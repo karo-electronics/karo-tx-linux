@@ -101,8 +101,13 @@ ENDPROC(cpu_v7_dcache_clean_area)
  */
 ENTRY(cpu_v7_switch_mm)
 #ifdef CONFIG_MMU
-	mov	r2, #0
 	ldr	r1, [r1, #MM_CONTEXT_ID]	@ get mm->context.id
+	mov	r2, #0
+#ifdef CONFIG_ARM_LPAE
+	and	r3, r1, #0xff
+	mov	r3, r3, lsl #(48 - 32)		@ ASID
+	mcrr	p15, 0, r0, r3, c2		@ set TTB 0
+#else	/* !CONFIG_ARM_LPAE */
 	ALT_SMP(orr	r0, r0, #TTB_FLAGS_SMP)
 	ALT_UP(orr	r0, r0, #TTB_FLAGS_UP)
 #ifdef CONFIG_ARM_ERRATA_430973
@@ -113,12 +118,13 @@ ENTRY(cpu_v7_switch_mm)
 #endif
 	mcr	p15, 0, r2, c13, c0, 1		@ set reserved context ID
 	isb
-1:	mcr	p15, 0, r0, c2, c0, 0		@ set TTB 0
+	mcr	p15, 0, r0, c2, c0, 0		@ set TTB 0
 	isb
 #ifdef CONFIG_ARM_ERRATA_754322
 	dsb
 #endif
 	mcr	p15, 0, r1, c13, c0, 1		@ set context ID
+#endif	/* CONFIG_ARM_LPAE */
 	isb
 #endif
 	mov	pc, lr
