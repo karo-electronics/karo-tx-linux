@@ -1308,6 +1308,13 @@ void dev_disable_lro(struct net_device *dev)
 {
 	u32 flags;
 
+	/*
+	 * If we're trying to disable lro on a vlan device
+	 * use the underlying physical device instead
+	 */
+	if (is_vlan_dev(dev))
+		dev = vlan_dev_real_dev(dev);
+
 	if (dev->ethtool_ops && dev->ethtool_ops->get_flags)
 		flags = dev->ethtool_ops->get_flags(dev);
 	else
@@ -4294,10 +4301,8 @@ int netdev_set_master(struct net_device *slave, struct net_device *master)
 
 	slave->master = master;
 
-	if (old) {
-		synchronize_net();
+	if (old)
 		dev_put(old);
-	}
 	return 0;
 }
 EXPORT_SYMBOL(netdev_set_master);
@@ -5956,7 +5961,10 @@ EXPORT_SYMBOL(free_netdev);
 void synchronize_net(void)
 {
 	might_sleep();
-	synchronize_rcu();
+	if (rtnl_is_locked())
+		synchronize_rcu_expedited();
+	else
+		synchronize_rcu();
 }
 EXPORT_SYMBOL(synchronize_net);
 
