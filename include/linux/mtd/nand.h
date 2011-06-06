@@ -617,8 +617,6 @@ struct platform_nand_chip {
 	int chip_delay;
 	unsigned int options;
 	const char **part_probe_types;
-	void (*set_parts)(uint64_t size, struct platform_nand_chip *chip);
-	void *priv;
 };
 
 /* Keep gcc happy */
