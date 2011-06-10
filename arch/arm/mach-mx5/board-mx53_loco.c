@@ -241,6 +241,8 @@ static const struct gpio_led_platform_data mx53loco_leds_data __initconst = {
 
 static void __init mx53_loco_board_init(void)
 {
+	imx53_soc_init();
+
 	mxc_iomux_v3_setup_multiple_pads(mx53_loco_pads,
 					ARRAY_SIZE(mx53_loco_pads));
 	imx53_add_imx_uart(0, NULL);
