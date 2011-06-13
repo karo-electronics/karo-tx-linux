@@ -9,15 +9,13 @@
 #include <linux/module.h>
 #include <linux/timex.h>
 #include <linux/delay.h>
+#include <linux/i8253.h>
 #include <linux/init.h>
 #include <linux/io.h>
 
-#include <asm/i8253.h>
 #include <asm/hpet.h>
+#include <asm/time.h>
 #include <asm/smp.h>
-
-DEFINE_RAW_SPINLOCK(i8253_lock);
-EXPORT_SYMBOL(i8253_lock);
 
 /*
  * HPET replaces the PIT, when enabled. So we need to know, which of
