@@ -304,11 +304,11 @@ static const struct spi_imx_master spi1_pdata __initconst = {
 	.num_chipselect	= ARRAY_SIZE(spi1_chipselect),
 };
 
-static int spi2_internal_chipselect[] = {SPI2_SS0};
+static int spi2_chipselect[] = {SPI2_SS0};
 
 static const struct spi_imx_master spi2_pdata __initconst = {
-	.chipselect	= spi2_internal_chipselect,
-	.num_chipselect	= ARRAY_SIZE(spi2_internal_chipselect),
+	.chipselect	= spi2_chipselect,
+	.num_chipselect	= ARRAY_SIZE(spi2_chipselect),
 };
 
 static struct imx_fb_videomode mx27_3ds_modes[] = {
