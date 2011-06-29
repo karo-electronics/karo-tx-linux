@@ -269,39 +269,9 @@ static int tea575x_s_ctrl(struct v4l2_ctrl *ctrl)
 	return -EINVAL;
 }
 
-static int vidioc_g_input(struct file *filp, void *priv, unsigned int *i)
-{
-	*i = 0;
-	return 0;
-}
-
-static int vidioc_s_input(struct file *filp, void *priv, unsigned int i)
-{
-	if (i != 0)
-		return -EINVAL;
-	return 0;
-}
-
-static int snd_tea575x_exclusive_open(struct file *file)
-{
-	struct snd_tea575x *tea = video_drvdata(file);
-
-	return test_and_set_bit(0, &tea->in_use) ? -EBUSY : 0;
-}
-
-static int snd_tea575x_exclusive_release(struct file *file)
-{
-	struct snd_tea575x *tea = video_drvdata(file);
-
-	clear_bit(0, &tea->in_use);
-	return 0;
-}
-
 static const struct v4l2_file_operations tea575x_fops = {
 	.owner		= THIS_MODULE,
-	.open           = snd_tea575x_exclusive_open,
-	.release        = snd_tea575x_exclusive_release,
-	.ioctl		= video_ioctl2,
+	.unlocked_ioctl	= video_ioctl2,
 };
 
 static const struct v4l2_ioctl_ops tea575x_ioctl_ops = {
@@ -310,8 +280,6 @@ static const struct v4l2_ioctl_ops tea575x_ioctl_ops = {
 	.vidioc_s_tuner     = vidioc_s_tuner,
 	.vidioc_g_audio     = vidioc_g_audio,
 	.vidioc_s_audio     = vidioc_s_audio,
-	.vidioc_g_input     = vidioc_g_input,
-	.vidioc_s_input     = vidioc_s_input,
 	.vidioc_g_frequency = vidioc_g_frequency,
 	.vidioc_s_frequency = vidioc_s_frequency,
 };
@@ -340,13 +308,14 @@ int snd_tea575x_init(struct snd_tea575x *tea)
 	if (snd_tea575x_read(tea) != 0x55AA)
 		return -ENODEV;
 
-	tea->in_use = 0;
 	tea->val = TEA575X_BIT_BAND_FM | TEA575X_BIT_SEARCH_10_40;
 	tea->freq = 90500 * 16;		/* 90.5Mhz default */
 	snd_tea575x_set_freq(tea);
 
 	tea->vd = tea575x_radio;
 	video_set_drvdata(&tea->vd, tea);
+	mutex_init(&tea->mutex);
+	tea->vd.lock = &tea->mutex;
 
 	v4l2_ctrl_handler_init(&tea->ctrl_handler, 1);
 	tea->vd.ctrl_handler = &tea->ctrl_handler;
