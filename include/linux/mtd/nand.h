@@ -605,8 +605,6 @@ extern int nand_do_read(struct mtd_info *mtd, loff_t from, size_t len,
  * @options:		Option flags, e.g. 16bit buswidth
  * @ecclayout:		ECC layout info structure
  * @part_probe_types:	NULL-terminated array of probe types
- * @set_parts:		platform specific function to set partitions
- * @priv:		hardware controller specific settings
  */
 struct platform_nand_chip {
 	int nr_chips;
