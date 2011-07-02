@@ -985,7 +985,6 @@ static int nvt_open(struct rc_dev *dev)
 	unsigned long flags;
 
 	spin_lock_irqsave(&nvt->nvt_lock, flags);
-	nvt->in_use = true;
 	nvt_enable_cir(nvt);
 	spin_unlock_irqrestore(&nvt->nvt_lock, flags);
 
@@ -998,7 +997,6 @@ static void nvt_close(struct rc_dev *dev)
 	unsigned long flags;
 
 	spin_lock_irqsave(&nvt->nvt_lock, flags);
-	nvt->in_use = false;
 	nvt_disable_cir(nvt);
 	spin_unlock_irqrestore(&nvt->nvt_lock, flags);
 }
