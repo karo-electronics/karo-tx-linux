@@ -28,6 +28,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/power_supply.h>
 #include <linux/power/max17042_battery.h>
+#include <linux/module.h>
 
 enum max17042_register {
 	MAX17042_STATUS		= 0x00,
