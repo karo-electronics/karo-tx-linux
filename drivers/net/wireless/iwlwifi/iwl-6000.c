@@ -36,6 +36,7 @@
 #include <net/mac80211.h>
 #include <linux/etherdevice.h>
 #include <asm/unaligned.h>
+#include <linux/stringify.h>
 
 #include "iwl-eeprom.h"
 #include "iwl-dev.h"
@@ -58,16 +59,16 @@
 #define IWL6000G2_UCODE_API_MIN 4
 
 #define IWL6000_FW_PRE "iwlwifi-6000-"
-#define IWL6000_MODULE_FIRMWARE(api) IWL6000_FW_PRE #api ".ucode"
+#define IWL6000_MODULE_FIRMWARE(api) IWL6000_FW_PRE __stringify(api) ".ucode"
 
 #define IWL6050_FW_PRE "iwlwifi-6050-"
-#define IWL6050_MODULE_FIRMWARE(api) IWL6050_FW_PRE #api ".ucode"
+#define IWL6050_MODULE_FIRMWARE(api) IWL6050_FW_PRE __stringify(api) ".ucode"
 
 #define IWL6005_FW_PRE "iwlwifi-6000g2a-"
-#define IWL6005_MODULE_FIRMWARE(api) IWL6005_FW_PRE #api ".ucode"
+#define IWL6005_MODULE_FIRMWARE(api) IWL6005_FW_PRE __stringify(api) ".ucode"
 
 #define IWL6030_FW_PRE "iwlwifi-6000g2b-"
-#define IWL6030_MODULE_FIRMWARE(api) IWL6030_FW_PRE #api ".ucode"
+#define IWL6030_MODULE_FIRMWARE(api) IWL6030_FW_PRE __stringify(api) ".ucode"
 
 static void iwl6000_set_ct_threshold(struct iwl_priv *priv)
 {
@@ -270,8 +271,6 @@ static int iwl6000_hw_channel_switch(struct iwl_priv *priv,
 			ctx->active.channel, ch);
 		return -EFAULT;
 	}
-	priv->switch_rxon.channel = cmd.channel;
-	priv->switch_rxon.switch_in_progress = true;
 
 	return iwl_send_cmd_sync(priv, &hcmd);
 }
@@ -603,19 +602,27 @@ struct iwl_cfg iwl6050_2abg_cfg = {
 	IWL_DEVICE_6050,
 };
 
+#define IWL_DEVICE_6150						\
+	.fw_name_pre = IWL6050_FW_PRE,				\
+	.ucode_api_max = IWL6050_UCODE_API_MAX,			\
+	.ucode_api_min = IWL6050_UCODE_API_MIN,			\
+	.ops = &iwl6150_ops,					\
+	.eeprom_ver = EEPROM_6150_EEPROM_VERSION,		\
+	.eeprom_calib_ver = EEPROM_6150_TX_POWER_VERSION,	\
+	.base_params = &iwl6050_base_params,			\
+	.need_dc_calib = true,					\
+	.led_mode = IWL_LED_BLINK,				\
+	.internal_wimax_coex = true
+
 struct iwl_cfg iwl6150_bgn_cfg = {
 	.name = "Intel(R) Centrino(R) Wireless-N + WiMAX 6150 BGN",
-	.fw_name_pre = IWL6050_FW_PRE,
-	.ucode_api_max = IWL6050_UCODE_API_MAX,
-	.ucode_api_min = IWL6050_UCODE_API_MIN,
-	.eeprom_ver = EEPROM_6150_EEPROM_VERSION,
-	.eeprom_calib_ver = EEPROM_6150_TX_POWER_VERSION,
-	.ops = &iwl6150_ops,
-	.base_params = &iwl6050_base_params,
+	IWL_DEVICE_6150,
 	.ht_params = &iwl6000_ht_params,
-	.need_dc_calib = true,
-	.led_mode = IWL_LED_RF_STATE,
-	.internal_wimax_coex = true,
+};
+
+struct iwl_cfg iwl6150_bg_cfg = {
+	.name = "Intel(R) Centrino(R) Wireless-N + WiMAX 6150 BG",
+	IWL_DEVICE_6150,
 };
 
 struct iwl_cfg iwl6000_3agn_cfg = {
