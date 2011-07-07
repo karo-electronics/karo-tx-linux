@@ -238,6 +238,17 @@ const char * const *v4l2_ctrl_get_menu(u32 id)
 		"75 useconds",
 		NULL,
 	};
+	static const char * const flash_led_mode[] = {
+		"Off",
+		"Flash",
+		"Torch",
+		NULL,
+	};
+	static const char * const flash_strobe_source[] = {
+		"Software",
+		"External",
+		NULL,
+	};
 
 	switch (id) {
 	case V4L2_CID_MPEG_AUDIO_SAMPLING_FREQ:
@@ -278,6 +289,10 @@ const char * const *v4l2_ctrl_get_menu(u32 id)
 		return colorfx;
 	case V4L2_CID_TUNE_PREEMPHASIS:
 		return tune_preemphasis;
+	case V4L2_CID_FLASH_LED_MODE:
+		return flash_led_mode;
+	case V4L2_CID_FLASH_STROBE_SOURCE:
+		return flash_strobe_source;
 	default:
 		return NULL;
 	}
@@ -411,6 +426,21 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_TUNE_POWER_LEVEL:		return "Tune Power Level";
 	case V4L2_CID_TUNE_ANTENNA_CAPACITOR:	return "Tune Antenna Capacitor";
 
+	/* Flash controls */
+	case V4L2_CID_FLASH_CLASS:		return "Flash controls";
+	case V4L2_CID_FLASH_LED_MODE:		return "LED mode";
+	case V4L2_CID_FLASH_STROBE_SOURCE:	return "Strobe source";
+	case V4L2_CID_FLASH_STROBE:		return "Strobe";
+	case V4L2_CID_FLASH_STROBE_STOP:	return "Stop strobe";
+	case V4L2_CID_FLASH_STROBE_STATUS:	return "Strobe status";
+	case V4L2_CID_FLASH_TIMEOUT:		return "Strobe timeout";
+	case V4L2_CID_FLASH_INTENSITY:		return "Intensity, flash mode";
+	case V4L2_CID_FLASH_TORCH_INTENSITY:	return "Intensity, torch mode";
+	case V4L2_CID_FLASH_INDICATOR_INTENSITY: return "Intensity, indicator";
+	case V4L2_CID_FLASH_FAULT:		return "Faults";
+	case V4L2_CID_FLASH_CHARGE:		return "Charge";
+	case V4L2_CID_FLASH_READY:		return "Ready to strobe";
+
 	default:
 		return NULL;
 	}
@@ -445,12 +475,17 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_PILOT_TONE_ENABLED:
 	case V4L2_CID_ILLUMINATORS_1:
 	case V4L2_CID_ILLUMINATORS_2:
+	case V4L2_CID_FLASH_STROBE_STATUS:
+	case V4L2_CID_FLASH_CHARGE:
+	case V4L2_CID_FLASH_READY:
 		*type = V4L2_CTRL_TYPE_BOOLEAN;
 		*min = 0;
 		*max = *step = 1;
 		break;
 	case V4L2_CID_PAN_RESET:
 	case V4L2_CID_TILT_RESET:
+	case V4L2_CID_FLASH_STROBE:
+	case V4L2_CID_FLASH_STROBE_STOP:
 		*type = V4L2_CTRL_TYPE_BUTTON;
 		*flags |= V4L2_CTRL_FLAG_WRITE_ONLY;
 		*min = *max = *step = *def = 0;
@@ -474,6 +509,8 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_EXPOSURE_AUTO:
 	case V4L2_CID_COLORFX:
 	case V4L2_CID_TUNE_PREEMPHASIS:
+	case V4L2_CID_FLASH_LED_MODE:
+	case V4L2_CID_FLASH_STROBE_SOURCE:
 		*type = V4L2_CTRL_TYPE_MENU;
 		break;
 	case V4L2_CID_RDS_TX_PS_NAME:
@@ -484,6 +521,7 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_CAMERA_CLASS:
 	case V4L2_CID_MPEG_CLASS:
 	case V4L2_CID_FM_TX_CLASS:
+	case V4L2_CID_FLASH_CLASS:
 		*type = V4L2_CTRL_TYPE_CTRL_CLASS;
 		/* You can neither read not write these */
 		*flags |= V4L2_CTRL_FLAG_READ_ONLY | V4L2_CTRL_FLAG_WRITE_ONLY;
@@ -495,6 +533,9 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 		*min = 0;
 		/* Max is calculated as RGB888 that is 2^24 */
 		*max = 0xFFFFFF;
+		break;
+	case V4L2_CID_FLASH_FAULT:
+		*type = V4L2_CTRL_TYPE_BITMASK;
 		break;
 	default:
 		*type = V4L2_CTRL_TYPE_INTEGER;
@@ -540,6 +581,10 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_IRIS_RELATIVE:
 	case V4L2_CID_ZOOM_RELATIVE:
 		*flags |= V4L2_CTRL_FLAG_WRITE_ONLY;
+		break;
+	case V4L2_CID_FLASH_STROBE_STATUS:
+	case V4L2_CID_FLASH_READY:
+		*flags |= V4L2_CTRL_FLAG_READ_ONLY;
 		break;
 	}
 }
@@ -712,10 +757,15 @@ static void new_to_cur(struct v4l2_fh *fh, struct v4l2_ctrl *ctrl,
 		if (!is_cur_manual(ctrl->cluster[0]))
 			ctrl->flags |= V4L2_CTRL_FLAG_INACTIVE;
 	}
-	if (changed || update_inactive)
+	if (changed || update_inactive) {
+		/* If a control was changed that was not one of the controls
+		   modified by the application, then send the event to all. */
+		if (!ctrl->is_new)
+			fh = NULL;
 		send_event(fh, ctrl,
 			(changed ? V4L2_EVENT_CTRL_CH_VALUE : 0) |
 			(update_inactive ? V4L2_EVENT_CTRL_CH_FLAGS : 0));
+	}
 }
 
 /* Copy the current value to the new value */
@@ -800,6 +850,10 @@ static int validate_new_int(const struct v4l2_ctrl *ctrl, s32 *pval)
 			return -EINVAL;
 		return 0;
 
+	case V4L2_CTRL_TYPE_BITMASK:
+		*pval &= ctrl->maximum;
+		return 0;
+
 	case V4L2_CTRL_TYPE_BUTTON:
 	case V4L2_CTRL_TYPE_CTRL_CLASS:
 		*pval = 0;
@@ -820,6 +874,7 @@ static int validate_new(const struct v4l2_ctrl *ctrl, struct v4l2_ext_control *c
 	case V4L2_CTRL_TYPE_INTEGER:
 	case V4L2_CTRL_TYPE_BOOLEAN:
 	case V4L2_CTRL_TYPE_MENU:
+	case V4L2_CTRL_TYPE_BITMASK:
 	case V4L2_CTRL_TYPE_BUTTON:
 	case V4L2_CTRL_TYPE_CTRL_CLASS:
 		return validate_new_int(ctrl, &c->value);
@@ -1058,10 +1113,14 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 
 	/* Sanity checks */
 	if (id == 0 || name == NULL || id >= V4L2_CID_PRIVATE_BASE ||
-	    max < min ||
 	    (type == V4L2_CTRL_TYPE_INTEGER && step == 0) ||
+	    (type == V4L2_CTRL_TYPE_BITMASK && max == 0) ||
 	    (type == V4L2_CTRL_TYPE_MENU && qmenu == NULL) ||
 	    (type == V4L2_CTRL_TYPE_STRING && max == 0)) {
+		handler_set_err(hdl, -ERANGE);
+		return NULL;
+	}
+	if (type != V4L2_CTRL_TYPE_BITMASK && max < min) {
 		handler_set_err(hdl, -ERANGE);
 		return NULL;
 	}
@@ -1069,6 +1128,10 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 	     type == V4L2_CTRL_TYPE_MENU ||
 	     type == V4L2_CTRL_TYPE_BOOLEAN) &&
 	    (def < min || def > max)) {
+		handler_set_err(hdl, -ERANGE);
+		return NULL;
+	}
+	if (type == V4L2_CTRL_TYPE_BITMASK && ((def & ~max) || min || step)) {
 		handler_set_err(hdl, -ERANGE);
 		return NULL;
 	}
@@ -1351,6 +1414,9 @@ static void log_ctrl(const struct v4l2_ctrl *ctrl,
 		break;
 	case V4L2_CTRL_TYPE_MENU:
 		printk(KERN_CONT "%s", ctrl->qmenu[ctrl->cur.val]);
+		break;
+	case V4L2_CTRL_TYPE_BITMASK:
+		printk(KERN_CONT "0x%08x", ctrl->cur.val);
 		break;
 	case V4L2_CTRL_TYPE_INTEGER64:
 		printk(KERN_CONT "%lld", ctrl->cur.val64);
@@ -1929,7 +1995,7 @@ static int try_set_ext_ctrls(struct v4l2_fh *fh, struct v4l2_ctrl_handler *hdl,
 		if (!ret) {
 			idx = i;
 			do {
-				ret = user_to_new(cs->controls + idx,
+				ret = new_to_user(cs->controls + idx,
 						helpers[idx].ctrl);
 				idx = helpers[idx].next;
 			} while (!ret && idx);

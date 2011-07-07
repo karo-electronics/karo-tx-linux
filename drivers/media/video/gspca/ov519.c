@@ -2432,9 +2432,12 @@ static int ov518_i2c_r(struct sd *sd, u8 reg)
 
 	/* Initiate 2-byte write cycle */
 	reg_w(sd, R518_I2C_CTL, 0x03);
+	reg_r8(sd, R518_I2C_CTL);
 
 	/* Initiate 2-byte read cycle */
 	reg_w(sd, R518_I2C_CTL, 0x05);
+	reg_r8(sd, R518_I2C_CTL);
+
 	value = reg_r(sd, R51x_I2C_DATA);
 	PDEBUG(D_USBI, "ov518_i2c_r %02x %02x", reg, value);
 	return value;
@@ -5003,7 +5006,8 @@ static const struct sd_desc sd_desc = {
 static const struct usb_device_id device_table[] = {
 	{USB_DEVICE(0x041e, 0x4003), .driver_info = BRIDGE_W9968CF },
 	{USB_DEVICE(0x041e, 0x4052), .driver_info = BRIDGE_OV519 },
-	{USB_DEVICE(0x041e, 0x405f), .driver_info = BRIDGE_OV519 },
+	{USB_DEVICE(0x041e, 0x405f),
+		.driver_info = BRIDGE_OV519 | BRIDGE_INVERT_LED },
 	{USB_DEVICE(0x041e, 0x4060), .driver_info = BRIDGE_OV519 },
 	{USB_DEVICE(0x041e, 0x4061), .driver_info = BRIDGE_OV519 },
 	{USB_DEVICE(0x041e, 0x4064),

@@ -220,21 +220,13 @@ and right.
 <para>(blocking mode is the default)</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+<para>RETURN VALUE</para>
 <informaltable><tgroup cols="2"><tbody><row><entry
  align="char">
 <para>ENODEV</para>
 </entry><entry
  align="char">
 <para>Device driver not loaded/available.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
 </entry>
  </row><row><entry
  align="char">
@@ -279,8 +271,7 @@ and right.
 <para>File descriptor returned by a previous call to open().</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+<para>RETURN VALUE</para>
 <informaltable><tgroup cols="2"><tbody><row><entry
  align="char">
 <para>EBADF</para>
@@ -335,8 +326,7 @@ and right.
 <para>Size of buf.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+<para>RETURN VALUE</para>
 <informaltable><tgroup cols="2"><tbody><row><entry
  align="char">
 <para>EPERM</para>
@@ -394,23 +384,7 @@ role="subsection"><title>AUDIO_STOP</title>
 <para>Equals AUDIO_STOP for this command.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_PLAY"
 role="subsection"><title>AUDIO_PLAY</title>
@@ -446,23 +420,7 @@ role="subsection"><title>AUDIO_PLAY</title>
 <para>Equals AUDIO_PLAY for this command.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_PAUSE"
 role="subsection"><title>AUDIO_PAUSE</title>
@@ -506,24 +464,7 @@ role="subsection"><title>AUDIO_PAUSE</title>
 <para>Equals AUDIO_PAUSE for this command.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
-
+&return-value-dvb;
 
 </section><section id="AUDIO_CONTINUE"
 role="subsection"><title>AUDIO_CONTINUE</title>
@@ -563,23 +504,7 @@ with AUDIO_PAUSE command.</para>
 <para>Equals AUDIO_CONTINUE for this command.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_SELECT_SOURCE"
 role="subsection"><title>AUDIO_SELECT_SOURCE</title>
@@ -627,30 +552,7 @@ role="subsection"><title>AUDIO_SELECT_SOURCE</title>
  stream.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>Illegal input parameter.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_SET_MUTE"
 role="subsection"><title>AUDIO_SET_MUTE</title>
@@ -706,30 +608,7 @@ role="subsection"><title>AUDIO_SET_MUTE</title>
 <para>FALSE Audio Un-mute</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>Illegal input parameter.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_SET_AV_SYNC"
 role="subsection"><title>AUDIO_SET_AV_SYNC</title>
@@ -785,30 +664,7 @@ role="subsection"><title>AUDIO_SET_AV_SYNC</title>
 <para>FALSE AV-sync OFF</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>Illegal input parameter.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_SET_BYPASS_MODE"
 role="subsection"><title>AUDIO_SET_BYPASS_MODE</title>
@@ -868,30 +724,7 @@ role="subsection"><title>AUDIO_SET_BYPASS_MODE</title>
 <para>FALSE Bypass is enabled</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>Illegal input parameter.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_CHANNEL_SELECT"
 role="subsection"><title>AUDIO_CHANNEL_SELECT</title>
@@ -937,30 +770,7 @@ role="subsection"><title>AUDIO_CHANNEL_SELECT</title>
  stereo).</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>Illegal input parameter ch.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_GET_STATUS"
 role="subsection"><title>AUDIO_GET_STATUS</title>
@@ -1005,30 +815,7 @@ role="subsection"><title>AUDIO_GET_STATUS</title>
 <para>Returns the current state of Audio Device.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>status points to invalid address.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_GET_CAPABILITIES"
 role="subsection"><title>AUDIO_GET_CAPABILITIES</title>
@@ -1073,30 +860,7 @@ role="subsection"><title>AUDIO_GET_CAPABILITIES</title>
 <para>Returns a bit array of supported sound formats.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>cap points to an invalid address.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_CLEAR_BUFFER"
 role="subsection"><title>AUDIO_CLEAR_BUFFER</title>
@@ -1132,23 +896,7 @@ role="subsection"><title>AUDIO_CLEAR_BUFFER</title>
 <para>Equals AUDIO_CLEAR_BUFFER for this command.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_SET_ID"
 role="subsection"><title>AUDIO_SET_ID</title>
@@ -1196,30 +944,7 @@ role="subsection"><title>AUDIO_SET_ID</title>
 <para>audio sub-stream id</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>Invalid sub-stream id.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_SET_MIXER"
 role="subsection"><title>AUDIO_SET_MIXER</title>
@@ -1262,30 +987,7 @@ role="subsection"><title>AUDIO_SET_MIXER</title>
 <para>mixer settings.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>mix points to an invalid address.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 
 </section><section id="AUDIO_SET_STREAMTYPE"
 role="subsection"><title>AUDIO_SET_STREAMTYPE</title>
@@ -1330,16 +1032,8 @@ role="subsection"><title>AUDIO_SET_STREAMTYPE</title>
 <para>stream type</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+&return-value-dvb;
 <informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor</para>
-</entry>
- </row><row><entry
  align="char">
 <para>EINVAL</para>
 </entry><entry
@@ -1390,16 +1084,8 @@ role="subsection"><title>AUDIO_SET_EXT_ID</title>
 <para>audio sub_stream_id</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+&return-value-dvb;
 <informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor</para>
-</entry>
- </row><row><entry
  align="char">
 <para>EINVAL</para>
 </entry><entry
@@ -1451,16 +1137,8 @@ role="subsection"><title>AUDIO_SET_ATTRIBUTES</title>
 <para>audio attributes according to section ??</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+&return-value-dvb;
 <informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor</para>
-</entry>
- </row><row><entry
  align="char">
 <para>EINVAL</para>
 </entry><entry
@@ -1512,16 +1190,8 @@ role="subsection"><title>AUDIO_SET_KARAOKE</title>
 <para>karaoke settings according to section ??.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+&return-value-dvb;
 <informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor</para>
-</entry>
- </row><row><entry
  align="char">
 <para>EINVAL</para>
 </entry><entry

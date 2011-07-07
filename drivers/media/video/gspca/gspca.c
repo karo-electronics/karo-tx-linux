@@ -443,8 +443,11 @@ void gspca_frame_add(struct gspca_dev *gspca_dev,
 	} else {
 		switch (gspca_dev->last_packet_type) {
 		case DISCARD_PACKET:
-			if (packet_type == LAST_PACKET)
+			if (packet_type == LAST_PACKET) {
 				gspca_dev->last_packet_type = packet_type;
+				gspca_dev->image = NULL;
+				gspca_dev->image_len = 0;
+			}
 			return;
 		case LAST_PACKET:
 			return;
@@ -1278,10 +1281,10 @@ static int vidioc_querycap(struct file *file, void  *priv,
 		ret = -ENODEV;
 		goto out;
 	}
-	strncpy((char *) cap->driver, gspca_dev->sd_desc->name,
+	strlcpy((char *) cap->driver, gspca_dev->sd_desc->name,
 			sizeof cap->driver);
 	if (gspca_dev->dev->product != NULL) {
-		strncpy((char *) cap->card, gspca_dev->dev->product,
+		strlcpy((char *) cap->card, gspca_dev->dev->product,
 			sizeof cap->card);
 	} else {
 		snprintf((char *) cap->card, sizeof cap->card,
@@ -1459,7 +1462,7 @@ static int vidioc_enum_input(struct file *file, void *priv,
 		return -EINVAL;
 	input->type = V4L2_INPUT_TYPE_CAMERA;
 	input->status = gspca_dev->cam.input_flags;
-	strncpy(input->name, gspca_dev->sd_desc->name,
+	strlcpy(input->name, gspca_dev->sd_desc->name,
 		sizeof input->name);
 	return 0;
 }

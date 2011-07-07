@@ -515,8 +515,7 @@ typedef enum fe_hierarchy {
 <para>(blocking mode is the default)</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+<para>RETURN VALUE</para>
 <informaltable><tgroup cols="2"><tbody><row><entry
  align="char">
 <para>ENODEV</para>
@@ -576,8 +575,7 @@ typedef enum fe_hierarchy {
 <para>File descriptor returned by a previous call to open().</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+<para>RETURN VALUE</para>
 <informaltable><tgroup cols="2"><tbody><row><entry
  align="char">
 <para>EBADF</para>
@@ -633,8 +631,7 @@ typedef enum fe_hierarchy {
  to be stored.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+<para>RETURN VALUE</para>
 <informaltable><tgroup cols="2"><tbody><row><entry
  align="char">
 <para>EBADF</para>
@@ -695,38 +692,8 @@ typedef enum fe_hierarchy {
 <para>The bit error rate is stored into *ber.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>ber points to invalid address.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>ENOSIGNAL</para>
-</entry><entry
- align="char">
-<para>There is no signal, thus no meaningful bit error rate. Also
- returned if the front-end is not turned on.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>ENOSYS</para>
-</entry><entry
- align="char">
-<para>Function not available for this device.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+
+&return-value-dvb;
 </section>
 
 <section id="FE_READ_SNR">
@@ -773,38 +740,7 @@ typedef enum fe_hierarchy {
 </entry>
  </row></tbody></tgroup></informaltable>
 
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>snr points to invalid address.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>ENOSIGNAL</para>
-</entry><entry
- align="char">
-<para>There is no signal, thus no meaningful signal strength
- value. Also returned if front-end is not turned on.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>ENOSYS</para>
-</entry><entry
- align="char">
-<para>Function not available for this device.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 <section id="FE_READ_SIGNAL_STRENGTH">
@@ -851,38 +787,8 @@ typedef enum fe_hierarchy {
 <para>The signal strength value is stored into *strength.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>status points to invalid address.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>ENOSIGNAL</para>
-</entry><entry
- align="char">
-<para>There is no signal, thus no meaningful signal strength
- value. Also returned if front-end is not turned on.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>ENOSYS</para>
-</entry><entry
- align="char">
-<para>Function not available for this device.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+
+&return-value-dvb;
 </section>
 
 <section id="FE_READ_UNCORRECTED_BLOCKS">
@@ -936,30 +842,8 @@ typedef enum fe_hierarchy {
  so far.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>ublocks points to invalid address.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>ENOSYS</para>
-</entry><entry
- align="char">
-<para>Function not available for this device.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+
+&return-value-dvb;
 </section>
 
 <section id="FE_SET_FRONTEND">
@@ -1012,23 +896,9 @@ typedef enum fe_hierarchy {
 <para>Points to parameters for tuning operation.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
+
+&return-value-dvb;
 <informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>p points to invalid address.</para>
-</entry>
- </row><row><entry
  align="char">
 <para>EINVAL</para>
 </entry><entry
@@ -1085,24 +955,8 @@ typedef enum fe_hierarchy {
 </entry>
  </row></tbody></tgroup></informaltable>
 
-<para>ERRORS
-</para>
-
+&return-value-dvb;
 <informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>p points to invalid address.</para>
-</entry>
- </row><row><entry
  align="char">
 <para>EINVAL</para>
 </entry><entry
@@ -1187,23 +1041,8 @@ typedef enum fe_hierarchy {
 </entry>
  </row></tbody></tgroup></informaltable>
 
-<para>ERRORS
-</para>
+&return-value-dvb;
 <informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>ev points to invalid address.</para>
-</entry>
- </row><row><entry
  align="char">
 <para>EWOULDBLOCK</para>
 </entry><entry
@@ -1214,11 +1053,6 @@ typedef enum fe_hierarchy {
  </row><row><entry
  align="char">
 <para>EOVERFLOW</para>
-</entry><entry
- align="char">
-</entry>
- </row><row><entry
- align="char">
 </entry><entry
  align="char">
 <para>Overflow in event queue - one or more events were lost.</para>
@@ -1273,23 +1107,7 @@ typedef enum fe_hierarchy {
  to be stored.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid open file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>info points to invalid address.</para>
-</entry>
-</row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 <section id="FE_DISEQC_RESET_OVERLOAD">
@@ -1332,30 +1150,7 @@ typedef enum fe_hierarchy {
 </entry>
  </row></tbody></tgroup></informaltable>
 
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EPERM</para>
-</entry><entry
- align="char">
-<para>Permission denied (needs read/write access).</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error in the device driver.</para>
-</entry>
-</row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 <section id="FE_DISEQC_SEND_MASTER_CMD">
@@ -1405,45 +1200,7 @@ typedef enum fe_hierarchy {
 </entry>
  </row></tbody></tgroup></informaltable>
 
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>Seq points to an invalid address.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>The data structure referred to by seq is invalid in some
- way.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EPERM</para>
-</entry><entry
- align="char">
-<para>Permission denied (needs read/write access).</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error in the device driver.</para>
-</entry>
-</row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 <section id="FE_DISEQC_RECV_SLAVE_REPLY">
@@ -1493,45 +1250,7 @@ typedef enum fe_hierarchy {
 <para>Pointer to the command to be received.</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>Seq points to an invalid address.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>The data structure referred to by seq is invalid in some
- way.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EPERM</para>
-</entry><entry
- align="char">
-<para>Permission denied (needs read/write access).</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error in the device driver.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 <section id="FE_DISEQC_SEND_BURST">
@@ -1579,45 +1298,7 @@ typedef enum fe_hierarchy {
 </entry>
  </row></tbody></tgroup></informaltable>
 
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>EBADF</para>
-</entry><entry
- align="char">
-<para>fd is not a valid file descriptor.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EFAULT</para>
-</entry><entry
- align="char">
-<para>Seq points to an invalid address.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>The data structure referred to by seq is invalid in some
- way.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EPERM</para>
-</entry><entry
- align="char">
-<para>Permission denied (needs read/write access).</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error in the device driver.</para>
-</entry>
-</row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 <section id="FE_SET_TONE">
@@ -1663,44 +1344,7 @@ typedef enum fe_hierarchy {
 <para>The requested tone generation mode (on/off).</para>
 </entry>
  </row></tbody></tgroup></informaltable>
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>ENODEV</para>
-</entry><entry
- align="char">
-<para>Device driver not loaded/available.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EBUSY</para>
-</entry><entry
- align="char">
-<para>Device or resource busy.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>Invalid argument.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EPERM</para>
-</entry><entry
- align="char">
-<para>File not opened with read permissions.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error in the device driver.</para>
-</entry>
-</row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 <section id="FE_SET_VOLTAGE">
@@ -1748,44 +1392,7 @@ typedef enum fe_hierarchy {
 </entry>
  </row></tbody></tgroup></informaltable>
 
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>ENODEV</para>
-</entry><entry
- align="char">
-<para>Device driver not loaded/available.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EBUSY</para>
-</entry><entry
- align="char">
-<para>Device or resource busy.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>Invalid argument.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EPERM</para>
-</entry><entry
- align="char">
-<para>File not opened with read permissions.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error in the device driver.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 <section id="FE_ENABLE_HIGH_LNB_VOLTAGE">
@@ -1834,44 +1441,7 @@ typedef enum fe_hierarchy {
 </entry>
  </row></tbody></tgroup></informaltable>
 
-<para>ERRORS
-</para>
-<informaltable><tgroup cols="2"><tbody><row><entry
- align="char">
-<para>ENODEV</para>
-</entry><entry
- align="char">
-<para>Device driver not loaded/available.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EBUSY</para>
-</entry><entry
- align="char">
-<para>Device or resource busy.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINVAL</para>
-</entry><entry
- align="char">
-<para>Invalid argument.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EPERM</para>
-</entry><entry
- align="char">
-<para>File not opened with read permissions.</para>
-</entry>
- </row><row><entry
- align="char">
-<para>EINTERNAL</para>
-</entry><entry
- align="char">
-<para>Internal error in the device driver.</para>
-</entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 <section id="FE_SET_FRONTEND_TUNE_MODE">
@@ -1903,11 +1473,7 @@ FE_TUNE_MODE_ONESHOT When set, this flag will disable any zigzagging or other "n
 </entry>
  </row></tbody></tgroup></informaltable>
 
-<para>ERRORS</para>
-<informaltable><tgroup cols="2"><tbody><row>
-<entry align="char"><para>EINVAL</para></entry>
-<entry align="char"><para>Invalid argument.</para></entry>
- </row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 <section id="FE_DISHNETWORK_SEND_LEGACY_CMD">
@@ -1941,12 +1507,7 @@ sends the specified raw cmd to the dish via DISEqC.
 </entry>
  </row></tbody></tgroup></informaltable>
 
-<para>ERRORS</para>
-<informaltable><tgroup cols="1"><tbody><row>
-<entry align="char">
-	<para>There are no errors in use for this call</para>
-</entry>
-</row></tbody></tgroup></informaltable>
+&return-value-dvb;
 </section>
 
 </section>
