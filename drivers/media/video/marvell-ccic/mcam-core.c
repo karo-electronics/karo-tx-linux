@@ -37,6 +37,7 @@ static int frames;
 static int singles;
 static int delivered;
 
+#ifdef MCAM_MODE_VMALLOC
 /*
  * Internal DMA buffer management.  Since the controller cannot do S/G I/O,
  * we must have physically contiguous buffers to bring frames into.
@@ -71,19 +72,10 @@ MODULE_PARM_DESC(dma_buf_size,
 		"The size of the allocated DMA buffers.  If actual operating "
 		"parameters require larger buffers, an attempt to reallocate "
 		"will be made.");
-
-static int min_buffers = 1;
-module_param(min_buffers, uint, 0644);
-MODULE_PARM_DESC(min_buffers,
-		"The minimum number of streaming I/O buffers we are willing "
-		"to work with.");
-
-static int max_buffers = 10;
-module_param(max_buffers, uint, 0644);
-MODULE_PARM_DESC(max_buffers,
-		"The maximum number of streaming I/O buffers an application "
-		"will be allowed to allocate.  These buffers are big and live "
-		"in vmalloc space.");
+#else /* MCAM_MODE_VMALLOC */
+static const int alloc_bufs_at_read = 0;
+static const int n_dma_bufs = 3;  /* Used by S/G_PARM */
+#endif /* MCAM_MODE_VMALLOC */
 
 static int flip;
 module_param(flip, bool, 0444);
@@ -157,29 +149,20 @@ static struct mcam_format_struct *mcam_find_format(u32 pixelformat)
 }
 
 /*
- * Start over with DMA buffers - dev_lock needed.
+ * The default format we use until somebody says otherwise.
  */
-static void mcam_reset_buffers(struct mcam_camera *cam)
-{
-	int i;
+static const struct v4l2_pix_format mcam_def_pix_format = {
+	.width		= VGA_WIDTH,
+	.height		= VGA_HEIGHT,
+	.pixelformat	= V4L2_PIX_FMT_YUYV,
+	.field		= V4L2_FIELD_NONE,
+	.bytesperline	= VGA_WIDTH*2,
+	.sizeimage	= VGA_WIDTH*VGA_HEIGHT*2,
+};
 
-	cam->next_buf = -1;
-	for (i = 0; i < cam->nbufs; i++)
-		clear_bit(i, &cam->flags);
-}
+static const enum v4l2_mbus_pixelcode mcam_def_mbus_code =
+					V4L2_MBUS_FMT_YUYV8_2X8;
 
-static inline int mcam_needs_config(struct mcam_camera *cam)
-{
-	return test_bit(CF_CONFIG_NEEDED, &cam->flags);
-}
-
-static void mcam_set_config_needed(struct mcam_camera *cam, int needed)
-{
-	if (needed)
-		set_bit(CF_CONFIG_NEEDED, &cam->flags);
-	else
-		clear_bit(CF_CONFIG_NEEDED, &cam->flags);
-}
 
 /*
  * The two-word DMA descriptor format used by the Armada 610 and like.  There
@@ -210,6 +193,19 @@ static inline struct mcam_vb_buffer *vb_to_mvb(struct vb2_buffer *vb)
 	return container_of(vb, struct mcam_vb_buffer, vb_buf);
 }
 
+/*
+ * Hand a completed buffer back to user space.
+ */
+static void mcam_buffer_done(struct mcam_camera *cam, int frame,
+		struct vb2_buffer *vbuf)
+{
+	vbuf->v4l2_buf.bytesused = cam->pix_format.sizeimage;
+	vbuf->v4l2_buf.sequence = cam->buf_seq[frame];
+	vb2_set_plane_payload(vbuf, 0, cam->pix_format.sizeimage);
+	vb2_buffer_done(vbuf, VB2_BUF_STATE_DONE);
+}
+
+
 
 /*
  * Debugging and related.
@@ -222,11 +218,111 @@ static inline struct mcam_vb_buffer *vb_to_mvb(struct vb2_buffer *vb)
 	dev_dbg((cam)->dev, fmt, ##arg);
 
 
+/*
+ * Flag manipulation helpers
+ */
+static void mcam_reset_buffers(struct mcam_camera *cam)
+{
+	int i;
+
+	cam->next_buf = -1;
+	for (i = 0; i < cam->nbufs; i++)
+		clear_bit(i, &cam->flags);
+}
+
+static inline int mcam_needs_config(struct mcam_camera *cam)
+{
+	return test_bit(CF_CONFIG_NEEDED, &cam->flags);
+}
+
+static void mcam_set_config_needed(struct mcam_camera *cam, int needed)
+{
+	if (needed)
+		set_bit(CF_CONFIG_NEEDED, &cam->flags);
+	else
+		clear_bit(CF_CONFIG_NEEDED, &cam->flags);
+}
 
 /* ------------------------------------------------------------------- */
 /*
- * Deal with the controller.
+ * Make the controller start grabbing images.  Everything must
+ * be set up before doing this.
  */
+static void mcam_ctlr_start(struct mcam_camera *cam)
+{
+	/* set_bit performs a read, so no other barrier should be
+	   needed here */
+	mcam_reg_set_bit(cam, REG_CTRL0, C0_ENABLE);
+}
+
+static void mcam_ctlr_stop(struct mcam_camera *cam)
+{
+	mcam_reg_clear_bit(cam, REG_CTRL0, C0_ENABLE);
+}
+
+/* ------------------------------------------------------------------- */
+
+#ifdef MCAM_MODE_VMALLOC
+/*
+ * Code specific to the vmalloc buffer mode.
+ */
+
+/*
+ * Allocate in-kernel DMA buffers for vmalloc mode.
+ */
+static int mcam_alloc_dma_bufs(struct mcam_camera *cam, int loadtime)
+{
+	int i;
+
+	mcam_set_config_needed(cam, 1);
+	if (loadtime)
+		cam->dma_buf_size = dma_buf_size;
+	else
+		cam->dma_buf_size = cam->pix_format.sizeimage;
+	if (n_dma_bufs > 3)
+		n_dma_bufs = 3;
+
+	cam->nbufs = 0;
+	for (i = 0; i < n_dma_bufs; i++) {
+		cam->dma_bufs[i] = dma_alloc_coherent(cam->dev,
+				cam->dma_buf_size, cam->dma_handles + i,
+				GFP_KERNEL);
+		if (cam->dma_bufs[i] == NULL) {
+			cam_warn(cam, "Failed to allocate DMA buffer\n");
+			break;
+		}
+		(cam->nbufs)++;
+	}
+
+	switch (cam->nbufs) {
+	case 1:
+		dma_free_coherent(cam->dev, cam->dma_buf_size,
+				cam->dma_bufs[0], cam->dma_handles[0]);
+		cam->nbufs = 0;
+	case 0:
+		cam_err(cam, "Insufficient DMA buffers, cannot operate\n");
+		return -ENOMEM;
+
+	case 2:
+		if (n_dma_bufs > 2)
+			cam_warn(cam, "Will limp along with only 2 buffers\n");
+		break;
+	}
+	return 0;
+}
+
+static void mcam_free_dma_bufs(struct mcam_camera *cam)
+{
+	int i;
+
+	for (i = 0; i < cam->nbufs; i++) {
+		dma_free_coherent(cam->dev, cam->dma_buf_size,
+				cam->dma_bufs[i], cam->dma_handles[i]);
+		cam->dma_bufs[i] = NULL;
+	}
+	cam->nbufs = 0;
+}
+
 
 /*
  * Set up DMA buffers when operating in vmalloc mode
@@ -250,6 +346,92 @@ static void mcam_ctlr_dma_vmalloc(struct mcam_camera *cam)
 		mcam_reg_write(cam, REG_UBAR, 0); /* 32 bits only */
 }
 
+/*
+ * Copy data out to user space in the vmalloc case
+ */
+static void mcam_frame_tasklet(unsigned long data)
+{
+	struct mcam_camera *cam = (struct mcam_camera *) data;
+	int i;
+	unsigned long flags;
+	struct mcam_vb_buffer *buf;
+
+	spin_lock_irqsave(&cam->dev_lock, flags);
+	for (i = 0; i < cam->nbufs; i++) {
+		int bufno = cam->next_buf;
+
+		if (cam->state != S_STREAMING || bufno < 0)
+			break;  /* I/O got stopped */
+		if (++(cam->next_buf) >= cam->nbufs)
+			cam->next_buf = 0;
+		if (!test_bit(bufno, &cam->flags))
+			continue;
+		if (list_empty(&cam->buffers)) {
+			singles++;
+			break;  /* Leave it valid, hope for better later */
+		}
+		delivered++;
+		clear_bit(bufno, &cam->flags);
+		buf = list_first_entry(&cam->buffers, struct mcam_vb_buffer,
+				queue);
+		list_del_init(&buf->queue);
+		/*
+		 * Drop the lock during the big copy.  This *should* be safe...
+		 */
+		spin_unlock_irqrestore(&cam->dev_lock, flags);
+		memcpy(vb2_plane_vaddr(&buf->vb_buf, 0), cam->dma_bufs[bufno],
+				cam->pix_format.sizeimage);
+		mcam_buffer_done(cam, bufno, &buf->vb_buf);
+		spin_lock_irqsave(&cam->dev_lock, flags);
+	}
+	spin_unlock_irqrestore(&cam->dev_lock, flags);
+}
+
+
+/*
+ * Make sure our allocated buffers are up to the task.
+ */
+static int mcam_check_dma_buffers(struct mcam_camera *cam)
+{
+	if (cam->nbufs > 0 && cam->dma_buf_size < cam->pix_format.sizeimage)
+			mcam_free_dma_bufs(cam);
+	if (cam->nbufs == 0)
+		return mcam_alloc_dma_bufs(cam, 0);
+	return 0;
+}
+
+static void mcam_vmalloc_done(struct mcam_camera *cam, int frame)
+{
+	tasklet_schedule(&cam->s_tasklet);
+}
+
+#else /* MCAM_MODE_VMALLOC */
+
+static inline int mcam_alloc_dma_bufs(struct mcam_camera *cam, int loadtime)
+{
+	return 0;
+}
+
+static inline void mcam_free_dma_bufs(struct mcam_camera *cam)
+{
+	return;
+}
+
+static inline int mcam_check_dma_buffers(struct mcam_camera *cam)
+{
+	return 0;
+}
+
+
+
+#endif /* MCAM_MODE_VMALLOC */
+
+
+#ifdef MCAM_MODE_DMA_CONTIG
+/* ---------------------------------------------------------------------- */
+/*
+ * DMA-contiguous code.
+ */
 /*
  * Set up a contiguous buffer for the given frame.  Here also is where
  * the underrun strategy is set: if there is no buffer available, reuse
@@ -295,6 +477,27 @@ static void mcam_ctlr_dma_contig(struct mcam_camera *cam)
 	mcam_set_contig_buffer(cam, 1);
 }
 
+/*
+ * Frame completion handling.
+ */
+static void mcam_dma_contig_done(struct mcam_camera *cam, int frame)
+{
+	struct mcam_vb_buffer *buf = cam->vb_bufs[frame];
+
+	if (!test_bit(CF_SINGLE_BUFFER, &cam->flags)) {
+		delivered++;
+		mcam_buffer_done(cam, frame, &buf->vb_buf);
+	}
+	mcam_set_contig_buffer(cam, frame);
+}
+
+#endif /* MCAM_MODE_DMA_CONTIG */
+
+#ifdef MCAM_MODE_DMA_SG
+/* ---------------------------------------------------------------------- */
+/*
+ * Scatter/gather-specific code.
+ */
 
 /*
  * Set up the next buffer for S/G I/O; caller should be sure that
@@ -325,8 +528,82 @@ static void mcam_ctlr_dma_sg(struct mcam_camera *cam)
 	cam->nbufs = 3;
 }
 
+
 /*
- * Image format setup, independent of DMA scheme.
+ * Frame completion with S/G is trickier.  We can't muck with
+ * a descriptor chain on the fly, since the controller buffers it
+ * internally.  So we have to actually stop and restart; Marvell
+ * says this is the way to do it.
+ *
+ * Of course, stopping is easier said than done; experience shows
+ * that the controller can start a frame *after* C0_ENABLE has been
+ * cleared.  So when running in S/G mode, the controller is "stopped"
+ * on receipt of the start-of-frame interrupt.  That means we can
+ * safely change the DMA descriptor array here and restart things
+ * (assuming there's another buffer waiting to go).
+ */
+static void mcam_dma_sg_done(struct mcam_camera *cam, int frame)
+{
+	struct mcam_vb_buffer *buf = cam->vb_bufs[0];
+
+	/*
+	 * Very Bad Not Good Things happen if you don't clear
+	 * C1_DESC_ENA before making any descriptor changes.
+	 */
+	mcam_reg_clear_bit(cam, REG_CTRL1, C1_DESC_ENA);
+	/*
+	 * If we have another buffer available, put it in and
+	 * restart the engine.
+	 */
+	if (!list_empty(&cam->buffers)) {
+		mcam_sg_next_buffer(cam);
+		mcam_reg_set_bit(cam, REG_CTRL1, C1_DESC_ENA);
+		mcam_ctlr_start(cam);
+	/*
+	 * Otherwise set CF_SG_RESTART and the controller will
+	 * be restarted once another buffer shows up.
+	 */
+	} else {
+		set_bit(CF_SG_RESTART, &cam->flags);
+		singles++;
+	}
+	/*
+	 * Now we can give the completed frame back to user space.
+	 */
+	delivered++;
+	mcam_buffer_done(cam, frame, &buf->vb_buf);
+}
+
+
+/*
+ * Scatter/gather mode requires stopping the controller between
+ * frames so we can put in a new DMA descriptor array.  If no new
+ * buffer exists at frame completion, the controller is left stopped;
+ * this function is charged with gettig things going again.
+ */
+static void mcam_sg_restart(struct mcam_camera *cam)
+{
+	mcam_ctlr_dma_sg(cam);
+	mcam_ctlr_start(cam);
+	clear_bit(CF_SG_RESTART, &cam->flags);
+}
+
+#else /* MCAM_MODE_DMA_SG */
+
+static inline void mcam_sg_restart(struct mcam_camera *cam)
+{
+	return;
+}
+
+#endif /* MCAM_MODE_DMA_SG */
+
+/* ---------------------------------------------------------------------- */
+/*
+ * Buffer-mode-independent controller code.
+ */
+
+/*
+ * Image format setup
  */
 static void mcam_ctlr_image(struct mcam_camera *cam)
 {
@@ -384,17 +661,7 @@ static int mcam_ctlr_configure(struct mcam_camera *cam)
 	unsigned long flags;
 
 	spin_lock_irqsave(&cam->dev_lock, flags);
-	switch (cam->buffer_mode) {
-	case B_vmalloc:
-		mcam_ctlr_dma_vmalloc(cam);
-		break;
-	case B_DMA_contig:
-		mcam_ctlr_dma_contig(cam);
-		break;
-	case B_DMA_sg:
-		mcam_ctlr_dma_sg(cam);
-		break;
-	}
+	cam->dma_setup(cam);
 	mcam_ctlr_image(cam);
 	mcam_set_config_needed(cam, 0);
 	clear_bit(CF_SG_RESTART, &cam->flags);
@@ -417,34 +684,7 @@ static void mcam_ctlr_irq_disable(struct mcam_camera *cam)
 	mcam_reg_clear_bit(cam, REG_IRQMASK, FRAMEIRQS);
 }
 
-/*
- * Make the controller start grabbing images.  Everything must
- * be set up before doing this.
- */
-static void mcam_ctlr_start(struct mcam_camera *cam)
-{
-	/* set_bit performs a read, so no other barrier should be
-	   needed here */
-	mcam_reg_set_bit(cam, REG_CTRL0, C0_ENABLE);
-}
 
-static void mcam_ctlr_stop(struct mcam_camera *cam)
-{
-	mcam_reg_clear_bit(cam, REG_CTRL0, C0_ENABLE);
-}
-
-/*
- * Scatter/gather mode requires stopping the controller between
- * frames so we can put in a new DMA descriptor array.  If no new
- * buffer exists at frame completion, the controller is left stopped;
- * this function is charged with gettig things going again.
- */
-static void mcam_sg_restart(struct mcam_camera *cam)
-{
-	mcam_ctlr_dma_sg(cam);
-	mcam_ctlr_start(cam);
-	clear_bit(CF_SG_RESTART, &cam->flags);
-}
 
 static void mcam_ctlr_init(struct mcam_camera *cam)
 {
@@ -603,75 +843,6 @@ static int mcam_cam_configure(struct mcam_camera *cam)
 	return ret;
 }
 
-/* -------------------------------------------------------------------- */
-/*
- * DMA buffer management.  These functions need s_mutex held.
- */
-
-/*
- * Allocate in-kernel DMA buffers for vmalloc mode.
- */
-static int mcam_alloc_dma_bufs(struct mcam_camera *cam, int loadtime)
-{
-	int i;
-
-	mcam_set_config_needed(cam, 1);
-	if (loadtime)
-		cam->dma_buf_size = dma_buf_size;
-	else
-		cam->dma_buf_size = cam->pix_format.sizeimage;
-	if (n_dma_bufs > 3)
-		n_dma_bufs = 3;
-
-	cam->nbufs = 0;
-	for (i = 0; i < n_dma_bufs; i++) {
-		cam->dma_bufs[i] = dma_alloc_coherent(cam->dev,
-				cam->dma_buf_size, cam->dma_handles + i,
-				GFP_KERNEL);
-		if (cam->dma_bufs[i] == NULL) {
-			cam_warn(cam, "Failed to allocate DMA buffer\n");
-			break;
-		}
-		(cam->nbufs)++;
-	}
-
-	switch (cam->nbufs) {
-	case 1:
-		dma_free_coherent(cam->dev, cam->dma_buf_size,
-				cam->dma_bufs[0], cam->dma_handles[0]);
-		cam->nbufs = 0;
-	case 0:
-		cam_err(cam, "Insufficient DMA buffers, cannot operate\n");
-		return -ENOMEM;
-
-	case 2:
-		if (n_dma_bufs > 2)
-			cam_warn(cam, "Will limp along with only 2 buffers\n");
-		break;
-	}
-	return 0;
-}
-
-static void mcam_free_dma_bufs(struct mcam_camera *cam)
-{
-	int i;
-
-	for (i = 0; i < cam->nbufs; i++) {
-		dma_free_coherent(cam->dev, cam->dma_buf_size,
-				cam->dma_bufs[i], cam->dma_handles[i]);
-		cam->dma_bufs[i] = NULL;
-	}
-	cam->nbufs = 0;
-}
-
-
-
-/* ----------------------------------------------------------------------- */
-/*
- * Here starts the V4L2 interface code.
- */
-
-
 /*
  * Get everything ready, and start grabbing frames.
  */
@@ -728,44 +899,6 @@ static int mcam_vb_queue_setup(struct vb2_queue *vq, unsigned int *nbufs,
 	return 0;
 }
 
-/* DMA_sg only */
-static int mcam_vb_sg_buf_init(struct vb2_buffer *vb)
-{
-	struct mcam_vb_buffer *mvb = vb_to_mvb(vb);
-	struct mcam_camera *cam = vb2_get_drv_priv(vb->vb2_queue);
-	int ndesc = cam->pix_format.sizeimage/PAGE_SIZE + 1;
-
-	mvb->dma_desc = dma_alloc_coherent(cam->dev,
-			ndesc * sizeof(struct mcam_dma_desc),
-			&mvb->dma_desc_pa, GFP_KERNEL);
-	if (mvb->dma_desc == NULL) {
-		cam_err(cam, "Unable to get DMA descriptor array\n");
-		return -ENOMEM;
-	}
-	return 0;
-}
-
-static int mcam_vb_sg_buf_prepare(struct vb2_buffer *vb)
-{
-	struct mcam_vb_buffer *mvb = vb_to_mvb(vb);
-	struct mcam_camera *cam = vb2_get_drv_priv(vb->vb2_queue);
-	struct vb2_dma_sg_desc *sgd = vb2_dma_sg_plane_desc(vb, 0);
-	struct mcam_dma_desc *desc = mvb->dma_desc;
-	struct scatterlist *sg;
-	int i;
-
-	mvb->dma_desc_nent = dma_map_sg(cam->dev, sgd->sglist, sgd->num_pages,
-			DMA_FROM_DEVICE);
-	if (mvb->dma_desc_nent <= 0)
-		return -EIO;  /* Not sure what's right here */
-	for_each_sg(sgd->sglist, sg, mvb->dma_desc_nent, i) {
-		desc->dma_addr = sg_dma_address(sg);
-		desc->segment_len = sg_dma_len(sg);
-		desc++;
-	}
-	return 0;
-}
-
 
 static void mcam_vb_buf_queue(struct vb2_buffer *vb)
 {
@@ -782,26 +915,6 @@ static void mcam_vb_buf_queue(struct vb2_buffer *vb)
 	spin_unlock_irqrestore(&cam->dev_lock, flags);
 	if (start)
 		mcam_read_setup(cam);
-}
-
-
-static int mcam_vb_sg_buf_finish(struct vb2_buffer *vb)
-{
-	struct mcam_camera *cam = vb2_get_drv_priv(vb->vb2_queue);
-	struct vb2_dma_sg_desc *sgd = vb2_dma_sg_plane_desc(vb, 0);
-
-	dma_unmap_sg(cam->dev, sgd->sglist, sgd->num_pages, DMA_FROM_DEVICE);
-	return 0;
-}
-
-static void mcam_vb_sg_buf_cleanup(struct vb2_buffer *vb)
-{
-	struct mcam_camera *cam = vb2_get_drv_priv(vb->vb2_queue);
-	struct mcam_vb_buffer *mvb = vb_to_mvb(vb);
-	int ndesc = cam->pix_format.sizeimage/PAGE_SIZE + 1;
-
-	dma_free_coherent(cam->dev, ndesc * sizeof(struct mcam_dma_desc),
-			mvb->dma_desc, mvb->dma_desc_pa);
 }
 
 
@@ -881,9 +994,69 @@ static const struct vb2_ops mcam_vb2_ops = {
 	.wait_finish		= mcam_vb_wait_finish,
 };
 
+
+#ifdef MCAM_MODE_DMA_SG
 /*
- * Scatter/gather mode complicates things somewhat.
+ * Scatter/gather mode uses all of the above functions plus a
+ * few extras to deal with DMA mapping.
  */
+static int mcam_vb_sg_buf_init(struct vb2_buffer *vb)
+{
+	struct mcam_vb_buffer *mvb = vb_to_mvb(vb);
+	struct mcam_camera *cam = vb2_get_drv_priv(vb->vb2_queue);
+	int ndesc = cam->pix_format.sizeimage/PAGE_SIZE + 1;
+
+	mvb->dma_desc = dma_alloc_coherent(cam->dev,
+			ndesc * sizeof(struct mcam_dma_desc),
+			&mvb->dma_desc_pa, GFP_KERNEL);
+	if (mvb->dma_desc == NULL) {
+		cam_err(cam, "Unable to get DMA descriptor array\n");
+		return -ENOMEM;
+	}
+	return 0;
+}
+
+static int mcam_vb_sg_buf_prepare(struct vb2_buffer *vb)
+{
+	struct mcam_vb_buffer *mvb = vb_to_mvb(vb);
+	struct mcam_camera *cam = vb2_get_drv_priv(vb->vb2_queue);
+	struct vb2_dma_sg_desc *sgd = vb2_dma_sg_plane_desc(vb, 0);
+	struct mcam_dma_desc *desc = mvb->dma_desc;
+	struct scatterlist *sg;
+	int i;
+
+	mvb->dma_desc_nent = dma_map_sg(cam->dev, sgd->sglist, sgd->num_pages,
+			DMA_FROM_DEVICE);
+	if (mvb->dma_desc_nent <= 0)
+		return -EIO;  /* Not sure what's right here */
+	for_each_sg(sgd->sglist, sg, mvb->dma_desc_nent, i) {
+		desc->dma_addr = sg_dma_address(sg);
+		desc->segment_len = sg_dma_len(sg);
+		desc++;
+	}
+	return 0;
+}
+
+static int mcam_vb_sg_buf_finish(struct vb2_buffer *vb)
+{
+	struct mcam_camera *cam = vb2_get_drv_priv(vb->vb2_queue);
+	struct vb2_dma_sg_desc *sgd = vb2_dma_sg_plane_desc(vb, 0);
+
+	dma_unmap_sg(cam->dev, sgd->sglist, sgd->num_pages, DMA_FROM_DEVICE);
+	return 0;
+}
+
+static void mcam_vb_sg_buf_cleanup(struct vb2_buffer *vb)
+{
+	struct mcam_camera *cam = vb2_get_drv_priv(vb->vb2_queue);
+	struct mcam_vb_buffer *mvb = vb_to_mvb(vb);
+	int ndesc = cam->pix_format.sizeimage/PAGE_SIZE + 1;
+
+	dma_free_coherent(cam->dev, ndesc * sizeof(struct mcam_dma_desc),
+			mvb->dma_desc, mvb->dma_desc_pa);
+}
+
+
 static const struct vb2_ops mcam_vb2_sg_ops = {
 	.queue_setup		= mcam_vb_queue_setup,
 	.buf_init		= mcam_vb_sg_buf_init,
@@ -897,6 +1070,8 @@ static const struct vb2_ops mcam_vb2_sg_ops = {
 	.wait_finish		= mcam_vb_wait_finish,
 };
 
+#endif /* MCAM_MODE_DMA_SG */
+
 static int mcam_setup_vb2(struct mcam_camera *cam)
 {
 	struct vb2_queue *vq = &cam->vb_queue;
@@ -907,21 +1082,35 @@ static int mcam_setup_vb2(struct mcam_camera *cam)
 	INIT_LIST_HEAD(&cam->buffers);
 	switch (cam->buffer_mode) {
 	case B_DMA_contig:
+#ifdef MCAM_MODE_DMA_CONTIG
 		vq->ops = &mcam_vb2_ops;
 		vq->mem_ops = &vb2_dma_contig_memops;
 		cam->vb_alloc_ctx = vb2_dma_contig_init_ctx(cam->dev);
 		vq->io_modes = VB2_MMAP | VB2_USERPTR;
+		cam->dma_setup = mcam_ctlr_dma_contig;
+		cam->frame_complete = mcam_dma_contig_done;
+#endif
 		break;
 	case B_DMA_sg:
+#ifdef MCAM_MODE_DMA_SG
 		vq->ops = &mcam_vb2_sg_ops;
 		vq->mem_ops = &vb2_dma_sg_memops;
 		vq->io_modes = VB2_MMAP | VB2_USERPTR;
+		cam->dma_setup = mcam_ctlr_dma_sg;
+		cam->frame_complete = mcam_dma_sg_done;
+#endif
 		break;
 	case B_vmalloc:
+#ifdef MCAM_MODE_VMALLOC
+		tasklet_init(&cam->s_tasklet, mcam_frame_tasklet,
+				(unsigned long) cam);
 		vq->ops = &mcam_vb2_ops;
 		vq->mem_ops = &vb2_vmalloc_memops;
 		vq->buf_struct_size = sizeof(struct mcam_vb_buffer);
 		vq->io_modes = VB2_MMAP;
+		cam->dma_setup = mcam_ctlr_dma_vmalloc;
+		cam->frame_complete = mcam_vmalloc_done;
+#endif
 		break;
 	}
 	return vb2_queue_init(vq);
@@ -930,27 +1119,16 @@ static int mcam_setup_vb2(struct mcam_camera *cam)
 static void mcam_cleanup_vb2(struct mcam_camera *cam)
 {
 	vb2_queue_release(&cam->vb_queue);
+#ifdef MCAM_MODE_DMA_CONTIG
 	if (cam->buffer_mode == B_DMA_contig)
 		vb2_dma_contig_cleanup_ctx(cam->vb_alloc_ctx);
-}
-
-static ssize_t mcam_v4l_read(struct file *filp,
-		char __user *buffer, size_t len, loff_t *pos)
-{
-	struct mcam_camera *cam = filp->private_data;
-	int ret;
-
-	mutex_lock(&cam->s_mutex);
-	ret = vb2_read(&cam->vb_queue, buffer, len, pos,
-			filp->f_flags & O_NONBLOCK);
-	mutex_unlock(&cam->s_mutex);
-	return ret;
+#endif
 }
 
 
-
+/* ---------------------------------------------------------------------- */
 /*
- * Streaming I/O support.
+ * The long list of V4L2 ioctl() operations.
  */
 
 static int mcam_vidioc_streamon(struct file *filp, void *priv,
@@ -1029,80 +1207,6 @@ static int mcam_vidioc_dqbuf(struct file *filp, void *priv,
 }
 
 
-static int mcam_v4l_mmap(struct file *filp, struct vm_area_struct *vma)
-{
-	struct mcam_camera *cam = filp->private_data;
-	int ret;
-
-	mutex_lock(&cam->s_mutex);
-	ret = vb2_mmap(&cam->vb_queue, vma);
-	mutex_unlock(&cam->s_mutex);
-	return ret;
-}
-
-
-
-static int mcam_v4l_open(struct file *filp)
-{
-	struct mcam_camera *cam = video_drvdata(filp);
-	int ret = 0;
-
-	filp->private_data = cam;
-
-	frames = singles = delivered = 0;
-	mutex_lock(&cam->s_mutex);
-	if (cam->users == 0) {
-		ret = mcam_setup_vb2(cam);
-		if (ret)
-			goto out;
-		mcam_ctlr_power_up(cam);
-		__mcam_cam_reset(cam);
-		mcam_set_config_needed(cam, 1);
-	}
-	(cam->users)++;
-out:
-	mutex_unlock(&cam->s_mutex);
-	return ret;
-}
-
-
-static int mcam_v4l_release(struct file *filp)
-{
-	struct mcam_camera *cam = filp->private_data;
-
-	cam_err(cam, "Release, %d frames, %d singles, %d delivered\n", frames,
-			singles, delivered);
-	mutex_lock(&cam->s_mutex);
-	(cam->users)--;
-	if (filp == cam->owner) {
-		mcam_ctlr_stop_dma(cam);
-		cam->owner = NULL;
-	}
-	if (cam->users == 0) {
-		mcam_cleanup_vb2(cam);
-		mcam_ctlr_power_down(cam);
-		if (cam->buffer_mode == B_vmalloc && alloc_bufs_at_read)
-			mcam_free_dma_bufs(cam);
-	}
-	mutex_unlock(&cam->s_mutex);
-	return 0;
-}
-
-
-
-static unsigned int mcam_v4l_poll(struct file *filp,
-		struct poll_table_struct *pt)
-{
-	struct mcam_camera *cam = filp->private_data;
-	int ret;
-
-	mutex_lock(&cam->s_mutex);
-	ret = vb2_poll(&cam->vb_queue, filp, pt);
-	mutex_unlock(&cam->s_mutex);
-	return ret;
-}
-
-
 
 static int mcam_vidioc_queryctrl(struct file *filp, void *priv,
 		struct v4l2_queryctrl *qc)
@@ -1154,21 +1258,6 @@ static int mcam_vidioc_querycap(struct file *file, void *priv,
 	return 0;
 }
 
-
-/*
- * The default format we use until somebody says otherwise.
- */
-static const struct v4l2_pix_format mcam_def_pix_format = {
-	.width		= VGA_WIDTH,
-	.height		= VGA_HEIGHT,
-	.pixelformat	= V4L2_PIX_FMT_YUYV,
-	.field		= V4L2_FIELD_NONE,
-	.bytesperline	= VGA_WIDTH*2,
-	.sizeimage	= VGA_WIDTH*VGA_HEIGHT*2,
-};
-
-static const enum v4l2_mbus_pixelcode mcam_def_mbus_code =
-					V4L2_MBUS_FMT_YUYV8_2X8;
 
 static int mcam_vidioc_enum_fmt_vid_cap(struct file *filp,
 		void *priv, struct v4l2_fmtdesc *fmt)
@@ -1235,15 +1324,10 @@ static int mcam_vidioc_s_fmt_vid_cap(struct file *filp, void *priv,
 	/*
 	 * Make sure we have appropriate DMA buffers.
 	 */
-	ret = -ENOMEM;
 	if (cam->buffer_mode == B_vmalloc) {
-		if (cam->nbufs > 0 &&
-				cam->dma_buf_size < cam->pix_format.sizeimage)
-			mcam_free_dma_bufs(cam);
-		if (cam->nbufs == 0) {
-			if (mcam_alloc_dma_bufs(cam, 0))
-				goto out;
-		}
+		ret = mcam_check_dma_buffers(cam);
+		if (ret)
+			goto out;
 	}
 	mcam_set_config_needed(cam, 1);
 	ret = 0;
@@ -1395,21 +1479,6 @@ static int mcam_vidioc_s_register(struct file *file, void *priv,
 }
 #endif
 
-/*
- * This template device holds all of those v4l2 methods; we
- * clone it for specific real devices.
- */
-
-static const struct v4l2_file_operations mcam_v4l_fops = {
-	.owner = THIS_MODULE,
-	.open = mcam_v4l_open,
-	.release = mcam_v4l_release,
-	.read = mcam_v4l_read,
-	.poll = mcam_v4l_poll,
-	.mmap = mcam_v4l_mmap,
-	.unlocked_ioctl = video_ioctl2,
-};
-
 static const struct v4l2_ioctl_ops mcam_v4l_ioctl_ops = {
 	.vidioc_querycap	= mcam_vidioc_querycap,
 	.vidioc_enum_fmt_vid_cap = mcam_vidioc_enum_fmt_vid_cap,
@@ -1440,6 +1509,112 @@ static const struct v4l2_ioctl_ops mcam_v4l_ioctl_ops = {
 #endif
 };
 
+/* ---------------------------------------------------------------------- */
+/*
+ * Our various file operations.
+ */
+static int mcam_v4l_open(struct file *filp)
+{
+	struct mcam_camera *cam = video_drvdata(filp);
+	int ret = 0;
+
+	filp->private_data = cam;
+
+	frames = singles = delivered = 0;
+	mutex_lock(&cam->s_mutex);
+	if (cam->users == 0) {
+		ret = mcam_setup_vb2(cam);
+		if (ret)
+			goto out;
+		mcam_ctlr_power_up(cam);
+		__mcam_cam_reset(cam);
+		mcam_set_config_needed(cam, 1);
+	}
+	(cam->users)++;
+out:
+	mutex_unlock(&cam->s_mutex);
+	return ret;
+}
+
+
+static int mcam_v4l_release(struct file *filp)
+{
+	struct mcam_camera *cam = filp->private_data;
+
+	cam_err(cam, "Release, %d frames, %d singles, %d delivered\n", frames,
+			singles, delivered);
+	mutex_lock(&cam->s_mutex);
+	(cam->users)--;
+	if (filp == cam->owner) {
+		mcam_ctlr_stop_dma(cam);
+		cam->owner = NULL;
+	}
+	if (cam->users == 0) {
+		mcam_cleanup_vb2(cam);
+		mcam_ctlr_power_down(cam);
+		if (cam->buffer_mode == B_vmalloc && alloc_bufs_at_read)
+			mcam_free_dma_bufs(cam);
+	}
+	mutex_unlock(&cam->s_mutex);
+	return 0;
+}
+
+static ssize_t mcam_v4l_read(struct file *filp,
+		char __user *buffer, size_t len, loff_t *pos)
+{
+	struct mcam_camera *cam = filp->private_data;
+	int ret;
+
+	mutex_lock(&cam->s_mutex);
+	ret = vb2_read(&cam->vb_queue, buffer, len, pos,
+			filp->f_flags & O_NONBLOCK);
+	mutex_unlock(&cam->s_mutex);
+	return ret;
+}
+
+
+
+static unsigned int mcam_v4l_poll(struct file *filp,
+		struct poll_table_struct *pt)
+{
+	struct mcam_camera *cam = filp->private_data;
+	int ret;
+
+	mutex_lock(&cam->s_mutex);
+	ret = vb2_poll(&cam->vb_queue, filp, pt);
+	mutex_unlock(&cam->s_mutex);
+	return ret;
+}
+
+
+static int mcam_v4l_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+	struct mcam_camera *cam = filp->private_data;
+	int ret;
+
+	mutex_lock(&cam->s_mutex);
+	ret = vb2_mmap(&cam->vb_queue, vma);
+	mutex_unlock(&cam->s_mutex);
+	return ret;
+}
+
+
+
+static const struct v4l2_file_operations mcam_v4l_fops = {
+	.owner = THIS_MODULE,
+	.open = mcam_v4l_open,
+	.release = mcam_v4l_release,
+	.read = mcam_v4l_read,
+	.poll = mcam_v4l_poll,
+	.mmap = mcam_v4l_mmap,
+	.unlocked_ioctl = video_ioctl2,
+};
+
+
+/*
+ * This template device holds all of those v4l2 methods; we
+ * clone it for specific real devices.
+ */
 static struct video_device mcam_v4l_template = {
 	.name = "mcam",
 	.tvnorms = V4L2_STD_NTSC_M,
@@ -1454,119 +1629,6 @@ static struct video_device mcam_v4l_template = {
 /*
  * Interrupt handler stuff
  */
-
-
-static void mcam_buffer_done(struct mcam_camera *cam, int frame,
-		struct vb2_buffer *vbuf)
-{
-	vbuf->v4l2_buf.bytesused = cam->pix_format.sizeimage;
-	vbuf->v4l2_buf.sequence = cam->buf_seq[frame];
-	vb2_set_plane_payload(vbuf, 0, cam->pix_format.sizeimage);
-	vb2_buffer_done(vbuf, VB2_BUF_STATE_DONE);
-}
-
-/*
- * Copy data out to user space in the vmalloc case
- */
-static void mcam_frame_tasklet(unsigned long data)
-{
-	struct mcam_camera *cam = (struct mcam_camera *) data;
-	int i;
-	unsigned long flags;
-	struct mcam_vb_buffer *buf;
-
-	spin_lock_irqsave(&cam->dev_lock, flags);
-	for (i = 0; i < cam->nbufs; i++) {
-		int bufno = cam->next_buf;
-
-		if (cam->state != S_STREAMING || bufno < 0)
-			break;  /* I/O got stopped */
-		if (++(cam->next_buf) >= cam->nbufs)
-			cam->next_buf = 0;
-		if (!test_bit(bufno, &cam->flags))
-			continue;
-		if (list_empty(&cam->buffers)) {
-			singles++;
-			break;  /* Leave it valid, hope for better later */
-		}
-		delivered++;
-		clear_bit(bufno, &cam->flags);
-		buf = list_first_entry(&cam->buffers, struct mcam_vb_buffer,
-				queue);
-		list_del_init(&buf->queue);
-		/*
-		 * Drop the lock during the big copy.  This *should* be safe...
-		 */
-		spin_unlock_irqrestore(&cam->dev_lock, flags);
-		memcpy(vb2_plane_vaddr(&buf->vb_buf, 0), cam->dma_bufs[bufno],
-				cam->pix_format.sizeimage);
-		mcam_buffer_done(cam, bufno, &buf->vb_buf);
-		spin_lock_irqsave(&cam->dev_lock, flags);
-	}
-	spin_unlock_irqrestore(&cam->dev_lock, flags);
-}
-
-/*
- * For direct DMA, mark the buffer ready and set up another one.
- */
-static void mcam_dma_contig_done(struct mcam_camera *cam, int frame)
-{
-	struct mcam_vb_buffer *buf = cam->vb_bufs[frame];
-
-	if (!test_bit(CF_SINGLE_BUFFER, &cam->flags)) {
-		delivered++;
-		mcam_buffer_done(cam, frame, &buf->vb_buf);
-	}
-	mcam_set_contig_buffer(cam, frame);
-}
-
-/*
- * Frame completion with S/G is trickier.  We can't muck with
- * a descriptor chain on the fly, since the controller buffers it
- * internally.  So we have to actually stop and restart; Marvell
- * says this is the way to do it.
- *
- * Of course, stopping is easier said than done; experience shows
- * that the controller can start a frame *after* C0_ENABLE has been
- * cleared.  So when running in S/G mode, the controller is "stopped"
- * on receipt of the start-of-frame interrupt.  That means we can
- * safely change the DMA descriptor array here and restart things
- * (assuming there's another buffer waiting to go).
- */
-static void mcam_dma_sg_done(struct mcam_camera *cam, int frame)
-{
-	struct mcam_vb_buffer *buf = cam->vb_bufs[0];
-
-	/*
-	 * Very Bad Not Good Things happen if you don't clear
-	 * C1_DESC_ENA before making any descriptor changes.
-	 */
-	mcam_reg_clear_bit(cam, REG_CTRL1, C1_DESC_ENA);
-	/*
-	 * If we have another buffer available, put it in and
-	 * restart the engine.
-	 */
-	if (!list_empty(&cam->buffers)) {
-		mcam_sg_next_buffer(cam);
-		mcam_reg_set_bit(cam, REG_CTRL1, C1_DESC_ENA);
-		mcam_ctlr_start(cam);
-	/*
-	 * Otherwise set CF_SG_RESTART and the controller will
-	 * be restarted once another buffer shows up.
-	 */
-	} else {
-		set_bit(CF_SG_RESTART, &cam->flags);
-		singles++;
-	}
-	/*
-	 * Now we can give the completed frame back to user space.
-	 */
-	delivered++;
-	mcam_buffer_done(cam, frame, &buf->vb_buf);
-}
-
-
-
 static void mcam_frame_complete(struct mcam_camera *cam, int frame)
 {
 	/*
@@ -1576,7 +1638,6 @@ static void mcam_frame_complete(struct mcam_camera *cam, int frame)
 	clear_bit(CF_DMA_ACTIVE, &cam->flags);
 	cam->next_buf = frame;
 	cam->buf_seq[frame] = ++(cam->sequence);
-	cam->last_delivered = frame;
 	frames++;
 	/*
 	 * "This should never happen"
@@ -1586,22 +1647,14 @@ static void mcam_frame_complete(struct mcam_camera *cam, int frame)
 	/*
 	 * Process the frame and set up the next one.
 	 */
-	switch (cam->buffer_mode) {
-	case B_vmalloc:
-	    tasklet_schedule(&cam->s_tasklet);
-	    break;
-	case B_DMA_contig:
-	    mcam_dma_contig_done(cam, frame);
-	    break;
-	case B_DMA_sg:
-	    mcam_dma_sg_done(cam, frame);
-	    break;
-	}
+	cam->frame_complete(cam, frame);
 }
 
 
-
-
+/*
+ * The interrupt handler; this needs to be called from the
+ * platform irq handler with the lock held.
+ */
 int mccic_irq(struct mcam_camera *cam, unsigned int irqs)
 {
 	unsigned int frame, handled = 0;
@@ -1636,10 +1689,10 @@ int mccic_irq(struct mcam_camera *cam, unsigned int irqs)
 	return handled;
 }
 
+/* ---------------------------------------------------------------------- */
 /*
  * Registration and such.
  */
-
 static struct ov7670_config sensor_cfg = {
 	/*
 	 * Exclude QCIF mode, because it only captures a tiny portion
@@ -1660,6 +1713,22 @@ int mccic_register(struct mcam_camera *cam)
 	int ret;
 
 	/*
+	 * Validate the requested buffer mode.
+	 */
+	if (buffer_mode >= 0)
+		cam->buffer_mode = buffer_mode;
+	if (cam->buffer_mode == B_DMA_sg &&
+			cam->chip_id == V4L2_IDENT_CAFE) {
+		printk(KERN_ERR "marvell-cam: Cafe can't do S/G I/O, "
+			"attempting vmalloc mode instead\n");
+		cam->buffer_mode = B_vmalloc;
+	}
+	if (!mcam_buffer_mode_supported(cam->buffer_mode)) {
+		printk(KERN_ERR "marvell-cam: buffer mode %d unsupported\n",
+				cam->buffer_mode);
+		return -EINVAL;
+	}
+	/*
 	 * Register with V4L
 	 */
 	ret = v4l2_device_register(cam->dev, &cam->v4l2_dev);
@@ -1671,28 +1740,7 @@ int mccic_register(struct mcam_camera *cam)
 	mcam_set_config_needed(cam, 1);
 	cam->pix_format = mcam_def_pix_format;
 	cam->mbus_code = mcam_def_mbus_code;
-	INIT_LIST_HEAD(&cam->dev_list);
 	INIT_LIST_HEAD(&cam->buffers);
-	tasklet_init(&cam->s_tasklet, mcam_frame_tasklet, (unsigned long) cam);
-	/*
-	 * User space may want to override the asked-for buffer mode;
-	 * here's hoping they know what they're doing.
-	 */
-	if (buffer_mode == 0)
-		cam->buffer_mode = B_vmalloc;
-	else if (buffer_mode == 1)
-		cam->buffer_mode = B_DMA_contig;
-	else if (buffer_mode == 2) {
-		if (cam->chip_id == V4L2_IDENT_ARMADA610)
-			cam->buffer_mode = B_DMA_sg;
-		else {
-			printk(KERN_ERR "marvell-cam: Cafe can't do S/G I/O\n");
-			cam->buffer_mode = B_vmalloc;
-		}
-	} else if (buffer_mode != -1)
-		printk(KERN_ERR "marvell-cam: "
-				"Strange module buffer mode %d - ignoring\n",
-				buffer_mode);
 	mcam_ctlr_init(cam);
 
 	/*
