@@ -1609,7 +1609,7 @@ static void __init xen_map_identity_early(pmd_t *pmd, unsigned long max_pfn)
 	set_page_prot(pmd, PAGE_KERNEL_RO);
 }
 
-void xen_setup_machphys_mapping(void)
+void __init xen_setup_machphys_mapping(void)
 {
 	struct xen_machphys_mapping mapping;
 	unsigned long machine_to_phys_nr_ents;

@@ -43,8 +43,6 @@ void xen_arch_hvm_post_suspend(int suspend_cancelled)
 
 void xen_arch_post_suspend(int suspend_cancelled)
 {
-	xen_setup_machphys_mapping();
-
 	xen_build_mfn_list_list();
 
 	xen_setup_shared_info();
