@@ -26,6 +26,7 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/version.h>
+#include <linux/module.h>
 #include <sound/core.h>
 #include <sound/tea575x-tuner.h>
 
