@@ -473,7 +473,7 @@ static const struct backlight_ops ams369fg06_backlight_ops = {
 	.update_status = ams369fg06_set_brightness,
 };
 
-static int __init ams369fg06_probe(struct spi_device *spi)
+static int __devinit ams369fg06_probe(struct spi_device *spi)
 {
 	int ret = 0;
 	struct ams369fg06 *lcd = NULL;
