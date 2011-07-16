@@ -3119,7 +3119,7 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	if ((flags & FAULT_FLAG_WRITE) && !(vma->vm_flags & VM_SHARED)) {
 
 		if (unlikely(anon_vma_prepare(vma)))
-			return  VM_FAULT_OOM;
+			return VM_FAULT_OOM;
 
 		cow_page = alloc_page_vma(GFP_HIGHUSER_MOVABLE, vma, address);
 		if (!cow_page)
