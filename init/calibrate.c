@@ -243,7 +243,7 @@ recalibrate:
 	return lpj;
 }
 
-DEFINE_PER_CPU(unsigned long, cpu_loops_per_jiffy) = { 0 };
+static DEFINE_PER_CPU(unsigned long, cpu_loops_per_jiffy) = { 0 };
 
 void __cpuinit calibrate_delay(void)
 {
