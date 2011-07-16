@@ -23,9 +23,7 @@
 #include <linux/log2.h>
 #include <linux/regulator/consumer.h>
 #include <linux/pm_runtime.h>
-#ifdef CONFIG_PM
 #include <linux/suspend.h>
-#endif
 
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
