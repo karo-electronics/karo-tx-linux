@@ -605,7 +605,7 @@ static int ams369fg06_resume(struct spi_device *spi)
 #define ams369fg06_resume	NULL
 #endif
 
-void ams369fg06_shutdown(struct spi_device *spi)
+static void ams369fg06_shutdown(struct spi_device *spi)
 {
 	struct ams369fg06 *lcd = dev_get_drvdata(&spi->dev);
 
