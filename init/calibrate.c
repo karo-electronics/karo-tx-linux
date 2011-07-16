@@ -253,7 +253,7 @@ void __cpuinit calibrate_delay(void)
 	int this_cpu = smp_processor_id();
 
 	if (per_cpu(cpu_loops_per_jiffy, this_cpu)) {
-		loops_per_jiffy = per_cpu(cpu_loops_per_jiffy, this_cpu);
+		lpj = per_cpu(cpu_loops_per_jiffy, this_cpu);
 		pr_info("Calibrating delay loop (skipped) "
 				"already calibrated this CPU");
 	} else if (preset_lpj) {
@@ -274,7 +274,7 @@ void __cpuinit calibrate_delay(void)
 			pr_info("Calibrating delay loop... ");
 		lpj = calibrate_delay_converge();
 	}
-	per_cpu(cpu_loops_per_jiffy, this_cpu) = loops_per_jiffy;
+	per_cpu(cpu_loops_per_jiffy, this_cpu) = lpj;
 	if (!printed)
 		pr_cont("%lu.%02lu BogoMIPS (lpj=%lu)\n",
 			lpj/(500000/HZ),
