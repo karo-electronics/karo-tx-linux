@@ -553,6 +553,7 @@ static int __devexit ams369fg06_remove(struct spi_device *spi)
 	struct ams369fg06 *lcd = dev_get_drvdata(&spi->dev);
 
 	ams369fg06_power(lcd, FB_BLANK_POWERDOWN);
+	backlight_device_unregister(lcd->bd);
 	lcd_device_unregister(lcd->ld);
 	kfree(lcd);
 
