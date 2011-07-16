@@ -389,7 +389,8 @@ static int __devinit pm8xxx_rtc_probe(struct platform_device *pdev)
 	bool rtc_write_enable = false;
 	struct pm8xxx_rtc *rtc_dd;
 	struct resource *rtc_resource;
-	const struct pm8xxx_rtc_platform_data *pdata = mfd_get_data(pdev);
+	const struct pm8xxx_rtc_platform_data *pdata =
+						dev_get_platdata(&pdev->dev);
 
 	if (pdata != NULL)
 		rtc_write_enable = pdata->rtc_write_enable;
