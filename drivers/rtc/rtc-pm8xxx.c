@@ -15,7 +15,7 @@
 #include <linux/rtc.h>
 #include <linux/pm.h>
 #include <linux/slab.h>
-#include<linux/spinlock.h>
+#include <linux/spinlock.h>
 
 #include <linux/mfd/pm8xxx/core.h>
 #include <linux/mfd/pm8xxx/rtc.h>
@@ -46,7 +46,6 @@
  * @rtc_dev:		device structure.
  * @ctrl_reg_lock:	spinlock protecting access to ctrl_reg.
  */
-
 struct pm8xxx_rtc {
 	struct rtc_device *rtc;
 	int rtc_alarm_irq;
@@ -63,7 +62,6 @@ struct pm8xxx_rtc {
  * The RTC registers need to be read/written one byte at a time. This is a
  * hardware limitation.
  */
-
 static int pm8xxx_read_wrapper(struct pm8xxx_rtc *rtc_dd, u8 *rtc_val,
 		int base, int count)
 {
@@ -105,8 +103,7 @@ static int pm8xxx_write_wrapper(struct pm8xxx_rtc *rtc_dd, u8 *rtc_val,
  * 3. Write Byte[1], Byte[2], Byte[3] then Byte[0].
  * 4. Enable alarm if disabled in step 1.
  */
-static int
-pm8xxx_rtc_set_time(struct device *dev, struct rtc_time *tm)
+static int pm8xxx_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
 	int rc, i;
 	unsigned long secs, irq_flags;
@@ -181,8 +178,7 @@ rtc_rw_fail:
 	return rc;
 }
 
-static int
-pm8xxx_rtc_read_time(struct device *dev, struct rtc_time *tm)
+static int pm8xxx_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
 	int rc;
 	u8 value[NUM_8_BIT_RTC_REGS], reg;
@@ -232,8 +228,7 @@ pm8xxx_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	return 0;
 }
 
-static int
-pm8xxx_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alarm)
+static int pm8xxx_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 {
 	int rc, i;
 	u8 value[NUM_8_BIT_RTC_REGS], ctrl_reg;
@@ -277,8 +272,7 @@ rtc_rw_fail:
 	return rc;
 }
 
-static int
-pm8xxx_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alarm)
+static int pm8xxx_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 {
 	int rc;
 	u8 value[NUM_8_BIT_RTC_REGS];
@@ -310,9 +304,7 @@ pm8xxx_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 	return 0;
 }
 
-
-static int
-pm8xxx_rtc_alarm_irq_enable(struct device *dev, unsigned int enable)
+static int pm8xxx_rtc_alarm_irq_enable(struct device *dev, unsigned int enable)
 {
 	int rc;
 	unsigned long irq_flags;
