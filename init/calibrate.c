@@ -9,6 +9,7 @@
 #include <linux/init.h>
 #include <linux/timex.h>
 #include <linux/smp.h>
+#include <linux/percpu.h>
 
 unsigned long lpj_fine;
 unsigned long preset_lpj;
