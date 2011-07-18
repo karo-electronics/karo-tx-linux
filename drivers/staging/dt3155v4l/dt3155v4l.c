@@ -21,6 +21,7 @@
 #include <linux/version.h>
 #include <linux/stringify.h>
 #include <linux/delay.h>
+#include <linux/slab.h>
 #include <linux/kthread.h>
 #include <linux/module.h>
 #include <media/v4l2-dev.h>
