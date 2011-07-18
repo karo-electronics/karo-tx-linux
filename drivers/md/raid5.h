@@ -209,7 +209,6 @@ struct stripe_head {
 	short			ddf_layout;/* use DDF ordering to calculate Q */
 	unsigned long		state;		/* state flags */
 	atomic_t		count;	      /* nr of active thread/requests */
-	spinlock_t		lock;
 	int			bm_seq;	/* sequence number for bitmap flushes */
 	int			disks;		/* disks in stripe */
 	enum check_states	check_state;
@@ -290,6 +289,7 @@ struct r6_state {
  * Stripe state
  */
 enum {
+	STRIPE_ACTIVE,
 	STRIPE_HANDLE,
 	STRIPE_SYNC_REQUESTED,
 	STRIPE_SYNCING,
