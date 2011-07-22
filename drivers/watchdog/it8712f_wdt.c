@@ -28,7 +28,6 @@
 #include <linux/notifier.h>
 #include <linux/reboot.h>
 #include <linux/fs.h>
-#include <linux/pci.h>
 #include <linux/spinlock.h>
 #include <linux/uaccess.h>
 #include <linux/io.h>
