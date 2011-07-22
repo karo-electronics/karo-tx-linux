@@ -16,10 +16,6 @@ enum vsyscall_num {
 #ifdef __KERNEL__
 #include <linux/seqlock.h>
 
-/* Definitions for CONFIG_GENERIC_TIME definitions */
-#define __vsyscall_fn \
-	__attribute__ ((unused, __section__(".vsyscall_fn"))) notrace
-
 #define VGETCPU_RDTSCP	1
 #define VGETCPU_LSL	2
 
@@ -30,18 +26,6 @@ extern struct timezone sys_tz;
 #include <asm/vvar.h>
 
 extern void map_vsyscall(void);
-
-/* Emulation */
-
-static inline bool is_vsyscall_entry(unsigned long addr)
-{
-	return (addr & ~0xC00UL) == VSYSCALL_START;
-}
-
-static inline int vsyscall_entry_nr(unsigned long addr)
-{
-	return (addr & 0xC00UL) >> 10;
-}
 
 #endif /* __KERNEL__ */
 
