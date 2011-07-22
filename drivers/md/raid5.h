@@ -248,6 +248,10 @@ struct stripe_head_state {
 	int failed_num[2];
 	unsigned long ops_request;
 	int p_failed, q_failed;
+
+	struct bio *return_bi;
+	mdk_rdev_t *blocked_rdev;
+	int dec_preread_active;
 };
 
 /* Flags */
