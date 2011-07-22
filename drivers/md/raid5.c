@@ -2898,88 +2898,7 @@ static void handle_stripe_expansion(raid5_conf_t *conf, struct stripe_head *sh)
  *
  */
 
-static int handle_stripe5(struct stripe_head *sh, struct stripe_head_state *s)
-{
-	raid5_conf_t *conf = sh->raid_conf;
-	int disks = sh->disks, i;
-	struct r5dev *dev;
-
-	/* Now to look around and see what can be done */
-	rcu_read_lock();
-	spin_lock_irq(&conf->device_lock);
-	for (i=disks; i--; ) {
-		mdk_rdev_t *rdev;
-
-		dev = &sh->dev[i];
-
-		pr_debug("check %d: state 0x%lx toread %p read %p write %p "
-			"written %p\n",	i, dev->flags, dev->toread, dev->read,
-			dev->towrite, dev->written);
-
-		/* maybe we can request a biofill operation
-		 *
-		 * new wantfill requests are only permitted while
-		 * ops_complete_biofill is guaranteed to be inactive
-		 */
-		if (test_bit(R5_UPTODATE, &dev->flags) && dev->toread &&
-		    !test_bit(STRIPE_BIOFILL_RUN, &sh->state))
-			set_bit(R5_Wantfill, &dev->flags);
-
-		/* now count some things */
-		if (test_bit(R5_LOCKED, &dev->flags))
-			s->locked++;
-		if (test_bit(R5_UPTODATE, &dev->flags))
-			s->uptodate++;
-		if (test_bit(R5_Wantcompute, &dev->flags))
-			s->compute++;
-
-		if (test_bit(R5_Wantfill, &dev->flags))
-			s->to_fill++;
-		else if (dev->toread)
-			s->to_read++;
-		if (dev->towrite) {
-			s->to_write++;
-			if (!test_bit(R5_OVERWRITE, &dev->flags))
-				s->non_overwrite++;
-		}
-		if (dev->written)
-			s->written++;
-		rdev = rcu_dereference(conf->disks[i].rdev);
-		if (s->blocked_rdev == NULL &&
-		    rdev && unlikely(test_bit(Blocked, &rdev->flags))) {
-			s->blocked_rdev = rdev;
-			atomic_inc(&rdev->nr_pending);
-		}
-		clear_bit(R5_Insync, &dev->flags);
-		if (!rdev)
-			/* Not in-sync */;
-		else if (test_bit(In_sync, &rdev->flags))
-			set_bit(R5_Insync, &dev->flags);
-		else {
-			/* could be in-sync depending on recovery/reshape status */
-			if (sh->sector + STRIPE_SECTORS <= rdev->recovery_offset)
-				set_bit(R5_Insync, &dev->flags);
-		}
-		if (!test_bit(R5_Insync, &dev->flags)) {
-			/* The ReadError flag will just be confusing now */
-			clear_bit(R5_ReadError, &dev->flags);
-			clear_bit(R5_ReWrite, &dev->flags);
-		}
-		if (test_bit(R5_ReadError, &dev->flags))
-			clear_bit(R5_Insync, &dev->flags);
-		if (!test_bit(R5_Insync, &dev->flags)) {
-			if (s->failed < 2)
-				s->failed_num[s->failed] = i;
-			s->failed++;
-		}
-	}
-	spin_unlock_irq(&conf->device_lock);
-	rcu_read_unlock();
-
-	return 0;
-}
-
-static int handle_stripe6(struct stripe_head *sh, struct stripe_head_state *s)
+static void analyse_stripe(struct stripe_head *sh, struct stripe_head_state *s)
 {
 	raid5_conf_t *conf = sh->raid_conf;
 	int disks = sh->disks;
@@ -2987,11 +2906,11 @@ static int handle_stripe6(struct stripe_head *sh, struct stripe_head_state *s)
 	int i;
 
 	/* Now to look around and see what can be done */
-
 	rcu_read_lock();
 	spin_lock_irq(&conf->device_lock);
 	for (i=disks; i--; ) {
 		mdk_rdev_t *rdev;
+
 		dev = &sh->dev[i];
 
 		pr_debug("check %d: state 0x%lx read %p write %p written %p\n",
@@ -3015,9 +2934,9 @@ static int handle_stripe6(struct stripe_head *sh, struct stripe_head_state *s)
 			BUG_ON(s->compute > 2);
 		}
 
-		if (test_bit(R5_Wantfill, &dev->flags)) {
+		if (test_bit(R5_Wantfill, &dev->flags))
 			s->to_fill++;
-		} else if (dev->toread)
+		else if (dev->toread)
 			s->to_read++;
 		if (dev->towrite) {
 			s->to_write++;
@@ -3057,14 +2976,11 @@ static int handle_stripe6(struct stripe_head *sh, struct stripe_head_state *s)
 	}
 	spin_unlock_irq(&conf->device_lock);
 	rcu_read_unlock();
-
-	return 0;
 }
 
 static void handle_stripe(struct stripe_head *sh)
 {
 	struct stripe_head_state s;
-	int done;
 	raid5_conf_t *conf = sh->raid_conf;
 	int i;
 	int prexor;
@@ -3098,13 +3014,7 @@ static void handle_stripe(struct stripe_head *sh)
 	s.failed_num[0] = -1;
 	s.failed_num[1] = -1;
 
-	if (conf->level == 6)
-		done = handle_stripe6(sh, &s);
-	else
-		done = handle_stripe5(sh, &s);
-
-	if (done)
-		goto finish;
+	analyse_stripe(sh, &s);
 
 	if (unlikely(s.blocked_rdev)) {
 		if (s.syncing || s.expanding || s.expanded ||
