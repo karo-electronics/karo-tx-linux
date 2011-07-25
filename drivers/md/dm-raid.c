@@ -10,8 +10,9 @@
 #include "md.h"
 #include "raid1.h"
 #include "raid5.h"
-#include "dm.h"
 #include "bitmap.h"
+
+#include <linux/device-mapper.h>
 
 #define DM_MSG_PREFIX "raid"
 
