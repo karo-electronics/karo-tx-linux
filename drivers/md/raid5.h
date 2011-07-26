@@ -209,7 +209,6 @@ struct stripe_head {
 	short			ddf_layout;/* use DDF ordering to calculate Q */
 	unsigned long		state;		/* state flags */
 	atomic_t		count;	      /* nr of active thread/requests */
-	spinlock_t		lock;
 	int			bm_seq;	/* sequence number for bitmap flushes */
 	int			disks;		/* disks in stripe */
 	enum check_states	check_state;
@@ -246,13 +245,14 @@ struct stripe_head_state {
 	int syncing, expanding, expanded;
 	int locked, uptodate, to_read, to_write, failed, written;
 	int to_fill, compute, req_compute, non_overwrite;
-	int failed_num;
+	int failed_num[2];
 	unsigned long ops_request;
-};
+	int p_failed, q_failed;
 
-/* r6_state - extra state data only relevant to r6 */
-struct r6_state {
-	int p_failed, q_failed, failed_num[2];
+	struct bio *return_bi;
+	mdk_rdev_t *blocked_rdev;
+	int dec_preread_active;
+	int handle_bad_blocks;
 };
 
 /* Flags */
@@ -268,14 +268,16 @@ struct r6_state {
 #define	R5_ReWrite	9	/* have tried to over-write the readerror */
 
 #define	R5_Expanded	10	/* This block now has post-expand data */
-#define	R5_Wantcompute	11 /* compute_block in progress treat as
-				    * uptodate
-				    */
-#define	R5_Wantfill	12 /* dev->toread contains a bio that needs
-				    * filling
-				    */
-#define R5_Wantdrain	13 /* dev->towrite needs to be drained */
-#define R5_WantFUA	14	/* Write should be FUA */
+#define	R5_Wantcompute	11	/* compute_block in progress treat as
+				 * uptodate
+				 */
+#define	R5_Wantfill	12	/* dev->toread contains a bio that needs
+				 * filling
+				 */
+#define	R5_Wantdrain	13	/* dev->towrite needs to be drained */
+#define	R5_WantFUA	14	/* Write should be FUA */
+#define	R5_WriteError	15	/* got a write error - need to record it */
+#define	R5_MadeGood	16	/* A bad block has been fixed by writing to it*/
 /*
  * Write method
  */
@@ -289,21 +291,25 @@ struct r6_state {
 /*
  * Stripe state
  */
-#define STRIPE_HANDLE		2
-#define	STRIPE_SYNCING		3
-#define	STRIPE_INSYNC		4
-#define	STRIPE_PREREAD_ACTIVE	5
-#define	STRIPE_DELAYED		6
-#define	STRIPE_DEGRADED		7
-#define	STRIPE_BIT_DELAY	8
-#define	STRIPE_EXPANDING	9
-#define	STRIPE_EXPAND_SOURCE	10
-#define	STRIPE_EXPAND_READY	11
-#define	STRIPE_IO_STARTED	12 /* do not count towards 'bypass_count' */
-#define	STRIPE_FULL_WRITE	13 /* all blocks are set to be overwritten */
-#define	STRIPE_BIOFILL_RUN	14
-#define	STRIPE_COMPUTE_RUN	15
-#define	STRIPE_OPS_REQ_PENDING	16
+enum {
+	STRIPE_ACTIVE,
+	STRIPE_HANDLE,
+	STRIPE_SYNC_REQUESTED,
+	STRIPE_SYNCING,
+	STRIPE_INSYNC,
+	STRIPE_PREREAD_ACTIVE,
+	STRIPE_DELAYED,
+	STRIPE_DEGRADED,
+	STRIPE_BIT_DELAY,
+	STRIPE_EXPANDING,
+	STRIPE_EXPAND_SOURCE,
+	STRIPE_EXPAND_READY,
+	STRIPE_IO_STARTED,	/* do not count towards 'bypass_count' */
+	STRIPE_FULL_WRITE,	/* all blocks are set to be overwritten */
+	STRIPE_BIOFILL_RUN,
+	STRIPE_COMPUTE_RUN,
+	STRIPE_OPS_REQ_PENDING,
+};
 
 /*
  * Operation request flags
@@ -399,7 +405,7 @@ struct raid5_private_data {
 					    * (fresh device added).
 					    * Cleared when a sync completes.
 					    */
-
+	int			recovery_disabled;
 	/* per cpu variables */
 	struct raid5_percpu {
 		struct page	*spare_page; /* Used when checking P/Q in raid6 */
