@@ -32,9 +32,13 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/ramoops.h>
+#include <linux/uaccess.h>
+#include <linux/debugfs.h>
 
 #define RAMOOPS_KERNMSG_HDR "===="
 #define MIN_MEM_SIZE 4096UL
+#define RAMOOPS_DIR "ramoops"
+#define RAMOOPS_NEXT "next"
 
 static ulong record_size = MIN_MEM_SIZE;
 module_param(record_size, ulong, 0400);
@@ -63,12 +67,81 @@ static struct ramoops_context {
 	unsigned long size;
 	unsigned long record_size;
 	int dump_oops;
+	int current_entry;
 	int count;
 	int max_count;
 } oops_cxt;
 
 static struct platform_device *dummy;
 static struct ramoops_platform_data *dummy_data;
+static DEFINE_MUTEX(ramoops_mutex);
+
+/* Debugfs entries for ramoops */
+static struct dentry *ramoops_dir, *ramoops_next_entry;
+
+/*
+ * Entry to have access to the memory logged by ramoops. The way the data
+ * is returned is as follows:
+ * Data records are checked one by one for the existence of the header.
+ * If a valid record is found data is returned from it, otherwise it is
+ * skipped.
+ * Once all the records are checked the next call after the last record
+ * will return an empty buffer and the counter is reset.
+ */
+static ssize_t ramoops_read_next(struct file *file, char __user *buf,
+					size_t count, loff_t *ppos)
+{
+	struct ramoops_context *cxt = &oops_cxt;
+
+	mutex_lock(&ramoops_mutex);
+
+	/* Do this check here so it returns an empty file once it resets */
+	if (cxt->current_entry >= cxt->max_count) {
+		cxt->current_entry = 0;
+		count = 0;
+		goto out;
+	}
+
+	/* Check to see if the current dump is valid */
+	while (cxt->current_entry < cxt->max_count
+		&& memcmp(cxt->virt_addr + cxt->record_size *
+			  cxt->current_entry, RAMOOPS_KERNMSG_HDR,
+			  strlen(RAMOOPS_KERNMSG_HDR)))
+		cxt->current_entry++;
+
+	/* In case a dump was not found return 0 */
+	if (cxt->current_entry >= cxt->max_count) {
+		count = 0;
+		goto out;
+	}
+
+	/* Otherwise proceed as normal to return the data */
+	if (*ppos + count > cxt->record_size)
+		count = cxt->record_size - *ppos;
+	if (*ppos > cxt->record_size) {
+		count = 0;
+		cxt->current_entry++;
+		goto out;
+	}
+	if (copy_to_user(buf, cxt->virt_addr + cxt->record_size *
+			 cxt->current_entry + *ppos, count)) {
+		count = -EFAULT;
+		goto out;
+	}
+	*ppos += count;
+
+	/* completed reading this part, go to the next one */
+	if (*ppos == cxt->record_size)
+		cxt->current_entry++;
+
+out:
+	mutex_unlock(&ramoops_mutex);
+	return count;
+}
+
+static const struct file_operations ramoops_next_fops = {
+	.read = ramoops_read_next,
+};
 
 static void ramoops_do_dump(struct kmsg_dumper *dumper,
 		enum kmsg_dump_reason reason, const char *s1, unsigned long l1,
@@ -91,6 +164,7 @@ static void ramoops_do_dump(struct kmsg_dumper *dumper,
 	if (reason == KMSG_DUMP_OOPS && !cxt->dump_oops)
 		return;
 
+	mutex_lock(&ramoops_mutex);
 	buf = cxt->virt_addr + (cxt->count * cxt->record_size);
 	buf_orig = buf;
 
@@ -112,6 +186,7 @@ static void ramoops_do_dump(struct kmsg_dumper *dumper,
 	memcpy(buf + l1_cpy, s2 + s2_start, l2_cpy);
 
 	cxt->count = (cxt->count + 1) % cxt->max_count;
+	mutex_unlock(&ramoops_mutex);
 }
 
 static int __init ramoops_probe(struct platform_device *pdev)
@@ -130,8 +205,8 @@ static int __init ramoops_probe(struct platform_device *pdev)
 	rounddown_pow_of_two(pdata->record_size);
 
 	/* Check for the minimum memory size */
-	if (pdata->mem_size < MIN_MEM_SIZE &&
-			pdata->record_size < MIN_MEM_SIZE) {
+	if (pdata->mem_size < MIN_MEM_SIZE
+	    && pdata->record_size < MIN_MEM_SIZE) {
 		pr_err("memory size too small, minium is %lu\n", MIN_MEM_SIZE);
 		goto fail3;
 	}
@@ -147,6 +222,7 @@ static int __init ramoops_probe(struct platform_device *pdev)
 	cxt->size = pdata->mem_size;
 	cxt->phys_addr = pdata->mem_address;
 	cxt->record_size = pdata->record_size;
+	cxt->current_entry = 0;
 	cxt->dump_oops = pdata->dump_oops;
 
 	if (!request_mem_region(cxt->phys_addr, cxt->size, "ramoops")) {
@@ -168,6 +244,30 @@ static int __init ramoops_probe(struct platform_device *pdev)
 		goto fail1;
 	}
 
+	/* Initialize debugfs entry so the memory can be easily accessed */
+	ramoops_dir = debugfs_create_dir(RAMOOPS_DIR, NULL);
+	if (ramoops_dir == NULL) {
+		err = -ENOMEM;
+		pr_err("debugfs directory entry creation failed\n");
+		goto out;
+	}
+
+	/*
+	 * This interface exposes the next valid entry from ramoops, starting
+	 * from the start of memory area. Once there are no more entries it
+	 * returns an empty buffer. Reading the entry again afterwards starts
+	 * from the begining.
+	 */
+	ramoops_next_entry = debugfs_create_file(RAMOOPS_NEXT, 0444,
+					ramoops_dir, NULL, &ramoops_next_fops);
+
+	if (ramoops_next_entry == NULL) {
+		err = -ENOMEM;
+		pr_err("debugfs next entry creation failed\n");
+		goto no_ramoops_next;
+	}
+
+
 	return 0;
 
 fail1:
@@ -175,6 +275,11 @@ fail1:
 fail2:
 	release_mem_region(cxt->phys_addr, cxt->size);
 fail3:
+	return err;
+
+no_ramoops_next:
+	debugfs_remove(ramoops_dir);
+out:
 	return err;
 }
 
@@ -233,6 +338,10 @@ static void __exit ramoops_exit(void)
 {
 	platform_driver_unregister(&ramoops_driver);
 	kfree(dummy_data);
+
+	/* Clean up debugfs entries */
+	debugfs_remove(ramoops_next_entry);
+	debugfs_remove(ramoops_dir);
 }
 
 module_init(ramoops_init);
