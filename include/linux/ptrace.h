@@ -114,6 +114,7 @@
 #include <linux/sched.h>		/* For struct task_struct.  */
 
 
+extern void show_regs(struct pt_regs *);
 extern long arch_ptrace(struct task_struct *child, long request,
 			unsigned long addr, unsigned long data);
 extern int ptrace_readdata(struct task_struct *tsk, unsigned long src, char __user *dst, int len);
