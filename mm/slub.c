@@ -2326,6 +2326,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
 		return;
 
 	do {
+		new = *page;
 		prior = page->freelist;
 		counters = page->counters;
 		set_freepointer(s, object, prior);
