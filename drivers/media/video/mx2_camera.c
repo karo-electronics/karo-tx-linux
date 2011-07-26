@@ -23,7 +23,6 @@
 #include <linux/mm.h>
 #include <linux/moduleparam.h>
 #include <linux/time.h>
-#include <linux/version.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>
 #include <linux/mutex.h>
@@ -47,7 +46,7 @@
 #include <asm/dma.h>
 
 #define MX2_CAM_DRV_NAME "mx2-camera"
-#define MX2_CAM_VERSION_CODE KERNEL_VERSION(0, 0, 5)
+#define MX2_CAM_VERSION "0.0.6"
 #define MX2_CAM_DRIVER_DESCRIPTION "i.MX2x_Camera"
 
 /* reset values */
@@ -974,11 +973,16 @@ static int mx2_camera_try_fmt(struct soc_camera_device *icd,
 		if (pix->bytesperline < 0)
 			return pix->bytesperline;
 		pix->sizeimage = pix->height * pix->bytesperline;
-		if (pix->sizeimage > (4 * 0x3ffff)) { /* CSIRXCNT limit */
-			dev_warn(icd->dev.parent,
-					"Image size (%u) above limit\n",
-					pix->sizeimage);
-			return -EINVAL;
+		/* Check against the CSIRXCNT limit */
+		if (pix->sizeimage > 4 * 0x3ffff) {
+			/* Adjust geometry, preserve aspect ratio */
+			unsigned int new_height = int_sqrt(4 * 0x3ffff *
+					pix->height / pix->bytesperline);
+			pix->width = new_height * pix->width / pix->height;
+			pix->height = new_height;
+			pix->bytesperline = soc_mbus_bytes_per_line(pix->width,
+							xlate->host_fmt);
+			BUG_ON(pix->bytesperline < 0);
 		}
 	}
 
@@ -1014,7 +1018,6 @@ static int mx2_camera_querycap(struct soc_camera_host *ici,
 {
 	/* cap->name is set by the friendly caller:-> */
 	strlcpy(cap->card, MX2_CAM_DRIVER_DESCRIPTION, sizeof(cap->card));
-	cap->version = MX2_CAM_VERSION_CODE;
 	cap->capabilities = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
 
 	return 0;
@@ -1523,3 +1526,4 @@ module_exit(mx2_camera_exit);
 MODULE_DESCRIPTION("i.MX27/i.MX25 SoC Camera Host driver");
 MODULE_AUTHOR("Sascha Hauer <sha@pengutronix.de>");
 MODULE_LICENSE("GPL");
+MODULE_VERSION(MX2_CAM_VERSION);
