@@ -119,7 +119,6 @@ static inline int is_file_shm_hugepages(struct file *file)
 }
 static inline void exit_shm(struct task_struct *task)
 {
-	return 0;
 }
 #endif
 
