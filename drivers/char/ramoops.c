@@ -180,10 +180,9 @@ static int __init ramoops_init(void)
 {
 	int ret;
 	ret = platform_driver_probe(&ramoops_driver, ramoops_probe);
-	if (ret == -ENODEV)
-	{
+	if (ret == -ENODEV) {
 		/*
-		 * if we didn't find a platform device, we use module parameters
+		 * If we didn't find a platform device, we use module parameters
 		 * building platform data on the fly.
 		 */
 		dummy_data = kzalloc(sizeof(struct ramoops_platform_data),
