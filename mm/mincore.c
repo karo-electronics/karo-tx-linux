@@ -71,13 +71,13 @@ static unsigned char mincore_page(struct address_space *mapping, pgoff_t pgoff)
 	 * tmpfs's .fault). So swapped out tmpfs mappings are tested here.
 	 */
 	page = find_get_page(mapping, pgoff);
-	if (page) {
 #ifdef CONFIG_SWAP
-		if (radix_tree_exceptional_entry(page)) {
-			swp_entry_t swap = radix_to_swp_entry(page);
-			page = find_get_page(&swapper_space, swap.val);
-		}
+	if (radix_tree_exceptional_entry(page)) {
+		swp_entry_t swap = radix_to_swp_entry(page);
+		page = find_get_page(&swapper_space, swap.val);
+	}
 #endif
+	if (page) {
 		present = PageUptodate(page);
 		page_cache_release(page);
 	}
