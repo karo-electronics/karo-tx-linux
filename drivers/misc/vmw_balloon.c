@@ -674,9 +674,9 @@ static void vmballoon_work(struct work_struct *work)
 	}
 
 	/*
-	 * We are using freezable workqueue so that balloon operations are
-	 * stopped while system transitions to/from sleep/hibernation.
-	*/
+	 * We are using a freezable workqueue so that balloon operations are
+	 * stopped while the system transitions to/from sleep/hibernation.
+	 */
 	queue_delayed_work(system_freezable_wq,
 			   dwork, round_jiffies_relative(HZ));
 }
