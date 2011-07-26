@@ -612,9 +612,8 @@ static struct dma_async_tx_descriptor *intel_mid_dma_prep_memcpy(
 
 	pr_debug("MDMA:called for DMA %x CH %d Length %zu\n",
 				midc->dma->pci_id, midc->ch_id, len);
-	pr_debug("MDMA:Cfg passed Mode %x, Dirn %x, HS %x, Width %x\n",
-			mids->cfg_mode, mids->dma_slave.direction,
-			mids->hs_mode, mids->dma_slave.src_addr_width);
+	pr_debug("MDMA:Cfg passed Mode %x, HS %x, Width %x\n",
+		mids->cfg_mode, mids->hs_mode, mids->dma_slave.src_addr_width);
 
 	/*calculate CFG_LO*/
 	if (mids->hs_mode == LNW_DMA_SW_HS) {
