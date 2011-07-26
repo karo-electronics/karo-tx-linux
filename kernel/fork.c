@@ -1174,8 +1174,8 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	mpol_fix_fork_child_flag(p);
 #endif
 #ifdef CONFIG_CPUSETS
-	p->cpuset_mem_spread_rotor = node_random(&p->mems_allowed);
-	p->cpuset_slab_spread_rotor = node_random(&p->mems_allowed);
+	p->cpuset_mem_spread_rotor = NUMA_NO_NODE;
+	p->cpuset_slab_spread_rotor = NUMA_NO_NODE;
 #endif
 #ifdef CONFIG_TRACE_IRQFLAGS
 	p->irq_events = 0;
