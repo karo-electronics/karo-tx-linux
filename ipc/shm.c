@@ -195,7 +195,7 @@ static void shm_destroy(struct ipc_namespace *ns, struct shmid_kernel *shp)
  *
  * 1) shmctl(id, IPC_RMID, NULL) was called for this shp
  *
- * 2) sysctl kernel.shm_forced_rmid is set to 1.
+ * 2) sysctl kernel.shm_rmid_forced is set to 1.
  */
 static bool shm_may_destroy(struct ipc_namespace *ns, struct shmid_kernel *shp)
 {
