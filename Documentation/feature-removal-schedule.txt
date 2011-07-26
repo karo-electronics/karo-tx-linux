@@ -655,3 +655,10 @@ Why:    In 2.6.40, we can now autodetect internal 3G device and already have
 Who:    Lee, Chun-Yi <jlee@novell.com>
 
 ----------------------------
+
+What:	g_file_storage driver
+When:	3.8
+Why:	This driver has been superseded by g_mass_storage.
+Who:	Alan Stern <stern@rowland.harvard.edu>
+
+----------------------------
