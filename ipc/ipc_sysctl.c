@@ -31,6 +31,7 @@ static int proc_ipc_dointvec(ctl_table *table, int write,
 	void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	struct ctl_table ipc_table;
+
 	memcpy(&ipc_table, table, sizeof(ipc_table));
 	ipc_table.data = get_ipc(table);
 
@@ -41,6 +42,7 @@ static int proc_ipc_dointvec_minmax(ctl_table *table, int write,
 	void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	struct ctl_table ipc_table;
+
 	memcpy(&ipc_table, table, sizeof(ipc_table));
 	ipc_table.data = get_ipc(table);
 
@@ -52,6 +54,7 @@ static int proc_ipc_dointvec_minmax_orphans(ctl_table *table, int write,
 {
 	struct ipc_namespace *ns = current->nsproxy->ipc_ns;
 	int err = proc_ipc_dointvec_minmax(table, write, buffer, lenp, ppos);
+
 	if (err < 0)
 		return err;
 	if (ns->shm_rmid_forced)
