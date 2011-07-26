@@ -521,7 +521,7 @@ kernel.  This value defaults to SHMMAX.
 
 shm_rmid_forced:
 
-Linux lets you set resource limits, including on how much memory one
+Linux lets you set resource limits, including how much memory one
 process can consume, via setrlimit(2).  Unfortunately, shared memory
 segments are allowed to exist without association with any process, and
 thus might not be counted against any resource limits.  If enabled,
