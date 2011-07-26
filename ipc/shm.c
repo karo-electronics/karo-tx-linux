@@ -187,6 +187,16 @@ static void shm_destroy(struct ipc_namespace *ns, struct shmid_kernel *shp)
 	ipc_rcu_putref(shp);
 }
 
+/*
+ * shm_may_destroy - identifies whether shm segment should be destroyed now
+ *
+ * Returns true if and only if there are no active users of the segment and
+ * one of the following is true:
+ *
+ * 1) shmctl(id, IPC_RMID, NULL) was called for this shp
+ *
+ * 2) sysctl kernel.shm_forced_rmid is set to 1.
+ */
 static bool shm_may_destroy(struct ipc_namespace *ns, struct shmid_kernel *shp)
 {
 	return (shp->shm_nattch == 0) &&
