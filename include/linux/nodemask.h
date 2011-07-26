@@ -433,8 +433,6 @@ static inline void node_set_offline(int nid)
 	nr_online_nodes = num_node_state(N_ONLINE);
 }
 
-extern int node_random(const nodemask_t *maskp);
-
 #else
 
 static inline int node_state(int node, enum node_states state)
@@ -466,7 +464,15 @@ static inline int num_node_state(enum node_states state)
 #define node_set_online(node)	   node_set_state((node), N_ONLINE)
 #define node_set_offline(node)	   node_clear_state((node), N_ONLINE)
 
-static inline int node_random(const nodemask_t *mask) { return 0; }
+#endif
+
+#if defined(CONFIG_NUMA) && (MAX_NUMNODES > 1)
+extern int node_random(const nodemask_t *maskp);
+#else
+static inline int node_random(const nodemask_t *mask)
+{
+	return 0;
+}
 #endif
 
 #define node_online_map 	node_states[N_ONLINE]
