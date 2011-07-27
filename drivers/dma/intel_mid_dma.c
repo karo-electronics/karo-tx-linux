@@ -612,9 +612,8 @@ static struct dma_async_tx_descriptor *intel_mid_dma_prep_memcpy(
 
 	pr_debug("MDMA:called for DMA %x CH %d Length %zu\n",
 				midc->dma->pci_id, midc->ch_id, len);
-	pr_debug("MDMA:Cfg passed Mode %x, Dirn %x, HS %x, Width %x\n",
-			mids->cfg_mode, mids->dma_slave.direction,
-			mids->hs_mode, mids->dma_slave.src_addr_width);
+	pr_debug("MDMA:Cfg passed Mode %x, HS %x, Width %x\n",
+		mids->cfg_mode, mids->hs_mode, mids->dma_slave.src_addr_width);
 
 	/*calculate CFG_LO*/
 	if (mids->hs_mode == LNW_DMA_SW_HS) {
@@ -1351,7 +1350,6 @@ int dma_suspend(struct pci_dev *pci, pm_message_t state)
 			return -EAGAIN;
 	}
 	device->state = SUSPENDED;
-	pci_set_drvdata(pci, device);
 	pci_save_state(pci);
 	pci_disable_device(pci);
 	pci_set_power_state(pci, PCI_D3hot);
@@ -1380,7 +1378,6 @@ int dma_resume(struct pci_dev *pci)
 	}
 	device->state = RUNNING;
 	iowrite32(REG_BIT0, device->dma_base + DMA_CFG);
-	pci_set_drvdata(pci, device);
 	return 0;
 }
 

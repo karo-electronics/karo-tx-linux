@@ -910,11 +910,9 @@ static int configure_dma(struct pl022 *pl022)
 {
 	struct dma_slave_config rx_conf = {
 		.src_addr = SSP_DR(pl022->phybase),
-		.direction = DMA_FROM_DEVICE,
 	};
 	struct dma_slave_config tx_conf = {
 		.dst_addr = SSP_DR(pl022->phybase),
-		.direction = DMA_TO_DEVICE,
 	};
 	unsigned int pages;
 	int ret;
