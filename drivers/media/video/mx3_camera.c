@@ -11,7 +11,6 @@
 
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/version.h>
 #include <linux/videodev2.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
@@ -913,12 +912,6 @@ static int mx3_camera_set_fmt(struct soc_camera_device *icd,
 	pix->colorspace		= mf.colorspace;
 	icd->current_fmt	= xlate;
 
-	pix->bytesperline = soc_mbus_bytes_per_line(pix->width,
-						    xlate->host_fmt);
-	if (pix->bytesperline < 0)
-		return pix->bytesperline;
-	pix->sizeimage = pix->height * pix->bytesperline;
-
 	dev_dbg(icd->dev.parent, "Sensor set %dx%d\n", pix->width, pix->height);
 
 	return ret;
@@ -945,12 +938,6 @@ static int mx3_camera_try_fmt(struct soc_camera_device *icd,
 		pix->height = 4096;
 	if (pix->width > 4096)
 		pix->width = 4096;
-
-	pix->bytesperline = soc_mbus_bytes_per_line(pix->width,
-						    xlate->host_fmt);
-	if (pix->bytesperline < 0)
-		return pix->bytesperline;
-	pix->sizeimage = pix->height * pix->bytesperline;
 
 	/* limit to sensor capabilities */
 	mf.width	= pix->width;
@@ -1000,7 +987,6 @@ static int mx3_camera_querycap(struct soc_camera_host *ici,
 {
 	/* cap->name is set by the firendly caller:-> */
 	strlcpy(cap->card, "i.MX3x Camera", sizeof(cap->card));
-	cap->version = KERNEL_VERSION(0, 2, 2);
 	cap->capabilities = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
 
 	return 0;
@@ -1325,4 +1311,5 @@ module_exit(mx3_camera_exit);
 MODULE_DESCRIPTION("i.MX3x SoC Camera Host driver");
 MODULE_AUTHOR("Guennadi Liakhovetski <lg@denx.de>");
 MODULE_LICENSE("GPL v2");
+MODULE_VERSION("0.2.3");
 MODULE_ALIAS("platform:" MX3_CAM_DRV_NAME);
