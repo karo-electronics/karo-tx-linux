@@ -23,7 +23,7 @@ static void bnx2fc_process_enable_conn_cmpl(struct bnx2fc_hba *hba,
 						struct fcoe_kcqe *ofld_kcqe);
 static void bnx2fc_init_failure(struct bnx2fc_hba *hba, u32 err_code);
 static void bnx2fc_process_conn_destroy_cmpl(struct bnx2fc_hba *hba,
-					struct fcoe_kcqe *conn_destroy);
+					struct fcoe_kcqe *destroy_kcqe);
 
 int bnx2fc_send_stat_req(struct bnx2fc_hba *hba)
 {
@@ -67,7 +67,7 @@ int bnx2fc_send_fw_fcoe_init_msg(struct bnx2fc_hba *hba)
 	int rc = 0;
 
 	if (!hba->cnic) {
-		printk(KERN_ALERT PFX "hba->cnic NULL during fcoe fw init\n");
+		printk(KERN_ERR PFX "hba->cnic NULL during fcoe fw init\n");
 		return -ENODEV;
 	}
 
@@ -102,6 +102,7 @@ int bnx2fc_send_fw_fcoe_init_msg(struct bnx2fc_hba *hba)
 
 	fcoe_init2.hsi_major_version = FCOE_HSI_MAJOR_VERSION;
 	fcoe_init2.hsi_minor_version = FCOE_HSI_MINOR_VERSION;
+
 
 	fcoe_init2.hash_tbl_pbl_addr_lo = (u32) hba->hash_tbl_pbl_dma;
 	fcoe_init2.hash_tbl_pbl_addr_hi = (u32)
@@ -165,7 +166,8 @@ int bnx2fc_send_session_ofld_req(struct fcoe_port *port,
 					struct bnx2fc_rport *tgt)
 {
 	struct fc_lport *lport = port->lport;
-	struct bnx2fc_hba *hba = port->priv;
+	struct bnx2fc_interface *interface = port->priv;
+	struct bnx2fc_hba *hba = interface->hba;
 	struct kwqe *kwqe_arr[4];
 	struct fcoe_kwqe_conn_offload1 ofld_req1;
 	struct fcoe_kwqe_conn_offload2 ofld_req2;
@@ -227,7 +229,7 @@ int bnx2fc_send_session_ofld_req(struct fcoe_port *port,
 	ofld_req3.hdr.flags =
 		(FCOE_KWQE_LAYER_CODE << FCOE_KWQE_HEADER_LAYER_CODE_SHIFT);
 
-	ofld_req3.vlan_tag = hba->vlan_id <<
+	ofld_req3.vlan_tag = interface->vlan_id <<
 				FCOE_KWQE_CONN_OFFLOAD3_VLAN_ID_SHIFT;
 	ofld_req3.vlan_tag |= 3 << FCOE_KWQE_CONN_OFFLOAD3_PRIORITY_SHIFT;
 
@@ -277,8 +279,20 @@ int bnx2fc_send_session_ofld_req(struct fcoe_port *port,
 	ofld_req3.flags |= (((rdata->sp_features & FC_SP_FT_SEQC) ? 1 : 0) <<
 			     FCOE_KWQE_CONN_OFFLOAD3_B_CONT_INCR_SEQ_CNT_SHIFT);
 
+	/*
+	 * Info from PRLI response, this info is used for sequence level error
+	 * recovery support
+	 */
+	if (tgt->dev_type == TYPE_TAPE) {
+		ofld_req3.flags |= 1 <<
+				    FCOE_KWQE_CONN_OFFLOAD3_B_CONF_REQ_SHIFT;
+		ofld_req3.flags |= (((rdata->flags & FC_RP_FLAGS_REC_SUPPORTED)
+				    ? 1 : 0) <<
+				    FCOE_KWQE_CONN_OFFLOAD3_B_REC_VALID_SHIFT);
+	}
+
 	/* vlan flag */
-	ofld_req3.flags |= (hba->vlan_enabled <<
+	ofld_req3.flags |= (interface->vlan_enabled <<
 			    FCOE_KWQE_CONN_OFFLOAD3_B_VLAN_FLAG_SHIFT);
 
 	/* C2_VALID and ACK flags are not set as they are not suppported */
@@ -300,12 +314,13 @@ int bnx2fc_send_session_ofld_req(struct fcoe_port *port,
 	ofld_req4.src_mac_addr_mid[1] =  port->data_src_addr[2];
 	ofld_req4.src_mac_addr_hi[0] =  port->data_src_addr[1];
 	ofld_req4.src_mac_addr_hi[1] =  port->data_src_addr[0];
-	ofld_req4.dst_mac_addr_lo[0] =  hba->ctlr.dest_addr[5];/* fcf mac */
-	ofld_req4.dst_mac_addr_lo[1] =  hba->ctlr.dest_addr[4];
-	ofld_req4.dst_mac_addr_mid[0] =  hba->ctlr.dest_addr[3];
-	ofld_req4.dst_mac_addr_mid[1] =  hba->ctlr.dest_addr[2];
-	ofld_req4.dst_mac_addr_hi[0] =  hba->ctlr.dest_addr[1];
-	ofld_req4.dst_mac_addr_hi[1] =  hba->ctlr.dest_addr[0];
+	ofld_req4.dst_mac_addr_lo[0] =  interface->ctlr.dest_addr[5];
+							/* fcf mac */
+	ofld_req4.dst_mac_addr_lo[1] =  interface->ctlr.dest_addr[4];
+	ofld_req4.dst_mac_addr_mid[0] =  interface->ctlr.dest_addr[3];
+	ofld_req4.dst_mac_addr_mid[1] =  interface->ctlr.dest_addr[2];
+	ofld_req4.dst_mac_addr_hi[0] =  interface->ctlr.dest_addr[1];
+	ofld_req4.dst_mac_addr_hi[1] =  interface->ctlr.dest_addr[0];
 
 	ofld_req4.lcq_addr_lo = (u32) tgt->lcq_dma;
 	ofld_req4.lcq_addr_hi = (u32)((u64) tgt->lcq_dma >> 32);
@@ -335,7 +350,8 @@ static int bnx2fc_send_session_enable_req(struct fcoe_port *port,
 					struct bnx2fc_rport *tgt)
 {
 	struct kwqe *kwqe_arr[2];
-	struct bnx2fc_hba *hba = port->priv;
+	struct bnx2fc_interface *interface = port->priv;
+	struct bnx2fc_hba *hba = interface->hba;
 	struct fcoe_kwqe_conn_enable_disable enbl_req;
 	struct fc_lport *lport = port->lport;
 	struct fc_rport *rport = tgt->rport;
@@ -358,12 +374,12 @@ static int bnx2fc_send_session_enable_req(struct fcoe_port *port,
 	enbl_req.src_mac_addr_hi[1] =  port->data_src_addr[0];
 	memcpy(tgt->src_addr, port->data_src_addr, ETH_ALEN);
 
-	enbl_req.dst_mac_addr_lo[0] =  hba->ctlr.dest_addr[5];/* fcf mac */
-	enbl_req.dst_mac_addr_lo[1] =  hba->ctlr.dest_addr[4];
-	enbl_req.dst_mac_addr_mid[0] =  hba->ctlr.dest_addr[3];
-	enbl_req.dst_mac_addr_mid[1] =  hba->ctlr.dest_addr[2];
-	enbl_req.dst_mac_addr_hi[0] =  hba->ctlr.dest_addr[1];
-	enbl_req.dst_mac_addr_hi[1] =  hba->ctlr.dest_addr[0];
+	enbl_req.dst_mac_addr_lo[0] =  interface->ctlr.dest_addr[5];
+	enbl_req.dst_mac_addr_lo[1] =  interface->ctlr.dest_addr[4];
+	enbl_req.dst_mac_addr_mid[0] =  interface->ctlr.dest_addr[3];
+	enbl_req.dst_mac_addr_mid[1] =  interface->ctlr.dest_addr[2];
+	enbl_req.dst_mac_addr_hi[0] =  interface->ctlr.dest_addr[1];
+	enbl_req.dst_mac_addr_hi[1] =  interface->ctlr.dest_addr[0];
 
 	port_id = fc_host_port_id(lport->host);
 	if (port_id != tgt->sid) {
@@ -379,10 +395,10 @@ static int bnx2fc_send_session_enable_req(struct fcoe_port *port,
 	enbl_req.d_id[0] = (port_id & 0x000000FF);
 	enbl_req.d_id[1] = (port_id & 0x0000FF00) >> 8;
 	enbl_req.d_id[2] = (port_id & 0x00FF0000) >> 16;
-	enbl_req.vlan_tag = hba->vlan_id <<
+	enbl_req.vlan_tag = interface->vlan_id <<
 				FCOE_KWQE_CONN_ENABLE_DISABLE_VLAN_ID_SHIFT;
 	enbl_req.vlan_tag |= 3 << FCOE_KWQE_CONN_ENABLE_DISABLE_PRIORITY_SHIFT;
-	enbl_req.vlan_flag = hba->vlan_enabled;
+	enbl_req.vlan_flag = interface->vlan_enabled;
 	enbl_req.context_id = tgt->context_id;
 	enbl_req.conn_id = tgt->fcoe_conn_id;
 
@@ -402,7 +418,8 @@ static int bnx2fc_send_session_enable_req(struct fcoe_port *port,
 int bnx2fc_send_session_disable_req(struct fcoe_port *port,
 				    struct bnx2fc_rport *tgt)
 {
-	struct bnx2fc_hba *hba = port->priv;
+	struct bnx2fc_interface *interface = port->priv;
+	struct bnx2fc_hba *hba = interface->hba;
 	struct fcoe_kwqe_conn_enable_disable disable_req;
 	struct kwqe *kwqe_arr[2];
 	struct fc_rport *rport = tgt->rport;
@@ -423,12 +440,12 @@ int bnx2fc_send_session_disable_req(struct fcoe_port *port,
 	disable_req.src_mac_addr_hi[0] =  tgt->src_addr[1];
 	disable_req.src_mac_addr_hi[1] =  tgt->src_addr[0];
 
-	disable_req.dst_mac_addr_lo[0] =  hba->ctlr.dest_addr[5];/* fcf mac */
-	disable_req.dst_mac_addr_lo[1] =  hba->ctlr.dest_addr[4];
-	disable_req.dst_mac_addr_mid[0] =  hba->ctlr.dest_addr[3];
-	disable_req.dst_mac_addr_mid[1] =  hba->ctlr.dest_addr[2];
-	disable_req.dst_mac_addr_hi[0] =  hba->ctlr.dest_addr[1];
-	disable_req.dst_mac_addr_hi[1] =  hba->ctlr.dest_addr[0];
+	disable_req.dst_mac_addr_lo[0] =  interface->ctlr.dest_addr[5];
+	disable_req.dst_mac_addr_lo[1] =  interface->ctlr.dest_addr[4];
+	disable_req.dst_mac_addr_mid[0] =  interface->ctlr.dest_addr[3];
+	disable_req.dst_mac_addr_mid[1] =  interface->ctlr.dest_addr[2];
+	disable_req.dst_mac_addr_hi[0] =  interface->ctlr.dest_addr[1];
+	disable_req.dst_mac_addr_hi[1] =  interface->ctlr.dest_addr[0];
 
 	port_id = tgt->sid;
 	disable_req.s_id[0] = (port_id & 0x000000FF);
@@ -442,11 +459,11 @@ int bnx2fc_send_session_disable_req(struct fcoe_port *port,
 	disable_req.d_id[2] = (port_id & 0x00FF0000) >> 16;
 	disable_req.context_id = tgt->context_id;
 	disable_req.conn_id = tgt->fcoe_conn_id;
-	disable_req.vlan_tag = hba->vlan_id <<
+	disable_req.vlan_tag = interface->vlan_id <<
 				FCOE_KWQE_CONN_ENABLE_DISABLE_VLAN_ID_SHIFT;
 	disable_req.vlan_tag |=
 			3 << FCOE_KWQE_CONN_ENABLE_DISABLE_PRIORITY_SHIFT;
-	disable_req.vlan_flag = hba->vlan_enabled;
+	disable_req.vlan_flag = interface->vlan_enabled;
 
 	kwqe_arr[0] = (struct kwqe *) &disable_req;
 
@@ -525,7 +542,7 @@ void bnx2fc_process_l2_frame_compl(struct bnx2fc_rport *tgt,
 {
 	struct fcoe_port *port = tgt->port;
 	struct fc_lport *lport = port->lport;
-	struct bnx2fc_hba *hba = port->priv;
+	struct bnx2fc_interface *interface = port->priv;
 	struct bnx2fc_unsol_els *unsol_els;
 	struct fc_frame_header *fh;
 	struct fc_frame *fp;
@@ -586,7 +603,7 @@ void bnx2fc_process_l2_frame_compl(struct bnx2fc_rport *tgt,
 		fr_eof(fp) = FC_EOF_T;
 		fr_crc(fp) = cpu_to_le32(~crc);
 		unsol_els->lport = lport;
-		unsol_els->hba = hba;
+		unsol_els->hba = interface->hba;
 		unsol_els->fp = fp;
 		INIT_WORK(&unsol_els->unsol_els_work, bnx2fc_unsol_els_work);
 		queue_work(bnx2fc_wq, &unsol_els->unsol_els_work);
@@ -608,7 +625,8 @@ static void bnx2fc_process_unsol_compl(struct bnx2fc_rport *tgt, u16 wqe)
 	u32 frame_len, len;
 	struct bnx2fc_cmd *io_req = NULL;
 	struct fcoe_task_ctx_entry *task, *task_page;
-	struct bnx2fc_hba *hba = tgt->port->priv;
+	struct bnx2fc_interface *interface = tgt->port->priv;
+	struct bnx2fc_hba *hba = interface->hba;
 	int task_idx, index;
 	int rc = 0;
 
@@ -685,7 +703,7 @@ static void bnx2fc_process_unsol_compl(struct bnx2fc_rport *tgt, u16 wqe)
 		task_idx = xid / BNX2FC_TASKS_PER_PAGE;
 		index = xid % BNX2FC_TASKS_PER_PAGE;
 		task_page = (struct fcoe_task_ctx_entry *)
-						hba->task_ctx[task_idx];
+					hba->task_ctx[task_idx];
 		task = &(task_page[index]);
 
 		io_req = (struct bnx2fc_cmd *)hba->cmd_mgr->cmds[xid];
@@ -770,7 +788,8 @@ void bnx2fc_process_cq_compl(struct bnx2fc_rport *tgt, u16 wqe)
 	struct fcoe_task_ctx_entry *task;
 	struct fcoe_task_ctx_entry *task_page;
 	struct fcoe_port *port = tgt->port;
-	struct bnx2fc_hba *hba = port->priv;
+	struct bnx2fc_interface *interface = port->priv;
+	struct bnx2fc_hba *hba = interface->hba;
 	struct bnx2fc_cmd *io_req;
 	int task_idx, index;
 	u16 xid;
@@ -781,7 +800,7 @@ void bnx2fc_process_cq_compl(struct bnx2fc_rport *tgt, u16 wqe)
 	spin_lock_bh(&tgt->tgt_lock);
 	xid = wqe & FCOE_PEND_WQ_CQE_TASK_ID;
 	if (xid >= BNX2FC_MAX_TASKS) {
-		printk(KERN_ALERT PFX "ERROR:xid out of range\n");
+		printk(KERN_ERR PFX "ERROR:xid out of range\n");
 		spin_unlock_bh(&tgt->tgt_lock);
 		return;
 	}
@@ -983,7 +1002,7 @@ static void bnx2fc_fastpath_notification(struct bnx2fc_hba *hba,
 	struct bnx2fc_rport *tgt = hba->tgt_ofld_list[conn_id];
 
 	if (!tgt) {
-		printk(KERN_ALERT PFX "conn_id 0x%x not valid\n", conn_id);
+		printk(KERN_ERR PFX "conn_id 0x%x not valid\n", conn_id);
 		return;
 	}
 
@@ -1004,6 +1023,7 @@ static void bnx2fc_process_ofld_cmpl(struct bnx2fc_hba *hba,
 {
 	struct bnx2fc_rport		*tgt;
 	struct fcoe_port		*port;
+	struct bnx2fc_interface		*interface;
 	u32				conn_id;
 	u32				context_id;
 	int				rc;
@@ -1018,8 +1038,9 @@ static void bnx2fc_process_ofld_cmpl(struct bnx2fc_hba *hba,
 	BNX2FC_TGT_DBG(tgt, "Entered ofld compl - context_id = 0x%x\n",
 		ofld_kcqe->fcoe_conn_context_id);
 	port = tgt->port;
-	if (hba != tgt->port->priv) {
-		printk(KERN_ALERT PFX "ERROR:ofld_cmpl: HBA mis-match\n");
+	interface = tgt->port->priv;
+	if (hba != interface->hba) {
+		printk(KERN_ERR PFX "ERROR:ofld_cmpl: HBA mis-match\n");
 		goto ofld_cmpl_err;
 	}
 	/*
@@ -1040,7 +1061,7 @@ static void bnx2fc_process_ofld_cmpl(struct bnx2fc_hba *hba,
 		/* now enable the session */
 		rc = bnx2fc_send_session_enable_req(port, tgt);
 		if (rc) {
-			printk(KERN_ALERT PFX "enable session failed\n");
+			printk(KERN_ERR PFX "enable session failed\n");
 			goto ofld_cmpl_err;
 		}
 	}
@@ -1063,6 +1084,7 @@ static void bnx2fc_process_enable_conn_cmpl(struct bnx2fc_hba *hba,
 						struct fcoe_kcqe *ofld_kcqe)
 {
 	struct bnx2fc_rport		*tgt;
+	struct bnx2fc_interface		*interface;
 	u32				conn_id;
 	u32				context_id;
 
@@ -1070,7 +1092,7 @@ static void bnx2fc_process_enable_conn_cmpl(struct bnx2fc_hba *hba,
 	conn_id = ofld_kcqe->fcoe_conn_id;
 	tgt = hba->tgt_ofld_list[conn_id];
 	if (!tgt) {
-		printk(KERN_ALERT PFX "ERROR:enbl_cmpl: No pending ofld req\n");
+		printk(KERN_ERR PFX "ERROR:enbl_cmpl: No pending ofld req\n");
 		return;
 	}
 
@@ -1082,16 +1104,17 @@ static void bnx2fc_process_enable_conn_cmpl(struct bnx2fc_hba *hba,
 	 * and enable
 	 */
 	if (tgt->context_id != context_id) {
-		printk(KERN_ALERT PFX "context id mis-match\n");
+		printk(KERN_ERR PFX "context id mis-match\n");
 		return;
 	}
-	if (hba != tgt->port->priv) {
-		printk(KERN_ALERT PFX "bnx2fc-enbl_cmpl: HBA mis-match\n");
+	interface = tgt->port->priv;
+	if (hba != interface->hba) {
+		printk(KERN_ERR PFX "bnx2fc-enbl_cmpl: HBA mis-match\n");
 		goto enbl_cmpl_err;
 	}
-	if (ofld_kcqe->completion_status) {
+	if (ofld_kcqe->completion_status)
 		goto enbl_cmpl_err;
-	} else {
+	else {
 		/* enable successful - rport ready for issuing IOs */
 		set_bit(BNX2FC_FLAG_OFFLOADED, &tgt->flags);
 		set_bit(BNX2FC_FLAG_OFLD_REQ_CMPL, &tgt->flags);
@@ -1114,14 +1137,14 @@ static void bnx2fc_process_conn_disable_cmpl(struct bnx2fc_hba *hba,
 	conn_id = disable_kcqe->fcoe_conn_id;
 	tgt = hba->tgt_ofld_list[conn_id];
 	if (!tgt) {
-		printk(KERN_ALERT PFX "ERROR: disable_cmpl: No disable req\n");
+		printk(KERN_ERR PFX "ERROR: disable_cmpl: No disable req\n");
 		return;
 	}
 
 	BNX2FC_TGT_DBG(tgt, PFX "disable_cmpl: conn_id %d\n", conn_id);
 
 	if (disable_kcqe->completion_status) {
-		printk(KERN_ALERT PFX "ERROR: Disable failed with cmpl status %d\n",
+		printk(KERN_ERR PFX "Disable failed with cmpl status %d\n",
 			disable_kcqe->completion_status);
 		return;
 	} else {
@@ -1143,14 +1166,14 @@ static void bnx2fc_process_conn_destroy_cmpl(struct bnx2fc_hba *hba,
 	conn_id = destroy_kcqe->fcoe_conn_id;
 	tgt = hba->tgt_ofld_list[conn_id];
 	if (!tgt) {
-		printk(KERN_ALERT PFX "destroy_cmpl: No destroy req\n");
+		printk(KERN_ERR PFX "destroy_cmpl: No destroy req\n");
 		return;
 	}
 
 	BNX2FC_TGT_DBG(tgt, "destroy_cmpl: conn_id %d\n", conn_id);
 
 	if (destroy_kcqe->completion_status) {
-		printk(KERN_ALERT PFX "Destroy conn failed, cmpl status %d\n",
+		printk(KERN_ERR PFX "Destroy conn failed, cmpl status %d\n",
 			destroy_kcqe->completion_status);
 		return;
 	} else {
@@ -1182,6 +1205,7 @@ static void bnx2fc_init_failure(struct bnx2fc_hba *hba, u32 err_code)
 		break;
 	case FCOE_KCQE_COMPLETION_STATUS_WRONG_HSI_VERSION:
 		printk(KERN_ERR PFX "init failure due to HSI mismatch\n");
+		break;
 	default:
 		printk(KERN_ERR PFX "Unknown Error code %d\n", err_code);
 	}
@@ -1240,7 +1264,7 @@ void bnx2fc_indicate_kcqe(void *context, struct kcqe *kcq[],
 			} else {
 				printk(KERN_ERR PFX "DESTROY success\n");
 			}
-			hba->flags |= BNX2FC_FLAG_DESTROY_CMPL;
+			set_bit(BNX2FC_FLAG_DESTROY_CMPL, &hba->flags);
 			wake_up_interruptible(&hba->destroy_wait);
 			break;
 
@@ -1262,7 +1286,7 @@ void bnx2fc_indicate_kcqe(void *context, struct kcqe *kcq[],
 		case FCOE_KCQE_OPCODE_FCOE_ERROR:
 			/* fall thru */
 		default:
-			printk(KERN_ALERT PFX "unknown opcode 0x%x\n",
+			printk(KERN_ERR PFX "unknown opcode 0x%x\n",
 								kcqe->op_code);
 		}
 	}
@@ -1305,7 +1329,8 @@ int bnx2fc_map_doorbell(struct bnx2fc_rport *tgt)
 	struct fcoe_port *port = tgt->port;
 	u32 reg_off;
 	resource_size_t reg_base;
-	struct bnx2fc_hba *hba = port->priv;
+	struct bnx2fc_interface *interface = port->priv;
+	struct bnx2fc_hba *hba = interface->hba;
 
 	reg_base = pci_resource_start(hba->pcidev,
 					BNX2X_DOORBELL_PCI_BAR);
