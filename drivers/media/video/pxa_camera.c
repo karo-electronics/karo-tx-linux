@@ -22,7 +22,6 @@
 #include <linux/mm.h>
 #include <linux/moduleparam.h>
 #include <linux/time.h>
-#include <linux/version.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
@@ -40,7 +39,7 @@
 #include <mach/dma.h>
 #include <mach/camera.h>
 
-#define PXA_CAM_VERSION_CODE KERNEL_VERSION(0, 0, 5)
+#define PXA_CAM_VERSION "0.0.6"
 #define PXA_CAM_DRV_NAME "pxa27x-camera"
 
 /* Camera Interface */
@@ -1499,16 +1498,11 @@ static int pxa_camera_try_fmt(struct soc_camera_device *icd,
 			      &pix->height, 32, 2048, 0,
 			      pixfmt == V4L2_PIX_FMT_YUV422P ? 4 : 0);
 
-	pix->bytesperline = soc_mbus_bytes_per_line(pix->width,
-						    xlate->host_fmt);
-	if (pix->bytesperline < 0)
-		return pix->bytesperline;
-	pix->sizeimage = pix->height * pix->bytesperline;
-
 	/* limit to sensor capabilities */
 	mf.width	= pix->width;
 	mf.height	= pix->height;
-	mf.field	= pix->field;
+	/* Only progressive video supported so far */
+	mf.field	= V4L2_FIELD_NONE;
 	mf.colorspace	= pix->colorspace;
 	mf.code		= xlate->code;
 
@@ -1578,7 +1572,6 @@ static int pxa_camera_querycap(struct soc_camera_host *ici,
 {
 	/* cap->name is set by the firendly caller:-> */
 	strlcpy(cap->card, pxa_cam_driver_description, sizeof(cap->card));
-	cap->version = PXA_CAM_VERSION_CODE;
 	cap->capabilities = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
 
 	return 0;
@@ -1596,8 +1589,12 @@ static int pxa_camera_suspend(struct soc_camera_device *icd, pm_message_t state)
 	pcdev->save_cicr[i++] = __raw_readl(pcdev->base + CICR3);
 	pcdev->save_cicr[i++] = __raw_readl(pcdev->base + CICR4);
 
-	if ((pcdev->icd) && (pcdev->icd->ops->suspend))
-		ret = pcdev->icd->ops->suspend(pcdev->icd, state);
+	if (pcdev->icd) {
+		struct v4l2_subdev *sd = soc_camera_to_subdev(icd);
+		ret = v4l2_subdev_call(sd, core, s_power, 0);
+		if (ret == -ENOIOCTLCMD)
+			ret = 0;
+	}
 
 	return ret;
 }
@@ -1618,8 +1615,12 @@ static int pxa_camera_resume(struct soc_camera_device *icd)
 	__raw_writel(pcdev->save_cicr[i++], pcdev->base + CICR3);
 	__raw_writel(pcdev->save_cicr[i++], pcdev->base + CICR4);
 
-	if ((pcdev->icd) && (pcdev->icd->ops->resume))
-		ret = pcdev->icd->ops->resume(pcdev->icd);
+	if (pcdev->icd) {
+		struct v4l2_subdev *sd = soc_camera_to_subdev(icd);
+		ret = v4l2_subdev_call(sd, core, s_power, 1);
+		if (ret == -ENOIOCTLCMD)
+			ret = 0;
+	}
 
 	/* Restart frame capture if active buffer exists */
 	if (!ret && pcdev->active)
@@ -1843,4 +1844,5 @@ module_exit(pxa_camera_exit);
 MODULE_DESCRIPTION("PXA27x SoC Camera Host driver");
 MODULE_AUTHOR("Guennadi Liakhovetski <kernel@pengutronix.de>");
 MODULE_LICENSE("GPL");
+MODULE_VERSION(PXA_CAM_VERSION);
 MODULE_ALIAS("platform:" PXA_CAM_DRV_NAME);

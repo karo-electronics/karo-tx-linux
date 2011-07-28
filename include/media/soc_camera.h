@@ -109,12 +109,6 @@ struct soc_camera_host_ops {
 #define SOCAM_SENSOR_INVERT_HSYNC	(1 << 2)
 #define SOCAM_SENSOR_INVERT_VSYNC	(1 << 3)
 #define SOCAM_SENSOR_INVERT_DATA	(1 << 4)
-#define SOCAM_MIPI_1LANE		(1 << 5)
-#define SOCAM_MIPI_2LANE		(1 << 6)
-#define SOCAM_MIPI_3LANE		(1 << 7)
-#define SOCAM_MIPI_4LANE		(1 << 8)
-#define SOCAM_MIPI	(SOCAM_MIPI_1LANE | SOCAM_MIPI_2LANE | \
-			SOCAM_MIPI_3LANE | SOCAM_MIPI_4LANE)
 
 struct i2c_board_info;
 struct regulator_bulk_data;
@@ -207,11 +201,8 @@ struct soc_camera_format_xlate {
 };
 
 struct soc_camera_ops {
-	int (*suspend)(struct soc_camera_device *, pm_message_t state);
-	int (*resume)(struct soc_camera_device *);
 	unsigned long (*query_bus_param)(struct soc_camera_device *);
 	int (*set_bus_param)(struct soc_camera_device *, unsigned long);
-	int (*enum_input)(struct soc_camera_device *, struct v4l2_input *);
 	const struct v4l2_queryctrl *controls;
 	int num_controls;
 };
@@ -270,6 +261,12 @@ static inline struct v4l2_queryctrl const *soc_camera_find_qctrl(
 #define SOCAM_PCLK_SAMPLE_FALLING	(1 << 13)
 #define SOCAM_DATA_ACTIVE_HIGH		(1 << 14)
 #define SOCAM_DATA_ACTIVE_LOW		(1 << 15)
+#define SOCAM_MIPI_1LANE		(1 << 16)
+#define SOCAM_MIPI_2LANE		(1 << 17)
+#define SOCAM_MIPI_3LANE		(1 << 18)
+#define SOCAM_MIPI_4LANE		(1 << 19)
+#define SOCAM_MIPI	(SOCAM_MIPI_1LANE | SOCAM_MIPI_2LANE | \
+			SOCAM_MIPI_3LANE | SOCAM_MIPI_4LANE)
 
 #define SOCAM_DATAWIDTH_MASK (SOCAM_DATAWIDTH_4 | SOCAM_DATAWIDTH_8 | \
 			      SOCAM_DATAWIDTH_9 | SOCAM_DATAWIDTH_10 | \
