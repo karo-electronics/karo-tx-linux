@@ -13,6 +13,7 @@
 #include <linux/slab.h>
 #include <linux/bitops.h>
 #include <linux/device-mapper.h>
+#include <linux/export.h>
 
 #define DM_MSG_PREFIX "space map disk"
 
