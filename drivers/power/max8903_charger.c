@@ -26,6 +26,7 @@
 #include <linux/power_supply.h>
 #include <linux/platform_device.h>
 #include <linux/power/max8903_charger.h>
+#include <linux/module.h>
 
 struct max8903_data {
 	struct max8903_pdata pdata;

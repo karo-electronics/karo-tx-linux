@@ -69,6 +69,8 @@
 
 #include <linux/kernel.h>
 #include <linux/mm.h>
+#include <linux/stat.h>
+#include <linux/module.h>
 #include <linux/mman.h>
 #include <linux/workqueue.h>
 #include <xen/balloon.h>

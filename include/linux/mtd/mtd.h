@@ -21,7 +21,6 @@
 #define __MTD_MTD_H__
 
 #include <linux/types.h>
-#include <linux/module.h>
 #include <linux/uio.h>
 #include <linux/notifier.h>
 #include <linux/device.h>
@@ -40,6 +39,8 @@
 #define MTD_ERASE_FAILED        0x10
 
 #define MTD_FAIL_ADDR_UNKNOWN -1LL
+
+struct module;
 
 /* If the erase fails, fail_addr might indicate exactly which block failed.  If
    fail_addr = MTD_FAIL_ADDR_UNKNOWN, the failure was not at the device level or was not

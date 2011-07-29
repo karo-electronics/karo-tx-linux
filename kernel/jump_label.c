@@ -7,7 +7,7 @@
  */
 #include <linux/memory.h>
 #include <linux/uaccess.h>
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/sort.h>
