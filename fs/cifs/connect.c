@@ -320,9 +320,10 @@ requeue_echo:
 }
 
 static int
-cifs_demultiplex_thread(struct TCP_Server_Info *server)
+cifs_demultiplex_thread(void *p)
 {
 	int length;
+	struct TCP_Server_Info *server = p;
 	unsigned int pdu_length, total_read;
 	struct smb_hdr *smb_buffer = NULL;
 	struct smb_hdr *bigbuf = NULL;
@@ -1791,7 +1792,7 @@ cifs_get_tcp_session(struct smb_vol *volume_info)
 	 * this will succeed. No need for try_module_get().
 	 */
 	__module_get(THIS_MODULE);
-	tcp_ses->tsk = kthread_run((void *)(void *)cifs_demultiplex_thread,
+	tcp_ses->tsk = kthread_run(cifs_demultiplex_thread,
 				  tcp_ses, "cifsd");
 	if (IS_ERR(tcp_ses->tsk)) {
 		rc = PTR_ERR(tcp_ses->tsk);
@@ -3485,7 +3486,7 @@ cifs_construct_tcon(struct cifs_sb_info *cifs_sb, uid_t fsuid)
 		goto out;
 	}
 
-	snprintf(username, MAX_USERNAME_SIZE, "krb50x%x", fsuid);
+	snprintf(username, sizeof(username), "krb50x%x", fsuid);
 	vol_info->username = username;
 	vol_info->local_nls = cifs_sb->local_nls;
 	vol_info->linux_uid = fsuid;
