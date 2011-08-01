@@ -127,8 +127,10 @@ int kdb_stub(struct kgdb_state *ks)
 	KDB_STATE_CLEAR(PAGER);
 	kdbnearsym_cleanup();
 	if (error == KDB_CMD_KGDB) {
-		if (KDB_STATE(DOING_KGDB))
+		if (KDB_STATE(DOING_KGDB) || KDB_STATE(DOING_KGDB2)) {
 			KDB_STATE_CLEAR(DOING_KGDB);
+			KDB_STATE_CLEAR(DOING_KGDB2);
+		}
 		return DBG_PASS_EVENT;
 	}
 	kdb_bp_install(ks->linux_regs);
