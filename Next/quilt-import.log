@@ -1,0 +1,112 @@
+Importing i2c based on 3.0-git5
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 3.0-git5
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 3.0
+Unchanged quilt series kernel-doc
+Importing rr based on v3.0-3853-g750e069
+Unchanged quilt series rr
+Importing device-mapper based on v3.0-6046-g55f9c40
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 55f9c40ff632d03c527d6a6ceddcda0a224587a6
+HEAD is now at 55f9c40 Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/sparc
+$ git am ../quilt/device-mapper/dm-snapshot-flush-disk-cache-when-merging.patch
+Applying: This patch makes dm-snapshot flush disk cache when writing metadata for
+$ git am ../quilt/device-mapper/dm-mpath-fix-potential-NULL-pointer-in-feature-arg-processing.patch
+Applying: Avoid dereferencing a NULL pointer if the number of feature arguments
+$ git am ../quilt/device-mapper/dm-io-flush-cpu-cache-with-vmapped-io.patch
+Applying: For normal kernel pages, CPU cache is synchronized by the dma layer.
+$ git am ../quilt/device-mapper/dm-table-fix-discard-support.patch
+Applying: Remove 'discards_supported' from the dm_table structure.  The same
+$ git am ../quilt/device-mapper/dm-log-clean-up-bit-little-endian-bitops.patch
+Applying: Using __test_and_{set,clear}_bit_le() with ignoring its return value
+$ git am ../quilt/device-mapper/dm-log-userspace-use-list_move.patch
+Applying: Replace list_del() followed by list_add() with list_move().
+$ git am ../quilt/device-mapper/dm-use-vzalloc.patch
+Applying: Use vzalloc() instead of vmalloc()+memset().
+$ git am ../quilt/device-mapper/dm-kcopyd-remove-offset-field-from-job-structure.patch
+Applying: The offset field in struct kcopyd_job is always zero so remove it.
+$ git am ../quilt/device-mapper/dm-kcopyd-remove-nr_pages-field-from-job-structure.patch
+Applying: The nr_pages field in struct kcopyd_job is only used temporarily in
+$ git am ../quilt/device-mapper/dm-snapshot-remove-unused-definitions.patch
+Applying: Remove a couple of unused #defines.
+$ git am ../quilt/device-mapper/dm-snapshot-style-cleanups.patch
+Applying: Coding style cleanups.
+$ git am ../quilt/device-mapper/dm-raid-cleanup-parameter-handling.patch
+Applying: Re-order the parameters so they are handled consistently in the same order
+$ git am ../quilt/device-mapper/dm-kcopyd-add-dm_kcopyd_zero-to-zero-an-area.patch
+Applying: This patch introduces dm_kcopyd_zero() to make it easy to use
+$ git am ../quilt/device-mapper/dm-ignore-merge_bvec-for-snapshots-when-safe.patch
+Applying: Add a new flag DMF_MERGE_IS_OPTIONAL to struct mapped_device to indicate
+$ git am ../quilt/device-mapper/dm-snap-skip-reading-origin-when-overwriting-complete-chunk.patch
+Applying: If we write a full chunk in the snapshot, skip reading the origin device
+$ git am ../quilt/device-mapper/dm-table-share-target-argument-parsing-functions.patch
+Applying: Move multipath target argument parsing code into dm-table so other
+$ git am ../quilt/device-mapper/dm-flakey-use-dm_target_offset-and-support-discards.patch
+Applying: Use dm_target_offset() and support discards.
+$ git am ../quilt/device-mapper/dm-flakey-support-feature-args.patch
+Applying: Add the ability to specify arbitrary feature flags when creating a
+$ git am ../quilt/device-mapper/dm-flakey-add-drop_writes.patch
+Applying: Add 'drop_writes' option to drop writes silently while the
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:11: new blank line at EOF.
++
+warning: 1 line adds whitespace errors.
+$ git am ../quilt/device-mapper/dm-flakey-add-corrupt_bio_byte-feature.patch
+Applying: Add corrupt_bio_byte feature to simulate corruption by overwriting a byte at a
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:12: new blank line at EOF.
++
+warning: 1 line adds whitespace errors.
+$ git am ../quilt/device-mapper/dm-ioctl-fill-in-device-parameters-in-more-ioctls.patch
+Applying: Move parameter filling from find_device to __find_device_hash_cell.
+$ git am ../quilt/device-mapper/dm-ioctl-introduce-__get_dev_cell.patch
+Applying: Move logic to find device based on major/minor number to a separate
+$ git am ../quilt/device-mapper/dm-ioctl-forbid-multiple-device-specifiers.patch
+Applying: Exactly one of name, uuid or device must be specified when referencing
+$ git am ../quilt/device-mapper/dm-raid-improve-table-parameters-documentation.patch
+Applying: Add more information about some dm-raid table parameters and clarify how
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:123: new blank line at EOF.
++
+warning: 1 line adds whitespace errors.
+$ git am ../quilt/device-mapper/dm-raid-add-region_size-parameter.patch
+Applying: Allow the user to specify the region_size.
+$ git am ../quilt/device-mapper/dm-raid-add-write_mostly-parameter.patch
+Applying: Add the write_mostly parameter to RAID1 dm-raid tables.
+$ git am ../quilt/device-mapper/dm-raid-support-metadata-devices.patch
+Applying: Add the ability to parse and use metadata devices to dm-raid.  Although
+$ git am ../quilt/device-mapper/dm-raid-add-md-raid1-support.patch
+Applying: Support the MD RAID1 personality through dm-raid.
+$ git am ../quilt/device-mapper/dm-raid-tidy-includes.patch
+Applying: A dm target only needs to use include/linux dm headers.
+$ git am ../quilt/device-mapper/dm-crypt-optionally-support-discard-requests.patch
+Applying: Add optional parameter field to dmcrypt table and support
+$ git am ../quilt/device-mapper/dm-table-clean-dm_get_device-and-move-exports.patch
+Applying: There is no need for __table_get_device to be factored out.
+$ git am ../quilt/device-mapper/dm-table-add-singleton-feature.patch
+Applying: Introduce the concept of a singleton table which contains exactly one target.
+$ git am ../quilt/device-mapper/dm-table-add-always-writeable-feature.patch
+Applying: Add a target feature flag to indicate that a target does not work in
+$ git am ../quilt/device-mapper/dm-ioctl-prevent-empty-message.patch
+Applying: Detect invalid empty messages in core dm instead of requiring every target to
+$ git am ../quilt/device-mapper/dm-export-dm-get-md.patch
+Applying: Export dm_get_md() for the new thin provisioning target to use.
+$ git am ../quilt/device-mapper/dm-suppress-endian-warnings.patch
+Applying: Suppress sparse warnings about cpu_to_le32() by using __le32 types for
+$ git am ../quilt/device-mapper/dm-table-set-flush-capability-based-on-underlying-devices.patch
+Applying: DM has always advertised both REQ_FLUSH and REQ_FUA flush capabilities
+$ git am ../quilt/device-mapper/dm-fix-idr-leak-on-module-removal.patch
+Applying: Destroy _minor_idr when unloading the core dm module.  (Found by kmemleak.)
+$ git am ../quilt/device-mapper/dm-add-persistent-data-library.patch
+Applying: The persistent-data library offers a re-usable framework for the storage
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:3212: new blank line at EOF.
++
+warning: 1 line adds whitespace errors.
+$ git am ../quilt/device-mapper/dm-add-thin-provisioning-target.patch
+Applying: Initial EXPERIMENTAL implementation of device-mapper thin provisioning
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:238: space before tab in indent.
+   	Create a new snapshot of another thinly-provisioned device.
+warning: 1 line adds whitespace errors.
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + afa2081...4b37934 master     -> quilt/device-mapper  (forced update)
