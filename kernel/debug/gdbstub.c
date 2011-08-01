@@ -53,20 +53,10 @@ static unsigned long		gdb_regs[(NUMREGBYTES +
  */
 
 #ifdef CONFIG_KGDB_KDB
-static int gdbstub_use_prev_in_buf;
-static int gdbstub_prev_in_buf_pos;
-
 static int gdbstub_read_wait(void)
 {
 	int ret = -1;
 	int i;
-
-	if (unlikely(gdbstub_use_prev_in_buf)) {
-		if (gdbstub_prev_in_buf_pos < gdbstub_use_prev_in_buf)
-			return remcom_in_buffer[gdbstub_prev_in_buf_pos++];
-		else
-			gdbstub_use_prev_in_buf = 0;
-	}
 
 	/* poll any additional I/O interfaces that are defined */
 	while (ret < 0)
@@ -119,6 +109,7 @@ static void get_packet(char *buffer)
 			buffer[count] = ch;
 			count = count + 1;
 		}
+		buffer[count] = 0;
 
 		if (ch == '#') {
 			xmitcsum = hex_to_bin(gdbstub_read_wait()) << 4;
@@ -133,8 +124,6 @@ static void get_packet(char *buffer)
 			if (dbg_io_ops->flush)
 				dbg_io_ops->flush();
 		}
-
-		buffer[count] = 0;
 	} while (checksum != xmitcsum);
 }
 
@@ -1093,11 +1082,12 @@ int gdbstub_state(struct kgdb_state *ks, char *cmd)
 	case 'c':
 		strcpy(remcom_in_buffer, cmd);
 		return 0;
-	case '$':
-		strcpy(remcom_in_buffer, cmd);
-		gdbstub_use_prev_in_buf = strlen(remcom_in_buffer);
-		gdbstub_prev_in_buf_pos = 0;
-		return 0;
+	case '?':
+		gdb_cmd_status(ks);
+		break;
+	case '\0':
+		strcpy(remcom_out_buffer, "");
+		break;
 	}
 	dbg_io_ops->write_char('+');
 	put_packet(remcom_out_buffer);
