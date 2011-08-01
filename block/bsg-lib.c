@@ -23,6 +23,7 @@
 #include <linux/slab.h>
 #include <linux/blkdev.h>
 #include <linux/delay.h>
+#include <linux/export.h>
 #include <linux/scatterlist.h>
 #include <linux/bsg-lib.h>
 #include <scsi/scsi_cmnd.h>

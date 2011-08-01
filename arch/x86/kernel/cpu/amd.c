@@ -1,5 +1,6 @@
 #include <linux/init.h>
 #include <linux/bitops.h>
+#include <linux/export.h>
 #include <linux/mm.h>
 
 #include <linux/io.h>

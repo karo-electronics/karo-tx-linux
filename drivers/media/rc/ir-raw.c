@@ -14,6 +14,8 @@
 
 #include <linux/kthread.h>
 #include <linux/mutex.h>
+#include <linux/export.h>
+#include <linux/kmod.h>
 #include <linux/sched.h>
 #include <linux/freezer.h>
 #include "rc-core-priv.h"

@@ -13,6 +13,7 @@
 #include <asm/bootinfo.h>
 #include <asm/cacheflush.h>
 #include <asm/r4kcache.h>
+#include <asm/smp-ops.h>
 #include <asm/reboot.h>
 #include <asm/smp-ops.h>
 #include <asm/time.h>
