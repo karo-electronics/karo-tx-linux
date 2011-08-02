@@ -35,6 +35,7 @@
 #include <linux/semaphore.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/export.h>
 
 #include <video/omapdss.h>
 #include "dss.h"

@@ -9,6 +9,7 @@
 #include <linux/dm-io.h>
 #include <linux/slab.h>
 #include <linux/device-mapper.h>
+#include <linux/module.h>
 
 #define DM_MSG_PREFIX "block manager"
 

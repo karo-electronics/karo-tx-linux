@@ -9,6 +9,7 @@
 #include "dm-transaction-manager.h"
 
 #include <linux/device-mapper.h>
+#include <linux/export.h>
 
 #define DM_MSG_PREFIX "btree"
 
