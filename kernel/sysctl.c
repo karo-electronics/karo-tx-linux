@@ -349,9 +349,7 @@ static struct ctl_table kern_table[] = {
 		.data		= &sysctl_timer_migration,
 		.maxlen		= sizeof(unsigned int),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= &zero,
-		.extra2		= &one,
+		.proc_handler	= proc_dointvec_bool,
 	},
 #endif
 	{
@@ -709,9 +707,7 @@ static struct ctl_table kern_table[] = {
 		.data		= &dmesg_restrict,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= &zero,
-		.extra2		= &one,
+		.proc_handler	= proc_dointvec_bool,
 	},
 	{
 		.procname	= "kptr_restrict",
@@ -754,9 +750,7 @@ static struct ctl_table kern_table[] = {
 		.data		= &softlockup_panic,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= &zero,
-		.extra2		= &one,
+		.proc_handler	= proc_dointvec_bool,
 	},
 	{
 		.procname       = "nmi_watchdog",
@@ -870,9 +864,7 @@ static struct ctl_table kern_table[] = {
 		.data		= &sysctl_hung_task_panic,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= &zero,
-		.extra2		= &one,
+		.proc_handler	= proc_dointvec_bool,
 	},
 	{
 		.procname	= "hung_task_check_count",
@@ -1320,9 +1312,7 @@ static struct ctl_table vm_table[] = {
 		.data		= &vm_highmem_is_dirtyable,
 		.maxlen		= sizeof(vm_highmem_is_dirtyable),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= &zero,
-		.extra2		= &one,
+		.proc_handler	= proc_dointvec_bool,
 	},
 #endif
 	{
@@ -1338,18 +1328,14 @@ static struct ctl_table vm_table[] = {
 		.data		= &sysctl_memory_failure_early_kill,
 		.maxlen		= sizeof(sysctl_memory_failure_early_kill),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= &zero,
-		.extra2		= &one,
+		.proc_handler	= proc_dointvec_bool,
 	},
 	{
 		.procname	= "memory_failure_recovery",
 		.data		= &sysctl_memory_failure_recovery,
 		.maxlen		= sizeof(sysctl_memory_failure_recovery),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= &zero,
-		.extra2		= &one,
+		.proc_handler	= proc_dointvec_bool,
 	},
 #endif
 	{ }
