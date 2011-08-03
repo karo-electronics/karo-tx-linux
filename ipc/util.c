@@ -108,6 +108,21 @@ static int __init ipc_init(void)
 }
 __initcall(ipc_init);
 
+void __ipc_init_ids(struct ipc_ids *ids)
+{
+	ids->in_use = 0;
+	ids->seq = 0;
+	{
+		int seq_limit = INT_MAX/SEQ_MULTIPLIER;
+		if (seq_limit > USHRT_MAX)
+			ids->seq_max = USHRT_MAX;
+		else
+			ids->seq_max = seq_limit;
+	}
+
+	idr_init(&ids->ipcs_idr);
+}
+
 /**
  *	ipc_init_ids		-	initialise IPC identifiers
  *	@ids: Identifier set
@@ -115,22 +130,11 @@ __initcall(ipc_init);
  *	Set up the sequence range to use for the ipc identifier range (limited
  *	below IPCMNI) then initialise the ids idr.
  */
- 
+
 void ipc_init_ids(struct ipc_ids *ids)
 {
 	init_rwsem(&ids->rw_mutex);
-
-	ids->in_use = 0;
-	ids->seq = 0;
-	{
-		int seq_limit = INT_MAX/SEQ_MULTIPLIER;
-		if (seq_limit > USHRT_MAX)
-			ids->seq_max = USHRT_MAX;
-		 else
-		 	ids->seq_max = seq_limit;
-	}
-
-	idr_init(&ids->ipcs_idr);
+	__ipc_init_ids(ids);
 }
 
 #ifdef CONFIG_PROC_FS
