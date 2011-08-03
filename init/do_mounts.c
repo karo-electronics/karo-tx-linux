@@ -110,10 +110,16 @@ static dev_t devt_from_partuuid(char *uuid_str)
 
 	/* Check for optional partition number offset attributes. */
 	if (uuid_str[36]) {
+		char c = 0;
 		/* Explicitly fail on poor PARTUUID syntax. */
-		if (sscanf(&uuid_str[36], "/PARTNROFF=%d", &offset) != 1) {
+		if (sscanf(&uuid_str[36],
+			   "/PARTNROFF=%d%c", &offset, &c) != 1) {
 			printk(KERN_ERR "VFS: PARTUUID= is invalid.\n"
 			 "Expected PARTUUID=<valid-uuid-id>[/PARTNROFF=%%d]\n");
+			if (root_wait)
+				printk(KERN_ERR
+				     "Disabling rootwait; root= is invalid.\n");
+			root_wait = 0;
 			goto done;
 		}
 	}
