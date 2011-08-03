@@ -132,11 +132,12 @@ config TMPFS_POSIX_ACL
 	  and this option selects support for ACLs specifically for tmpfs
 	  filesystems.
 
-	  If you've selected TMPFS, you almost certainly want this option
-	  as well since a number of user space features (e.g., ALSA sound)
-	  require POSIX ACL support under /dev to work properly.  In other
-	  words, if you're not sure and you have no *compelling* reason to
-	  deselect this feature, say Y.
+	  If you've selected TMPFS, it's possible that you'll also need
+	  this option as there are a number of Linux distros that require
+	  POSIX ACL support under /dev for certain features to work properly.
+	  For example, some distros need this feature for ALSA-related /dev
+	  files for sound to work properly.  In short, if you're not sure,
+	  say Y.
 
 	  To learn more about Access Control Lists, visit the POSIX ACLs for
 	  Linux website <http://acl.bestbits.at/>.
