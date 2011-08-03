@@ -10,6 +10,7 @@
 #include "dm-persistent-data-internal.h"
 
 #include <linux/slab.h>
+#include <linux/export.h>
 #include <linux/device-mapper.h>
 
 #define DM_MSG_PREFIX "transaction manager"
