@@ -40,7 +40,9 @@
 #include <linux/compiler.h>
 #include <asm/page.h>
 
+#ifdef CONFIG_XEN
 #include <xen/xen.h>
+#endif
 
 #define build_mmio_read(name, size, type, reg, barrier) \
 static inline type name(const volatile void __iomem *addr) \
