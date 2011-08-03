@@ -20,6 +20,9 @@
 
 DEFINE_SPINLOCK(mq_lock);
 
+#define INIT_IPC_SHM_IDS(name) \
+	{ .rw_mutex = __RWSEM_INITIALIZER(name.rw_mutex), }
+
 /*
  * The next 2 defines are here bc this is the only file
  * compiled when either CONFIG_SYSVIPC and CONFIG_POSIX_MQUEUE
@@ -27,6 +30,9 @@ DEFINE_SPINLOCK(mq_lock);
  */
 struct ipc_namespace init_ipc_ns = {
 	.count		= ATOMIC_INIT(1),
+	.ids	= {
+		[IPC_SHM_IDS] = INIT_IPC_SHM_IDS(init_ipc_ns.ids[IPC_SHM_IDS]),
+	},
 #ifdef CONFIG_POSIX_MQUEUE
 	.mq_queues_max   = DFLT_QUEUESMAX,
 	.mq_msg_max      = DFLT_MSGMAX,
