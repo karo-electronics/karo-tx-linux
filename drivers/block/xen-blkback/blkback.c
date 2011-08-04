@@ -274,7 +274,7 @@ int xen_blkif_schedule(void *arg)
 
 	xen_blkif_get(blkif);
 
-	while (!kthread_should_stop()) {
+	while (!blkif->remove_requested) {
 		if (try_to_freeze())
 			continue;
 		if (unlikely(vbd->size != vbd_sz(vbd)))
@@ -282,11 +282,11 @@ int xen_blkif_schedule(void *arg)
 
 		wait_event_interruptible(
 			blkif->wq,
-			blkif->waiting_reqs || kthread_should_stop());
+			blkif->waiting_reqs || blkif->remove_requested);
 		wait_event_interruptible(
 			blkbk->pending_free_wq,
 			!list_empty(&blkbk->pending_free) ||
-			kthread_should_stop());
+			blkif->remove_requested);
 
 		blkif->waiting_reqs = 0;
 		smp_mb(); /* clear flag *before* checking for work */
@@ -301,8 +301,8 @@ int xen_blkif_schedule(void *arg)
 	if (log_stats)
 		print_stats(blkif);
 
-	blkif->xenblkd = NULL;
 	xen_blkif_put(blkif);
+	xen_blkback_close(blkif);
 
 	return 0;
 }
@@ -476,7 +476,7 @@ __do_block_io_op(struct xen_blkif *blkif)
 		if (RING_REQUEST_CONS_OVERFLOW(&blk_rings->common, rc))
 			break;
 
-		if (kthread_should_stop()) {
+		if (blkif->remove_requested) {
 			more_to_do = 1;
 			break;
 		}
