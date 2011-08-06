@@ -123,8 +123,8 @@ static DEFINE_SPINLOCK(minor_lock);
 #define BLKIF_MINOR_EXT(dev) ((dev)&(~EXTENDED))
 #define EMULATED_HD_DISK_MINOR_OFFSET (0)
 #define EMULATED_HD_DISK_NAME_OFFSET (EMULATED_HD_DISK_MINOR_OFFSET / 256)
-#define EMULATED_SD_DISK_MINOR_OFFSET (0)
-#define EMULATED_SD_DISK_NAME_OFFSET (EMULATED_SD_DISK_MINOR_OFFSET / 256)
+#define EMULATED_SD_DISK_MINOR_OFFSET (EMULATED_HD_DISK_MINOR_OFFSET + (4 * 16))
+#define EMULATED_SD_DISK_NAME_OFFSET (EMULATED_HD_DISK_NAME_OFFSET + 4)
 
 #define DEV_NAME	"xvd"	/* name in /dev */
 
@@ -529,7 +529,7 @@ static int xlvbd_alloc_gendisk(blkif_sector_t capacity,
 		minor = BLKIF_MINOR_EXT(info->vdevice);
 		nr_parts = PARTS_PER_EXT_DISK;
 		offset = minor / nr_parts;
-		if (xen_hvm_domain() && offset < EMULATED_HD_DISK_NAME_OFFSET + 4)
+		if (xen_hvm_domain() && offset <= EMULATED_HD_DISK_NAME_OFFSET + 4)
 			printk(KERN_WARNING "blkfront: vdevice 0x%x might conflict with "
 					"emulated IDE disks,\n\t choose an xvd device name"
 					"from xvde on\n", info->vdevice);
@@ -1148,7 +1148,7 @@ static void blkfront_connect(struct blkfront_info *info)
 		return;
 	}
 
-	info->feature_flush = REQ_FLUSH | REQ_FUA;
+	info->feature_flush = 0;
 	info->flush_op = 0;
 
 	err = xenbus_gather(XBT_NIL, info->xbdev->otherend,
@@ -1163,6 +1163,7 @@ static void blkfront_connect(struct blkfront_info *info)
 	 * If there are barriers, then we use flush.
 	 */
 	if (!err && barrier) {
+		info->feature_flush = REQ_FLUSH | REQ_FUA;
 		info->flush_op = BLKIF_OP_WRITE_BARRIER;
 	}
 	/*
@@ -1174,12 +1175,10 @@ static void blkfront_connect(struct blkfront_info *info)
 			    NULL);
 
 	if (!err && flush) {
+		info->feature_flush = REQ_FLUSH;
 		info->flush_op = BLKIF_OP_FLUSH_DISKCACHE;
 	}
-
-	if (!flush && !barrier)
-		info->feature_flush = 0;
-
+		
 	err = xlvbd_alloc_gendisk(sectors, info, binfo, sector_size);
 	if (err) {
 		xenbus_dev_fatal(info->xbdev, err, "xlvbd_add at %s",

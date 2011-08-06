@@ -49,7 +49,6 @@
 	pr_debug(DRV_PFX "(%s:%d) " fmt ".\n",	\
 		 __func__, __LINE__, ##args)
 
-#define WPRINTK(fmt, args...) printk(KERN_WARNING "xen-blkback: " fmt, ##args)
 
 /* Not a real protocol.  Used to generate ring structs which contain
  * the elements common to all protocols only.  This way we get a
@@ -146,7 +145,6 @@ struct xen_blkif {
 	/* Back pointer to the backend_info. */
 	struct backend_info	*be;
 	/* Private fields. */
-	bool			remove_requested;
 	spinlock_t		blk_ring_lock;
 	atomic_t		refcnt;
 
@@ -199,9 +197,6 @@ int xen_blkbk_flush_diskcache(struct xenbus_transaction xbt,
 			      struct backend_info *be, int state);
 
 struct xenbus_device *xen_blkbk_xenbus(struct backend_info *be);
-
-void xen_vbd_sync(struct xen_vbd *vbd);
-void xen_blkback_close(struct xen_blkif *blkif);
 
 static inline void blkif_get_x86_32_req(struct blkif_request *dst,
 					struct blkif_x86_32_request *src)

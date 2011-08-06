@@ -25,25 +25,16 @@ struct backend_info {
 	struct xenbus_device	*dev;
 	struct xen_blkif	*blkif;
 	struct xenbus_watch	backend_watch;
-	struct xenbus_watch	shutdown_watch;
 	unsigned		major;
 	unsigned		minor;
 	char			*mode;
-	bool			group_added;
-	char			*nodename;
-	atomic_t		refcnt;
-	pid_t			kthread_pid;
-	bool			shutdown_signalled;
 };
-
-DEFINE_SEMAPHORE(blkback_dev_sem);
 
 static struct kmem_cache *xen_blkif_cachep;
 static void connect(struct backend_info *);
 static int connect_ring(struct backend_info *);
 static void backend_changed(struct xenbus_watch *, const char **,
 			    unsigned int);
-static void xen_vbd_free(struct xen_vbd *vbd);
 
 struct xenbus_device *xen_blkbk_xenbus(struct backend_info *be)
 {
@@ -107,16 +98,6 @@ static void xen_update_blkif_status(struct xen_blkif *blkif)
 		err = PTR_ERR(blkif->xenblkd);
 		blkif->xenblkd = NULL;
 		xenbus_dev_error(blkif->be->dev, err, "start xenblkd");
-	}
-
-	blkif->be->kthread_pid = blkif->xenblkd->pid;
-	atomic_inc(&blkif->be->refcnt);
-
-	err = xenbus_printf(XBT_NIL, blkif->be->dev->nodename, "kthread-pid",
-			    "%d", blkif->xenblkd->pid);
-	if (err) {
-		xenbus_dev_error(blkif->be->dev, err, "write kthread-pid");
-		return;
 	}
 }
 
@@ -232,6 +213,11 @@ static int xen_blkif_map(struct xen_blkif *blkif, unsigned long shared_page,
 
 static void xen_blkif_disconnect(struct xen_blkif *blkif)
 {
+	if (blkif->xenblkd) {
+		kthread_stop(blkif->xenblkd);
+		blkif->xenblkd = NULL;
+	}
+
 	atomic_dec(&blkif->refcnt);
 	wait_event(blkif->waiting_to_free, atomic_read(&blkif->refcnt) == 0);
 	atomic_inc(&blkif->refcnt);
@@ -310,7 +296,6 @@ VBD_SHOW(mode, "%s\n", be->mode);
 int xenvbd_sysfs_addif(struct xenbus_device *dev)
 {
 	int error;
-	struct backend_info *be = dev_get_drvdata(&dev->dev);
 
 	error = device_create_file(&dev->dev, &dev_attr_physical_device);
 	if (error)
@@ -324,8 +309,6 @@ int xenvbd_sysfs_addif(struct xenbus_device *dev)
 	if (error)
 		goto fail3;
 
-	be->group_added = true;
-
 	return 0;
 
 fail3:	sysfs_remove_group(&dev->dev.kobj, &xen_vbdstat_group);
@@ -336,85 +319,17 @@ fail1:	device_remove_file(&dev->dev, &dev_attr_physical_device);
 
 void xenvbd_sysfs_delif(struct xenbus_device *dev)
 {
-	struct backend_info *be = dev_get_drvdata(&dev->dev);
-	if (!be->group_added)
-		return;
 	sysfs_remove_group(&dev->dev.kobj, &xen_vbdstat_group);
 	device_remove_file(&dev->dev, &dev_attr_mode);
 	device_remove_file(&dev->dev, &dev_attr_physical_device);
-	be->group_added = false;
 }
 
-static int xenvbd_kthread_remove(struct backend_info *be)
-{
-	struct xen_blkif *blkif = be->blkif;
-
-	if (!blkif || !blkif->xenblkd)
-		return 0;
-
-	blkif->remove_requested = true;
-	wake_up_process(blkif->xenblkd);
-
-	return -EBUSY;
-}
-
-static void xenvbd_signal_shutdown(struct backend_info *be)
-{
-	int err;
-
-	down(&blkback_dev_sem);
-
-	if (be->shutdown_signalled)
-		goto out;
-
-	err = xenbus_write(XBT_NIL, be->nodename, "shutdown-done", "");
-	if (err)
-		WPRINTK("Error writing shutdown-done for %s: %d\n",
-			be->nodename, err);
-
-	if (be->dev)
-		xenbus_switch_state(be->dev, XenbusStateClosed);
-
-	be->shutdown_signalled = true;
-
- out:
-	up(&blkback_dev_sem);
-}
-
-static void backend_release(struct backend_info *be)
-{
-	struct xen_blkif *blkif = be->blkif;
-
-	if (current->pid == be->kthread_pid)
-		xenvbd_signal_shutdown(be);
-
-	if (!atomic_dec_and_test(&be->refcnt))
-		return;
-
-	xenvbd_signal_shutdown(be);
-
-	if (blkif) {
-		xen_blkif_disconnect(blkif);
-		xen_vbd_free(&blkif->vbd);
-		xen_blkif_free(blkif);
-		be->blkif = NULL;
-	}
-
-	kfree(be->nodename);
-	kfree(be);
-}
 
 static void xen_vbd_free(struct xen_vbd *vbd)
 {
 	if (vbd->bdev)
 		blkdev_put(vbd->bdev, vbd->readonly ? FMODE_READ : FMODE_WRITE);
 	vbd->bdev = NULL;
-}
-
-void xen_vbd_sync(struct xen_vbd *vbd)
-{
-	if (vbd->bdev)
-		fsync_bdev(vbd->bdev);
 }
 
 static int xen_vbd_create(struct xen_blkif *blkif, blkif_vdev_t handle,
@@ -469,9 +384,8 @@ static int xen_blkbk_remove(struct xenbus_device *dev)
 
 	DPRINTK("");
 
-	down(&blkback_dev_sem);
-	be->dev = NULL;
-	up(&blkback_dev_sem);
+	if (be->major || be->minor)
+		xenvbd_sysfs_delif(dev);
 
 	if (be->backend_watch.node) {
 		unregister_xenbus_watch(&be->backend_watch);
@@ -479,76 +393,18 @@ static int xen_blkbk_remove(struct xenbus_device *dev)
 		be->backend_watch.node = NULL;
 	}
 
-	if (be->shutdown_watch.node) {
-		unregister_xenbus_watch(&be->shutdown_watch);
-		kfree(be->shutdown_watch.node);
-		be->shutdown_watch.node = NULL;
+	if (be->blkif) {
+		xen_blkif_disconnect(be->blkif);
+		xen_vbd_free(&be->blkif->vbd);
+		xen_blkif_free(be->blkif);
+		be->blkif = NULL;
 	}
 
-	if (xenvbd_kthread_remove(be))
-		WPRINTK("BAD REMOVE REQUEST for %s\n", be->nodename);
-
-	xenvbd_sysfs_delif(dev);
-	backend_release(be);
-
+	kfree(be);
 	dev_set_drvdata(&dev->dev, NULL);
-
 	return 0;
 }
 
-/*
- * called by kthread when closing
- */
-void xen_blkback_close(struct xen_blkif *blkif)
-{
-	struct xenbus_device *dev = blkif->be->dev;
-
-	xen_blkif_disconnect(blkif);
-	xen_vbd_sync(&blkif->vbd);
-	blkif->remove_requested = false;
-
-	down(&blkback_dev_sem);
-	if (blkif->be->dev)
-		xenvbd_sysfs_delif(blkif->be->dev);
-	up(&blkback_dev_sem);
-
-	backend_release(blkif->be);
-	blkif->xenblkd = NULL;
-	device_unregister(&dev->dev);
-}
-
-static void xenvbd_start_shutdown(struct xenbus_watch *watch,
-			   const char **vec, unsigned int length)
-{
-	int err;
-	char *type;
-	unsigned int len;
-	struct backend_info *be
-		= container_of(watch, struct backend_info, shutdown_watch);
-	struct xenbus_device *dev = be->dev;
-
-	if (be->shutdown_signalled)
-		return;
-
-	type = xenbus_read(XBT_NIL, dev->nodename, "shutdown-request", &len);
-	err  = (IS_ERR(type) ? PTR_ERR(type) : 0);
-
-	if (XENBUS_EXIST_ERR(err))
-		return;
-
-	if (err) {
-		xenbus_dev_fatal(dev, err, "reading shutdown-request");
-		return;
-	}
-
-	xenbus_switch_state(dev, XenbusStateClosing);
-
-	if (len == sizeof("force") - 1 && !memcmp(type, "force", len))
-		if (!xenvbd_kthread_remove(be))
-			xenvbd_signal_shutdown(be); /* shutdown immediately */
-
-	kfree(type);
-}
 int xen_blkbk_flush_diskcache(struct xenbus_transaction xbt,
 			      struct backend_info *be, int state)
 {
@@ -581,15 +437,6 @@ static int xen_blkbk_probe(struct xenbus_device *dev,
 	}
 	be->dev = dev;
 	dev_set_drvdata(&dev->dev, be);
-	atomic_set(&be->refcnt, 1);
-
-	be->nodename = kasprintf(GFP_KERNEL, "%s", dev->nodename);
-	if (!be->nodename) {
-		xenbus_dev_fatal(dev, -ENOMEM,
-				 "allocating backend structure");
-		kfree(be);
-		return -ENOMEM;
-	}
 
 	be->blkif = xen_blkif_alloc(dev->otherend_id);
 	if (IS_ERR(be->blkif)) {
@@ -604,12 +451,6 @@ static int xen_blkbk_probe(struct xenbus_device *dev,
 
 	err = xenbus_watch_pathfmt(dev, &be->backend_watch, backend_changed,
 				   "%s/%s", dev->nodename, "physical-device");
-	if (err)
-		goto fail;
-
-	err = xenbus_watch_pathfmt(dev, &be->shutdown_watch,
-				   xenvbd_start_shutdown, "%s/%s",
-				   dev->nodename, "shutdown-request");
 	if (err)
 		goto fail;
 
@@ -726,17 +567,13 @@ static void frontend_changed(struct xenbus_device *dev,
 	struct backend_info *be = dev_get_drvdata(&dev->dev);
 	int err;
 
-	DPRINTK("%s: %s", dev->nodename, xenbus_strstate(frontend_state));
+	DPRINTK("%s", xenbus_strstate(frontend_state));
 
 	switch (frontend_state) {
 	case XenbusStateInitialising:
 		if (dev->state == XenbusStateClosed) {
 			pr_info(DRV_PFX "%s: prepare for reconnect\n",
 				dev->nodename);
-
-			xenbus_rm(XBT_NIL, dev->nodename, "shutdown-done");
-			be->shutdown_signalled = false;
-
 			xenbus_switch_state(dev, XenbusStateInitWait);
 		}
 		break;
@@ -753,7 +590,7 @@ static void frontend_changed(struct xenbus_device *dev,
 
 		/*
 		 * Enforce precondition before potential leak point.
-		 * xen_blkif_disconnect() is idempotent.
+		 * blkif_disconnect() is idempotent.
 		 */
 		xen_blkif_disconnect(be->blkif);
 
@@ -764,16 +601,17 @@ static void frontend_changed(struct xenbus_device *dev,
 		break;
 
 	case XenbusStateClosing:
+		xen_blkif_disconnect(be->blkif);
 		xenbus_switch_state(dev, XenbusStateClosing);
 		break;
 
 	case XenbusStateClosed:
-		if (!xenvbd_kthread_remove(be))
-			xenvbd_signal_shutdown(be);
-		break;
-
+		xenbus_switch_state(dev, XenbusStateClosed);
+		if (xenbus_dev_is_online(dev))
+			break;
+		/* fall through if not online */
 	case XenbusStateUnknown:
-		/* implies xen_blkif_disconnect() via blkback_remove() */
+		/* implies blkif_disconnect() via blkback_remove() */
 		device_unregister(&dev->dev);
 		break;
 
@@ -782,8 +620,6 @@ static void frontend_changed(struct xenbus_device *dev,
 				 frontend_state);
 		break;
 	}
-
-	DPRINTK("%s: %s", dev->nodename, xenbus_strstate(dev->state));
 }
 
 
