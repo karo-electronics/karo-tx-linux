@@ -28,6 +28,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/power_supply.h>
 #include <linux/power/max17042_battery.h>
+#include <linux/module.h>
 
 struct max17042_chip {
 	struct i2c_client *client;
