@@ -19,6 +19,7 @@
  *   http://marc.info/?l=linux-mm&m=127811271605009
  */
 
+#include <linux/module.h>
 #include <linux/cpu.h>
 #include <linux/highmem.h>
 #include <linux/list.h>
@@ -53,6 +54,9 @@
 
 #define MAX_CLIENTS 16
 #define LOCAL_CLIENT ((uint16_t)-1)
+
+MODULE_LICENSE("GPL");
+
 struct zcache_client {
 	struct tmem_pool *tmem_pools[MAX_POOLS_PER_CLIENT];
 	struct xv_pool *xvpool;
