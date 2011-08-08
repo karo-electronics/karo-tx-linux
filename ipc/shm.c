@@ -74,9 +74,18 @@ void shm_init_ns(struct ipc_namespace *ns)
 	ns->shm_ctlmax = SHMMAX;
 	ns->shm_ctlall = SHMALL;
 	ns->shm_ctlmni = SHMMNI;
-	ns->shm_rmid_forced = 0;
+	ns->shm_rmid_forced = 1;
 	ns->shm_tot = 0;
-	ipc_init_ids(&shm_ids(ns));
+
+	/*
+	 * For init_ipc_ns shm_ids().rw_mutex is statically initialized
+	 * as kernel threads should be able to use it in do_exit() before
+	 * shm_init(), which is called on do_initcall()
+	 */
+	if (ns == &init_ipc_ns)
+		__ipc_init_ids(&shm_ids(ns));
+	else
+		ipc_init_ids(&shm_ids(ns));
 }
 
 /*
