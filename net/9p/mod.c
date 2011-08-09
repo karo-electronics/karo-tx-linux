@@ -34,12 +34,10 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
-#ifdef CONFIG_NET_9P_DEBUG
 unsigned int p9_debug_level = 0;	/* feature-rific global debug level  */
 EXPORT_SYMBOL(p9_debug_level);
 module_param_named(debug, p9_debug_level, uint, 0);
 MODULE_PARM_DESC(debug, "9P debugging level");
-#endif
 
 /*
  * Dynamic Transport Registration Routines
