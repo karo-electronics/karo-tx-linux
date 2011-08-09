@@ -15,29 +15,10 @@
 #include <linux/mutex.h>
 #include <linux/err.h>
 
-#include <linux/regmap.h>
+#define CREATE_TRACE_POINTS
+#include <trace/events/regmap.h>
 
-struct regmap;
-
-struct regmap_format {
-	size_t buf_size;
-	size_t reg_bytes;
-	size_t val_bytes;
-	void (*format_write)(struct regmap *map,
-			     unsigned int reg, unsigned int val);
-	void (*format_reg)(void *buf, unsigned int reg);
-	void (*format_val)(void *buf, unsigned int val);
-	unsigned int (*parse_val)(void *buf);
-};
-
-struct regmap {
-	struct mutex lock;
-
-	struct device *dev; /* Device we do I/O on */
-	void *work_buf;     /* Scratch buffer used to format I/O */
-	struct regmap_format format;  /* Buffer format */
-	const struct regmap_bus *bus;
-};
+#include "internal.h"
 
 static void regmap_format_4_12_write(struct regmap *map,
 				     unsigned int reg, unsigned int val)
@@ -116,6 +97,11 @@ struct regmap *regmap_init(struct device *dev,
 	map->format.val_bytes = config->val_bits / 8;
 	map->dev = dev;
 	map->bus = bus;
+	map->max_register = config->max_register;
+	map->writeable_reg = config->writeable_reg;
+	map->readable_reg = config->readable_reg;
+	map->volatile_reg = config->volatile_reg;
+	map->precious_reg = config->precious_reg;
 
 	switch (config->reg_bits) {
 	case 4:
@@ -171,6 +157,8 @@ struct regmap *regmap_init(struct device *dev,
 		goto err_bus;
 	}
 
+	regmap_debugfs_init(map);
+
 	return map;
 
 err_bus:
@@ -187,6 +175,7 @@ EXPORT_SYMBOL_GPL(regmap_init);
  */
 void regmap_exit(struct regmap *map)
 {
+	regmap_debugfs_exit(map);
 	kfree(map->work_buf);
 	module_put(map->bus->owner);
 	kfree(map);
@@ -199,16 +188,32 @@ static int _regmap_raw_write(struct regmap *map, unsigned int reg,
 	void *buf;
 	int ret = -ENOTSUPP;
 	size_t len;
+	int i;
+
+	/* Check for unwritable registers before we start */
+	if (map->writeable_reg)
+		for (i = 0; i < val_len / map->format.val_bytes; i++)
+			if (!map->writeable_reg(map->dev, reg + i))
+				return -EINVAL;
 
 	map->format.format_reg(map->work_buf, reg);
 
-	/* Try to do a gather write if we can */
-	if (map->bus->gather_write)
+	trace_regmap_hw_write_start(map->dev, reg,
+				    val_len / map->format.val_bytes);
+
+	/* If we're doing a single register write we can probably just
+	 * send the work_buf directly, otherwise try to do a gather
+	 * write.
+	 */
+	if (val == map->work_buf + map->format.reg_bytes)
+		ret = map->bus->write(map->dev, map->work_buf,
+				      map->format.reg_bytes + val_len);
+	else if (map->bus->gather_write)
 		ret = map->bus->gather_write(map->dev, map->work_buf,
 					     map->format.reg_bytes,
 					     val, val_len);
 
-	/* Otherwise fall back on linearising by hand. */
+	/* If that didn't work fall back on linearising by hand. */
 	if (ret == -ENOTSUPP) {
 		len = map->format.reg_bytes + val_len;
 		buf = kmalloc(len, GFP_KERNEL);
@@ -222,19 +227,31 @@ static int _regmap_raw_write(struct regmap *map, unsigned int reg,
 		kfree(buf);
 	}
 
+	trace_regmap_hw_write_done(map->dev, reg,
+				   val_len / map->format.val_bytes);
+
 	return ret;
 }
 
 static int _regmap_write(struct regmap *map, unsigned int reg,
 			 unsigned int val)
 {
+	int ret;
 	BUG_ON(!map->format.format_write && !map->format.format_val);
+
+	trace_regmap_reg_write(map->dev, reg, val);
 
 	if (map->format.format_write) {
 		map->format.format_write(map, reg, val);
 
-		return map->bus->write(map->dev, map->work_buf,
-				       map->format.buf_size);
+		trace_regmap_hw_write_start(map->dev, reg, 1);
+
+		ret = map->bus->write(map->dev, map->work_buf,
+				      map->format.buf_size);
+
+		trace_regmap_hw_write_done(map->dev, reg, 1);
+
+		return ret;
 	} else {
 		map->format.format_val(map->work_buf + map->format.reg_bytes,
 				       val);
@@ -316,12 +333,16 @@ static int _regmap_raw_read(struct regmap *map, unsigned int reg, void *val,
 	if (map->bus->read_flag_mask)
 		u8[0] |= map->bus->read_flag_mask;
 
-	ret = map->bus->read(map->dev, map->work_buf, map->format.reg_bytes,
-			     val, map->format.val_bytes);
-	if (ret != 0)
-		return ret;
+	trace_regmap_hw_read_start(map->dev, reg,
+				   val_len / map->format.val_bytes);
 
-	return 0;
+	ret = map->bus->read(map->dev, map->work_buf, map->format.reg_bytes,
+			     val, val_len);
+
+	trace_regmap_hw_read_done(map->dev, reg,
+				  val_len / map->format.val_bytes);
+
+	return ret;
 }
 
 static int _regmap_read(struct regmap *map, unsigned int reg,
@@ -333,8 +354,10 @@ static int _regmap_read(struct regmap *map, unsigned int reg,
 		return -EINVAL;
 
 	ret = _regmap_raw_read(map, reg, map->work_buf, map->format.val_bytes);
-	if (ret == 0)
+	if (ret == 0) {
 		*val = map->format.parse_val(map->work_buf);
+		trace_regmap_reg_read(map->dev, reg, *val);
+	}
 
 	return ret;
 }
@@ -453,3 +476,11 @@ out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(regmap_update_bits);
+
+static int __init regmap_initcall(void)
+{
+	regmap_debugfs_initcall();
+
+	return 0;
+}
+postcore_initcall(regmap_initcall);
