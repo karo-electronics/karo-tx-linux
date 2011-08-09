@@ -36,8 +36,8 @@
 
 #define _QLCNIC_LINUX_MAJOR 5
 #define _QLCNIC_LINUX_MINOR 0
-#define _QLCNIC_LINUX_SUBVERSION 21
-#define QLCNIC_LINUX_VERSIONID  "5.0.21"
+#define _QLCNIC_LINUX_SUBVERSION 22
+#define QLCNIC_LINUX_VERSIONID  "5.0.22"
 #define QLCNIC_DRV_IDC_VER  0x01
 #define QLCNIC_DRIVER_VERSION  ((_QLCNIC_LINUX_MAJOR << 16) |\
 		 (_QLCNIC_LINUX_MINOR << 8) | (_QLCNIC_LINUX_SUBVERSION))
@@ -911,6 +911,7 @@ struct qlcnic_ipaddr {
 #define QLCNIC_PROMISC_DISABLED		0x800
 #define QLCNIC_NEED_FLR			0x1000
 #define QLCNIC_FW_RESET_OWNER		0x2000
+#define QLCNIC_FW_HANG			0x4000
 #define QLCNIC_IS_MSI_FAMILY(adapter) \
 	((adapter)->flags & (QLCNIC_MSI_ENABLED | QLCNIC_MSIX_ENABLED))
 
@@ -1344,6 +1345,7 @@ enum op_codes {
 #define QLCNIC_FORCE_FW_DUMP_KEY	0xdeadfeed
 #define QLCNIC_ENABLE_FW_DUMP		0xaddfeed
 #define QLCNIC_DISABLE_FW_DUMP		0xbadfeed
+#define QLCNIC_FORCE_FW_RESET		0xdeaddead
 
 struct qlcnic_dump_operations {
 	enum op_codes opcode;

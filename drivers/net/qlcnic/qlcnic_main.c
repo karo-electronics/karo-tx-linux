@@ -643,14 +643,28 @@ static void get_brd_name(struct qlcnic_adapter *adapter, char *name)
 static void
 qlcnic_check_options(struct qlcnic_adapter *adapter)
 {
-	u32 fw_major, fw_minor, fw_build;
+	u32 fw_major, fw_minor, fw_build, prev_fw_version;
 	struct pci_dev *pdev = adapter->pdev;
+	struct qlcnic_fw_dump *fw_dump = &adapter->ahw->fw_dump;
+
+	prev_fw_version = adapter->fw_version;
 
 	fw_major = QLCRD32(adapter, QLCNIC_FW_VERSION_MAJOR);
 	fw_minor = QLCRD32(adapter, QLCNIC_FW_VERSION_MINOR);
 	fw_build = QLCRD32(adapter, QLCNIC_FW_VERSION_SUB);
 
 	adapter->fw_version = QLCNIC_VERSION_CODE(fw_major, fw_minor, fw_build);
+
+	if (adapter->op_mode != QLCNIC_NON_PRIV_FUNC) {
+		if (fw_dump->tmpl_hdr == NULL ||
+				adapter->fw_version > prev_fw_version) {
+			if (fw_dump->tmpl_hdr)
+				vfree(fw_dump->tmpl_hdr);
+			if (!qlcnic_fw_cmd_get_minidump_temp(adapter))
+				dev_info(&pdev->dev,
+					"Supports FW dump capability\n");
+		}
+	}
 
 	dev_info(&pdev->dev, "firmware v%d.%d.%d\n",
 			fw_major, fw_minor, fw_build);
@@ -1609,12 +1623,6 @@ qlcnic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		dev_err(&pdev->dev, "Loading fw failed.Please Reboot\n");
 		goto err_out_decr_ref;
 	}
-
-	/* Get FW dump template and store it */
-	if (adapter->op_mode != QLCNIC_NON_PRIV_FUNC)
-		if (!qlcnic_fw_cmd_get_minidump_temp(adapter))
-			dev_info(&pdev->dev,
-				"Supports FW dump capability\n");
 
 	if (qlcnic_read_mac_addr(adapter))
 		dev_warn(&pdev->dev, "failed to read mac addr\n");
@@ -2682,6 +2690,7 @@ qlcnic_clr_all_drv_state(struct qlcnic_adapter *adapter, u8 failed)
 	qlcnic_api_unlock(adapter);
 err:
 	adapter->fw_fail_cnt = 0;
+	adapter->flags &= ~QLCNIC_FW_HANG;
 	clear_bit(__QLCNIC_START_FW, &adapter->state);
 	clear_bit(__QLCNIC_RESETTING, &adapter->state);
 }
@@ -2859,6 +2868,7 @@ skip_ack_check:
 		    (adapter->flags & QLCNIC_FW_RESET_OWNER)) {
 			QLCDB(adapter, DRV, "Take FW dump\n");
 			qlcnic_dump_fw(adapter);
+			adapter->flags |= QLCNIC_FW_HANG;
 		}
 		rtnl_unlock();
 
@@ -3046,6 +3056,7 @@ attach:
 done:
 	netif_device_attach(netdev);
 	adapter->fw_fail_cnt = 0;
+	adapter->flags &= ~QLCNIC_FW_HANG;
 	clear_bit(__QLCNIC_RESETTING, &adapter->state);
 
 	if (!qlcnic_clr_drv_state(adapter))
@@ -3090,13 +3101,26 @@ qlcnic_check_health(struct qlcnic_adapter *adapter)
 	if (++adapter->fw_fail_cnt < FW_FAIL_THRESH)
 		return 0;
 
+	adapter->flags |= QLCNIC_FW_HANG;
+
 	qlcnic_dev_request_reset(adapter);
 
 	if (auto_fw_reset)
 		clear_bit(__QLCNIC_FW_ATTACHED, &adapter->state);
 
 	dev_info(&netdev->dev, "firmware hang detected\n");
-
+	dev_info(&adapter->pdev->dev, "Dumping hw/fw registers\n"
+			"PEG_HALT_STATUS1: 0x%x, PEG_HALT_STATUS2: 0x%x,\n"
+			"PEG_NET_0_PC: 0x%x, PEG_NET_1_PC: 0x%x,\n"
+			"PEG_NET_2_PC: 0x%x, PEG_NET_3_PC: 0x%x,\n"
+			"PEG_NET_4_PC: 0x%x\n",
+			QLCRD32(adapter, QLCNIC_PEG_HALT_STATUS1),
+			QLCRD32(adapter, QLCNIC_PEG_HALT_STATUS2),
+			QLCRD32(adapter, QLCNIC_CRB_PEG_NET_0 + 0x3c),
+			QLCRD32(adapter, QLCNIC_CRB_PEG_NET_1 + 0x3c),
+			QLCRD32(adapter, QLCNIC_CRB_PEG_NET_2 + 0x3c),
+			QLCRD32(adapter, QLCNIC_CRB_PEG_NET_3 + 0x3c),
+			QLCRD32(adapter, QLCNIC_CRB_PEG_NET_4 + 0x3c));
 detach:
 	adapter->dev_state = (state == QLCNIC_DEV_NEED_QUISCENT) ? state :
 		QLCNIC_DEV_NEED_RESET;
