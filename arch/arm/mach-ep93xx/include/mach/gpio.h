@@ -99,14 +99,6 @@
 /* maximum value for irq capable line identifiers */
 #define EP93XX_GPIO_LINE_MAX_IRQ	EP93XX_GPIO_LINE_F(7)
 
-/* new generic GPIO API - see Documentation/gpio.txt */
-
-#include <asm-generic/gpio.h>
-
-#define gpio_get_value	__gpio_get_value
-#define gpio_set_value	__gpio_set_value
-#define gpio_cansleep	__gpio_cansleep
-
 /*
  * Map GPIO A0..A7  (0..7)  to irq 64..71,
  *          B0..B7  (7..15) to irq 72..79, and

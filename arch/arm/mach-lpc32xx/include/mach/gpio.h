@@ -19,8 +19,6 @@
 #ifndef __ASM_ARCH_GPIO_H
 #define __ASM_ARCH_GPIO_H
 
-#include <asm-generic/gpio.h>
-
 /*
  * Note!
  * Muxed GP pins need to be setup to the GP state in the board level
@@ -50,25 +48,5 @@
  * See the LPC32x0 User's guide for GPIO group numbers
  */
 #define LPC32XX_GPIO(x, y) ((x) + (y))
-
-static inline int gpio_get_value(unsigned gpio)
-{
-	return __gpio_get_value(gpio);
-}
-
-static inline void gpio_set_value(unsigned gpio, int value)
-{
-	__gpio_set_value(gpio, value);
-}
-
-static inline int gpio_cansleep(unsigned gpio)
-{
-	return __gpio_cansleep(gpio);
-}
-
-static inline int gpio_to_irq(unsigned gpio)
-{
-	return __gpio_to_irq(gpio);
-}
 
 #endif
