@@ -26,33 +26,18 @@ struct be_ethtool_stat {
 	int offset;
 };
 
-enum {NETSTAT, DRVSTAT_TX, DRVSTAT_RX, ERXSTAT,
-			DRVSTAT};
+enum {DRVSTAT_TX, DRVSTAT_RX, DRVSTAT};
 #define FIELDINFO(_struct, field) FIELD_SIZEOF(_struct, field), \
 					offsetof(_struct, field)
-#define NETSTAT_INFO(field) 	#field, NETSTAT,\
-					FIELDINFO(struct net_device_stats,\
-						field)
 #define DRVSTAT_TX_INFO(field)	#field, DRVSTAT_TX,\
 					FIELDINFO(struct be_tx_stats, field)
 #define DRVSTAT_RX_INFO(field)	#field, DRVSTAT_RX,\
 					FIELDINFO(struct be_rx_stats, field)
-#define ERXSTAT_INFO(field)	#field, ERXSTAT,\
-					FIELDINFO(struct be_erx_stats_v1, field)
 #define	DRVSTAT_INFO(field)	#field, DRVSTAT,\
-					FIELDINFO(struct be_drv_stats, \
-						field)
+					FIELDINFO(struct be_drv_stats, field)
 
 static const struct be_ethtool_stat et_stats[] = {
-	{NETSTAT_INFO(rx_packets)},
-	{NETSTAT_INFO(tx_packets)},
-	{NETSTAT_INFO(rx_bytes)},
-	{NETSTAT_INFO(tx_bytes)},
-	{NETSTAT_INFO(rx_errors)},
-	{NETSTAT_INFO(tx_errors)},
-	{NETSTAT_INFO(rx_dropped)},
-	{NETSTAT_INFO(tx_dropped)},
-	{DRVSTAT_INFO(be_tx_events)},
+	{DRVSTAT_INFO(tx_events)},
 	{DRVSTAT_INFO(rx_crc_errors)},
 	{DRVSTAT_INFO(rx_alignment_symbol_errors)},
 	{DRVSTAT_INFO(rx_pause_frames)},
@@ -71,9 +56,6 @@ static const struct be_ethtool_stat et_stats[] = {
 	{DRVSTAT_INFO(rx_ip_checksum_errs)},
 	{DRVSTAT_INFO(rx_tcp_checksum_errs)},
 	{DRVSTAT_INFO(rx_udp_checksum_errs)},
-	{DRVSTAT_INFO(rx_switched_unicast_packets)},
-	{DRVSTAT_INFO(rx_switched_multicast_packets)},
-	{DRVSTAT_INFO(rx_switched_broadcast_packets)},
 	{DRVSTAT_INFO(tx_pauseframes)},
 	{DRVSTAT_INFO(tx_controlframes)},
 	{DRVSTAT_INFO(rx_priority_pause_frames)},
@@ -92,28 +74,33 @@ static const struct be_ethtool_stat et_stats[] = {
 };
 #define ETHTOOL_STATS_NUM ARRAY_SIZE(et_stats)
 
-/* Stats related to multi RX queues */
+/* Stats related to multi RX queues: get_stats routine assumes bytes, pkts
+ * are first and second members respectively.
+ */
 static const struct be_ethtool_stat et_rx_stats[] = {
-	{DRVSTAT_RX_INFO(rx_bytes)},
-	{DRVSTAT_RX_INFO(rx_pkts)},
-	{DRVSTAT_RX_INFO(rx_rate)},
+	{DRVSTAT_RX_INFO(rx_bytes)},/* If moving this member see above note */
+	{DRVSTAT_RX_INFO(rx_pkts)}, /* If moving this member see above note */
 	{DRVSTAT_RX_INFO(rx_polls)},
 	{DRVSTAT_RX_INFO(rx_events)},
 	{DRVSTAT_RX_INFO(rx_compl)},
 	{DRVSTAT_RX_INFO(rx_mcast_pkts)},
 	{DRVSTAT_RX_INFO(rx_post_fail)},
-	{DRVSTAT_RX_INFO(rx_dropped)},
-	{ERXSTAT_INFO(rx_drops_no_fragments)}
+	{DRVSTAT_RX_INFO(rx_drops_no_skbs)},
+	{DRVSTAT_RX_INFO(rx_drops_no_frags)}
 };
 #define ETHTOOL_RXSTATS_NUM (ARRAY_SIZE(et_rx_stats))
 
-/* Stats related to multi TX queues */
+/* Stats related to multi TX queues: get_stats routine assumes compl is the
+ * first member
+ */
 static const struct be_ethtool_stat et_tx_stats[] = {
-	{DRVSTAT_TX_INFO(be_tx_rate)},
-	{DRVSTAT_TX_INFO(be_tx_reqs)},
-	{DRVSTAT_TX_INFO(be_tx_wrbs)},
-	{DRVSTAT_TX_INFO(be_tx_stops)},
-	{DRVSTAT_TX_INFO(be_tx_compl)}
+	{DRVSTAT_TX_INFO(tx_compl)}, /* If moving this member see above note */
+	{DRVSTAT_TX_INFO(tx_bytes)},
+	{DRVSTAT_TX_INFO(tx_pkts)},
+	{DRVSTAT_TX_INFO(tx_reqs)},
+	{DRVSTAT_TX_INFO(tx_wrbs)},
+	{DRVSTAT_TX_INFO(tx_compl)},
+	{DRVSTAT_TX_INFO(tx_stops)}
 };
 #define ETHTOOL_TXSTATS_NUM (ARRAY_SIZE(et_tx_stats))
 
@@ -260,50 +247,49 @@ be_get_ethtool_stats(struct net_device *netdev,
 	struct be_adapter *adapter = netdev_priv(netdev);
 	struct be_rx_obj *rxo;
 	struct be_tx_obj *txo;
-	void *p = NULL;
-	int i, j, base;
+	void *p;
+	unsigned int i, j, base = 0, start;
 
 	for (i = 0; i < ETHTOOL_STATS_NUM; i++) {
-		switch (et_stats[i].type) {
-		case NETSTAT:
-			p = &netdev->stats;
-			break;
-		case DRVSTAT:
-			p = &adapter->drv_stats;
-			break;
-		}
-
-		p = (u8 *)p + et_stats[i].offset;
-		data[i] = (et_stats[i].size == sizeof(u64)) ?
-				*(u64 *)p: *(u32 *)p;
+		p = (u8 *)&adapter->drv_stats + et_stats[i].offset;
+		data[i] = *(u32 *)p;
 	}
+	base += ETHTOOL_STATS_NUM;
 
-	base = ETHTOOL_STATS_NUM;
 	for_all_rx_queues(adapter, rxo, j) {
-		for (i = 0; i < ETHTOOL_RXSTATS_NUM; i++) {
-			switch (et_rx_stats[i].type) {
-			case DRVSTAT_RX:
-				p = (u8 *)&rxo->stats + et_rx_stats[i].offset;
-				break;
-			case ERXSTAT:
-				p = (u32 *)be_erx_stats_from_cmd(adapter) +
-								rxo->q.id;
-				break;
-			}
-			data[base + j * ETHTOOL_RXSTATS_NUM + i] =
-				(et_rx_stats[i].size == sizeof(u64)) ?
-					*(u64 *)p: *(u32 *)p;
+		struct be_rx_stats *stats = rx_stats(rxo);
+
+		do {
+			start = u64_stats_fetch_begin_bh(&stats->sync);
+			data[base] = stats->rx_bytes;
+			data[base + 1] = stats->rx_pkts;
+		} while (u64_stats_fetch_retry_bh(&stats->sync, start));
+
+		for (i = 2; i < ETHTOOL_RXSTATS_NUM; i++) {
+			p = (u8 *)stats + et_rx_stats[i].offset;
+			data[base + i] = *(u32 *)p;
 		}
+		base += ETHTOOL_RXSTATS_NUM;
 	}
 
-	base = ETHTOOL_STATS_NUM + adapter->num_rx_qs * ETHTOOL_RXSTATS_NUM;
 	for_all_tx_queues(adapter, txo, j) {
-		for (i = 0; i < ETHTOOL_TXSTATS_NUM; i++) {
-			p = (u8 *)&txo->stats + et_tx_stats[i].offset;
-			data[base + j * ETHTOOL_TXSTATS_NUM + i] =
-				(et_tx_stats[i].size == sizeof(u64)) ?
-					*(u64 *)p: *(u32 *)p;
-		}
+		struct be_tx_stats *stats = tx_stats(txo);
+
+		do {
+			start = u64_stats_fetch_begin_bh(&stats->sync_compl);
+			data[base] = stats->tx_compl;
+		} while (u64_stats_fetch_retry_bh(&stats->sync_compl, start));
+
+		do {
+			start = u64_stats_fetch_begin_bh(&stats->sync);
+			for (i = 1; i < ETHTOOL_TXSTATS_NUM; i++) {
+				p = (u8 *)stats + et_tx_stats[i].offset;
+				data[base + i] =
+					(et_tx_stats[i].size == sizeof(u64)) ?
+						*(u64 *)p : *(u32 *)p;
+			}
+		} while (u64_stats_fetch_retry_bh(&stats->sync, start));
+		base += ETHTOOL_TXSTATS_NUM;
 	}
 }
 
@@ -363,19 +349,15 @@ static int be_get_sset_count(struct net_device *netdev, int stringset)
 static int be_get_settings(struct net_device *netdev, struct ethtool_cmd *ecmd)
 {
 	struct be_adapter *adapter = netdev_priv(netdev);
-	struct be_dma_mem phy_cmd;
-	struct be_cmd_resp_get_phy_info *resp;
+	struct be_phy_info phy_info;
 	u8 mac_speed = 0;
 	u16 link_speed = 0;
-	bool link_up = false;
 	int status;
-	u16 intf_type;
 
 	if ((adapter->link_speed < 0) || (!(netdev->flags & IFF_UP))) {
-		status = be_cmd_link_status_query(adapter, &link_up,
-						&mac_speed, &link_speed, 0);
+		status = be_cmd_link_status_query(adapter, &mac_speed,
+						&link_speed, 0);
 
-		be_link_status_update(adapter, link_up);
 		/* link_speed is in units of 10 Mbps */
 		if (link_speed) {
 			ethtool_cmd_speed_set(ecmd, link_speed*10);
@@ -399,20 +381,9 @@ static int be_get_settings(struct net_device *netdev, struct ethtool_cmd *ecmd)
 			}
 		}
 
-		phy_cmd.size = sizeof(struct be_cmd_req_get_phy_info);
-		phy_cmd.va = dma_alloc_coherent(&adapter->pdev->dev,
-						phy_cmd.size, &phy_cmd.dma,
-						GFP_KERNEL);
-		if (!phy_cmd.va) {
-			dev_err(&adapter->pdev->dev, "Memory alloc failure\n");
-			return -ENOMEM;
-		}
-		status = be_cmd_get_phy_info(adapter, &phy_cmd);
+		status = be_cmd_get_phy_info(adapter, &phy_info);
 		if (!status) {
-			resp = phy_cmd.va;
-			intf_type = le16_to_cpu(resp->interface_type);
-
-			switch (intf_type) {
+			switch (phy_info.interface_type) {
 			case PHY_TYPE_XFP_10GB:
 			case PHY_TYPE_SFP_1GB:
 			case PHY_TYPE_SFP_PLUS_10GB:
@@ -423,7 +394,7 @@ static int be_get_settings(struct net_device *netdev, struct ethtool_cmd *ecmd)
 				break;
 			}
 
-			switch (intf_type) {
+			switch (phy_info.interface_type) {
 			case PHY_TYPE_KR_10GB:
 			case PHY_TYPE_KX4_10GB:
 				ecmd->autoneg = AUTONEG_ENABLE;
@@ -441,8 +412,6 @@ static int be_get_settings(struct net_device *netdev, struct ethtool_cmd *ecmd)
 		adapter->port_type = ecmd->port;
 		adapter->transceiver = ecmd->transceiver;
 		adapter->autoneg = ecmd->autoneg;
-		dma_free_coherent(&adapter->pdev->dev, phy_cmd.size, phy_cmd.va,
-				  phy_cmd.dma);
 	} else {
 		ethtool_cmd_speed_set(ecmd, adapter->link_speed);
 		ecmd->port = adapter->port_type;
@@ -631,7 +600,6 @@ static void
 be_self_test(struct net_device *netdev, struct ethtool_test *test, u64 *data)
 {
 	struct be_adapter *adapter = netdev_priv(netdev);
-	bool link_up;
 	u8 mac_speed = 0;
 	u16 qos_link_speed = 0;
 
@@ -657,7 +625,7 @@ be_self_test(struct net_device *netdev, struct ethtool_test *test, u64 *data)
 		test->flags |= ETH_TEST_FL_FAILED;
 	}
 
-	if (be_cmd_link_status_query(adapter, &link_up, &mac_speed,
+	if (be_cmd_link_status_query(adapter, &mac_speed,
 				&qos_link_speed, 0) != 0) {
 		test->flags |= ETH_TEST_FL_FAILED;
 		data[4] = -1;

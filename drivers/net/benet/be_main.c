@@ -245,14 +245,14 @@ netdev_addr:
 
 static void populate_be2_stats(struct be_adapter *adapter)
 {
-
-	struct be_drv_stats *drvs = &adapter->drv_stats;
-	struct be_pmem_stats *pmem_sts = be_pmem_stats_from_cmd(adapter);
+	struct be_hw_stats_v0 *hw_stats = hw_stats_from_cmd(adapter);
+	struct be_pmem_stats *pmem_sts = &hw_stats->pmem;
+	struct be_rxf_stats_v0 *rxf_stats = &hw_stats->rxf;
 	struct be_port_rxf_stats_v0 *port_stats =
-		be_port_rxf_stats_from_cmd(adapter);
-	struct be_rxf_stats_v0 *rxf_stats =
-		be_rxf_stats_from_cmd(adapter);
+					&rxf_stats->port[adapter->port_num];
+	struct be_drv_stats *drvs = &adapter->drv_stats;
 
+	be_dws_le_to_cpu(hw_stats, sizeof(*hw_stats));
 	drvs->rx_pause_frames = port_stats->rx_pause_frames;
 	drvs->rx_crc_errors = port_stats->rx_crc_errors;
 	drvs->rx_control_frames = port_stats->rx_control_frames;
@@ -267,12 +267,10 @@ static void populate_be2_stats(struct be_adapter *adapter)
 	drvs->rx_dropped_too_small = port_stats->rx_dropped_too_small;
 	drvs->rx_dropped_too_short = port_stats->rx_dropped_too_short;
 	drvs->rx_out_range_errors = port_stats->rx_out_range_errors;
-	drvs->rx_input_fifo_overflow_drop =
-		port_stats->rx_input_fifo_overflow;
+	drvs->rx_input_fifo_overflow_drop = port_stats->rx_input_fifo_overflow;
 	drvs->rx_dropped_header_too_small =
 		port_stats->rx_dropped_header_too_small;
-	drvs->rx_address_match_errors =
-		port_stats->rx_address_match_errors;
+	drvs->rx_address_match_errors = port_stats->rx_address_match_errors;
 	drvs->rx_alignment_symbol_errors =
 		port_stats->rx_alignment_symbol_errors;
 
@@ -280,36 +278,30 @@ static void populate_be2_stats(struct be_adapter *adapter)
 	drvs->tx_controlframes = port_stats->tx_controlframes;
 
 	if (adapter->port_num)
-		drvs->jabber_events =
-			rxf_stats->port1_jabber_events;
+		drvs->jabber_events = rxf_stats->port1_jabber_events;
 	else
-		drvs->jabber_events =
-			rxf_stats->port0_jabber_events;
+		drvs->jabber_events = rxf_stats->port0_jabber_events;
 	drvs->rx_drops_no_pbuf = rxf_stats->rx_drops_no_pbuf;
 	drvs->rx_drops_no_txpb = rxf_stats->rx_drops_no_txpb;
 	drvs->rx_drops_no_erx_descr = rxf_stats->rx_drops_no_erx_descr;
 	drvs->rx_drops_invalid_ring = rxf_stats->rx_drops_invalid_ring;
 	drvs->forwarded_packets = rxf_stats->forwarded_packets;
 	drvs->rx_drops_mtu = rxf_stats->rx_drops_mtu;
-	drvs->rx_drops_no_tpre_descr =
-		rxf_stats->rx_drops_no_tpre_descr;
-	drvs->rx_drops_too_many_frags =
-		rxf_stats->rx_drops_too_many_frags;
+	drvs->rx_drops_no_tpre_descr = rxf_stats->rx_drops_no_tpre_descr;
+	drvs->rx_drops_too_many_frags = rxf_stats->rx_drops_too_many_frags;
 	adapter->drv_stats.eth_red_drops = pmem_sts->eth_red_drops;
 }
 
 static void populate_be3_stats(struct be_adapter *adapter)
 {
-	struct be_drv_stats *drvs = &adapter->drv_stats;
-	struct be_pmem_stats *pmem_sts = be_pmem_stats_from_cmd(adapter);
-
-	struct be_rxf_stats_v1 *rxf_stats =
-		be_rxf_stats_from_cmd(adapter);
+	struct be_hw_stats_v1 *hw_stats = hw_stats_from_cmd(adapter);
+	struct be_pmem_stats *pmem_sts = &hw_stats->pmem;
+	struct be_rxf_stats_v1 *rxf_stats = &hw_stats->rxf;
 	struct be_port_rxf_stats_v1 *port_stats =
-		be_port_rxf_stats_from_cmd(adapter);
+					&rxf_stats->port[adapter->port_num];
+	struct be_drv_stats *drvs = &adapter->drv_stats;
 
-	drvs->rx_priority_pause_frames = 0;
-	drvs->pmem_fifo_overflow_drop = 0;
+	be_dws_le_to_cpu(hw_stats, sizeof(*hw_stats));
 	drvs->rx_pause_frames = port_stats->rx_pause_frames;
 	drvs->rx_crc_errors = port_stats->rx_crc_errors;
 	drvs->rx_control_frames = port_stats->rx_control_frames;
@@ -327,12 +319,10 @@ static void populate_be3_stats(struct be_adapter *adapter)
 		port_stats->rx_dropped_header_too_small;
 	drvs->rx_input_fifo_overflow_drop =
 		port_stats->rx_input_fifo_overflow_drop;
-	drvs->rx_address_match_errors =
-		port_stats->rx_address_match_errors;
+	drvs->rx_address_match_errors = port_stats->rx_address_match_errors;
 	drvs->rx_alignment_symbol_errors =
 		port_stats->rx_alignment_symbol_errors;
-	drvs->rxpp_fifo_overflow_drop =
-		port_stats->rxpp_fifo_overflow_drop;
+	drvs->rxpp_fifo_overflow_drop = port_stats->rxpp_fifo_overflow_drop;
 	drvs->tx_pauseframes = port_stats->tx_pauseframes;
 	drvs->tx_controlframes = port_stats->tx_controlframes;
 	drvs->jabber_events = port_stats->jabber_events;
@@ -342,10 +332,8 @@ static void populate_be3_stats(struct be_adapter *adapter)
 	drvs->rx_drops_invalid_ring = rxf_stats->rx_drops_invalid_ring;
 	drvs->forwarded_packets = rxf_stats->forwarded_packets;
 	drvs->rx_drops_mtu = rxf_stats->rx_drops_mtu;
-	drvs->rx_drops_no_tpre_descr =
-		rxf_stats->rx_drops_no_tpre_descr;
-	drvs->rx_drops_too_many_frags =
-		rxf_stats->rx_drops_too_many_frags;
+	drvs->rx_drops_no_tpre_descr = rxf_stats->rx_drops_no_tpre_descr;
+	drvs->rx_drops_too_many_frags = rxf_stats->rx_drops_too_many_frags;
 	adapter->drv_stats.eth_red_drops = pmem_sts->eth_red_drops;
 }
 
@@ -353,22 +341,15 @@ static void populate_lancer_stats(struct be_adapter *adapter)
 {
 
 	struct be_drv_stats *drvs = &adapter->drv_stats;
-	struct lancer_cmd_pport_stats *pport_stats = pport_stats_from_cmd
-						(adapter);
-	drvs->rx_priority_pause_frames = 0;
-	drvs->pmem_fifo_overflow_drop = 0;
-	drvs->rx_pause_frames =
-		make_64bit_val(pport_stats->rx_pause_frames_hi,
-				 pport_stats->rx_pause_frames_lo);
-	drvs->rx_crc_errors = make_64bit_val(pport_stats->rx_crc_errors_hi,
-						pport_stats->rx_crc_errors_lo);
-	drvs->rx_control_frames =
-			make_64bit_val(pport_stats->rx_control_frames_hi,
-			pport_stats->rx_control_frames_lo);
+	struct lancer_pport_stats *pport_stats =
+					pport_stats_from_cmd(adapter);
+
+	be_dws_le_to_cpu(pport_stats, sizeof(*pport_stats));
+	drvs->rx_pause_frames = pport_stats->rx_pause_frames_lo;
+	drvs->rx_crc_errors = pport_stats->rx_crc_errors_lo;
+	drvs->rx_control_frames = pport_stats->rx_control_frames_lo;
 	drvs->rx_in_range_errors = pport_stats->rx_in_range_errors;
-	drvs->rx_frame_too_long =
-		make_64bit_val(pport_stats->rx_internal_mac_errors_hi,
-					pport_stats->rx_frames_too_long_lo);
+	drvs->rx_frame_too_long = pport_stats->rx_frames_too_long_lo;
 	drvs->rx_dropped_runt = pport_stats->rx_dropped_runt;
 	drvs->rx_ip_checksum_errs = pport_stats->rx_ip_checksum_errors;
 	drvs->rx_tcp_checksum_errs = pport_stats->rx_tcp_checksum_errors;
@@ -382,32 +363,24 @@ static void populate_lancer_stats(struct be_adapter *adapter)
 				pport_stats->rx_dropped_header_too_small;
 	drvs->rx_input_fifo_overflow_drop = pport_stats->rx_fifo_overflow;
 	drvs->rx_address_match_errors = pport_stats->rx_address_match_errors;
-	drvs->rx_alignment_symbol_errors =
-		make_64bit_val(pport_stats->rx_symbol_errors_hi,
-				pport_stats->rx_symbol_errors_lo);
+	drvs->rx_alignment_symbol_errors = pport_stats->rx_symbol_errors_lo;
 	drvs->rxpp_fifo_overflow_drop = pport_stats->rx_fifo_overflow;
-	drvs->tx_pauseframes = make_64bit_val(pport_stats->tx_pause_frames_hi,
-					pport_stats->tx_pause_frames_lo);
-	drvs->tx_controlframes =
-		make_64bit_val(pport_stats->tx_control_frames_hi,
-				pport_stats->tx_control_frames_lo);
+	drvs->tx_pauseframes = pport_stats->tx_pause_frames_lo;
+	drvs->tx_controlframes = pport_stats->tx_control_frames_lo;
 	drvs->jabber_events = pport_stats->rx_jabbers;
-	drvs->rx_drops_no_pbuf = 0;
-	drvs->rx_drops_no_txpb = 0;
-	drvs->rx_drops_no_erx_descr = 0;
 	drvs->rx_drops_invalid_ring = pport_stats->rx_drops_invalid_queue;
-	drvs->forwarded_packets = make_64bit_val(pport_stats->num_forwards_hi,
-						pport_stats->num_forwards_lo);
-	drvs->rx_drops_mtu = make_64bit_val(pport_stats->rx_drops_mtu_hi,
-						pport_stats->rx_drops_mtu_lo);
-	drvs->rx_drops_no_tpre_descr = 0;
+	drvs->forwarded_packets = pport_stats->num_forwards_lo;
+	drvs->rx_drops_mtu = pport_stats->rx_drops_mtu_lo;
 	drvs->rx_drops_too_many_frags =
-		make_64bit_val(pport_stats->rx_drops_too_many_frags_hi,
-				pport_stats->rx_drops_too_many_frags_lo);
+				pport_stats->rx_drops_too_many_frags_lo;
 }
 
 void be_parse_stats(struct be_adapter *adapter)
 {
+	struct be_erx_stats_v1 *erx = be_erx_stats_from_cmd(adapter);
+	struct be_rx_obj *rxo;
+	int i;
+
 	if (adapter->generation == BE_GEN3) {
 		if (lancer_chip(adapter))
 			populate_lancer_stats(adapter);
@@ -416,50 +389,51 @@ void be_parse_stats(struct be_adapter *adapter)
 	} else {
 		populate_be2_stats(adapter);
 	}
+
+	/* as erx_v1 is longer than v0, ok to use v1 defn for v0 access */
+	for_all_rx_queues(adapter, rxo, i)
+		rx_stats(rxo)->rx_drops_no_frags =
+			erx->rx_drops_no_fragments[rxo->q.id];
 }
 
-void netdev_stats_update(struct be_adapter *adapter)
+static struct rtnl_link_stats64 *be_get_stats64(struct net_device *netdev,
+					struct rtnl_link_stats64 *stats)
 {
+	struct be_adapter *adapter = netdev_priv(netdev);
 	struct be_drv_stats *drvs = &adapter->drv_stats;
-	struct net_device_stats *dev_stats = &adapter->netdev->stats;
 	struct be_rx_obj *rxo;
 	struct be_tx_obj *txo;
-	unsigned long pkts = 0, bytes = 0, mcast = 0, drops = 0;
+	u64 pkts, bytes;
+	unsigned int start;
 	int i;
 
 	for_all_rx_queues(adapter, rxo, i) {
-		pkts += rx_stats(rxo)->rx_pkts;
-		bytes += rx_stats(rxo)->rx_bytes;
-		mcast += rx_stats(rxo)->rx_mcast_pkts;
-		drops += rx_stats(rxo)->rx_dropped;
-		/*  no space in linux buffers: best possible approximation */
-		if (adapter->generation == BE_GEN3) {
-			if (!(lancer_chip(adapter))) {
-				struct be_erx_stats_v1 *erx =
-					be_erx_stats_from_cmd(adapter);
-				drops += erx->rx_drops_no_fragments[rxo->q.id];
-			}
-		} else {
-			struct be_erx_stats_v0 *erx =
-					be_erx_stats_from_cmd(adapter);
-			drops += erx->rx_drops_no_fragments[rxo->q.id];
-		}
+		const struct be_rx_stats *rx_stats = rx_stats(rxo);
+		do {
+			start = u64_stats_fetch_begin_bh(&rx_stats->sync);
+			pkts = rx_stats(rxo)->rx_pkts;
+			bytes = rx_stats(rxo)->rx_bytes;
+		} while (u64_stats_fetch_retry_bh(&rx_stats->sync, start));
+		stats->rx_packets += pkts;
+		stats->rx_bytes += bytes;
+		stats->multicast += rx_stats(rxo)->rx_mcast_pkts;
+		stats->rx_dropped += rx_stats(rxo)->rx_drops_no_skbs +
+					rx_stats(rxo)->rx_drops_no_frags;
 	}
-	dev_stats->rx_packets = pkts;
-	dev_stats->rx_bytes = bytes;
-	dev_stats->multicast = mcast;
-	dev_stats->rx_dropped = drops;
 
-	pkts = bytes = 0;
 	for_all_tx_queues(adapter, txo, i) {
-		pkts += tx_stats(txo)->be_tx_pkts;
-		bytes += tx_stats(txo)->be_tx_bytes;
+		const struct be_tx_stats *tx_stats = tx_stats(txo);
+		do {
+			start = u64_stats_fetch_begin_bh(&tx_stats->sync);
+			pkts = tx_stats(txo)->tx_pkts;
+			bytes = tx_stats(txo)->tx_bytes;
+		} while (u64_stats_fetch_retry_bh(&tx_stats->sync, start));
+		stats->tx_packets += pkts;
+		stats->tx_bytes += bytes;
 	}
-	dev_stats->tx_packets = pkts;
-	dev_stats->tx_bytes = bytes;
 
 	/* bad pkts received */
-	dev_stats->rx_errors = drvs->rx_crc_errors +
+	stats->rx_errors = drvs->rx_crc_errors +
 		drvs->rx_alignment_symbol_errors +
 		drvs->rx_in_range_errors +
 		drvs->rx_out_range_errors +
@@ -468,115 +442,38 @@ void netdev_stats_update(struct be_adapter *adapter)
 		drvs->rx_dropped_too_short +
 		drvs->rx_dropped_header_too_small +
 		drvs->rx_dropped_tcp_length +
-		drvs->rx_dropped_runt +
-		drvs->rx_tcp_checksum_errs +
-		drvs->rx_ip_checksum_errs +
-		drvs->rx_udp_checksum_errs;
+		drvs->rx_dropped_runt;
 
 	/* detailed rx errors */
-	dev_stats->rx_length_errors = drvs->rx_in_range_errors +
+	stats->rx_length_errors = drvs->rx_in_range_errors +
 		drvs->rx_out_range_errors +
 		drvs->rx_frame_too_long;
 
-	dev_stats->rx_crc_errors = drvs->rx_crc_errors;
+	stats->rx_crc_errors = drvs->rx_crc_errors;
 
 	/* frame alignment errors */
-	dev_stats->rx_frame_errors = drvs->rx_alignment_symbol_errors;
+	stats->rx_frame_errors = drvs->rx_alignment_symbol_errors;
 
 	/* receiver fifo overrun */
 	/* drops_no_pbuf is no per i/f, it's per BE card */
-	dev_stats->rx_fifo_errors = drvs->rxpp_fifo_overflow_drop +
+	stats->rx_fifo_errors = drvs->rxpp_fifo_overflow_drop +
 				drvs->rx_input_fifo_overflow_drop +
 				drvs->rx_drops_no_pbuf;
+	return stats;
 }
 
-void be_link_status_update(struct be_adapter *adapter, bool link_up)
+void be_link_status_update(struct be_adapter *adapter, u32 link_status)
 {
 	struct net_device *netdev = adapter->netdev;
 
-	/* If link came up or went down */
-	if (adapter->link_up != link_up) {
-		adapter->link_speed = -1;
-		if (link_up) {
-			netif_carrier_on(netdev);
-			printk(KERN_INFO "%s: Link up\n", netdev->name);
-		} else {
-			netif_carrier_off(netdev);
-			printk(KERN_INFO "%s: Link down\n", netdev->name);
-		}
-		adapter->link_up = link_up;
-	}
-}
-
-/* Update the EQ delay n BE based on the RX frags consumed / sec */
-static void be_rx_eqd_update(struct be_adapter *adapter, struct be_rx_obj *rxo)
-{
-	struct be_eq_obj *rx_eq = &rxo->rx_eq;
-	struct be_rx_stats *stats = &rxo->stats;
-	ulong now = jiffies;
-	u32 eqd;
-
-	if (!rx_eq->enable_aic)
-		return;
-
-	/* Wrapped around */
-	if (time_before(now, stats->rx_fps_jiffies)) {
-		stats->rx_fps_jiffies = now;
-		return;
-	}
-
-	/* Update once a second */
-	if ((now - stats->rx_fps_jiffies) < HZ)
-		return;
-
-	stats->rx_fps = (stats->rx_frags - stats->prev_rx_frags) /
-			((now - stats->rx_fps_jiffies) / HZ);
-
-	stats->rx_fps_jiffies = now;
-	stats->prev_rx_frags = stats->rx_frags;
-	eqd = stats->rx_fps / 110000;
-	eqd = eqd << 3;
-	if (eqd > rx_eq->max_eqd)
-		eqd = rx_eq->max_eqd;
-	if (eqd < rx_eq->min_eqd)
-		eqd = rx_eq->min_eqd;
-	if (eqd < 10)
-		eqd = 0;
-	if (eqd != rx_eq->cur_eqd)
-		be_cmd_modify_eqd(adapter, rx_eq->q.id, eqd);
-
-	rx_eq->cur_eqd = eqd;
-}
-
-static u32 be_calc_rate(u64 bytes, unsigned long ticks)
-{
-	u64 rate = bytes;
-
-	do_div(rate, ticks / HZ);
-	rate <<= 3;			/* bytes/sec -> bits/sec */
-	do_div(rate, 1000000ul);	/* MB/Sec */
-
-	return rate;
-}
-
-static void be_tx_rate_update(struct be_tx_obj *txo)
-{
-	struct be_tx_stats *stats = tx_stats(txo);
-	ulong now = jiffies;
-
-	/* Wrapped around? */
-	if (time_before(now, stats->be_tx_jiffies)) {
-		stats->be_tx_jiffies = now;
-		return;
-	}
-
-	/* Update tx rate once in two seconds */
-	if ((now - stats->be_tx_jiffies) > 2 * HZ) {
-		stats->be_tx_rate = be_calc_rate(stats->be_tx_bytes
-						  - stats->be_tx_bytes_prev,
-						 now - stats->be_tx_jiffies);
-		stats->be_tx_jiffies = now;
-		stats->be_tx_bytes_prev = stats->be_tx_bytes;
+	/* when link status changes, link speed must be re-queried from card */
+	adapter->link_speed = -1;
+	if ((link_status & LINK_STATUS_MASK) == LINK_UP) {
+		netif_carrier_on(netdev);
+		dev_info(&adapter->pdev->dev, "%s: Link up\n", netdev->name);
+	} else {
+		netif_carrier_off(netdev);
+		dev_info(&adapter->pdev->dev, "%s: Link down\n", netdev->name);
 	}
 }
 
@@ -585,12 +482,14 @@ static void be_tx_stats_update(struct be_tx_obj *txo,
 {
 	struct be_tx_stats *stats = tx_stats(txo);
 
-	stats->be_tx_reqs++;
-	stats->be_tx_wrbs += wrb_cnt;
-	stats->be_tx_bytes += copied;
-	stats->be_tx_pkts += (gso_segs ? gso_segs : 1);
+	u64_stats_update_begin(&stats->sync);
+	stats->tx_reqs++;
+	stats->tx_wrbs += wrb_cnt;
+	stats->tx_bytes += copied;
+	stats->tx_pkts += (gso_segs ? gso_segs : 1);
 	if (stopped)
-		stats->be_tx_stops++;
+		stats->tx_stops++;
+	u64_stats_update_end(&stats->sync);
 }
 
 /* Determine number of WRB entries needed to xmit data in an skb */
@@ -829,6 +728,10 @@ static int be_vid_config(struct be_adapter *adapter, bool vf, u32 vf_num)
 		status = be_cmd_vlan_config(adapter, if_handle, vtag, 1, 1, 0);
 	}
 
+	/* No need to further configure vids if in promiscuous mode */
+	if (adapter->promiscuous)
+		return 0;
+
 	if (adapter->vlans_added <= adapter->max_vlans)  {
 		/* Construct VLAN Table to give to HW */
 		for (i = 0; i < VLAN_N_VID; i++) {
@@ -879,7 +782,7 @@ static void be_set_multicast_list(struct net_device *netdev)
 	struct be_adapter *adapter = netdev_priv(netdev);
 
 	if (netdev->flags & IFF_PROMISC) {
-		be_cmd_promiscuous_config(adapter, true);
+		be_cmd_rx_filter(adapter, IFF_PROMISC, ON);
 		adapter->promiscuous = true;
 		goto done;
 	}
@@ -887,19 +790,20 @@ static void be_set_multicast_list(struct net_device *netdev)
 	/* BE was previously in promiscuous mode; disable it */
 	if (adapter->promiscuous) {
 		adapter->promiscuous = false;
-		be_cmd_promiscuous_config(adapter, false);
+		be_cmd_rx_filter(adapter, IFF_PROMISC, OFF);
+
+		if (adapter->vlans_added)
+			be_vid_config(adapter, false, 0);
 	}
 
 	/* Enable multicast promisc if num configured exceeds what we support */
 	if (netdev->flags & IFF_ALLMULTI ||
-	    netdev_mc_count(netdev) > BE_MAX_MC) {
-		be_cmd_multicast_set(adapter, adapter->if_handle, NULL,
-				&adapter->mc_cmd_mem);
+			netdev_mc_count(netdev) > BE_MAX_MC) {
+		be_cmd_rx_filter(adapter, IFF_ALLMULTI, ON);
 		goto done;
 	}
 
-	be_cmd_multicast_set(adapter, adapter->if_handle, netdev,
-		&adapter->mc_cmd_mem);
+	be_cmd_rx_filter(adapter, IFF_MULTICAST, ON);
 done:
 	return;
 }
@@ -1005,10 +909,17 @@ static int be_set_vf_tx_rate(struct net_device *netdev,
 	return status;
 }
 
-static void be_rx_rate_update(struct be_rx_obj *rxo)
+static void be_rx_eqd_update(struct be_adapter *adapter, struct be_rx_obj *rxo)
 {
-	struct be_rx_stats *stats = &rxo->stats;
+	struct be_eq_obj *rx_eq = &rxo->rx_eq;
+	struct be_rx_stats *stats = rx_stats(rxo);
 	ulong now = jiffies;
+	ulong delta = now - stats->rx_jiffies;
+	u64 pkts;
+	unsigned int start, eqd;
+
+	if (!rx_eq->enable_aic)
+		return;
 
 	/* Wrapped around */
 	if (time_before(now, stats->rx_jiffies)) {
@@ -1016,29 +927,46 @@ static void be_rx_rate_update(struct be_rx_obj *rxo)
 		return;
 	}
 
-	/* Update the rate once in two seconds */
-	if ((now - stats->rx_jiffies) < 2 * HZ)
+	/* Update once a second */
+	if (delta < HZ)
 		return;
 
-	stats->rx_rate = be_calc_rate(stats->rx_bytes - stats->rx_bytes_prev,
-				now - stats->rx_jiffies);
+	do {
+		start = u64_stats_fetch_begin_bh(&stats->sync);
+		pkts = stats->rx_pkts;
+	} while (u64_stats_fetch_retry_bh(&stats->sync, start));
+
+	stats->rx_pps = (pkts - stats->rx_pkts_prev) / (delta / HZ);
+	stats->rx_pkts_prev = pkts;
 	stats->rx_jiffies = now;
-	stats->rx_bytes_prev = stats->rx_bytes;
+	eqd = stats->rx_pps / 110000;
+	eqd = eqd << 3;
+	if (eqd > rx_eq->max_eqd)
+		eqd = rx_eq->max_eqd;
+	if (eqd < rx_eq->min_eqd)
+		eqd = rx_eq->min_eqd;
+	if (eqd < 10)
+		eqd = 0;
+	if (eqd != rx_eq->cur_eqd) {
+		be_cmd_modify_eqd(adapter, rx_eq->q.id, eqd);
+		rx_eq->cur_eqd = eqd;
+	}
 }
 
 static void be_rx_stats_update(struct be_rx_obj *rxo,
 		struct be_rx_compl_info *rxcp)
 {
-	struct be_rx_stats *stats = &rxo->stats;
+	struct be_rx_stats *stats = rx_stats(rxo);
 
+	u64_stats_update_begin(&stats->sync);
 	stats->rx_compl++;
-	stats->rx_frags += rxcp->num_rcvd;
 	stats->rx_bytes += rxcp->pkt_size;
 	stats->rx_pkts++;
 	if (rxcp->pkt_type == BE_MULTICAST_PACKET)
 		stats->rx_mcast_pkts++;
 	if (rxcp->err)
-		stats->rxcp_err++;
+		stats->rx_compl_err++;
+	u64_stats_update_end(&stats->sync);
 }
 
 static inline bool csum_passed(struct be_rx_compl_info *rxcp)
@@ -1174,7 +1102,7 @@ static void be_rx_compl_process(struct be_adapter *adapter,
 
 	skb = netdev_alloc_skb_ip_align(netdev, BE_HDR_LEN);
 	if (unlikely(!skb)) {
-		rxo->stats.rx_dropped++;
+		rx_stats(rxo)->rx_drops_no_skbs++;
 		be_rx_compl_discard(adapter, rxo, rxcp);
 		return;
 	}
@@ -1285,6 +1213,7 @@ static void be_parse_rx_compl_v1(struct be_adapter *adapter,
 		rxcp->vlan_tag = AMAP_GET_BITS(struct amap_eth_rx_compl_v1, vlan_tag,
 					       compl);
 	}
+	rxcp->port = AMAP_GET_BITS(struct amap_eth_rx_compl_v1, port, compl);
 }
 
 static void be_parse_rx_compl_v0(struct be_adapter *adapter,
@@ -1317,6 +1246,7 @@ static void be_parse_rx_compl_v0(struct be_adapter *adapter,
 		rxcp->vlan_tag = AMAP_GET_BITS(struct amap_eth_rx_compl_v0, vlan_tag,
 					       compl);
 	}
+	rxcp->port = AMAP_GET_BITS(struct amap_eth_rx_compl_v0, port, compl);
 }
 
 static struct be_rx_compl_info *be_rx_compl_get(struct be_rx_obj *rxo)
@@ -1389,7 +1319,7 @@ static void be_post_rx_frags(struct be_rx_obj *rxo, gfp_t gfp)
 		if (!pagep) {
 			pagep = be_alloc_pages(adapter->big_page_size, gfp);
 			if (unlikely(!pagep)) {
-				rxo->stats.rx_post_fail++;
+				rx_stats(rxo)->rx_post_fail++;
 				break;
 			}
 			page_dmaaddr = dma_map_page(&adapter->pdev->dev, pagep,
@@ -1899,22 +1829,36 @@ static int be_poll_rx(struct napi_struct *napi, int budget)
 	struct be_rx_compl_info *rxcp;
 	u32 work_done;
 
-	rxo->stats.rx_polls++;
+	rx_stats(rxo)->rx_polls++;
 	for (work_done = 0; work_done < budget; work_done++) {
 		rxcp = be_rx_compl_get(rxo);
 		if (!rxcp)
 			break;
 
-		/* Ignore flush completions */
-		if (rxcp->num_rcvd && rxcp->pkt_size) {
-			if (do_gro(rxcp))
-				be_rx_compl_process_gro(adapter, rxo, rxcp);
-			else
-				be_rx_compl_process(adapter, rxo, rxcp);
-		} else if (rxcp->pkt_size == 0) {
+		/* Is it a flush compl that has no data */
+		if (unlikely(rxcp->num_rcvd == 0))
+			goto loop_continue;
+
+		/* Discard compl with partial DMA Lancer B0 */
+		if (unlikely(!rxcp->pkt_size)) {
 			be_rx_compl_discard(adapter, rxo, rxcp);
+			goto loop_continue;
 		}
 
+		/* On BE drop pkts that arrive due to imperfect filtering in
+		 * promiscuous mode on some skews
+		 */
+		if (unlikely(rxcp->port != adapter->port_num &&
+				!lancer_chip(adapter))) {
+			be_rx_compl_discard(adapter, rxo, rxcp);
+			goto loop_continue;
+		}
+
+		if (do_gro(rxcp))
+			be_rx_compl_process_gro(adapter, rxo, rxcp);
+		else
+			be_rx_compl_process(adapter, rxo, rxcp);
+loop_continue:
 		be_rx_stats_update(rxo, rxcp);
 	}
 
@@ -1968,8 +1912,9 @@ static int be_poll_tx_mcc(struct napi_struct *napi, int budget)
 				netif_wake_subqueue(adapter->netdev, i);
 			}
 
-			adapter->drv_stats.be_tx_events++;
-			txo->stats.be_tx_compl += tx_compl;
+			u64_stats_update_begin(&tx_stats(txo)->sync_compl);
+			tx_stats(txo)->tx_compl += tx_compl;
+			u64_stats_update_end(&tx_stats(txo)->sync_compl);
 		}
 	}
 
@@ -1983,6 +1928,7 @@ static int be_poll_tx_mcc(struct napi_struct *napi, int budget)
 	napi_complete(napi);
 
 	be_eq_notify(adapter, tx_eq->q.id, true, false, 0);
+	adapter->drv_stats.tx_events++;
 	return 1;
 }
 
@@ -2031,7 +1977,6 @@ static void be_worker(struct work_struct *work)
 	struct be_adapter *adapter =
 		container_of(work, struct be_adapter, work.work);
 	struct be_rx_obj *rxo;
-	struct be_tx_obj *txo;
 	int i;
 
 	if (!adapter->ue_detected && !lancer_chip(adapter))
@@ -2060,11 +2005,7 @@ static void be_worker(struct work_struct *work)
 			be_cmd_get_stats(adapter, &adapter->stats_cmd);
 	}
 
-	for_all_tx_queues(adapter, txo, i)
-		be_tx_rate_update(txo);
-
 	for_all_rx_queues(adapter, rxo, i) {
-		be_rx_rate_update(rxo);
 		be_rx_eqd_update(adapter, rxo);
 
 		if (rxo->rx_post_starved) {
@@ -2294,9 +2235,6 @@ static int be_close(struct net_device *netdev)
 
 	be_async_mcc_disable(adapter);
 
-	netif_carrier_off(netdev);
-	adapter->link_up = false;
-
 	if (!lancer_chip(adapter))
 		be_intr_set(adapter, false);
 
@@ -2374,10 +2312,7 @@ static int be_open(struct net_device *netdev)
 	struct be_adapter *adapter = netdev_priv(netdev);
 	struct be_eq_obj *tx_eq = &adapter->tx_eq;
 	struct be_rx_obj *rxo;
-	bool link_up;
 	int status, i;
-	u8 mac_speed;
-	u16 link_speed;
 
 	status = be_rx_queues_setup(adapter);
 	if (status)
@@ -2399,12 +2334,6 @@ static int be_open(struct net_device *netdev)
 
 	/* Now that interrupts are on we can process async mcc */
 	be_async_mcc_enable(adapter);
-
-	status = be_cmd_link_status_query(adapter, &link_up, &mac_speed,
-			&link_speed, 0);
-	if (status)
-		goto err;
-	be_link_status_update(adapter, link_up);
 
 	if (be_physfn(adapter)) {
 		status = be_vid_config(adapter, false, 0);
@@ -2656,6 +2585,21 @@ static bool be_flash_redboot(struct be_adapter *adapter,
 		return true;
 }
 
+static bool phy_flashing_required(struct be_adapter *adapter)
+{
+	int status = 0;
+	struct be_phy_info phy_info;
+
+	status = be_cmd_get_phy_info(adapter, &phy_info);
+	if (status)
+		return false;
+	if ((phy_info.phy_type == TN_8022) &&
+		(phy_info.interface_type == PHY_TYPE_BASET_10GB)) {
+		return true;
+	}
+	return false;
+}
+
 static int be_flash_data(struct be_adapter *adapter,
 			const struct firmware *fw,
 			struct be_dma_mem *flash_cmd, int num_of_images)
@@ -2669,7 +2613,7 @@ static int be_flash_data(struct be_adapter *adapter,
 	const struct flash_comp *pflashcomp;
 	int num_comp;
 
-	static const struct flash_comp gen3_flash_types[9] = {
+	static const struct flash_comp gen3_flash_types[10] = {
 		{ FLASH_iSCSI_PRIMARY_IMAGE_START_g3, IMG_TYPE_ISCSI_ACTIVE,
 			FLASH_IMAGE_MAX_SIZE_g3},
 		{ FLASH_REDBOOT_START_g3, IMG_TYPE_REDBOOT,
@@ -2687,7 +2631,9 @@ static int be_flash_data(struct be_adapter *adapter,
 		{ FLASH_FCoE_BACKUP_IMAGE_START_g3, IMG_TYPE_FCOE_FW_BACKUP,
 			FLASH_IMAGE_MAX_SIZE_g3},
 		{ FLASH_NCSI_START_g3, IMG_TYPE_NCSI_FW,
-			FLASH_NCSI_IMAGE_MAX_SIZE_g3}
+			FLASH_NCSI_IMAGE_MAX_SIZE_g3},
+		{ FLASH_PHY_FW_START_g3, IMG_TYPE_PHY_FW,
+			FLASH_PHY_FW_IMAGE_MAX_SIZE_g3}
 	};
 	static const struct flash_comp gen2_flash_types[8] = {
 		{ FLASH_iSCSI_PRIMARY_IMAGE_START_g2, IMG_TYPE_ISCSI_ACTIVE,
@@ -2721,6 +2667,10 @@ static int be_flash_data(struct be_adapter *adapter,
 		if ((pflashcomp[i].optype == IMG_TYPE_NCSI_FW) &&
 				memcmp(adapter->fw_ver, "3.102.148.0", 11) < 0)
 			continue;
+		if (pflashcomp[i].optype == IMG_TYPE_PHY_FW) {
+			if (!phy_flashing_required(adapter))
+				continue;
+		}
 		if ((pflashcomp[i].optype == IMG_TYPE_REDBOOT) &&
 			(!be_flash_redboot(adapter, fw->data,
 			pflashcomp[i].offset, pflashcomp[i].size, filehdr_size +
@@ -2729,25 +2679,35 @@ static int be_flash_data(struct be_adapter *adapter,
 		p = fw->data;
 		p += filehdr_size + pflashcomp[i].offset
 			+ (num_of_images * sizeof(struct image_hdr));
-	if (p + pflashcomp[i].size > fw->data + fw->size)
-		return -1;
-	total_bytes = pflashcomp[i].size;
+		if (p + pflashcomp[i].size > fw->data + fw->size)
+			return -1;
+		total_bytes = pflashcomp[i].size;
 		while (total_bytes) {
 			if (total_bytes > 32*1024)
 				num_bytes = 32*1024;
 			else
 				num_bytes = total_bytes;
 			total_bytes -= num_bytes;
-
-			if (!total_bytes)
-				flash_op = FLASHROM_OPER_FLASH;
-			else
-				flash_op = FLASHROM_OPER_SAVE;
+			if (!total_bytes) {
+				if (pflashcomp[i].optype == IMG_TYPE_PHY_FW)
+					flash_op = FLASHROM_OPER_PHY_FLASH;
+				else
+					flash_op = FLASHROM_OPER_FLASH;
+			} else {
+				if (pflashcomp[i].optype == IMG_TYPE_PHY_FW)
+					flash_op = FLASHROM_OPER_PHY_SAVE;
+				else
+					flash_op = FLASHROM_OPER_SAVE;
+			}
 			memcpy(req->params.data_buf, p, num_bytes);
 			p += num_bytes;
 			status = be_cmd_write_flashrom(adapter, flash_cmd,
 				pflashcomp[i].optype, flash_op, num_bytes);
 			if (status) {
+				if ((status == ILLEGAL_IOCTL_REQ) &&
+					(pflashcomp[i].optype ==
+						IMG_TYPE_PHY_FW))
+					break;
 				dev_err(&adapter->pdev->dev,
 					"cmd to write to flash rom failed.\n");
 				return -1;
@@ -2938,6 +2898,7 @@ static struct net_device_ops be_netdev_ops = {
 	.ndo_set_rx_mode	= be_set_multicast_list,
 	.ndo_set_mac_address	= be_mac_addr_set,
 	.ndo_change_mtu		= be_change_mtu,
+	.ndo_get_stats64	= be_get_stats64,
 	.ndo_validate_addr	= eth_validate_addr,
 	.ndo_vlan_rx_add_vid	= be_vlan_add_vid,
 	.ndo_vlan_rx_kill_vid	= be_vlan_rem_vid,
@@ -3060,7 +3021,7 @@ static void be_ctrl_cleanup(struct be_adapter *adapter)
 		dma_free_coherent(&adapter->pdev->dev, mem->size, mem->va,
 				  mem->dma);
 
-	mem = &adapter->mc_cmd_mem;
+	mem = &adapter->rx_filter;
 	if (mem->va)
 		dma_free_coherent(&adapter->pdev->dev, mem->size, mem->va,
 				  mem->dma);
@@ -3070,7 +3031,7 @@ static int be_ctrl_init(struct be_adapter *adapter)
 {
 	struct be_dma_mem *mbox_mem_alloc = &adapter->mbox_mem_alloced;
 	struct be_dma_mem *mbox_mem_align = &adapter->mbox_mem;
-	struct be_dma_mem *mc_cmd_mem = &adapter->mc_cmd_mem;
+	struct be_dma_mem *rx_filter = &adapter->rx_filter;
 	int status;
 
 	status = be_map_pci_bars(adapter);
@@ -3086,21 +3047,19 @@ static int be_ctrl_init(struct be_adapter *adapter)
 		status = -ENOMEM;
 		goto unmap_pci_bars;
 	}
-
 	mbox_mem_align->size = sizeof(struct be_mcc_mailbox);
 	mbox_mem_align->va = PTR_ALIGN(mbox_mem_alloc->va, 16);
 	mbox_mem_align->dma = PTR_ALIGN(mbox_mem_alloc->dma, 16);
 	memset(mbox_mem_align->va, 0, sizeof(struct be_mcc_mailbox));
 
-	mc_cmd_mem->size = sizeof(struct be_cmd_req_mcast_mac_config);
-	mc_cmd_mem->va = dma_alloc_coherent(&adapter->pdev->dev,
-					    mc_cmd_mem->size, &mc_cmd_mem->dma,
-					    GFP_KERNEL);
-	if (mc_cmd_mem->va == NULL) {
+	rx_filter->size = sizeof(struct be_cmd_req_rx_filter);
+	rx_filter->va = dma_alloc_coherent(&adapter->pdev->dev, rx_filter->size,
+					&rx_filter->dma, GFP_KERNEL);
+	if (rx_filter->va == NULL) {
 		status = -ENOMEM;
 		goto free_mbox;
 	}
-	memset(mc_cmd_mem->va, 0, mc_cmd_mem->size);
+	memset(rx_filter->va, 0, rx_filter->size);
 
 	mutex_init(&adapter->mbox_lock);
 	spin_lock_init(&adapter->mcc_lock);
@@ -3421,11 +3380,9 @@ static int __devinit be_probe(struct pci_dev *pdev,
 	status = register_netdev(netdev);
 	if (status != 0)
 		goto unsetup;
-	netif_carrier_off(netdev);
 
 	if (be_physfn(adapter) && adapter->sriov_enabled) {
 		u8 mac_speed;
-		bool link_up;
 		u16 vf, lnk_speed;
 
 		if (!lancer_chip(adapter)) {
@@ -3435,8 +3392,8 @@ static int __devinit be_probe(struct pci_dev *pdev,
 		}
 
 		for (vf = 0; vf < num_vfs; vf++) {
-			status = be_cmd_link_status_query(adapter, &link_up,
-					&mac_speed, &lnk_speed, vf + 1);
+			status = be_cmd_link_status_query(adapter, &mac_speed,
+						&lnk_speed, vf + 1);
 			if (!status)
 				adapter->vf_cfg[vf].vf_tx_rate = lnk_speed * 10;
 			else
