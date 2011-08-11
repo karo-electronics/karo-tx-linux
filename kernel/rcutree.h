@@ -230,9 +230,9 @@ struct rcu_data {
 					/*  in order to detect GP end. */
 	unsigned long	gpnum;		/* Highest gp number that this CPU */
 					/*  is aware of having started. */
-	unsigned long	passed_quiesc_completed;
-					/* Value of completed at time of qs. */
-	bool		passed_quiesc;	/* User-mode/idle loop etc. */
+	unsigned long	passed_quiesce_gpnum;
+					/* gpnum at time of quiescent state. */
+	bool		passed_quiesce;	/* User-mode/idle loop etc. */
 	bool		qs_pending;	/* Core waits for quiesc state. */
 	bool		beenonline;	/* CPU online at least once. */
 	bool		preemptible;	/* Preemptible RCU? */
@@ -299,6 +299,7 @@ struct rcu_data {
 	unsigned long n_rp_need_nothing;
 
 	int cpu;
+	struct rcu_state *rsp;
 };
 
 /* Values for signaled field in struct rcu_state. */
@@ -416,6 +417,13 @@ DECLARE_PER_CPU(struct rcu_data, rcu_bh_data);
 extern struct rcu_state rcu_preempt_state;
 DECLARE_PER_CPU(struct rcu_data, rcu_preempt_data);
 #endif /* #ifdef CONFIG_TREE_PREEMPT_RCU */
+
+#ifdef CONFIG_RCU_BOOST
+DECLARE_PER_CPU(unsigned int, rcu_cpu_kthread_status);
+DECLARE_PER_CPU(int, rcu_cpu_kthread_cpu);
+DECLARE_PER_CPU(unsigned int, rcu_cpu_kthread_loops);
+DECLARE_PER_CPU(char, rcu_cpu_has_work);
+#endif /* #ifdef CONFIG_RCU_BOOST */
 
 #ifndef RCU_TREE_NONCORE
 
