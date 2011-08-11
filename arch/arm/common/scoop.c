@@ -17,6 +17,7 @@
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/io.h>
+#include <linux/export.h>
 #include <asm/hardware/scoop.h>
 
 /* PCMCIA to Scoop linkage

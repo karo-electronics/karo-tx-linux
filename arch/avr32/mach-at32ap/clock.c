@@ -186,6 +186,7 @@ EXPORT_SYMBOL(clk_get_parent);
 #include <linux/io.h>
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
+#include <linux/export.h>
 #include "pm.h"
 
 
