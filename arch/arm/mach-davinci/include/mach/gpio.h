@@ -21,6 +21,8 @@
 #include <mach/irqs.h>
 #include <mach/common.h>
 
+#define __ARM_GPIOLIB_COMPLEX
+
 #define DAVINCI_GPIO_BASE 0x01C67000
 
 enum davinci_gpio_type {
@@ -145,11 +147,6 @@ static inline int gpio_cansleep(unsigned gpio)
 		return 0;
 	else
 		return __gpio_cansleep(gpio);
-}
-
-static inline int gpio_to_irq(unsigned gpio)
-{
-	return __gpio_to_irq(gpio);
 }
 
 static inline int irq_to_gpio(unsigned irq)
