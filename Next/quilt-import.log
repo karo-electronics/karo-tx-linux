@@ -1,0 +1,31 @@
+Importing i2c based on 3.0-git5
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 3.0-git5
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 3.0
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 02f8c6aee8df3cdc935e9bdd4f2d020306035dbe
+HEAD is now at 02f8c6a Linux 3.0
+$ git am ../quilt/kernel-doc/docum-submitpatch-spello.patch
+Applying: Fixed a spelling error.
+$ git am ../quilt/kernel-doc/docum-kerneldocs-remove-lsd.patch
+Applying: Dropping LSD (Linux Source Driver) since it hasn't been available
+$ git am ../quilt/kernel-doc/docum-arm-user-debug.patch
+Applying: Usually kernel parameters are documented in kernel-parameters.txt
+$ git am ../quilt/kernel-doc/docum-add-arch-flags.patch
+Applying: General cleanups to kernel-parameters.txt:
+$ git am ../quilt/kernel-doc/docum-email-clients-tbird-update.patch
+Applying: Add better Thunderbird information.
+$ git am ../quilt/kernel-doc/docum-add-ramoops.patch
+Applying: Add a documentation file describing the usage of Ramoops
+$ git am ../quilt/kernel-doc/docum-submitdrivers-gittree.patch
+Applying: Change resource URL to new git tree -
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/kernel-doc
+From ../quilt-tmp
+ + 44466a8...63cd06e master     -> quilt/kernel-doc  (forced update)
+Importing rr based on v3.0-6862-g3da3f87
+Unchanged quilt series rr
+Importing device-mapper based on v3.1-rc1
+Unchanged quilt series device-mapper
