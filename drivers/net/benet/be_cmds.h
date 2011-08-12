@@ -89,9 +89,10 @@ struct be_async_event_trailer {
 };
 
 enum {
-	ASYNC_EVENT_LINK_DOWN 	= 0x0,
-	ASYNC_EVENT_LINK_UP 	= 0x1
+	LINK_DOWN	= 0x0,
+	LINK_UP		= 0x1
 };
+#define LINK_STATUS_MASK			0x1
 
 /* When the event code of an async trailer is link-state, the mcc_compl
  * must be interpreted as follows
@@ -693,8 +694,7 @@ struct be_cmd_resp_get_stats_v0 {
 	struct be_hw_stats_v0 hw_stats;
 };
 
-#define make_64bit_val(hi_32, lo_32)	(((u64)hi_32<<32) | lo_32)
-struct lancer_cmd_pport_stats {
+struct lancer_pport_stats {
 	u32 tx_packets_lo;
 	u32 tx_packets_hi;
 	u32 tx_unicast_packets_lo;
@@ -871,16 +871,16 @@ struct lancer_cmd_req_pport_stats {
 	struct be_cmd_req_hdr hdr;
 	union {
 		struct pport_stats_params params;
-		u8 rsvd[sizeof(struct lancer_cmd_pport_stats)];
+		u8 rsvd[sizeof(struct lancer_pport_stats)];
 	} cmd_params;
 };
 
 struct lancer_cmd_resp_pport_stats {
 	struct be_cmd_resp_hdr hdr;
-	struct lancer_cmd_pport_stats pport_stats;
+	struct lancer_pport_stats pport_stats;
 };
 
-static inline  struct lancer_cmd_pport_stats*
+static inline struct lancer_pport_stats*
 	pport_stats_from_cmd(struct be_adapter *adapter)
 {
 	struct lancer_cmd_resp_pport_stats *cmd = adapter->stats_cmd.va;
@@ -910,21 +910,12 @@ struct be_cmd_req_vlan_config {
 	u16 normal_vlan[64];
 } __packed;
 
-/******************** Multicast MAC Config *******************/
+/******************* RX FILTER ******************************/
 #define BE_MAX_MC		64 /* set mcast promisc if > 64 */
 struct macaddr {
 	u8 byte[ETH_ALEN];
 };
 
-struct be_cmd_req_mcast_mac_config {
-	struct be_cmd_req_hdr hdr;
-	u16 num_mac;
-	u8 promiscuous;
-	u8 interface_id;
-	struct macaddr mac[BE_MAX_MC];
-} __packed;
-
-/******************* RX FILTER ******************************/
 struct be_cmd_req_rx_filter {
 	struct be_cmd_req_hdr hdr;
 	u32 global_flags_mask;
@@ -932,10 +923,9 @@ struct be_cmd_req_rx_filter {
 	u32 if_flags_mask;
 	u32 if_flags;
 	u32 if_id;
-	u32 multicast_num;
-	struct macaddr mac[BE_MAX_MC];
+	u32 mcast_num;
+	struct macaddr mcast_mac[BE_MAX_MC];
 };
-
 
 /******************** Link Status Query *******************/
 struct be_cmd_req_link_status {
@@ -1254,12 +1244,17 @@ struct be_cmd_req_get_phy_info {
 	struct be_cmd_req_hdr hdr;
 	u8 rsvd0[24];
 };
-struct be_cmd_resp_get_phy_info {
-	struct be_cmd_req_hdr hdr;
+
+struct be_phy_info {
 	u16 phy_type;
 	u16 interface_type;
 	u32 misc_params;
 	u32 future_use[4];
+};
+
+struct be_cmd_resp_get_phy_info {
+	struct be_cmd_req_hdr hdr;
+	struct be_phy_info phy_info;
 };
 
 /*********************** Set QOS ***********************/
@@ -1383,8 +1378,7 @@ struct be_cmd_resp_get_stats_v1 {
 	struct be_hw_stats_v1 hw_stats;
 };
 
-static inline void *
-hw_stats_from_cmd(struct be_adapter *adapter)
+static inline void *hw_stats_from_cmd(struct be_adapter *adapter)
 {
 	if (adapter->generation == BE_GEN3) {
 		struct be_cmd_resp_get_stats_v1 *cmd = adapter->stats_cmd.va;
@@ -1394,34 +1388,6 @@ hw_stats_from_cmd(struct be_adapter *adapter)
 		struct be_cmd_resp_get_stats_v0 *cmd = adapter->stats_cmd.va;
 
 		return &cmd->hw_stats;
-	}
-}
-
-static inline void *be_port_rxf_stats_from_cmd(struct be_adapter *adapter)
-{
-	if (adapter->generation == BE_GEN3) {
-		struct be_hw_stats_v1 *hw_stats = hw_stats_from_cmd(adapter);
-		struct be_rxf_stats_v1 *rxf_stats = &hw_stats->rxf;
-
-		return &rxf_stats->port[adapter->port_num];
-	} else {
-		struct be_hw_stats_v0 *hw_stats = hw_stats_from_cmd(adapter);
-		struct be_rxf_stats_v0 *rxf_stats = &hw_stats->rxf;
-
-		return &rxf_stats->port[adapter->port_num];
-	}
-}
-
-static inline void *be_rxf_stats_from_cmd(struct be_adapter *adapter)
-{
-	if (adapter->generation == BE_GEN3) {
-		struct be_hw_stats_v1 *hw_stats = hw_stats_from_cmd(adapter);
-
-		return &hw_stats->rxf;
-	} else {
-		struct be_hw_stats_v0 *hw_stats = hw_stats_from_cmd(adapter);
-
-		return &hw_stats->rxf;
 	}
 }
 
@@ -1435,19 +1401,6 @@ static inline void *be_erx_stats_from_cmd(struct be_adapter *adapter)
 		struct be_hw_stats_v0 *hw_stats = hw_stats_from_cmd(adapter);
 
 		return &hw_stats->erx;
-	}
-}
-
-static inline void *be_pmem_stats_from_cmd(struct be_adapter *adapter)
-{
-	if (adapter->generation == BE_GEN3) {
-		struct be_hw_stats_v1 *hw_stats = hw_stats_from_cmd(adapter);
-
-		return &hw_stats->pmem;
-	} else {
-		struct be_hw_stats_v0 *hw_stats = hw_stats_from_cmd(adapter);
-
-		return &hw_stats->pmem;
 	}
 }
 
@@ -1485,7 +1438,7 @@ extern int be_cmd_q_destroy(struct be_adapter *adapter, struct be_queue_info *q,
 extern int be_cmd_rxq_destroy(struct be_adapter *adapter,
 			struct be_queue_info *q);
 extern int be_cmd_link_status_query(struct be_adapter *adapter,
-			bool *link_up, u8 *mac_speed, u16 *link_speed, u32 dom);
+			u8 *mac_speed, u16 *link_speed, u32 dom);
 extern int be_cmd_reset(struct be_adapter *adapter);
 extern int be_cmd_get_stats(struct be_adapter *adapter,
 			struct be_dma_mem *nonemb_cmd);
@@ -1497,9 +1450,7 @@ extern int be_cmd_modify_eqd(struct be_adapter *adapter, u32 eq_id, u32 eqd);
 extern int be_cmd_vlan_config(struct be_adapter *adapter, u32 if_id,
 			u16 *vtag_array, u32 num, bool untagged,
 			bool promiscuous);
-extern int be_cmd_promiscuous_config(struct be_adapter *adapter, bool en);
-extern int be_cmd_multicast_set(struct be_adapter *adapter, u32 if_id,
-			struct net_device *netdev, struct be_dma_mem *mem);
+extern int be_cmd_rx_filter(struct be_adapter *adapter, u32 flags, u32 status);
 extern int be_cmd_set_flow_control(struct be_adapter *adapter,
 			u32 tx_fc, u32 rx_fc);
 extern int be_cmd_get_flow_control(struct be_adapter *adapter,
@@ -1540,7 +1491,7 @@ extern int be_cmd_get_seeprom_data(struct be_adapter *adapter,
 extern int be_cmd_set_loopback(struct be_adapter *adapter, u8 port_num,
 				u8 loopback_type, u8 enable);
 extern int be_cmd_get_phy_info(struct be_adapter *adapter,
-		struct be_dma_mem *cmd);
+				struct be_phy_info *phy_info);
 extern int be_cmd_set_qos(struct be_adapter *adapter, u32 bps, u32 domain);
 extern void be_detect_dump_ue(struct be_adapter *adapter);
 extern int be_cmd_get_die_temperature(struct be_adapter *adapter);
