@@ -206,7 +206,7 @@ __create_page_tables:
 1:	orr	r3, r7, r5, lsl #SECTION_SHIFT	@ flags + kernel base
 	str	r3, [r4, r5, lsl #PMD_ORDER]	@ identity mapping
 	cmp	r5, r6
-	addlo	r5, r5, #SECTION_SHIFT >> 20	@ next section
+	addlo	r5, r5, #1			@ next section
 	blo	1b
 
 	/*
