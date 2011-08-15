@@ -98,6 +98,16 @@ ext4_file_write(struct kiocb *iocb, const struct iovec *iov,
 	int ret;
 
 	/*
+	 * If O_DIRECT is set and we are doing data journalling we
+	 * don't support O_DIRECT so force it off.
+	 */
+	if ((iocb->ki_filp->f_flags & O_DIRECT) &&
+	    ext4_should_journal_data(inode)) {
+		iocb->ki_filp->f_flags &= ~O_DIRECT;
+		iocb->ki_filp->f_flags |= O_DSYNC;
+	}
+
+	/*
 	 * If we have encountered a bitmap-format file, the size limit
 	 * is smaller than s_maxbytes, which is for extent-mapped files.
 	 */
