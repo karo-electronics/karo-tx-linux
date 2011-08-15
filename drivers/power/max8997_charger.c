@@ -23,6 +23,7 @@
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
+#include <linux/module.h>
 #include <linux/mfd/max8997.h>
 #include <linux/mfd/max8997-private.h>
 
