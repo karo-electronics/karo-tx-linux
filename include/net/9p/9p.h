@@ -61,7 +61,6 @@ enum p9_debug_flags {
 	P9_DEBUG_VPKT =		(1<<12),
 };
 
-#ifdef CONFIG_NET_9P_DEBUG
 extern unsigned int p9_debug_level;
 
 #define P9_DPRINTK(level, format, arg...) \
@@ -77,11 +76,6 @@ do {  \
 } while (0)
 
 #define P9_DUMP_PKT(way, pdu) p9pdu_dump(way, pdu)
-
-#else
-#define P9_DPRINTK(level, format, arg...)  do { } while (0)
-#define P9_DUMP_PKT(way, pdu) do { } while (0)
-#endif
 
 
 #define P9_EPRINTK(level, format, arg...) \
@@ -287,6 +281,29 @@ enum p9_perm_t {
 	P9_DMSETGID = 0x00040000,
 	P9_DMSETVTX = 0x00010000,
 };
+
+/* 9p2000.L open flags */
+#define P9_DOTL_RDONLY        00000000
+#define P9_DOTL_WRONLY        00000001
+#define P9_DOTL_RDWR          00000002
+#define P9_DOTL_CREAT         00000100
+#define P9_DOTL_EXCL          00000200
+#define P9_DOTL_NOCTTY        00000400
+#define P9_DOTL_TRUNC         00001000
+#define P9_DOTL_APPEND        00002000
+#define P9_DOTL_NONBLOCK      00004000
+#define P9_DOTL_DSYNC         00010000
+#define P9_DOTL_FASYNC        00020000
+#define P9_DOTL_DIRECT        00040000
+#define P9_DOTL_LARGEFILE     00100000
+#define P9_DOTL_DIRECTORY     00200000
+#define P9_DOTL_NOFOLLOW      00400000
+#define P9_DOTL_NOATIME       01000000
+#define P9_DOTL_CLOEXEC       02000000
+#define P9_DOTL_SYNC          04000000
+
+/* 9p2000.L at flags */
+#define P9_DOTL_AT_REMOVEDIR		0x200
 
 /**
  * enum p9_qid_t - QID types

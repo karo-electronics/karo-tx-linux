@@ -40,7 +40,6 @@
 static int
 p9pdu_writef(struct p9_fcall *pdu, int proto_version, const char *fmt, ...);
 
-#ifdef CONFIG_NET_9P_DEBUG
 void
 p9pdu_dump(int way, struct p9_fcall *pdu)
 {
@@ -63,12 +62,6 @@ p9pdu_dump(int way, struct p9_fcall *pdu)
 		print_hex_dump_bytes("]9P[ ", DUMP_PREFIX_OFFSET, pdu->sdata,
 									len);
 }
-#else
-void
-p9pdu_dump(int way, struct p9_fcall *pdu)
-{
-}
-#endif
 EXPORT_SYMBOL(p9pdu_dump);
 
 void p9stat_free(struct p9_wstat *stbuf)
