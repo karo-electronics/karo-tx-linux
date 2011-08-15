@@ -768,30 +768,30 @@ static int gfs2_write_inode(struct inode *inode, struct writeback_control *wbc)
 			goto do_flush;
 		unlock_required = 1;
 	}
-	ret = gfs2_trans_begin(sdp, RES_DINODE, 0);
-	if (ret)
-		goto do_unlock;
 	ret = gfs2_meta_inode_buffer(ip, &bh);
 	if (ret == 0) {
 		di = (struct gfs2_dinode *)bh->b_data;
 		atime.tv_sec = be64_to_cpu(di->di_atime);
 		atime.tv_nsec = be32_to_cpu(di->di_atime_nsec);
 		if (timespec_compare(&inode->i_atime, &atime) > 0) {
-			gfs2_trans_add_bh(ip->i_gl, bh, 1);
-			gfs2_dinode_out(ip, bh->b_data);
+			ret = gfs2_trans_begin(sdp, RES_DINODE, 0);
+			if (ret == 0) {
+				gfs2_trans_add_bh(ip->i_gl, bh, 1);
+				gfs2_dinode_out(ip, bh->b_data);
+				gfs2_trans_end(sdp);
+			}
 		}
 		brelse(bh);
 	}
-	gfs2_trans_end(sdp);
-do_unlock:
 	if (unlock_required)
 		gfs2_glock_dq_uninit(&gh);
 do_flush:
 	if (wbc->sync_mode == WB_SYNC_ALL)
 		gfs2_log_flush(GFS2_SB(inode), ip->i_gl);
-	filemap_fdatawrite(metamapping);
 	if (bdi->dirty_exceeded)
 		gfs2_ail1_flush(sdp, wbc);
+	else
+		filemap_fdatawrite(metamapping);
 	if (!ret && (wbc->sync_mode == WB_SYNC_ALL))
 		ret = filemap_fdatawait(metamapping);
 	if (ret)
@@ -1471,9 +1471,11 @@ static void gfs2_evict_inode(struct inode *inode)
 		goto out;
 	}
 
-	error = gfs2_check_blk_type(sdp, ip->i_no_addr, GFS2_BLKST_UNLINKED);
-	if (error)
-		goto out_truncate;
+	if (!test_bit(GIF_ALLOC_FAILED, &ip->i_flags)) {
+		error = gfs2_check_blk_type(sdp, ip->i_no_addr, GFS2_BLKST_UNLINKED);
+		if (error)
+			goto out_truncate;
+	}
 
 	if (test_bit(GIF_INVALID, &ip->i_flags)) {
 		error = gfs2_inode_refresh(ip);
@@ -1513,6 +1515,10 @@ static void gfs2_evict_inode(struct inode *inode)
 	goto out_unlock;
 
 out_truncate:
+	gfs2_log_flush(sdp, ip->i_gl);
+	write_inode_now(inode, 1);
+	gfs2_ail_flush(ip->i_gl);
+
 	/* Case 2 starts here */
 	error = gfs2_trans_begin(sdp, 0, sdp->sd_jdesc->jd_blocks);
 	if (error)
