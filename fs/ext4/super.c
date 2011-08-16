@@ -919,7 +919,6 @@ static void ext4_i_callback(struct rcu_head *head)
 
 static void ext4_destroy_inode(struct inode *inode)
 {
-	ext4_ioend_wait(inode);
 	if (!list_empty(&(EXT4_I(inode)->i_orphan))) {
 		ext4_msg(inode->i_sb, KERN_ERR,
 			 "Inode %lu (%p): orphan list check failed!",
@@ -1818,6 +1817,7 @@ set_qf_format:
 			break;
 		case Opt_delalloc:
 			set_opt(sb, DELALLOC);
+			set_opt2(sb, DELALLOC_EXPLICIT);
 			break;
 		case Opt_block_validity:
 			set_opt(sb, BLOCK_VALIDITY);
@@ -3682,8 +3682,9 @@ no_journal:
 
 	if (test_opt(sb, DELALLOC) &&
 	    (test_opt(sb, DATA_FLAGS) == EXT4_MOUNT_JOURNAL_DATA)) {
-		ext4_msg(sb, KERN_WARNING, "Ignoring delalloc option - "
-			 "requested data journaling mode");
+		if (test_opt2(sb, DELALLOC_EXPLICIT))
+			ext4_msg(sb, KERN_WARNING, "Ignoring delalloc option "
+				 "- requested data journaling mode");
 		clear_opt(sb, DELALLOC);
 	}
 	if (test_opt(sb, DIOREAD_NOLOCK)) {
