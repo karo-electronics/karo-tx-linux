@@ -61,7 +61,6 @@ enum p9_debug_flags {
 	P9_DEBUG_VPKT =		(1<<12),
 };
 
-#ifdef CONFIG_NET_9P_DEBUG
 extern unsigned int p9_debug_level;
 
 #define P9_DPRINTK(level, format, arg...) \
@@ -77,11 +76,6 @@ do {  \
 } while (0)
 
 #define P9_DUMP_PKT(way, pdu) p9pdu_dump(way, pdu)
-
-#else
-#define P9_DPRINTK(level, format, arg...)  do { } while (0)
-#define P9_DUMP_PKT(way, pdu) do { } while (0)
-#endif
 
 
 #define P9_EPRINTK(level, format, arg...) \
