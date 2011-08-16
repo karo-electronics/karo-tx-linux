@@ -79,6 +79,12 @@ static unsigned char mincore_page(struct address_space *mapping, pgoff_t pgoff)
 	}
 #endif
 	if (page) {
+#ifdef CONFIG_SWAP
+		if (radix_tree_exceptional_entry(page)) {
+			swp_entry_t swap = radix_to_swp_entry(page);
+			page = find_get_page(&swapper_space, swap.val);
+		}
+#endif
 		present = PageUptodate(page);
 		page_cache_release(page);
 	}

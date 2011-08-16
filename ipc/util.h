@@ -80,6 +80,7 @@ struct seq_file;
 struct ipc_ids;
 
 void ipc_init_ids(struct ipc_ids *);
+void __ipc_init_ids(struct ipc_ids *ids);
 #ifdef CONFIG_PROC_FS
 void __init ipc_init_proc_interface(const char *path, const char *header,
 		int ids, int (*show)(struct seq_file *, void *));
