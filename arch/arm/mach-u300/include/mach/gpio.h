@@ -18,6 +18,8 @@
 #include <mach/hardware.h>
 #include <asm/irq.h>
 
+#define __ARM_GPIOLIB_COMPLEX
+
 /* Switch type depending on platform/chip variant */
 #if defined(CONFIG_MACH_U300_BS2X) || defined(CONFIG_MACH_U300_BS330)
 #define U300_COH901335
@@ -281,6 +283,7 @@ static inline unsigned gpio_to_irq(unsigned gpio)
 {
 	return PIN_TO_PORT(gpio) + IRQ_U300_GPIO_PORT0;
 }
+#define gpio_to_irq gpio_to_irq
 
 static inline unsigned irq_to_gpio(unsigned irq)
 {
