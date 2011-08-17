@@ -944,6 +944,12 @@ do_alignment(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	return 0;
 }
 
+#ifdef CONFIG_ARM_LPAE
+#define ALIGNMENT_FAULT		33
+#else
+#define ALIGNMENT_FAULT		1
+#endif
+
 /*
  * This needs to be done after sysctl_init, otherwise sys/ will be
  * overwritten.  Actually, this shouldn't be in sys/ at all since
@@ -968,7 +974,7 @@ static int __init alignment_init(void)
 		ai_usermode = safe_usermode(ai_usermode, false);
 	}
 
-	hook_fault_code(1, do_alignment, SIGBUS, BUS_ADRALN,
+	hook_fault_code(ALIGNMENT_FAULT, do_alignment, SIGBUS, BUS_ADRALN,
 			"alignment exception");
 
 	/*
