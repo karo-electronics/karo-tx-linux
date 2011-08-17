@@ -9,8 +9,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
-#include <linux/device.h>
-#include <linux/pm_runtime.h>
+#include <linux/pm_clock.h>
 
 /**
  * dev_pm_get_subsys_data - Create or refcount power.subsys_data for device.
