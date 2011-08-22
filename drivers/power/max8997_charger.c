@@ -20,6 +20,7 @@
  */
 
 #include <linux/err.h>
+#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
@@ -177,6 +178,7 @@ static int __devexit max8997_battery_remove(struct platform_device *pdev)
 
 static const struct platform_device_id max8997_battery_id[] = {
 	{ "max8997-battery", 0 },
+	{ }
 };
 
 static struct platform_driver max8997_battery_driver = {
