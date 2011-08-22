@@ -478,8 +478,7 @@ out:
 	return res;
 }
 
-static unsigned long i5k_channel_pci_id(struct i5k_amb_data *data,
-					unsigned long channel)
+static long i5k_channel_pci_id(struct i5k_amb_data *data, unsigned long channel)
 {
 	switch (data->chipset_id) {
 	case PCI_DEVICE_ID_INTEL_5000_ERR:
@@ -487,7 +486,8 @@ static unsigned long i5k_channel_pci_id(struct i5k_amb_data *data,
 	case PCI_DEVICE_ID_INTEL_5400_ERR:
 		return PCI_DEVICE_ID_INTEL_5400_FBD0 + channel;
 	default:
-		BUG();
+		WARN(1, "Unexpected chipset ID 0x%lx\n", data->chipset_id);
+		return -ENODEV;
 	}
 }
 
@@ -528,14 +528,18 @@ static int __devinit i5k_amb_probe(struct platform_device *pdev)
 		goto err;
 
 	/* Copy the DIMM presence map for the first two channels */
-	res = i5k_channel_probe(&data->amb_present[0],
-				i5k_channel_pci_id(data, 0));
+	res = i5k_channel_pci_id(data, 0);
+	if (res < 0)
+		goto err;
+	res = i5k_channel_probe(&data->amb_present[0], res);
 	if (res)
 		goto err;
 
 	/* Copy the DIMM presence map for the optional second two channels */
-	i5k_channel_probe(&data->amb_present[2],
-			  i5k_channel_pci_id(data, 1));
+	res = i5k_channel_pci_id(data, 1);
+	if (res < 0)
+		goto err;
+	i5k_channel_probe(&data->amb_present[2], res);
 
 	/* Set up resource regions */
 	reso = request_mem_region(data->amb_base, data->amb_len, DRVNAME);
