@@ -1,0 +1,19 @@
+Importing i2c based on 3.1-rc2
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 3.1-rc2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 93ee7a9340d64f20295aacc3fb6a22b759323280
+HEAD is now at 93ee7a9 Linux 3.1-rc2
+$ git am ../quilt/jdelvare-hwmon/hwmon-avoid-building-drivers-for-powerpc-that-read-write-isa-addresses.patch
+Applying: hwmon: Avoid building drivers for powerpc that read/write ISA addresses
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+   93ee7a9..eb57258  master     -> quilt/jdelvare-hwmon
+Importing kernel-doc based on 3.0
+Unchanged quilt series kernel-doc
+Importing rr based on v3.1-rc1-304-g91d85ea
+Unchanged quilt series rr
+Importing device-mapper based on v3.1-rc1
+Unchanged quilt series device-mapper
