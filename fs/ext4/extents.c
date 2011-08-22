@@ -3649,6 +3649,7 @@ void ext4_ext_truncate(struct inode *inode)
 	struct super_block *sb = inode->i_sb;
 	ext4_lblk_t last_block;
 	handle_t *handle;
+	loff_t page_len;
 	int err = 0;
 
 	/*
@@ -3665,8 +3666,16 @@ void ext4_ext_truncate(struct inode *inode)
 	if (IS_ERR(handle))
 		return;
 
-	if (inode->i_size & (sb->s_blocksize - 1))
-		ext4_block_truncate_page(handle, mapping, inode->i_size);
+	 if (inode->i_size % PAGE_CACHE_SIZE != 0) {
+
+		page_len = PAGE_CACHE_SIZE -
+			(inode->i_size & (PAGE_CACHE_SIZE - 1));
+
+		if (page_len >= sb->s_blocksize) {
+			ext4_discard_partial_page_buffers(handle,
+			mapping, inode->i_size, page_len, 0);
+		}
+	}
 
 	if (ext4_orphan_add(handle, inode))
 		goto out_stop;
