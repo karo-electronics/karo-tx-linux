@@ -111,6 +111,13 @@ static inline unsigned long cmpxchg_386(volatile void *ptr, unsigned long old,
 				sizeof(*(ptr)));			\
 	__ret;								\
 })
+
+#define cmpxchg_flag(ptr, o, n)			\
+({						\
+	__typeof__(*(ptr)) __orig = (o);	\
+	cmpxchg((ptr), __orig, (n)) == __orig;	\
+})
+
 #define cmpxchg_local(ptr, o, n)					\
 ({									\
 	__typeof__(*(ptr)) __ret;					\
@@ -124,6 +131,13 @@ static inline unsigned long cmpxchg_386(volatile void *ptr, unsigned long old,
 				sizeof(*(ptr)));			\
 	__ret;								\
 })
+
+#define cmpxchg_local_flag(ptr, o, n)			\
+({							\
+	__typeof__(*(ptr)) __orig = (o);		\
+	cmpxchg_local((ptr), __orig, (n)) == __orig;	\
+})
+
 #endif
 
 #ifndef CONFIG_X86_CMPXCHG64
