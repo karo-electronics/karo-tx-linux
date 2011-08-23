@@ -15,6 +15,7 @@
 #include <linux/slab.h>
 #include <linux/mbus.h>
 #include <asm/irq.h>
+#include <asm/vga.h>
 #include <asm/mach/pci.h>
 #include <plat/pcie.h>
 #include "common.h"
