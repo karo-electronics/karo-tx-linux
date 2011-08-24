@@ -634,9 +634,10 @@ SYSCALL_DEFINE5(osf_getsysinfo, unsigned long, op, void __user *, buffer,
  	case GSI_UACPROC:
 		if (nbytes < sizeof(unsigned int))
 			return -EINVAL;
- 		w = (current_thread_info()->flags >> ALPHA_UAC_SHIFT) & UAC_BITMASK;
- 		if (put_user(w, (unsigned int __user *)buffer))
- 			return -EFAULT;
+		w = (current_thread_info()->flags >> ALPHA_UAC_SHIFT) &
+			UAC_BITMASK;
+		if (put_user(w, (unsigned int __user *)buffer))
+			return -EFAULT;
  		return 1;
 
 	case GSI_PROC_TYPE:
