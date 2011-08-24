@@ -448,7 +448,7 @@ static bool alloc_p2m(unsigned long pfn)
 
 		p2m_mid_init(mid);
 
-		if (cmpxchg(top_p, p2m_mid_missing, mid) != p2m_mid_missing)
+		if (!cmpxchg_flag(top_p, p2m_mid_missing, mid))
 			free_p2m_page(mid);
 	}
 
@@ -470,7 +470,7 @@ static bool alloc_p2m(unsigned long pfn)
 
 		missing_mfn = virt_to_mfn(p2m_mid_missing_mfn);
 		mid_mfn_mfn = virt_to_mfn(mid_mfn);
-		if (cmpxchg(top_mfn_p, missing_mfn, mid_mfn_mfn) != missing_mfn)
+		if (!cmpxchg_flag(top_mfn_p, missing_mfn, mid_mfn_mfn))
 			free_p2m_page(mid_mfn);
 		else
 			p2m_top_mfn_p[topidx] = mid_mfn;
@@ -488,7 +488,7 @@ static bool alloc_p2m(unsigned long pfn)
 
 		p2m_init(p2m);
 
-		if (cmpxchg(&mid[mididx], p2m_orig, p2m) != p2m_orig)
+		if (!cmpxchg_flag(&mid[mididx], p2m_orig, p2m))
 			free_p2m_page(p2m);
 		else
 			mid_mfn[mididx] = virt_to_mfn(p2m);
@@ -626,8 +626,8 @@ bool __set_phys_to_machine(unsigned long pfn, unsigned long mfn)
 
 		/* Swap over from MISSING to IDENTITY if needed. */
 		if (p2m_top[topidx][mididx] == p2m_missing) {
-			WARN_ON(cmpxchg(&p2m_top[topidx][mididx], p2m_missing,
-				p2m_identity) != p2m_missing);
+			WARN_ON(!cmpxchg_flag(&p2m_top[topidx][mididx], p2m_missing,
+					      p2m_identity));
 			return true;
 		}
 	}
