@@ -16,6 +16,7 @@
 #include <linux/ctype.h>
 #include <linux/fs.h>
 #include <linux/gfp.h>
+#include <linux/crash_dump.h>
 #include <asm/ipl.h>
 #include <asm/smp.h>
 #include <asm/setup.h>
@@ -1220,7 +1221,7 @@ static int __init reipl_fcp_init(void)
 	/* sysfs: create fcp kset for mixing attr group and bin attrs */
 	reipl_fcp_kset = kset_create_and_add(IPL_FCP_STR, NULL,
 					     &reipl_kset->kobj);
-	if (!reipl_kset) {
+	if (!reipl_fcp_kset) {
 		free_page((unsigned long) reipl_block_fcp);
 		return -ENOMEM;
 	}
@@ -1738,6 +1739,9 @@ static struct kobj_attribute on_restart_attr =
 void do_restart(void)
 {
 	smp_send_stop();
+#ifdef CONFIG_CRASH_DUMP
+	crash_kexec(NULL);
+#endif
 	on_restart_trigger.action->fn(&on_restart_trigger);
 	stop_run(&on_restart_trigger);
 }
