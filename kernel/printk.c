@@ -24,7 +24,7 @@
 #include <linux/init.h>
 #include <linux/jiffies.h>
 #include <linux/nmi.h>
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/moduleparam.h>
 #include <linux/interrupt.h>			/* For in_interrupt() */
 #include <linux/delay.h>
