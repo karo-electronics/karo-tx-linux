@@ -1,0 +1,33 @@
+Importing i2c based on 3.1-rc3
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard fcb8ce5cfe30ca9ca5c9a79cdfe26d1993e65e0c
+HEAD is now at fcb8ce5 Linux 3.1-rc3
+$ git am ../quilt/i2c/i2c-i2c_elektor-should-depend-on-has_ioport.patch
+Applying: i2c: I2C_ELEKTOR should depend on HAS_IOPORT
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + f1e6f53...0650a12 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 3.1-rc3
+$ cd ../quilt-tmp
+$ git reset --hard fcb8ce5cfe30ca9ca5c9a79cdfe26d1993e65e0c
+HEAD is now at fcb8ce5 Linux 3.1-rc3
+$ git am ../quilt/jdelvare-hwmon/hwmon-avoid-building-drivers-for-powerpc-that-read-write-isa-addresses.patch
+Applying: hwmon: Avoid building drivers for powerpc that read/write ISA addresses
+$ git am ../quilt/jdelvare-hwmon/hwmon-ibmaem-01-fix-error-paths.patch
+Applying: hwmon: (ibmaem) Fix error paths
+$ git am ../quilt/jdelvare-hwmon/hwmon-ibmaem-02-independent-instance-initialization.patch
+Applying: hwmon: (ibmaem) Make instance initializations independent
+$ git am ../quilt/jdelvare-hwmon/hwmon-ibmaem-03-avoid-repeated-kzalloc.patch
+Applying: hwmon: (ibmaem) Avoid repeated memory allocations
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + eb57258...a47980c master     -> quilt/jdelvare-hwmon  (forced update)
+Importing kernel-doc based on 3.1-rc2
+Unchanged quilt series kernel-doc
+Importing rr based on v3.1-rc1-304-g91d85ea
+Unchanged quilt series rr
+Importing device-mapper based on v3.1-rc1
+Unchanged quilt series device-mapper
