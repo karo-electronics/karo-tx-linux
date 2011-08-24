@@ -28,8 +28,9 @@
 #include <linux/fcntl.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
-#include <linux/interrupt.h>
 #include <linux/hardirq.h>
+#include <linux/mutex.h>
+#include <linux/wait.h>
 #include <net/cfg80211.h>
 #include <defs.h>
 #include <brcmu_utils.h>
@@ -41,11 +42,6 @@
 #include "dhd_dbg.h"
 #include "wl_cfg80211.h"
 #include "bcmchip.h"
-
-#if defined(CONFIG_PM_SLEEP)
-#include <linux/suspend.h>
-atomic_t brcmf_mmc_suspend;
-#endif	/*  defined(CONFIG_PM_SLEEP) */
 
 MODULE_AUTHOR("Broadcom Corporation");
 MODULE_DESCRIPTION("Broadcom 802.11n wireless LAN fullmac driver.");
@@ -75,12 +71,11 @@ struct brcmf_info {
 	/* OS/stack specifics */
 	struct brcmf_if *iflist[BRCMF_MAX_IFS];
 
-	struct semaphore proto_sem;
-	wait_queue_head_t ioctl_resp_wait;
+	struct mutex proto_block;
 
 	/* Thread to issue ioctl for multicast */
 	struct task_struct *sysioc_tsk;
-	struct semaphore sysioc_sem;
+	wait_queue_head_t sysioc_waitq;
 	bool set_multicast;
 	bool set_macaddress;
 	u8 macvalue[ETH_ALEN];
@@ -115,8 +110,6 @@ module_param(brcmf_pkt_filter_init, uint, 0);
 uint brcmf_master_mode = true;
 module_param(brcmf_master_mode, uint, 0);
 
-module_param(brcmf_dongle_memsize, int, 0);
-
 /* Contorl fw roaming */
 uint brcmf_roam = 1;
 
@@ -128,29 +121,6 @@ char iface_name[IFNAMSIZ] = "wlan";
 module_param_string(iface_name, iface_name, IFNAMSIZ, 0);
 
 /* The following are specific to the SDIO dongle */
-
-/* IOCTL response timeout */
-int brcmf_ioctl_timeout_msec = IOCTL_RESP_TIMEOUT;
-
-/* Idle timeout for backplane clock */
-int brcmf_idletime = BRCMF_IDLETIME_TICKS;
-module_param(brcmf_idletime, int, 0);
-
-/* Use polling */
-uint brcmf_poll;
-module_param(brcmf_poll, uint, 0);
-
-/* Use interrupts */
-uint brcmf_intr = true;
-module_param(brcmf_intr, uint, 0);
-
-/* SDIO Drive Strength (in milliamps) */
-uint brcmf_sdiod_drive_strength = 6;
-module_param(brcmf_sdiod_drive_strength, uint, 0);
-
-/* Tx/Rx bounds */
-module_param(brcmf_txbound, uint, 0);
-module_param(brcmf_rxbound, uint, 0);
 
 #ifdef SDTEST
 /* Echo packet generator (pkts/s) */
@@ -164,67 +134,9 @@ module_param(brcmf_pktgen_len, uint, 0);
 
 static int brcmf_toe_get(struct brcmf_info *drvr_priv, int idx, u32 *toe_ol);
 static int brcmf_toe_set(struct brcmf_info *drvr_priv, int idx, u32 toe_ol);
-static int brcmf_host_event(struct brcmf_info *drvr_priv, int *ifidx, void *pktdata,
-			    struct brcmf_event_msg *event_ptr,
+static int brcmf_host_event(struct brcmf_info *drvr_priv, int *ifidx,
+			    void *pktdata, struct brcmf_event_msg *event_ptr,
 			    void **data_ptr);
-
-/*
- * Generalized timeout mechanism.  Uses spin sleep with exponential
- * back-off until
- * the sleep time reaches one jiffy, then switches over to task delay.  Usage:
- *
- *      brcmf_timeout_start(&tmo, usec);
- *      while (!brcmf_timeout_expired(&tmo))
- *              if (poll_something())
- *                      break;
- *      if (brcmf_timeout_expired(&tmo))
- *              fatal();
- */
-
-void brcmf_timeout_start(struct brcmf_timeout *tmo, uint usec)
-{
-	tmo->limit = usec;
-	tmo->increment = 0;
-	tmo->elapsed = 0;
-	tmo->tick = 1000000 / HZ;
-}
-
-int brcmf_timeout_expired(struct brcmf_timeout *tmo)
-{
-	/* Does nothing the first call */
-	if (tmo->increment == 0) {
-		tmo->increment = 1;
-		return 0;
-	}
-
-	if (tmo->elapsed >= tmo->limit)
-		return 1;
-
-	/* Add the delay that's about to take place */
-	tmo->elapsed += tmo->increment;
-
-	if (tmo->increment < tmo->tick) {
-		udelay(tmo->increment);
-		tmo->increment *= 2;
-		if (tmo->increment > tmo->tick)
-			tmo->increment = tmo->tick;
-	} else {
-		wait_queue_head_t delay_wait;
-		DECLARE_WAITQUEUE(wait, current);
-		int pending;
-		init_waitqueue_head(&delay_wait);
-		add_wait_queue(&delay_wait, &wait);
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(1);
-		pending = signal_pending(current);
-		remove_wait_queue(&delay_wait, &wait);
-		set_current_state(TASK_RUNNING);
-		if (pending)
-			return 1;	/* Interrupted */
-	}
-
-	return 0;
-}
 
 static int brcmf_net2idx(struct brcmf_info *drvr_priv, struct net_device *net)
 {
@@ -392,7 +304,8 @@ static void _brcmf_set_multicast_list(struct brcmf_info *drvr_priv, int ifidx)
 	}
 }
 
-static int _brcmf_set_mac_address(struct brcmf_info *drvr_priv, int ifidx, u8 *addr)
+static int
+_brcmf_set_mac_address(struct brcmf_info *drvr_priv, int ifidx, u8 *addr)
 {
 	char buf[32];
 	struct brcmf_ioctl ioc;
@@ -412,18 +325,17 @@ static int _brcmf_set_mac_address(struct brcmf_info *drvr_priv, int ifidx, u8 *a
 	ioc.set = true;
 
 	ret = brcmf_proto_ioctl(&drvr_priv->pub, ifidx, &ioc, ioc.buf, ioc.len);
-	if (ret < 0) {
+	if (ret < 0)
 		BRCMF_ERROR(("%s: set cur_etheraddr failed\n",
 			     brcmf_ifname(&drvr_priv->pub, ifidx)));
-	} else {
+	else
 		memcpy(drvr_priv->iflist[ifidx]->net->dev_addr, addr, ETH_ALEN);
-	}
 
 	return ret;
 }
 
 #ifdef SOFTAP
-extern struct net_device *ap_net_dev;
+static struct net_device *ap_net_dev;
 #endif
 
 /* Virtual interfaces only ((ifp && ifp->info && ifp->idx == true) */
@@ -458,7 +370,8 @@ static void brcmf_op_if(struct brcmf_if *ifp)
 		}
 		if (ret == 0) {
 			strcpy(ifp->net->name, ifp->name);
-			memcpy(netdev_priv(ifp->net), &drvr_priv, sizeof(drvr_priv));
+			memcpy(netdev_priv(ifp->net), &drvr_priv,
+			       sizeof(drvr_priv));
 			err = brcmf_net_attach(&drvr_priv->pub, ifp->idx);
 			if (err != 0) {
 				BRCMF_ERROR(("%s: brcmf_net_attach failed, "
@@ -469,7 +382,7 @@ static void brcmf_op_if(struct brcmf_if *ifp)
 #ifdef SOFTAP
 				/* semaphore that the soft AP CODE
 					 waits on */
-				extern struct semaphore ap_eth_sema;
+				struct semaphore ap_eth_sema;
 
 				/* save ptr to wl0.1 netdev for use
 					 in wl_iw.c  */
@@ -521,12 +434,20 @@ static int _brcmf_sysioc_thread(void *data)
 #ifdef SOFTAP
 	bool in_ap = false;
 #endif
-
+	DECLARE_WAITQUEUE(wait, current);
 	allow_signal(SIGTERM);
 
-	while (down_interruptible(&drvr_priv->sysioc_sem) == 0) {
+	add_wait_queue(&drvr_priv->sysioc_waitq, &wait);
+	while (1) {
+		prepare_to_wait(&drvr_priv->sysioc_waitq, &wait,
+				TASK_INTERRUPTIBLE);
+
+		/* wait for event */
+		schedule();
+
 		if (kthread_should_stop())
 			break;
+
 		for (i = 0; i < BRCMF_MAX_IFS; i++) {
 			struct brcmf_if *ifentry = drvr_priv->iflist[i];
 			if (ifentry) {
@@ -573,6 +494,7 @@ static int _brcmf_sysioc_thread(void *data)
 			}
 		}
 	}
+	finish_wait(&drvr_priv->sysioc_waitq, &wait);
 	return 0;
 }
 
@@ -590,8 +512,7 @@ static int brcmf_netdev_set_mac_address(struct net_device *dev, void *addr)
 
 	memcpy(&drvr_priv->macvalue, sa->sa_data, ETH_ALEN);
 	drvr_priv->set_macaddress = true;
-	up(&drvr_priv->sysioc_sem);
-
+	wake_up(&drvr_priv->sysioc_waitq);
 	return ret;
 }
 
@@ -605,7 +526,7 @@ static void brcmf_netdev_set_multicast_list(struct net_device *dev)
 		return;
 
 	drvr_priv->set_multicast = true;
-	up(&drvr_priv->sysioc_sem);
+	wake_up(&drvr_priv->sysioc_waitq);
 }
 
 int brcmf_sendpkt(struct brcmf_pub *drvr, int ifidx, struct sk_buff *pktbuf)
@@ -771,9 +692,9 @@ void brcmf_rx_frame(struct brcmf_pub *drvr, int ifidx, struct sk_buff *skb,
 		drvr->dstats.rx_bytes += skb->len;
 		drvr->rx_packets++;	/* Local count */
 
-		if (in_interrupt()) {
+		if (in_interrupt())
 			netif_rx(skb);
-		} else {
+		else
 			/* If the receive is not processed inside an ISR,
 			 * the softirqd must be woken explicitly to service
 			 * the NET_RX_SOFTIRQ.  In 2.6 kernels, this is handled
@@ -781,7 +702,6 @@ void brcmf_rx_frame(struct brcmf_pub *drvr, int ifidx, struct sk_buff *skb,
 			 * to do it manually.
 			 */
 			netif_rx_ni(skb);
-		}
 	}
 }
 
@@ -816,10 +736,9 @@ static struct net_device_stats *brcmf_netdev_get_stats(struct net_device *net)
 
 	ifp = drvr_priv->iflist[ifidx];
 
-	if (drvr_priv->pub.up) {
+	if (drvr_priv->pub.up)
 		/* Use the protocol to get dongle stats */
 		brcmf_proto_dstats(&drvr_priv->pub);
-	}
 
 	/* Copy dongle stats to net device stats */
 	ifp->stats.rx_packets = drvr_priv->pub.dstats.rx_packets;
@@ -1059,7 +978,7 @@ static int brcmf_netdev_ioctl_entry(struct net_device *net, struct ifreq *ifr,
 		return -1;
 
 	if (cmd == SIOCETHTOOL)
-		return brcmf_ethtool(drvr_priv, (void *)ifr->ifr_data);
+		return brcmf_ethtool(drvr_priv, ifr->ifr_data);
 
 	if (cmd != SIOCDEVPRIVATE)
 		return -EOPNOTSUPP;
@@ -1108,7 +1027,8 @@ static int brcmf_netdev_ioctl_entry(struct net_device *net, struct ifreq *ifr,
 
 	/* check for local brcmf ioctl and handle it */
 	if (driver == BRCMF_IOCTL_MAGIC) {
-		bcmerror = brcmf_c_ioctl((void *)&drvr_priv->pub, &ioc, buf, buflen);
+		bcmerror = brcmf_c_ioctl((void *)&drvr_priv->pub, &ioc,
+					 buf, buflen);
 		if (bcmerror)
 			drvr_priv->pub.bcmerror = bcmerror;
 		goto done;
@@ -1138,9 +1058,8 @@ static int brcmf_netdev_ioctl_entry(struct net_device *net, struct ifreq *ifr,
 	if (is_set_key_cmd)
 		brcmf_netdev_wait_pend8021x(net);
 
-	bcmerror =
-	    brcmf_proto_ioctl(&drvr_priv->pub, ifidx, (struct brcmf_ioctl *)&ioc,
-			      buf, buflen);
+	bcmerror = brcmf_proto_ioctl(&drvr_priv->pub, ifidx,
+				     (struct brcmf_ioctl *)&ioc, buf, buflen);
 
 done:
 	if (!bcmerror && buf && ioc.buf) {
@@ -1221,12 +1140,12 @@ static int brcmf_netdev_open(struct net_device *net)
 }
 
 int
-brcmf_add_if(struct brcmf_info *drvr_priv, int ifidx, void *handle, char *name,
-	   u8 *mac_addr, u32 flags, u8 bssidx)
+brcmf_add_if(struct brcmf_info *drvr_priv, int ifidx, struct net_device *net,
+	     char *name, u8 *mac_addr, u32 flags, u8 bssidx)
 {
 	struct brcmf_if *ifp;
 
-	BRCMF_TRACE(("%s: idx %d, handle->%p\n", __func__, ifidx, handle));
+	BRCMF_TRACE(("%s: idx %d, handle->%p\n", __func__, ifidx, net));
 
 	ifp = drvr_priv->iflist[ifidx];
 	if (!ifp) {
@@ -1244,12 +1163,12 @@ brcmf_add_if(struct brcmf_info *drvr_priv, int ifidx, void *handle, char *name,
 	if (mac_addr != NULL)
 		memcpy(&ifp->mac_addr, mac_addr, ETH_ALEN);
 
-	if (handle == NULL) {
+	if (net == NULL) {
 		ifp->state = BRCMF_E_IF_ADD;
 		ifp->idx = ifidx;
-		up(&drvr_priv->sysioc_sem);
+		wake_up(&drvr_priv->sysioc_waitq);
 	} else
-		ifp->net = (struct net_device *)handle;
+		ifp->net = net;
 
 	return 0;
 }
@@ -1268,7 +1187,7 @@ void brcmf_del_if(struct brcmf_info *drvr_priv, int ifidx)
 
 	ifp->state = BRCMF_E_IF_DEL;
 	ifp->idx = ifidx;
-	up(&drvr_priv->sysioc_sem);
+	wake_up(&drvr_priv->sysioc_waitq);
 }
 
 struct brcmf_pub *brcmf_attach(struct brcmf_bus *bus, uint bus_hdrlen)
@@ -1309,14 +1228,12 @@ struct brcmf_pub *brcmf_attach(struct brcmf_bus *bus, uint bus_hdrlen)
 			strcat(net->name, "%d");
 	}
 
-	if (brcmf_add_if(drvr_priv, 0, (void *)net, net->name, NULL, 0, 0) ==
+	if (brcmf_add_if(drvr_priv, 0, net, net->name, NULL, 0, 0) ==
 	    BRCMF_BAD_IF)
 		goto fail;
 
 	net->netdev_ops = NULL;
-	sema_init(&drvr_priv->proto_sem, 1);
-	/* Initialize other structure content */
-	init_waitqueue_head(&drvr_priv->ioctl_resp_wait);
+	mutex_init(&drvr_priv->proto_block);
 
 	/* Link to info module */
 	drvr_priv->pub.info = drvr_priv;
@@ -1338,9 +1255,9 @@ struct brcmf_pub *brcmf_attach(struct brcmf_bus *bus, uint bus_hdrlen)
 	}
 
 	if (brcmf_sysioc) {
-		sema_init(&drvr_priv->sysioc_sem, 0);
-		drvr_priv->sysioc_tsk = kthread_run(_brcmf_sysioc_thread, drvr_priv,
-						"_brcmf_sysioc");
+		init_waitqueue_head(&drvr_priv->sysioc_waitq);
+		drvr_priv->sysioc_tsk = kthread_run(_brcmf_sysioc_thread,
+						    drvr_priv, "_brcmf_sysioc");
 		if (IS_ERR(drvr_priv->sysioc_tsk)) {
 			printk(KERN_WARNING
 				"_brcmf_sysioc thread failed to start\n");
@@ -1354,9 +1271,6 @@ struct brcmf_pub *brcmf_attach(struct brcmf_bus *bus, uint bus_hdrlen)
 	 */
 	memcpy(netdev_priv(net), &drvr_priv, sizeof(drvr_priv));
 
-#if defined(CONFIG_PM_SLEEP)
-	atomic_set(&brcmf_mmc_suspend, false);
-#endif	/* defined(CONFIG_PM_SLEEP) */
 	return &drvr_priv->pub;
 
 fail:
@@ -1584,7 +1498,7 @@ int brcmf_os_proto_block(struct brcmf_pub *drvr)
 	struct brcmf_info *drvr_priv = drvr->info;
 
 	if (drvr_priv) {
-		down(&drvr_priv->proto_sem);
+		mutex_lock(&drvr_priv->proto_block);
 		return 1;
 	}
 	return 0;
@@ -1595,61 +1509,16 @@ int brcmf_os_proto_unblock(struct brcmf_pub *drvr)
 	struct brcmf_info *drvr_priv = drvr->info;
 
 	if (drvr_priv) {
-		up(&drvr_priv->proto_sem);
+		mutex_unlock(&drvr_priv->proto_block);
 		return 1;
 	}
 
 	return 0;
 }
 
-unsigned int brcmf_os_get_ioctl_resp_timeout(void)
-{
-	return (unsigned int)brcmf_ioctl_timeout_msec;
-}
-
-void brcmf_os_set_ioctl_resp_timeout(unsigned int timeout_msec)
-{
-	brcmf_ioctl_timeout_msec = (int)timeout_msec;
-}
-
-int brcmf_os_ioctl_resp_wait(struct brcmf_pub *drvr, uint *condition,
-			     bool *pending)
-{
-	struct brcmf_info *drvr_priv = drvr->info;
-	DECLARE_WAITQUEUE(wait, current);
-	int timeout = brcmf_ioctl_timeout_msec;
-
-	/* Convert timeout in millsecond to jiffies */
-	timeout = timeout * HZ / 1000;
-
-	/* Wait until control frame is available */
-	add_wait_queue(&drvr_priv->ioctl_resp_wait, &wait);
-	set_current_state(TASK_INTERRUPTIBLE);
-
-	while (!(*condition) && (!signal_pending(current) && timeout))
-		timeout = schedule_timeout(timeout);
-
-	if (signal_pending(current))
-		*pending = true;
-
-	set_current_state(TASK_RUNNING);
-	remove_wait_queue(&drvr_priv->ioctl_resp_wait, &wait);
-
-	return timeout;
-}
-
-int brcmf_os_ioctl_resp_wake(struct brcmf_pub *drvr)
-{
-	struct brcmf_info *drvr_priv = drvr->info;
-
-	if (waitqueue_active(&drvr_priv->ioctl_resp_wait))
-		wake_up_interruptible(&drvr_priv->ioctl_resp_wait);
-
-	return 0;
-}
-
-static int brcmf_host_event(struct brcmf_info *drvr_priv, int *ifidx, void *pktdata,
-			    struct brcmf_event_msg *event, void **data)
+static int brcmf_host_event(struct brcmf_info *drvr_priv, int *ifidx,
+			    void *pktdata, struct brcmf_event_msg *event,
+			    void **data)
 {
 	int bcmerror = 0;
 
