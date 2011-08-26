@@ -43,6 +43,7 @@
 #include <linux/input/sh_keysc.h>
 #include <linux/usb/r8a66597.h>
 #include <linux/dma-mapping.h>
+#include <linux/pm_clock.h>
 
 #include <media/sh_mobile_ceu.h>
 #include <media/sh_mobile_csi2.h>
@@ -1415,6 +1416,7 @@ static void __init ap4evb_init(void)
 	fsi_init_pm_clock();
 	sh7372_pm_init();
 	pm_clk_add(&fsi_device.dev, "spu2");
+	pm_clk_add(&hdmi_lcdc_device.dev, "hdmi");
 }
 
 static void __init ap4evb_timer_init(void)
