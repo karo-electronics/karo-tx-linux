@@ -602,7 +602,8 @@ __rt_mutex_slowlock(struct rt_mutex *lock, int state,
 
 		raw_spin_unlock(&lock->wait_lock);
 
-		if (was_disabled = irqs_disabled())
+		was_disabled = irqs_disabled();
+		if (was_disabled)
 			local_irq_enable();
 
 		debug_rt_mutex_print_deadlock(waiter);
