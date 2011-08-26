@@ -1,0 +1,29 @@
+Importing i2c based on 3.1-rc3
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 3.1-rc3
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 3.1-rc2
+Unchanged quilt series kernel-doc
+Importing rr based on v3.1-rc2-188-g6719db6
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 6719db6a23d4b7f1e5052eedae394135e3aef9c1
+HEAD is now at 6719db6 Btrfs: fix 64 bit divide problem
+$ git am ../quilt/rr/lguest-weaken-paravirt-restriction.patch
+Applying: lguest: Allow running under paravirt-enabled KVM.
+$ git am ../quilt/rr/lguest-remove-kvm-cpuid-signature.patch
+Applying: lguest: don't allow KVM-detection cpuid.
+$ git am ../quilt/rr/virtio:console_use_config_val_for_retrieving_config.patch
+Applying: virtio-console: Use virtio_config_val() for retrieving config
+$ git am ../quilt/rr/virtio:config_add_config_val_len.patch
+Applying: virtio_config: Add virtio_config_val_len()
+$ git am ../quilt/rr/virtio:net_use_config_val_for_retrieving_config.patch
+Applying: virtio-net: Use virtio_config_val() for retrieving config
+$ git am ../quilt/rr/virtio:h_correct_comment_for_struct_driver.patch
+Applying: virtio.h: correct comment for struct virtio_driver
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 69010e5...bbdb3ec master     -> quilt/rr  (forced update)
+Importing device-mapper based on v3.1-rc1
+Unchanged quilt series device-mapper
