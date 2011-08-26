@@ -16,6 +16,7 @@
 #include <linux/ctype.h>
 #include <linux/fs.h>
 #include <linux/gfp.h>
+#include <linux/crash_dump.h>
 #include <asm/ipl.h>
 #include <asm/smp.h>
 #include <asm/setup.h>
@@ -1220,7 +1221,7 @@ static int __init reipl_fcp_init(void)
 	/* sysfs: create fcp kset for mixing attr group and bin attrs */
 	reipl_fcp_kset = kset_create_and_add(IPL_FCP_STR, NULL,
 					     &reipl_kset->kobj);
-	if (!reipl_kset) {
+	if (!reipl_fcp_kset) {
 		free_page((unsigned long) reipl_block_fcp);
 		return -ENOMEM;
 	}
@@ -1618,7 +1619,8 @@ static struct shutdown_action vmcmd_action = {SHUTDOWN_ACTION_VMCMD_STR,
 
 static void stop_run(struct shutdown_trigger *trigger)
 {
-	if (strcmp(trigger->name, ON_PANIC_STR) == 0)
+	if (strcmp(trigger->name, ON_PANIC_STR) == 0 ||
+	    strcmp(trigger->name, ON_RESTART_STR) == 0)
 		disabled_wait((unsigned long) __builtin_return_address(0));
 	while (sigp(smp_processor_id(), sigp_stop) == sigp_busy)
 		cpu_relax();
@@ -1717,7 +1719,7 @@ static void do_panic(void)
 /* on restart */
 
 static struct shutdown_trigger on_restart_trigger = {ON_RESTART_STR,
-	&reipl_action};
+	&stop_action};
 
 static ssize_t on_restart_show(struct kobject *kobj,
 			       struct kobj_attribute *attr, char *page)
@@ -1737,7 +1739,11 @@ static struct kobj_attribute on_restart_attr =
 
 void do_restart(void)
 {
+	smp_restart_with_online_cpu();
 	smp_send_stop();
+#ifdef CONFIG_CRASH_DUMP
+	crash_kexec(NULL);
+#endif
 	on_restart_trigger.action->fn(&on_restart_trigger);
 	stop_run(&on_restart_trigger);
 }
