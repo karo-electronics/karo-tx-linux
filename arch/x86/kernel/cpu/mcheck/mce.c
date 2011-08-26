@@ -177,7 +177,7 @@ void mce_log(struct mce *mce)
 		}
 		smp_rmb();
 		next = entry + 1;
-		if (cmpxchg(&mcelog.next, entry, next) == entry)
+		if (cmpxchg_flag(&mcelog.next, entry, next))
 			break;
 	}
 	memcpy(mcelog.entry + entry, mce, sizeof(struct mce));
