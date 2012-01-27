@@ -26,6 +26,7 @@
 #include <linux/mtd/partitions.h>
 
 #include <video/platform_lcd.h>
+#include <linux/input/edt-ft5x06.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach/time.h>
@@ -43,6 +44,8 @@
 #define TX28_STK5_GPIO_BACKLIGHT	MXS_GPIO_NR(3, 16)
 #define TX28_STK5_GPIO_LCD_ENABLE	MXS_GPIO_NR(1, 31)
 #define TX28_STK5_GPIO_LCD_RESET	MXS_GPIO_NR(3, 30)
+#define TX28_STK5_GPIO_EDT_IRQ		MXS_GPIO_NR(2, 5)
+#define TX28_STK5_GPIO_EDT_RESET	MXS_GPIO_NR(2, 6)
 
 #define TX28_GPIO_IN_PAD_CTRL		(MXS_PAD_3V3 | MXS_PAD_4MA | \
 					MXS_PAD_PULLUP)
@@ -144,6 +147,12 @@ static const iomux_cfg_t tx28_stk5v3_pads[] __initconst = {
 	MX28_PAD_SPDIF__GPIO_3_27 | MXS_PAD_CTRL,	/* USB host vbusen */
 	MX28_PAD_GPMI_CE2N__GPIO_0_18 | MXS_PAD_CTRL,	/* USB otg vbusen */
 	MX28_PAD_PWM2__USB0_ID |
+		MXS_PAD_3V3 | MXS_PAD_4MA | MXS_PAD_PULLUP,
+
+	/* EDT Touchscreen */
+	MX28_PAD_SSP0_DATA5__GPIO_2_5 |
+		MXS_PAD_3V3 | MXS_PAD_4MA | MXS_PAD_PULLUP,
+	MX28_PAD_SSP0_DATA6__GPIO_2_6 |
 		MXS_PAD_3V3 | MXS_PAD_4MA | MXS_PAD_PULLUP,
 };
 
@@ -327,6 +336,13 @@ static struct pca953x_platform_data tx28_pca953x_pdata = {
 #endif
 };
 
+#if defined CONFIG_TOUCHSCREEN_EDT_FT5X06 || defined CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE
+static struct edt_ft5x06_platform_data edt_ft5x06_pdata = {
+	.irq_pin = TX28_STK5_GPIO_EDT_IRQ,
+	.reset_pin = TX28_STK5_GPIO_EDT_RESET,
+};
+#endif
+
 static struct i2c_board_info tx28_stk5v3_i2c_boardinfo[] __initdata = {
 	{
 		I2C_BOARD_INFO("tsc2007", 0x48),
@@ -341,6 +357,12 @@ static struct i2c_board_info tx28_stk5v3_i2c_boardinfo[] __initdata = {
 	}, {
 		I2C_BOARD_INFO("sgtl5000", 0x0a),
 	},
+#if defined CONFIG_TOUCHSCREEN_EDT_FT5X06 || defined CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE
+	{
+		I2C_BOARD_INFO("edt-ft5x06", 0x38),
+		.platform_data  = &edt_ft5x06_pdata,
+	},
+#endif /* EDT_FT5X06 */
 };
 
 #if defined(CONFIG_REGULATOR_FIXED_VOLTAGE) || \
