@@ -72,7 +72,7 @@ enum sgtl5000_regulator_supplies {
 static const char *supply_names[SGTL5000_SUPPLY_NUM] = {
 	"VDDA",
 	"VDDIO",
-	"VDDD"
+	"VDDD",
 };
 
 #define LDO_CONSUMER_NAME	"VDDD_LDO"
@@ -1286,7 +1286,6 @@ err_regulator_free:
 	if (external_vddd)
 		ldo_regulator_remove(codec);
 	return ret;
-
 }
 
 static int sgtl5000_probe(struct snd_soc_codec *codec)
@@ -1431,7 +1430,7 @@ static __devexit int sgtl5000_i2c_remove(struct i2c_client *client)
 
 static const struct i2c_device_id sgtl5000_id[] = {
 	{"sgtl5000", 0},
-	{},
+	{ /* sentinel */ }
 };
 
 MODULE_DEVICE_TABLE(i2c, sgtl5000_id);
@@ -1444,10 +1443,10 @@ MODULE_DEVICE_TABLE(of, sgtl5000_dt_ids);
 
 static struct i2c_driver sgtl5000_i2c_driver = {
 	.driver = {
-		   .name = "sgtl5000",
-		   .owner = THIS_MODULE,
-		   .of_match_table = sgtl5000_dt_ids,
-		   },
+		.name = "sgtl5000",
+		.owner = THIS_MODULE,
+		.of_match_table = sgtl5000_dt_ids,
+	},
 	.probe = sgtl5000_i2c_probe,
 	.remove = __devexit_p(sgtl5000_i2c_remove),
 	.id_table = sgtl5000_id,

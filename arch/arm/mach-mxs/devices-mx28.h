@@ -34,6 +34,18 @@ extern const struct mxs_flexcan_data mx28_flexcan_data[] __initconst;
 #define mx28_add_flexcan0(pdata)	mx28_add_flexcan(0, pdata)
 #define mx28_add_flexcan1(pdata)	mx28_add_flexcan(1, pdata)
 
+extern const struct mxs_fsl_usb2_udc_data mx28_fsl_usb2_udc_data __initconst;
+#define mx28_add_fsl_usb2_udc(pdata)	\
+	mxs_add_fsl_usb2_udc(&mx28_fsl_usb2_udc_data, pdata)
+
+extern const struct mxs_gpmi_nand_data mx28_gpmi_nand_data __initconst;
+#define mx28_add_gpmi_nand(pdata)	\
+	mxs_add_gpmi_nand(pdata, &mx28_gpmi_nand_data)
+
+extern const struct mxs_mxs_ehci_data mx28_mxs_ehci_data[] __initconst;
+#define mx28_add_mxs_ehci(id, pdata)	\
+	mxs_add_mxs_ehci(&mx28_mxs_ehci_data[id], pdata)
+
 extern const struct mxs_mxs_i2c_data mx28_mxs_i2c_data[] __initconst;
 #define mx28_add_mxs_i2c(id)		mxs_add_mxs_i2c(&mx28_mxs_i2c_data[id])
 
@@ -49,5 +61,9 @@ struct platform_device *__init mx28_add_mxsfb(
 extern const struct mxs_saif_data mx28_saif_data[] __initconst;
 #define mx28_add_saif(id, pdata) \
 	mxs_add_saif(&mx28_saif_data[id], pdata)
+
+extern const struct mxs_mxs_usbphy_data mx28_mxs_usbphy_data[] __initconst;
+#define mx28_add_mxs_usbphy(id, pdata)	\
+	mxs_add_mxs_usbphy(&mx28_mxs_usbphy_data[id], pdata)
 
 struct platform_device *__init mx28_add_rtc_stmp3xxx(void);

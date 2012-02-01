@@ -23,16 +23,16 @@
 #include <linux/usb/otg.h>
 #include <linux/usb/ulpi.h>
 #include <linux/slab.h>
+#include <linux/usb/mxc_ehci.h>
 
 #include <mach/hardware.h>
-#include <mach/mxc_ehci.h>
 
 #include <asm/mach-types.h>
 
 #define ULPI_VIEWPORT_OFFSET	0x170
 
 struct ehci_mxc_priv {
-	struct clk *usbclk, *ahbclk, *phy1clk;
+	struct clk *usbclk, *ahbclk, *phyclk;
 	struct usb_hcd *hcd;
 };
 
@@ -112,6 +112,8 @@ static const struct hc_driver ehci_mxc_hc_driver = {
 	.clear_tt_buffer_complete = ehci_clear_tt_buffer_complete,
 };
 
+#define OTG_MULTI
+
 static int ehci_mxc_drv_probe(struct platform_device *pdev)
 {
 	struct mxc_usbh_platform_data *pdata = pdev->dev.platform_data;
@@ -122,6 +124,7 @@ static int ehci_mxc_drv_probe(struct platform_device *pdev)
 	struct ehci_mxc_priv *priv;
 	struct device *dev = &pdev->dev;
 	struct ehci_hcd *ehci;
+	struct otg_transceiver *otg;
 
 	dev_info(&pdev->dev, "initializing i.MX USB Controller\n");
 
@@ -169,29 +172,30 @@ static int ehci_mxc_drv_probe(struct platform_device *pdev)
 	priv->usbclk = clk_get(dev, "usb");
 	if (IS_ERR(priv->usbclk)) {
 		ret = PTR_ERR(priv->usbclk);
+		dev_err(dev, "Failed to get USB clock: %d\n", ret);
 		goto err_clk;
 	}
 	clk_enable(priv->usbclk);
 
-	if (!cpu_is_mx35() && !cpu_is_mx25()) {
-		priv->ahbclk = clk_get(dev, "usb_ahb");
-		if (IS_ERR(priv->ahbclk)) {
-			ret = PTR_ERR(priv->ahbclk);
-			goto err_clk_ahb;
-		}
+	priv->ahbclk = clk_get(dev, "usb_ahb");
+	if (!IS_ERR(priv->ahbclk))
 		clk_enable(priv->ahbclk);
+	else if (priv->ahbclk == ERR_PTR(-ENOENT))
+		priv->ahbclk = NULL;
+	else {
+		ret = PTR_ERR(priv->ahbclk);
+		goto err_clk_ahb;
 	}
-
-	/* "dr" device has its own clock on i.MX51 */
-	if (cpu_is_mx51() && (pdev->id == 0)) {
-		priv->phy1clk = clk_get(dev, "usb_phy1");
-		if (IS_ERR(priv->phy1clk)) {
-			ret = PTR_ERR(priv->phy1clk);
-			goto err_clk_phy;
-		}
-		clk_enable(priv->phy1clk);
+	/* "dr" device may have its own clock */
+	priv->phyclk = clk_get(dev, "usb_phy");
+	if (!IS_ERR(priv->phyclk))
+		clk_enable(priv->phyclk);
+	else if (priv->phyclk == ERR_PTR(-ENOENT))
+		priv->phyclk = NULL;
+	else {
+		ret = PTR_ERR(priv->phyclk);
+		goto err_clk_phy;
 	}
-
 
 	/* call platform specific init function */
 	if (pdata->init) {
@@ -211,6 +215,19 @@ static int ehci_mxc_drv_probe(struct platform_device *pdev)
 	ehci->regs = hcd->regs + 0x100 +
 		HC_LENGTH(ehci, ehci_readl(ehci, &ehci->caps->hc_capbase));
 
+#ifdef OTG_MULTI
+	priv->hcd = hcd;
+	hcd->irq = irq;
+	platform_set_drvdata(pdev, priv);
+
+	otg = otg_find_transceiver(&pdev->dev);
+	if (!otg) {
+		dev_err(&pdev->dev, "unable to find otg transceiver\n");
+		/* FIXME: cleanup */
+		return -ENODEV;
+	}
+	otg_set_host(otg, &hcd->self);
+#else
 	/* set up the PORTSCx register */
 	ehci_writel(ehci, pdata->portsc, &ehci->regs->port_status[0]);
 
@@ -239,6 +256,7 @@ static int ehci_mxc_drv_probe(struct platform_device *pdev)
 	ret = usb_add_hcd(hcd, irq, IRQF_SHARED);
 	if (ret)
 		goto err_add;
+#endif
 
 	if (pdata->otg) {
 		/*
@@ -263,9 +281,9 @@ err_add:
 	if (pdata && pdata->exit)
 		pdata->exit(pdev);
 err_init:
-	if (priv->phy1clk) {
-		clk_disable(priv->phy1clk);
-		clk_put(priv->phy1clk);
+	if (priv->phyclk) {
+		clk_disable(priv->phyclk);
+		clk_put(priv->phyclk);
 	}
 err_clk_phy:
 	if (priv->ahbclk) {
@@ -311,9 +329,9 @@ static int __exit ehci_mxc_drv_remove(struct platform_device *pdev)
 		clk_disable(priv->ahbclk);
 		clk_put(priv->ahbclk);
 	}
-	if (priv->phy1clk) {
-		clk_disable(priv->phy1clk);
-		clk_put(priv->phy1clk);
+	if (priv->phyclk) {
+		clk_disable(priv->phyclk);
+		clk_put(priv->phyclk);
 	}
 
 	kfree(priv);
@@ -337,6 +355,6 @@ static struct platform_driver ehci_mxc_driver = {
 	.remove = __exit_p(ehci_mxc_drv_remove),
 	.shutdown = ehci_mxc_drv_shutdown,
 	.driver = {
-		   .name = "mxc-ehci",
+		.name = "mxc-ehci",
 	},
 };

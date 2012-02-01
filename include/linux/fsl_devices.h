@@ -80,6 +80,7 @@ struct fsl_usb2_platform_data {
 	unsigned	have_sysif_regs:1;
 	unsigned	invert_drvvbus:1;
 	unsigned	invert_pwr_fault:1;
+	unsigned	require_transceiver:1;
 
 	unsigned	suspended:1;
 	unsigned	already_suspended:1;

@@ -58,6 +58,7 @@ struct mxs_gpio_port {
 	int irq;
 	int virtual_irq_start;
 	struct bgpio_chip bgc;
+	unsigned long bothedge;
 };
 
 /* Note: This driver assumes 32 GPIOs are handled in one register */
@@ -71,6 +72,7 @@ static int mxs_gpio_set_irq_type(struct irq_data *d, unsigned int type)
 	void __iomem *pin_addr;
 	int edge;
 
+	__clear_bit(gpio & 31, &port->bothedge);
 	switch (type) {
 	case IRQ_TYPE_EDGE_RISING:
 		edge = GPIO_INT_RISE_EDGE;
@@ -83,6 +85,10 @@ static int mxs_gpio_set_irq_type(struct irq_data *d, unsigned int type)
 		break;
 	case IRQ_TYPE_LEVEL_HIGH:
 		edge = GPIO_INT_HIGH_LEV;
+		break;
+	case IRQ_TYPE_EDGE_BOTH:
+		edge = gpio_get_value(gpio) ? GPIO_INT_LOW_LEV : GPIO_INT_HIGH_LEV;
+		__set_bit(gpio & 31, &port->bothedge);
 		break;
 	default:
 		return -EINVAL;
@@ -108,6 +114,31 @@ static int mxs_gpio_set_irq_type(struct irq_data *d, unsigned int type)
 	return 0;
 }
 
+static int mxs_gpio_toggle_irq_level(struct mxs_gpio_port *port, int offset)
+{
+	int ret;
+	int invert;
+	int gpio = port->id * 32 + offset;
+	u32 pin_mask = 1 << offset;
+	void __iomem *pin_addr = port->base + PINCTRL_IRQPOL(port->id);
+	void __iomem *ack_addr = port->base + PINCTRL_IRQSTAT(port->id);
+
+	if (gpio_get_value(gpio)) {
+		pr_info("%s: switching IRQ%d (GPIO%d_%d) to LOW level\n",
+			__func__, gpio_to_irq(gpio), port->id, offset);
+		writel(pin_mask, pin_addr + MXS_CLR);
+		invert = 0;
+	} else {
+		pr_info("%s: switching IRQ%d (GPIO%d_%d) to HIGH level\n",
+			__func__, gpio_to_irq(gpio), port->id, offset);
+		writel(pin_mask, pin_addr + MXS_SET);
+		invert = 1;
+	}
+	writel(pin_mask, ack_addr + MXS_CLR);
+	ret = (readl(pin_addr) >> offset) & 1;
+	return ret ^ invert;
+}
+
 /* MXS has one interrupt *per* gpio port */
 static void mxs_gpio_irq_handler(u32 irq, struct irq_desc *desc)
 {
@@ -122,7 +153,12 @@ static void mxs_gpio_irq_handler(u32 irq, struct irq_desc *desc)
 
 	while (irq_stat != 0) {
 		int irqoffset = fls(irq_stat) - 1;
+
+	redo:
 		generic_handle_irq(gpio_irq_no_base + irqoffset);
+		if (test_bit(irqoffset, &port->bothedge))
+			if (mxs_gpio_toggle_irq_level(port, irqoffset))
+				goto redo;
 		irq_stat &= ~(1 << irqoffset);
 	}
 }
@@ -160,13 +196,22 @@ static void __init mxs_gpio_init_gc(struct mxs_gpio_port *port)
 
 	ct = gc->chip_types;
 	ct->chip.irq_ack = irq_gc_ack_set_bit;
+#if 0
 	ct->chip.irq_mask = irq_gc_mask_clr_bit;
 	ct->chip.irq_unmask = irq_gc_mask_set_bit;
+#else
+	ct->chip.irq_mask = irq_gc_mask_disable_reg;
+	ct->chip.irq_unmask = irq_gc_unmask_enable_reg;
+#endif
 	ct->chip.irq_set_type = mxs_gpio_set_irq_type;
 	ct->chip.irq_set_wake = mxs_gpio_set_wake_irq;
 	ct->regs.ack = PINCTRL_IRQSTAT(port->id) + MXS_CLR;
+#if 0
 	ct->regs.mask = PINCTRL_IRQEN(port->id);
-
+#else
+	ct->regs.enable = PINCTRL_IRQEN(port->id) + MXS_SET;
+	ct->regs.disable = PINCTRL_IRQEN(port->id) + MXS_CLR;
+#endif
 	irq_setup_generic_chip(gc, IRQ_MSK(32), 0, IRQ_NOREQUEST, 0);
 }
 

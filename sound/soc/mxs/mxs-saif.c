@@ -226,6 +226,7 @@ int mxs_saif_put_mclk(unsigned int saif_id)
 	saif->mclk_in_use = 0;
 	return 0;
 }
+EXPORT_SYMBOL(mxs_saif_put_mclk);
 
 /*
  * Get MCLK and set clock rate, then enable it
@@ -279,6 +280,7 @@ int mxs_saif_get_mclk(unsigned int saif_id, unsigned int mclk,
 
 	return 0;
 }
+EXPORT_SYMBOL(mxs_saif_get_mclk);
 
 /*
  * SAIF DAI format configuration.
@@ -486,7 +488,7 @@ static int mxs_saif_trigger(struct snd_pcm_substream *substream, int cmd,
 
 		/*
 		 * If the saif's master is not himself, we also need to enable
-		 * itself clk for its internal basic logic to work.
+		 * its clk for its internal basic logic to work.
 		 */
 		if (saif != master_saif) {
 			clk_enable(saif->clk);

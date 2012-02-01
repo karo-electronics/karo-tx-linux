@@ -18,7 +18,7 @@
  */
 
 #define DRIVER_NAME "mxsfb"
-
+#define DEBUG
 /**
  * @file
  * @brief LCDIF driver for i.MX23 and i.MX28
@@ -46,6 +46,9 @@
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
 #include <mach/mxsfb.h>
+
+static char *mode;
+module_param(mode, charp, S_IRUGO);
 
 #define REG_SET	4
 #define REG_CLR	8
@@ -366,7 +369,8 @@ static void mxsfb_disable_controller(struct fb_info *fb_info)
 		loop--;
 	}
 
-	writel(VDCTRL4_SYNC_SIGNALS_ON, host->base + LCDC_VDCTRL4 + REG_CLR);
+	reg = readl(host->base + LCDC_VDCTRL4);
+	writel(reg & ~VDCTRL4_SYNC_SIGNALS_ON, host->base + LCDC_VDCTRL4);
 
 	clk_disable_unprepare(host->clk);
 
@@ -755,7 +759,7 @@ static int __devinit mxsfb_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct mxsfb_info *host;
 	struct fb_info *fb_info;
-	struct fb_modelist *modelist;
+	struct fb_modelist *modelist = NULL;
 	int i, ret;
 
 	if (!pdata) {
@@ -811,11 +815,22 @@ static int __devinit mxsfb_probe(struct platform_device *pdev)
 	if (ret != 0)
 		goto error_init_fb;
 
-	for (i = 0; i < pdata->mode_count; i++)
+	for (i = 0; i < pdata->mode_count; i++) {
+		printk(KERN_DEBUG "%s: Adding vmode[%d] '%s'\n", __func__, i,
+			pdata->mode_list[i].name);
 		fb_add_videomode(&pdata->mode_list[i], &fb_info->modelist);
-
-	modelist = list_first_entry(&fb_info->modelist,
-			struct fb_modelist, list);
+		if (mode && strlen(mode) > 0 &&
+			strcmp(mode, pdata->mode_list[i].name) == 0) {
+			printk(KERN_DEBUG "Selecting mode '%s'\n", mode);
+			modelist = list_first_entry(&fb_info->modelist,
+						struct fb_modelist, list);
+		}
+	}
+	if (modelist == NULL)
+		modelist = list_first_entry(&fb_info->modelist,
+					struct fb_modelist, list);
+	printk(KERN_DEBUG "%s: Using vmode '%s'\n", __func__,
+		modelist->mode.name);
 	fb_videomode_to_var(&fb_info->var, &modelist->mode);
 
 	/* init the color fields */

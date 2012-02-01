@@ -47,7 +47,7 @@
 #define DRIVER_NAME	"mxs-mmc"
 
 /* card detect polling timeout */
-#define MXS_MMC_DETECT_TIMEOUT			(HZ/2)
+#define MXS_MMC_DETECT_TIMEOUT			(HZ / 2)
 
 #define SSP_VERSION_LATEST	4
 #define ssp_is_old()		(host->version < SSP_VERSION_LATEST)
@@ -59,39 +59,39 @@
 #define  BM_SSP_CTRL0_IGNORE_CRC		(1 << 26)
 #define  BM_SSP_CTRL0_READ			(1 << 25)
 #define  BM_SSP_CTRL0_DATA_XFER			(1 << 24)
-#define  BP_SSP_CTRL0_BUS_WIDTH			(22)
-#define  BM_SSP_CTRL0_BUS_WIDTH			(0x3 << 22)
+#define  BP_SSP_CTRL0_BUS_WIDTH			22
+#define  BM_SSP_CTRL0_BUS_WIDTH			(0x3 << BP_SSP_CTRL0_BUS_WIDTH)
 #define  BM_SSP_CTRL0_WAIT_FOR_IRQ		(1 << 21)
 #define  BM_SSP_CTRL0_LONG_RESP			(1 << 19)
 #define  BM_SSP_CTRL0_GET_RESP			(1 << 17)
 #define  BM_SSP_CTRL0_ENABLE			(1 << 16)
-#define  BP_SSP_CTRL0_XFER_COUNT		(0)
-#define  BM_SSP_CTRL0_XFER_COUNT		(0xffff)
+#define  BP_SSP_CTRL0_XFER_COUNT		0
+#define  BM_SSP_CTRL0_XFER_COUNT		0xffff
 #define HW_SSP_CMD0				0x010
 #define  BM_SSP_CMD0_DBL_DATA_RATE_EN		(1 << 25)
 #define  BM_SSP_CMD0_SLOW_CLKING_EN		(1 << 22)
 #define  BM_SSP_CMD0_CONT_CLKING_EN		(1 << 21)
 #define  BM_SSP_CMD0_APPEND_8CYC		(1 << 20)
-#define  BP_SSP_CMD0_BLOCK_SIZE			(16)
-#define  BM_SSP_CMD0_BLOCK_SIZE			(0xf << 16)
-#define  BP_SSP_CMD0_BLOCK_COUNT		(8)
-#define  BM_SSP_CMD0_BLOCK_COUNT		(0xff << 8)
-#define  BP_SSP_CMD0_CMD			(0)
-#define  BM_SSP_CMD0_CMD			(0xff)
+#define  BP_SSP_CMD0_BLOCK_SIZE			16
+#define  BM_SSP_CMD0_BLOCK_SIZE			(0xf << BP_SSP_CMD0_BLOCK_SIZE)
+#define  BP_SSP_CMD0_BLOCK_COUNT		8
+#define  BM_SSP_CMD0_BLOCK_COUNT		(0xff << BP_SSP_CMD0_BLOCK_COUNT)
+#define  BP_SSP_CMD0_CMD			0
+#define  BM_SSP_CMD0_CMD			0xff
 #define HW_SSP_CMD1				0x020
 #define HW_SSP_XFER_SIZE			0x030
 #define HW_SSP_BLOCK_SIZE			0x040
-#define  BP_SSP_BLOCK_SIZE_BLOCK_COUNT		(4)
-#define  BM_SSP_BLOCK_SIZE_BLOCK_COUNT		(0xffffff << 4)
-#define  BP_SSP_BLOCK_SIZE_BLOCK_SIZE		(0)
-#define  BM_SSP_BLOCK_SIZE_BLOCK_SIZE		(0xf)
+#define  BP_SSP_BLOCK_SIZE_BLOCK_COUNT		4
+#define  BM_SSP_BLOCK_SIZE_BLOCK_COUNT		(0xffffff << BP_SSP_BLOCK_SIZE_BLOCK_COUNT)
+#define  BP_SSP_BLOCK_SIZE_BLOCK_SIZE		0
+#define  BM_SSP_BLOCK_SIZE_BLOCK_SIZE		0xf
 #define HW_SSP_TIMING				(ssp_is_old() ? 0x050 : 0x070)
-#define  BP_SSP_TIMING_TIMEOUT			(16)
-#define  BM_SSP_TIMING_TIMEOUT			(0xffff << 16)
-#define  BP_SSP_TIMING_CLOCK_DIVIDE		(8)
-#define  BM_SSP_TIMING_CLOCK_DIVIDE		(0xff << 8)
-#define  BP_SSP_TIMING_CLOCK_RATE		(0)
-#define  BM_SSP_TIMING_CLOCK_RATE		(0xff)
+#define  BP_SSP_TIMING_TIMEOUT			16
+#define  BM_SSP_TIMING_TIMEOUT			(0xffff << BP_SSP_TIMING_TIMEOUT)
+#define  BP_SSP_TIMING_CLOCK_DIVIDE		8
+#define  BM_SSP_TIMING_CLOCK_DIVIDE		(0xff << BP_SSP_TIMING_CLOCK_DIVIDE)
+#define  BP_SSP_TIMING_CLOCK_RATE		0
+#define  BM_SSP_TIMING_CLOCK_RATE		0xff
 #define HW_SSP_CTRL1				(ssp_is_old() ? 0x060 : 0x080)
 #define  BM_SSP_CTRL1_SDIO_IRQ			(1 << 31)
 #define  BM_SSP_CTRL1_SDIO_IRQ_EN		(1 << 30)
@@ -111,10 +111,10 @@
 #define  BM_SSP_CTRL1_FIFO_OVERRUN_IRQ_EN	(1 << 14)
 #define  BM_SSP_CTRL1_DMA_ENABLE		(1 << 13)
 #define  BM_SSP_CTRL1_POLARITY			(1 << 9)
-#define  BP_SSP_CTRL1_WORD_LENGTH		(4)
-#define  BM_SSP_CTRL1_WORD_LENGTH		(0xf << 4)
-#define  BP_SSP_CTRL1_SSP_MODE			(0)
-#define  BM_SSP_CTRL1_SSP_MODE			(0xf)
+#define  BP_SSP_CTRL1_WORD_LENGTH		4
+#define  BM_SSP_CTRL1_WORD_LENGTH		(0xf << BP_SSP_CTRL1_WORD_LENGTH)
+#define  BP_SSP_CTRL1_SSP_MODE			0
+#define  BM_SSP_CTRL1_SSP_MODE			0xf
 #define HW_SSP_SDRESP0				(ssp_is_old() ? 0x080 : 0x0a0)
 #define HW_SSP_SDRESP1				(ssp_is_old() ? 0x090 : 0x0b0)
 #define HW_SSP_SDRESP2				(ssp_is_old() ? 0x0a0 : 0x0c0)
@@ -123,7 +123,7 @@
 #define  BM_SSP_STATUS_CARD_DETECT		(1 << 28)
 #define  BM_SSP_STATUS_SDIO_IRQ			(1 << 17)
 #define HW_SSP_VERSION				(cpu_is_mx23() ? 0x110 : 0x130)
-#define  BP_SSP_VERSION_MAJOR			(24)
+#define  BP_SSP_VERSION_MAJOR			24
 
 #define BF_SSP(value, field)	(((value) << BP_SSP_##field) & BM_SSP_##field)
 
@@ -151,7 +151,7 @@ struct mxs_mmc_host {
 	struct clk			*clk;
 	unsigned int			clk_rate;
 
-	struct dma_chan         	*dmach;
+	struct dma_chan			*dmach;
 	struct mxs_dma_data		dma_data;
 	unsigned int			dma_dir;
 	enum dma_transfer_direction	slave_dirn;
@@ -181,16 +181,24 @@ static int mxs_mmc_get_ro(struct mmc_host *mmc)
 static int mxs_mmc_get_cd(struct mmc_host *mmc)
 {
 	struct mxs_mmc_host *host = mmc_priv(mmc);
+	struct mxs_mmc_platform_data *pdata =
+		mmc_dev(host->mmc)->platform_data;
+
+	if (pdata && gpio_is_valid(pdata->cd_gpio))
+		return gpio_get_value(pdata->cd_gpio);
 
 	return !(readl(host->base + HW_SSP_STATUS) &
 		 BM_SSP_STATUS_CARD_DETECT);
 }
 
-static void mxs_mmc_reset(struct mxs_mmc_host *host)
+static int mxs_mmc_reset(struct mxs_mmc_host *host)
 {
+	int ret;
 	u32 ctrl0, ctrl1;
 
-	mxs_reset_block(host->base);
+	ret = mxs_reset_block(host->base);
+	if (ret)
+		return ret;
 
 	ctrl0 = BM_SSP_CTRL0_IGNORE_CRC;
 	ctrl1 = BF_SSP(0x3, CTRL1_SSP_MODE) |
@@ -215,6 +223,7 @@ static void mxs_mmc_reset(struct mxs_mmc_host *host)
 
 	writel(ctrl0, host->base + HW_SSP_CTRL0);
 	writel(ctrl1, host->base + HW_SSP_CTRL1);
+	return 0;
 }
 
 static void mxs_mmc_start_cmd(struct mxs_mmc_host *host,
@@ -267,6 +276,15 @@ static void mxs_mmc_dma_irq_callback(void *param)
 	mxs_mmc_request_done(host);
 }
 
+static irqreturn_t mxs_mmc_cd_irq_handler(int irq, void *dev_id)
+{
+	struct mxs_mmc_host *host = dev_id;
+
+	mmc_detect_change(host->mmc,
+			msecs_to_jiffies(100));
+	return IRQ_HANDLED;
+}
+
 static irqreturn_t mxs_mmc_irq_handler(int irq, void *dev_id)
 {
 	struct mxs_mmc_host *host = dev_id;
@@ -278,7 +296,7 @@ static irqreturn_t mxs_mmc_irq_handler(int irq, void *dev_id)
 
 	stat = readl(host->base + HW_SSP_CTRL1);
 	writel(stat & MXS_MMC_IRQ_BITS,
-	       host->base + HW_SSP_CTRL1 + MXS_CLR_ADDR);
+		host->base + HW_SSP_CTRL1 + MXS_CLR_ADDR);
 
 	if ((stat & BM_SSP_CTRL1_SDIO_IRQ) && (stat & BM_SSP_CTRL1_SDIO_IRQ_EN))
 		mmc_signal_sdio_irq(host->mmc);
@@ -558,7 +576,6 @@ static void mxs_mmc_start_cmd(struct mxs_mmc_host *host,
 	default:
 		dev_warn(mmc_dev(host->mmc),
 			 "%s: unknown MMC command\n", __func__);
-		break;
 	}
 }
 
@@ -721,9 +738,19 @@ static int mxs_mmc_probe(struct platform_device *pdev)
 		ret = PTR_ERR(host->clk);
 		goto out_iounmap;
 	}
-	clk_prepare_enable(host->clk);
+	ret = clk_prepare_enable(host->clk);
+	if (ret) {
+		dev_err(mmc_dev(host->mmc),
+			"%s: failed to enable clock: %d\n", __func__, ret);
+		goto out_clk_put;
+	}
 
-	mxs_mmc_reset(host);
+	ret = mxs_mmc_reset(host);
+	if (ret) {
+		dev_err(mmc_dev(host->mmc),
+			"%s: failed to reset controller: %d\n", __func__, ret);
+		goto out_clk_put;
+	}
 
 	dma_cap_zero(mask);
 	dma_cap_set(DMA_SLAVE, mask);
@@ -740,7 +767,7 @@ static int mxs_mmc_probe(struct platform_device *pdev)
 	mmc->caps = MMC_CAP_SD_HIGHSPEED | MMC_CAP_MMC_HIGHSPEED |
 		    MMC_CAP_SDIO_IRQ | MMC_CAP_NEEDS_POLL;
 
-	pdata =	mmc_dev(host->mmc)->platform_data;
+	pdata = mmc_dev(host->mmc)->platform_data;
 	if (pdata) {
 		if (pdata->flags & SLOTF_8_BIT_CAPABLE)
 			mmc->caps |= MMC_CAP_4_BIT_DATA | MMC_CAP_8_BIT_DATA;
@@ -766,14 +793,43 @@ static int mxs_mmc_probe(struct platform_device *pdev)
 
 	spin_lock_init(&host->lock);
 
+	if (gpio_is_valid(pdata->wp_gpio)) {
+		ret = gpio_request(pdata->wp_gpio, "MMC-WP");
+		if (ret)
+			goto out_free_irq;
+	}
+
+	if (gpio_is_valid(pdata->cd_gpio)) {
+		ret = gpio_request(pdata->cd_gpio, "MMC-CD");
+		if (ret)
+			goto out_free_wp_gpio;
+
+		ret = request_irq(gpio_to_irq(pdata->cd_gpio),
+				mxs_mmc_cd_irq_handler,
+				IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+				DRIVER_NAME, host);
+		if (ret)
+			goto out_free_cd_gpio;
+		mmc->caps &= ~MMC_CAP_NEEDS_POLL;
+	}
+
 	ret = mmc_add_host(mmc);
 	if (ret)
-		goto out_free_irq;
+		goto out_free_cd_irq;
 
 	dev_info(mmc_dev(host->mmc), "initialized\n");
 
 	return 0;
 
+out_free_cd_irq:
+	if (gpio_is_valid(pdata->cd_gpio))
+		free_irq(gpio_to_irq(pdata->cd_gpio), host);
+out_free_cd_gpio:
+	if (gpio_is_valid(pdata->cd_gpio))
+		gpio_free(pdata->cd_gpio);
+out_free_wp_gpio:
+	if (gpio_is_valid(pdata->wp_gpio))
+		gpio_free(pdata->wp_gpio);
 out_free_irq:
 	free_irq(host->irq, host);
 out_free_dma:
@@ -796,6 +852,7 @@ static int mxs_mmc_remove(struct platform_device *pdev)
 	struct mmc_host *mmc = platform_get_drvdata(pdev);
 	struct mxs_mmc_host *host = mmc_priv(mmc);
 	struct resource *res = host->res;
+	struct mxs_mmc_platform_data *pdata = mmc_dev(host->mmc)->platform_data;
 
 	mmc_remove_host(mmc);
 
@@ -812,6 +869,13 @@ static int mxs_mmc_remove(struct platform_device *pdev)
 	iounmap(host->base);
 
 	mmc_free_host(mmc);
+
+	if (gpio_is_valid(pdata->cd_gpio)) {
+		free_irq(gpio_to_irq(pdata->cd_gpio), host);
+		gpio_free(pdata->cd_gpio);
+	}
+	if (gpio_is_valid(pdata->wp_gpio))
+		gpio_free(pdata->wp_gpio);
 
 	release_mem_region(res->start, resource_size(res));
 
@@ -838,7 +902,9 @@ static int mxs_mmc_resume(struct device *dev)
 	struct mxs_mmc_host *host = mmc_priv(mmc);
 	int ret = 0;
 
-	clk_prepare_enable(host->clk);
+	ret = clk_prepare_enable(host->clk);
+	if (ret)
+		return ret;
 
 	ret = mmc_resume_host(mmc);
 
@@ -868,3 +934,4 @@ module_platform_driver(mxs_mmc_driver);
 MODULE_DESCRIPTION("FREESCALE MXS MMC peripheral");
 MODULE_AUTHOR("Freescale Semiconductor");
 MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:mxs-mmc");
