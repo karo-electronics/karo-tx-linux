@@ -577,7 +577,7 @@ static irqreturn_t flexcan_irq(int irq, void *dev_id)
 
 	reg_iflag1 = flexcan_read(&regs->iflag1);
 	reg_esr = flexcan_read(&regs->esr);
-	flexcan_write(FLEXCAN_ESR_ERR_INT, &regs->esr);	/* ACK err IRQ */
+	flexcan_write(reg_esr, &regs->esr);	/* ACK all IRQs */
 
 	/*
 	 * schedule NAPI in case of:

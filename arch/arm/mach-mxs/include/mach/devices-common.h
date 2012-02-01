@@ -66,6 +66,27 @@ struct platform_device *__init mxs_add_flexcan(
 		const struct mxs_flexcan_data *data,
 		const struct flexcan_platform_data *pdata);
 
+/* USB device */
+#include <linux/fsl_devices.h>
+struct mxs_fsl_usb2_udc_data {
+	int id;
+	resource_size_t iobase;
+	resource_size_t irq;
+};
+struct platform_device *__init mxs_add_fsl_usb2_udc(
+		const struct mxs_fsl_usb2_udc_data *data,
+		const struct fsl_usb2_platform_data *pdata);
+
+/* gpmi-nand */
+#include <linux/mtd/gpmi-nand.h>
+struct mxs_gpmi_nand_data {
+	const char *devid;
+	const struct resource res[GPMI_NAND_RES_SIZE];
+};
+struct platform_device *__init
+mxs_add_gpmi_nand(const struct gpmi_nand_platform_data *pdata,
+		const struct mxs_gpmi_nand_data *data);
+
 /* i2c */
 struct mxs_mxs_i2c_data {
 	int id;
@@ -93,6 +114,17 @@ struct platform_device *__init mxs_add_mxs_mmc(
 struct platform_device *__init mxs_add_mxs_pwm(
 		resource_size_t iobase, int id);
 
+/* usb */
+#include <linux/usb/mxc_ehci.h>
+struct mxs_mxs_ehci_data {
+	int id;
+	resource_size_t iobase;
+	resource_size_t irq;
+};
+struct platform_device *__init mxs_add_mxs_ehci(
+		const struct mxs_mxs_ehci_data *data,
+		const struct mxc_usbh_platform_data *pdata);
+
 /* saif */
 #include <sound/saif.h>
 struct mxs_saif_data {
@@ -102,7 +134,17 @@ struct mxs_saif_data {
 	resource_size_t dma;
 	resource_size_t dmairq;
 };
-
 struct platform_device *__init mxs_add_saif(
 		const struct mxs_saif_data *data,
 		const struct mxs_saif_platform_data *pdata);
+
+/* USB PHY */
+#include <mach/usbphy.h>
+struct mxs_mxs_usbphy_data {
+	int id;
+	resource_size_t iobase;
+	resource_size_t irq;
+};
+struct platform_device *__init mxs_add_mxs_usbphy(
+		const struct mxs_mxs_usbphy_data *data,
+		const struct mxs_mxs_usbphy_platform_data *pdata);

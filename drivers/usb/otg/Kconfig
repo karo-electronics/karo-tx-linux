@@ -128,4 +128,9 @@ config USB_MV_OTG
 
 	  To compile this driver as a module, choose M here.
 
+config USB_MXS_USBPHY
+        tristate "i.MX USB Transceiver Driver"
+        depends on ARCH_MXS
+        select USB_OTG_UTILS
+
 endif # USB || OTG

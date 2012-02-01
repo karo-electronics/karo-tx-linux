@@ -74,6 +74,10 @@ struct otg_transceiver {
 	struct otg_io_access_ops	*io_ops;
 	void __iomem			*io_priv;
 
+	struct list_head	list;
+	const char		*dev_id_host;
+	const char		*dev_id_peripheral;
+
 	/* for notification of usb_xceiv_events */
 	struct atomic_notifier_head	notifier;
 
@@ -167,16 +171,33 @@ otg_shutdown(struct otg_transceiver *otg)
 /* for usb host and peripheral controller drivers */
 #ifdef CONFIG_USB_OTG_UTILS
 extern struct otg_transceiver *otg_get_transceiver(void);
+extern struct otg_transceiver *otg_find_transceiver(struct device *dev);
 extern void otg_put_transceiver(struct otg_transceiver *);
 extern const char *otg_state_string(enum usb_otg_state state);
+extern int otg_add_transceiver(struct otg_transceiver *x);
+extern int otg_remove_transceiver(struct otg_transceiver *x);
 #else
 static inline struct otg_transceiver *otg_get_transceiver(void)
 {
 	return NULL;
 }
 
+static struct otg_transceiver *otg_find_transceiver(struct device *dev);
+{
+	return NULL;
+}
+
 static inline void otg_put_transceiver(struct otg_transceiver *x)
 {
+}
+static inline int otg_add_transceiver(struct otg_transceiver *x)
+{
+	return 0;
+}
+
+static int otg_remove_transceiver(struct otg_transceiver *x)
+{
+	return 0;
 }
 
 static inline const char *otg_state_string(enum usb_otg_state state)

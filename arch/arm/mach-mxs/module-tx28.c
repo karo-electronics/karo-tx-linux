@@ -10,9 +10,10 @@
 #include <linux/fec.h>
 #include <linux/gpio.h>
 
+#include <mach/common.h>
 #include <mach/iomux-mx28.h>
-#include "../devices-mx28.h"
 
+#include "devices-mx28.h"
 #include "module-tx28.h"
 
 #define TX28_FEC_PHY_POWER	MXS_GPIO_NR(3, 29)
@@ -66,13 +67,30 @@ static const iomux_cfg_t tx28_fec1_pads[] __initconst = {
 	MX28_PAD_ENET0_CRS__ENET1_RX_EN,
 };
 
-static const struct fec_platform_data tx28_fec0_data __initconst = {
+static struct fec_platform_data tx28_fec0_data __initdata = {
 	.phy = PHY_INTERFACE_MODE_RMII,
+	.mac = { 0, }, /* will be overwritten by tx28_fec_set_mac() */
 };
 
-static const struct fec_platform_data tx28_fec1_data __initconst = {
+static struct fec_platform_data tx28_fec1_data __initdata = {
 	.phy = PHY_INTERFACE_MODE_RMII,
+	.mac = { 0, }, /* will be overwritten by tx28_fec_set_mac() */
 };
+
+static void tx28_fec_set_mac(int id, unsigned char mac[])
+{
+	const u32 *ocotp = mxs_get_ocotp();
+	int i;
+
+	if (!ocotp) {
+		printk(KERN_ERR "Failed to read MAC address from OCOTP\n");
+		return;
+	}
+
+	for (i = 0; i < ETH_ALEN; i++) {
+		mac[i] = ocotp[id * 2 + i / 4] >> (24 - i % 4 * 8);
+	}
+}
 
 int __init tx28_add_fec0(void)
 {
@@ -128,6 +146,7 @@ int __init tx28_add_fec0(void)
 				__func__, ret);
 		goto free_gpios;
 	}
+	tx28_fec_set_mac(0, tx28_fec0_data.mac);
 	pr_debug("%s: Registering FEC0 device\n", __func__);
 	mx28_add_fec(0, &tx28_fec0_data);
 	return 0;
@@ -154,6 +173,7 @@ int __init tx28_add_fec1(void)
 				__func__, ret);
 		return ret;
 	}
+	tx28_fec_set_mac(1, tx28_fec1_data.mac);
 	pr_debug("%s: Registering FEC1 device\n", __func__);
 	mx28_add_fec(1, &tx28_fec1_data);
 	return 0;

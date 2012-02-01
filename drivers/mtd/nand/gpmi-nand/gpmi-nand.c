@@ -18,6 +18,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
+#include <linux/module.h>
 #include <linux/clk.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
@@ -1490,6 +1491,10 @@ static int __devinit gpmi_nfc_init(struct gpmi_nand_data *this)
 	chip->badblock_pattern	= &gpmi_bbt_descr;
 	chip->block_markbad	= gpmi_block_markbad;
 	chip->options		|= NAND_NO_SUBPAGE_WRITE;
+	if (pdata->use_flash_bbt) {
+		chip->bbt_options |= NAND_BBT_USE_FLASH;
+		chip->bbt_options |= NAND_BBT_NO_OOB;
+	}
 	chip->ecc.mode		= NAND_ECC_HW;
 	chip->ecc.size		= 1;
 	chip->ecc.layout	= &gpmi_hw_ecclayout;
@@ -1564,7 +1569,7 @@ exit_acquire_resources:
 	return ret;
 }
 
-static int __exit gpmi_nand_remove(struct platform_device *pdev)
+static int __devexit gpmi_nand_remove(struct platform_device *pdev)
 {
 	struct gpmi_nand_data *this = platform_get_drvdata(pdev);
 
@@ -1590,7 +1595,7 @@ static struct platform_driver gpmi_nand_driver = {
 		.name = "gpmi-nand",
 	},
 	.probe   = gpmi_nand_probe,
-	.remove  = __exit_p(gpmi_nand_remove),
+	.remove  = __devexit_p(gpmi_nand_remove),
 	.id_table = gpmi_ids,
 };
 

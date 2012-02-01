@@ -243,6 +243,7 @@ static void tsc2007_stop(struct tsc2007 *ts)
 	mb();
 	wake_up(&ts->wait);
 
+	pr_info("%s: Disabling IRQ%d\n", __func__, ts->irq);
 	disable_irq(ts->irq);
 }
 
@@ -254,6 +255,7 @@ static int tsc2007_open(struct input_dev *input_dev)
 	ts->stopped = false;
 	mb();
 
+	pr_info("%s: Enabling IRQ%d\n", __func__, ts->irq);
 	enable_irq(ts->irq);
 
 	/* Prepare for touch readings - power down ADC and enable PENIRQ */

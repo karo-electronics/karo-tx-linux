@@ -1150,7 +1150,7 @@ int jffs2_nand_flash_setup(struct jffs2_sb_info *c)
 	/* Cleanmarker is out-of-band, so inline size zero */
 	c->cleanmarker_size = 0;
 
-	if (!oinfo || oinfo->oobavail == 0) {
+	if (!oinfo /* || oinfo->oobavail == 0 */) {
 		printk(KERN_ERR "inconsistent device description\n");
 		return -EINVAL;
 	}

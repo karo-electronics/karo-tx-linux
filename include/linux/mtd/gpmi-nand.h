@@ -64,5 +64,6 @@ struct gpmi_nand_platform_data {
 	/* Medium information. */
 	struct		mtd_partition *partitions;
 	unsigned	partition_count;
+	unsigned	use_flash_bbt:1;
 };
 #endif

@@ -677,7 +677,7 @@ static void start_transfer(struct fsg_dev *fsg, struct usb_ep *ep,
 	*pbusy = 1;
 	*state = BUF_STATE_BUSY;
 	spin_unlock_irq(&fsg->common->lock);
-	rc = usb_ep_queue(ep, req, GFP_KERNEL);
+	rc = usb_ep_queue(ep, req, GFP_ATOMIC);
 	if (rc != 0) {
 		*pbusy = 0;
 		*state = BUF_STATE_EMPTY;
