@@ -682,19 +682,11 @@ again:
 	if (!force && test_bit(IRQTF_RUNTHREAD, &action->thread_flags))
 		goto out_unlock;
 
-	pr_info("%s: Clearing IRQ%d oneshot flag\n", __func__,
-		desc - irq_desc);
 	desc->threads_oneshot &= ~action->thread_mask;
 
 	if (!desc->threads_oneshot && !irqd_irq_disabled(&desc->irq_data) &&
-		irqd_irq_masked(&desc->irq_data)) {
-		pr_info("%s: Unmasking IRQ%d\n", __func__,
-			desc - irq_desc);
+	    irqd_irq_masked(&desc->irq_data))
 		unmask_irq(desc);
-	} else {
-		pr_info("%s: Leaving IRQ%d masked\n", __func__,
-			desc - irq_desc);
-	}
 
 out_unlock:
 	raw_spin_unlock_irq(&desc->lock);
