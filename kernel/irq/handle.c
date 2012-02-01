@@ -146,6 +146,11 @@ handle_irq_event_percpu(struct irq_desc *desc, struct irqaction *action)
 			/* Fall through to add to randomness */
 		case IRQ_HANDLED:
 			random |= action->flags;
+			/* unmask the IRQ that has been masked by the
+			 * hard_irq handler due to race condition
+			 */
+			if (res == IRQ_HANDLED && (action->flags & IRQF_ONESHOT))
+				unmask_irq(desc);
 			break;
 
 		default:
