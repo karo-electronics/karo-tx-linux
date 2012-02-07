@@ -364,6 +364,8 @@ static void cond_unmask_irq(struct irq_desc *desc)
 void
 handle_level_irq(unsigned int irq, struct irq_desc *desc)
 {
+	irqreturn_t ret;
+
 	raw_spin_lock(&desc->lock);
 	mask_ack_irq(desc);
 
@@ -381,7 +383,7 @@ handle_level_irq(unsigned int irq, struct irq_desc *desc)
 	if (unlikely(!desc->action || irqd_irq_disabled(&desc->irq_data)))
 		goto out_unlock;
 
-	handle_irq_event(desc);
+	ret = handle_irq_event(desc);
 
 	cond_unmask_irq(desc);
 
