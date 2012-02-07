@@ -343,6 +343,8 @@ EXPORT_SYMBOL_GPL(handle_simple_irq);
 void
 handle_level_irq(unsigned int irq, struct irq_desc *desc)
 {
+	irqreturn_t ret;
+
 	raw_spin_lock(&desc->lock);
 	mask_ack_irq(desc);
 
@@ -360,10 +362,13 @@ handle_level_irq(unsigned int irq, struct irq_desc *desc)
 	if (unlikely(!desc->action || irqd_irq_disabled(&desc->irq_data)))
 		goto out_unlock;
 
-	handle_irq_event(desc);
+	ret = handle_irq_event(desc);
 
-	if (!irqd_irq_disabled(&desc->irq_data) && !(desc->istate & IRQS_ONESHOT))
+	if (!irqd_irq_disabled(&desc->irq_data) &&
+			(!(desc->istate & IRQS_ONESHOT) ||
+				!(ret & IRQ_WAKE_THREAD)))
 		unmask_irq(desc);
+
 out_unlock:
 	raw_spin_unlock(&desc->lock);
 }
