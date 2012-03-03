@@ -1479,6 +1479,9 @@ struct task_struct {
 	short il_next;
 	short pref_node_fork;
 #endif
+#ifdef CONFIG_SCHED_NUMA
+	int node;
+#endif
 	struct rcu_head rcu;
 
 	/*
@@ -1552,6 +1555,15 @@ struct task_struct {
 
 /* Future-safe accessor for struct task_struct's cpus_allowed. */
 #define tsk_cpus_allowed(tsk) (&(tsk)->cpus_allowed)
+
+static inline int tsk_home_node(struct task_struct *p)
+{
+#ifdef CONFIG_SCHED_NUMA
+	return p->node;
+#else
+	return -1;
+#endif
+}
 
 /*
  * Priority of a process goes from 0..MAX_PRIO-1, valid RT
