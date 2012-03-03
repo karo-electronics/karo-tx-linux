@@ -418,6 +418,13 @@ struct rq {
 
 	struct list_head cfs_tasks;
 
+#ifdef CONFIG_SCHED_NUMA
+	unsigned long    onnode_running;
+	unsigned long    offnode_running;
+	unsigned long	 offnode_weight;
+	struct list_head offnode_tasks;
+#endif
+
 	u64 rt_avg;
 	u64 age_stamp;
 	u64 idle_stamp;
@@ -468,6 +475,15 @@ struct rq {
 	struct llist_head wake_list;
 #endif
 };
+
+static inline struct list_head *offnode_tasks(struct rq *rq)
+{
+#ifdef CONFIG_SCHED_NUMA
+	return &rq->offnode_tasks;
+#else
+	return NULL;
+#endif
+}
 
 static inline int cpu_of(struct rq *rq)
 {
@@ -529,6 +545,7 @@ static inline struct sched_domain *highest_flag_domain(int cpu, int flag)
 
 DECLARE_PER_CPU(struct sched_domain *, sd_llc);
 DECLARE_PER_CPU(int, sd_llc_id);
+DECLARE_PER_CPU(struct sched_domain *, sd_node);
 
 extern int group_balance_cpu(struct sched_group *sg);
 
