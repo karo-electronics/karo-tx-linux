@@ -391,19 +391,19 @@ static struct fb_videomode tx28_vmodes[] = {
 		/* Emerging ETV570 640 x 480 display. Syncs low active,
 		 * DE high active, 115.2 mm x 86.4 mm display area
 		 */
-		.name = "ETV570",
-		.refresh = 60,
-		.xres = 640,
-		.yres = 480,
-		.pixclock = KHZ2PICOS(25175),
-		.left_margin = 114,
-		.hsync_len = 30,
-		.right_margin = 16,
-		.upper_margin = 32,
-		.vsync_len = 3,
-		.lower_margin = 10,
-		.sync = FB_SYNC_DATA_ENABLE_HIGH_ACT,
-		.vmode = FB_VMODE_NONINTERLACED,
+		.name		= "ETV570",
+		.refresh	= 60,
+		.xres		= 640,
+		.yres		= 480,
+		.pixclock	= KHZ2PICOS(25175),
+		.left_margin	= 114,
+		.hsync_len	= 30,
+		.right_margin	= 16,
+		.upper_margin	= 32,
+		.vsync_len	= 3,
+		.lower_margin	= 10,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
 	},
 	{
 		.name		= "tx15",
@@ -435,24 +435,78 @@ static struct fb_videomode tx28_vmodes[] = {
 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
 		.vmode		= FB_VMODE_NONINTERLACED,
 	},
+ 	{
+ 		/* Emerging ET0430G0DH6 480 x 272 display. 
+ 		 * 95.04 mm x 53.856 mm display area.
+ 		 */
+ 		.name		= "ET0430",
+ 		.refresh	= 60,
+ 		.xres		= 480,
+ 		.yres		= 272,
+ 		.pixclock	= KHZ2PICOS(9000),
+ 		.left_margin	= 10,
+ 		.hsync_len 	= 41,
+ 		.right_margin 	= 16,
+ 		.upper_margin	= 2, /* not certain */
+ 		.vsync_len	= 10,
+ 		.lower_margin	= 2,
+ 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+ 		.vmode		= FB_VMODE_NONINTERLACED,
+ 	},
+ 	{
+ 		/* Emerging ETQ570G0DH6 320 x 240 display. 
+ 		 * 115.2 mm x 86.4 mm display area.
+ 		 */
+ 		.name		= "ETQ570",
+ 		.refresh	= 60,
+ 		.xres		= 320,
+ 		.yres		= 240,
+ 		.pixclock	= KHZ2PICOS(6400),
+ 		.left_margin	= 20,
+ 		.hsync_len 	= 30, /*THP*/
+ 		.right_margin 	= 38,
+ 		.upper_margin	= 23,
+ 		.vsync_len	= 3, /* TVP -> 1>x>5*/
+ 		.lower_margin	= 46, /* 46.5 */
+ 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+ 		.vmode		= FB_VMODE_NONINTERLACED,
+ 	},
 	{
-		/* Emerging ETV0430 480 x 272 display. Syncs low active,
-		 * DE high active, 115.2 mm x 86.4 mm display area
-		 */
-		.name = "ETV0430",
-		.refresh = 60,
-		.xres = 480,
-		.yres = 272,
-		.pixclock = KHZ2PICOS(8999),
-		.left_margin = 2,
-		.right_margin = 2,
-		.hsync_len = 41,
-		.upper_margin = 2,
-		.lower_margin = 2,
-		.vsync_len = 10,
-		.sync = FB_SYNC_DATA_ENABLE_HIGH_ACT,
-		.vmode = FB_VMODE_NONINTERLACED,
-	},
+ 		/* Emerging ET0500G0DH6 800 x 480 display. 
+ 		 * 109.6 mm x 66.4 mm display area.
+ 		 */
+ 		.name		= "ET0500",
+ 		.refresh	= 60,
+ 		.xres		= 800,
+ 		.yres		= 480,
+ 		.pixclock	= KHZ2PICOS(33260),
+ 		.left_margin	= 216, /* THS */
+ 		.hsync_len 	= 41, /*???*/
+ 		.right_margin 	= 16, /*???*/
+ 		.upper_margin	= 2, /*???*/
+ 		.vsync_len	= 10, /*???*/
+ 		.lower_margin	= 2, /*???*/
+ 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+ 		.vmode		= FB_VMODE_NONINTERLACED,
+ 	},
+ 	{
+ 		/* Emerging ET0700G0DH6 800 x 480 display. 
+ 		 * 152.4 mm x 91.44 mm display area.
+ 		 */
+ 		.name		= "ET0700",
+ 		.refresh	= 60,
+ 		.xres		= 800,
+ 		.yres		= 480,
+ 		.pixclock	= KHZ2PICOS(33260),
+ 		.left_margin	= 10, /*???*/
+ 		.hsync_len 	= 41, /*???*/
+ 		.right_margin 	= 16, /*???*/
+ 		.upper_margin	= 2, /*???*/
+ 		.vsync_len	= 10, /*???*/
+ 		.lower_margin	= 2, /*???*/
+ 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+ 		.vmode		= FB_VMODE_NONINTERLACED,
+ 	},
 };
 
 static unsigned long tx28_videomem = SZ_2M;
