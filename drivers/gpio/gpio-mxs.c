@@ -124,12 +124,12 @@ static int mxs_gpio_toggle_irq_level(struct mxs_gpio_port *port, int offset)
 	void __iomem *ack_addr = port->base + PINCTRL_IRQSTAT(port->id);
 
 	if (gpio_get_value(gpio)) {
-		pr_info("%s: switching IRQ%d (GPIO%d_%d) to LOW level\n",
+		pr_debug("%s: switching IRQ%d (GPIO%d_%d) to LOW level\n",
 			__func__, gpio_to_irq(gpio), port->id, offset);
 		writel(pin_mask, pin_addr + MXS_CLR);
 		invert = 0;
 	} else {
-		pr_info("%s: switching IRQ%d (GPIO%d_%d) to HIGH level\n",
+		pr_debug("%s: switching IRQ%d (GPIO%d_%d) to HIGH level\n",
 			__func__, gpio_to_irq(gpio), port->id, offset);
 		writel(pin_mask, pin_addr + MXS_SET);
 		invert = 1;
