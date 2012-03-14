@@ -185,7 +185,7 @@ static int mxs_mmc_get_cd(struct mmc_host *mmc)
 		mmc_dev(host->mmc)->platform_data;
 
 	if (pdata && gpio_is_valid(pdata->cd_gpio))
-		return gpio_get_value(pdata->cd_gpio);
+		return !gpio_get_value(pdata->cd_gpio);
 
 	return !(readl(host->base + HW_SSP_STATUS) &
 		 BM_SSP_STATUS_CARD_DETECT);
