@@ -816,12 +816,9 @@ static int __devinit mxsfb_probe(struct platform_device *pdev)
 		goto error_init_fb;
 
 	for (i = 0; i < pdata->mode_count; i++) {
-		printk(KERN_DEBUG "%s: Adding vmode[%d] '%s'\n", __func__, i,
-			pdata->mode_list[i].name);
 		fb_add_videomode(&pdata->mode_list[i], &fb_info->modelist);
 		if (mode && strlen(mode) > 0 &&
 			strcmp(mode, pdata->mode_list[i].name) == 0) {
-			printk(KERN_DEBUG "Selecting mode '%s'\n", mode);
 			modelist = list_first_entry(&fb_info->modelist,
 						struct fb_modelist, list);
 		}
@@ -829,8 +826,7 @@ static int __devinit mxsfb_probe(struct platform_device *pdev)
 	if (modelist == NULL)
 		modelist = list_first_entry(&fb_info->modelist,
 					struct fb_modelist, list);
-	printk(KERN_DEBUG "%s: Using vmode '%s'\n", __func__,
-		modelist->mode.name);
+
 	fb_videomode_to_var(&fb_info->var, &modelist->mode);
 
 	/* init the color fields */
