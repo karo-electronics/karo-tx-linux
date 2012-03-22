@@ -714,30 +714,32 @@ static int edt_ft5x06_i2c_ts_remove(struct i2c_client *client)
 	return 0;
 }
 
-static int edt_ft5x06_i2c_ts_suspend(struct i2c_client *client,
-				     pm_message_t mesg)
+static int edt_ft5x06_i2c_ts_suspend(struct device *dev)
 {
-	struct edt_ft5x06_i2c_ts_data *tsdata = dev_get_drvdata(&client->dev);
+	struct edt_ft5x06_i2c_ts_data *tsdata = dev_get_drvdata(dev);
 
-	if (device_may_wakeup(&client->dev))
+	if (device_may_wakeup(dev))
 		enable_irq_wake(tsdata->irq);
 
 	return 0;
 }
 
-static int edt_ft5x06_i2c_ts_resume(struct i2c_client *client)
+static int edt_ft5x06_i2c_ts_resume(struct device *dev)
 {
-	struct edt_ft5x06_i2c_ts_data *tsdata = dev_get_drvdata(&client->dev);
+	struct edt_ft5x06_i2c_ts_data *tsdata = dev_get_drvdata(dev);
 
-	if (device_may_wakeup(&client->dev))
+	if (device_may_wakeup(dev))
 		disable_irq_wake(tsdata->irq);
 
 	return 0;
 }
 
+static SIMPLE_DEV_PM_OPS(edt_ft5x06_i2c_ts_pm_ops,
+			 edt_ft5x06_i2c_ts_suspend, edt_ft5x06_i2c_ts_resume);
+
 static const struct i2c_device_id edt_ft5x06_i2c_ts_id[] = {
 	{ "edt-ft5x06", 0 },
-	{ }
+	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(i2c, edt_ft5x06_i2c_ts_id);
 
@@ -745,12 +747,11 @@ static struct i2c_driver edt_ft5x06_i2c_ts_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = "edt_ft5x06_i2c",
+		.pm = &edt_ft5x06_i2c_ts_pm_ops,
 	},
 	.id_table = edt_ft5x06_i2c_ts_id,
 	.probe    = edt_ft5x06_i2c_ts_probe,
 	.remove   = edt_ft5x06_i2c_ts_remove,
-	.suspend  = edt_ft5x06_i2c_ts_suspend,
-	.resume   = edt_ft5x06_i2c_ts_resume,
 };
 
 static int __init edt_ft5x06_i2c_ts_init(void)
