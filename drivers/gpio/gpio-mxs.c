@@ -114,7 +114,7 @@ static int mxs_gpio_set_irq_type(struct irq_data *d, unsigned int type)
 	return 0;
 }
 
-static int mxs_gpio_toggle_irq_level(struct mxs_gpio_port *port, int offset)
+static void mxs_gpio_toggle_irq_level(struct mxs_gpio_port *port, int offset)
 {
 	int ret;
 	int invert;
@@ -124,19 +124,13 @@ static int mxs_gpio_toggle_irq_level(struct mxs_gpio_port *port, int offset)
 	void __iomem *ack_addr = port->base + PINCTRL_IRQSTAT(port->id);
 
 	if (gpio_get_value(gpio)) {
-		pr_debug("%s: switching IRQ%d (GPIO%d_%d) to LOW level\n",
-			__func__, gpio_to_irq(gpio), port->id, offset);
 		writel(pin_mask, pin_addr + MXS_CLR);
 		invert = 0;
 	} else {
-		pr_debug("%s: switching IRQ%d (GPIO%d_%d) to HIGH level\n",
-			__func__, gpio_to_irq(gpio), port->id, offset);
 		writel(pin_mask, pin_addr + MXS_SET);
 		invert = 1;
 	}
 	writel(pin_mask, ack_addr + MXS_CLR);
-	ret = (readl(pin_addr) >> offset) & 1;
-	return ret ^ invert;
 }
 
 /* MXS has one interrupt *per* gpio port */
@@ -154,11 +148,9 @@ static void mxs_gpio_irq_handler(u32 irq, struct irq_desc *desc)
 	while (irq_stat != 0) {
 		int irqoffset = fls(irq_stat) - 1;
 
-	redo:
 		generic_handle_irq(gpio_irq_no_base + irqoffset);
 		if (test_bit(irqoffset, &port->bothedge))
-			if (mxs_gpio_toggle_irq_level(port, irqoffset))
-				goto redo;
+			mxs_gpio_toggle_irq_level(port, irqoffset);
 		irq_stat &= ~(1 << irqoffset);
 	}
 }
@@ -196,22 +188,12 @@ static void __init mxs_gpio_init_gc(struct mxs_gpio_port *port)
 
 	ct = gc->chip_types;
 	ct->chip.irq_ack = irq_gc_ack_set_bit;
-#if 0
 	ct->chip.irq_mask = irq_gc_mask_clr_bit;
 	ct->chip.irq_unmask = irq_gc_mask_set_bit;
-#else
-	ct->chip.irq_mask = irq_gc_mask_disable_reg;
-	ct->chip.irq_unmask = irq_gc_unmask_enable_reg;
-#endif
 	ct->chip.irq_set_type = mxs_gpio_set_irq_type;
 	ct->chip.irq_set_wake = mxs_gpio_set_wake_irq;
 	ct->regs.ack = PINCTRL_IRQSTAT(port->id) + MXS_CLR;
-#if 0
 	ct->regs.mask = PINCTRL_IRQEN(port->id);
-#else
-	ct->regs.enable = PINCTRL_IRQEN(port->id) + MXS_SET;
-	ct->regs.disable = PINCTRL_IRQEN(port->id) + MXS_CLR;
-#endif
 	irq_setup_generic_chip(gc, IRQ_MSK(32), 0, IRQ_NOREQUEST, 0);
 }
 
