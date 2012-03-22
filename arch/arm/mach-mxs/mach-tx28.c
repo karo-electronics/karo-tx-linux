@@ -291,14 +291,14 @@ static int __init tx28_add_spi_gpio(void)
 
 	ret = platform_device_register(&tx28_spi_gpio0_device);
 	if (ret)
-		printk(KERN_ERR "Failed to register SPI0 device: %d\n", ret);
+		pr_err("Failed to register SPI0 device: %d\n", ret);
 
 	mxs_iomux_setup_multiple_pads(tx28_spi_gpio1_pads,
 				ARRAY_SIZE(tx28_spi_gpio1_pads));
 
 	ret = platform_device_register(&tx28_spi_gpio1_device);
 	if (ret)
-		printk(KERN_ERR "Failed to register SPI1 device: %d\n", ret);
+		pr_err("Failed to register SPI1 device: %d\n", ret);
 	return ret;
 }
 
@@ -790,12 +790,12 @@ static int __init tx28_add_gpmi_nand(void)
 	ret = mxs_iomux_setup_multiple_pads(tx28_gpmi_pads,
 			ARRAY_SIZE(tx28_gpmi_pads));
 	if (ret) {
-		printk(KERN_ERR "Failed to setup GPMI pads: %d\n", ret);
+		pr_err("Failed to setup GPMI pads: %d\n", ret);
 		return ret;
 	}
 	pdev = mx28_add_gpmi_nand(&tx28_gpmi_pdata);
 	if (!pdev) {
-		printk(KERN_ERR "Failed to add GPMI device\n");
+		pr_err("Failed to add GPMI device\n");
 		return -ENOMEM;
 	}
 	return 0;
@@ -935,7 +935,7 @@ static void __init tx28_add_flexcan(unsigned int id)
 		mxs_iomux_setup_pad(MX28_PAD_LCD_D00__GPIO_1_0);
 		if (gpio_request_one(TX28_STK5_GPIO_FLEXCAN_XCVR_EN,
 					GPIOF_OUT_INIT_LOW, "FLEXCAN") != 0) {
-			printk(KERN_ERR "Failed to request GPIO for flexcan transceiver\n");
+			pr_err("Failed to request flexcan transceiver enable GPIO\n");
 			return;
 		}
 		first = 0;
