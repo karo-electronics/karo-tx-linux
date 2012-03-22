@@ -678,7 +678,7 @@ static int edt_ft5x06_i2c_ts_probe(struct i2c_client *client,
 	return 0;
 
 err_free_irq:
-	free_irq(client->irq, tsdata);
+	free_irq(tsdata->irq, tsdata);
 err_unregister_device:
 	input_unregister_device(input);
 	input = NULL;
@@ -703,7 +703,7 @@ static int edt_ft5x06_i2c_ts_remove(struct i2c_client *client)
 
 	sysfs_remove_group(&client->dev.kobj, &edt_ft5x06_i2c_attr_group);
 
-	free_irq(client->irq, tsdata);
+	free_irq(tsdata->irq, tsdata);
 	kfree(tsdata->input->name);
 	input_unregister_device(tsdata->input);
 	gpio_free(tsdata->irq_pin);
