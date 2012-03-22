@@ -193,4 +193,14 @@ config MAX1363_RING_BUFFER
 	  Say yes here to include ring buffer support in the MAX1363
 	  ADC driver.
 
+config MXS_LRADC
+	tristate "Freescale i.MX23/i.MX28 LRADC"
+	depends on ARCH_MXS
+	help
+	  Say yes here to build support for i.MX23/i.MX28 LRADC convertor
+	  built into these chips.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called mxs-lradc.
+
 endmenu
