@@ -410,8 +410,25 @@ static void __init tx28_add_regulators(void)
 
 static struct fb_videomode tx28_vmodes[] = {
 	{
+		/* Standard VGA timing */
+		.name		= "VGA",
+		.refresh	= 60,
+		.xres		= 640,
+		.yres		= 480,
+		.pixclock	= KHZ2PICOS(25175),
+		.left_margin	= 48,
+		.hsync_len	= 96,
+		.right_margin	= 16,
+		.upper_margin	= 33,
+		.vsync_len	= 2,
+		.lower_margin	= 10,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
 		/* Emerging ETV570 640 x 480 display. Syncs low active,
 		 * DE high active, 115.2 mm x 86.4 mm display area
+		 * VGA compatible timing
 		 */
 		.name		= "ETV570",
 		.refresh	= 60,
@@ -428,11 +445,101 @@ static struct fb_videomode tx28_vmodes[] = {
 		.vmode		= FB_VMODE_NONINTERLACED,
 	},
 	{
+		/* Emerging ET0350G0DH6 320 x 240 display.
+		 * 70.08 mm x 52.56 mm display area.
+		 */
+		.name		= "ET0350",
+		.refresh	= 60,
+		.xres		= 320,
+		.yres		= 240,
+		.pixclock	= KHZ2PICOS(6500),
+		.left_margin	= 68 - 34,
+		.hsync_len	= 34,
+		.right_margin	= 20,
+		.upper_margin	= 18 - 3,
+		.vsync_len	= 3,
+		.lower_margin	= 4,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
+		/* Emerging ET0430G0DH6 480 x 272 display.
+		 * 95.04 mm x 53.856 mm display area.
+		 */
+		.name		= "ET0430",
+		.refresh	= 60,
+		.xres		= 480,
+		.yres		= 272,
+		.pixclock	= KHZ2PICOS(9000),
+		.left_margin	= 2,
+		.hsync_len	= 41,
+		.right_margin	= 2,
+		.upper_margin	= 2,
+		.vsync_len	= 10,
+		.lower_margin	= 2,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
+		/* Emerging ET0500G0DH6 800 x 480 display.
+		 * 109.6 mm x 66.4 mm display area.
+		 */
+		.name		= "ET0500",
+		.refresh	= 60,
+		.xres		= 800,
+		.yres		= 480,
+		.pixclock	= KHZ2PICOS(33260),
+		.left_margin	= 216 - 128,
+		.hsync_len	= 128,
+		.right_margin	= 1056 - 800 - 216,
+		.upper_margin	= 35 - 2,
+		.vsync_len	= 2,
+		.lower_margin	= 525 - 480 - 35,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
+		/* Emerging ETQ570G0DH6 320 x 240 display.
+		 * 115.2 mm x 86.4 mm display area.
+		 */
+		.name		= "ETQ570",
+		.refresh	= 60,
+		.xres		= 320,
+		.yres		= 240,
+		.pixclock	= KHZ2PICOS(6400),
+		.left_margin	= 38,
+		.hsync_len	= 30,
+		.right_margin	= 30,
+		.upper_margin	= 16, /* 15 according to datasheet */
+		.vsync_len	= 3, /* TVP -> 1>x>5 */
+		.lower_margin	= 4, /* 4.5 according to datasheet */
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
+		/* Emerging ET0700G0DH6 800 x 480 display.
+		 * 152.4 mm x 91.44 mm display area.
+		 */
+		.name		= "ET0700",
+		.refresh	= 60,
+		.xres		= 800,
+		.yres		= 480,
+		.pixclock	= KHZ2PICOS(33260),
+		.left_margin	= 216 - 128,
+		.hsync_len	= 128,
+		.right_margin	= 1056 - 800 - 216,
+		.upper_margin	= 35 - 2,
+		.vsync_len	= 2,
+		.lower_margin	= 525 - 480 - 35,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
 		.name		= "tx15",
 		.refresh	= 55,
 		.xres		= 400,
 		.yres		= 240,
-		.pixclock	= 120000,
+		.pixclock	= KHZ2PICOS(8333),
 		.left_margin	= 80,
 		.right_margin	= 100,
 		.upper_margin	= 5,
@@ -447,7 +554,7 @@ static struct fb_videomode tx28_vmodes[] = {
 		.refresh	= 60,
 		.xres		= 800,
 		.yres		= 256,
-		.pixclock	= 50000,
+		.pixclock	= KHZ2PICOS(20000),
 		.left_margin	= 254,
 		.right_margin	= 1,
 		.upper_margin	= 58,
@@ -457,78 +564,6 @@ static struct fb_videomode tx28_vmodes[] = {
 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
 		.vmode		= FB_VMODE_NONINTERLACED,
 	},
- 	{
- 		/* Emerging ET0430G0DH6 480 x 272 display. 
- 		 * 95.04 mm x 53.856 mm display area.
- 		 */
- 		.name		= "ET0430",
- 		.refresh	= 60,
- 		.xres		= 480,
- 		.yres		= 272,
- 		.pixclock	= KHZ2PICOS(9000),
- 		.left_margin	= 10,
- 		.hsync_len 	= 41,
- 		.right_margin 	= 16,
- 		.upper_margin	= 2, /* not certain */
- 		.vsync_len	= 10,
- 		.lower_margin	= 2,
- 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
- 		.vmode		= FB_VMODE_NONINTERLACED,
- 	},
- 	{
- 		/* Emerging ETQ570G0DH6 320 x 240 display. 
- 		 * 115.2 mm x 86.4 mm display area.
- 		 */
- 		.name		= "ETQ570",
- 		.refresh	= 60,
- 		.xres		= 320,
- 		.yres		= 240,
- 		.pixclock	= KHZ2PICOS(6400),
- 		.left_margin	= 20,
- 		.hsync_len 	= 30, /*THP*/
- 		.right_margin 	= 38,
- 		.upper_margin	= 23,
- 		.vsync_len	= 3, /* TVP -> 1>x>5*/
- 		.lower_margin	= 46, /* 46.5 */
- 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
- 		.vmode		= FB_VMODE_NONINTERLACED,
- 	},
-	{
- 		/* Emerging ET0500G0DH6 800 x 480 display. 
- 		 * 109.6 mm x 66.4 mm display area.
- 		 */
- 		.name		= "ET0500",
- 		.refresh	= 60,
- 		.xres		= 800,
- 		.yres		= 480,
- 		.pixclock	= KHZ2PICOS(33260),
- 		.left_margin	= 216, /* THS */
- 		.hsync_len 	= 41, /*???*/
- 		.right_margin 	= 16, /*???*/
- 		.upper_margin	= 2, /*???*/
- 		.vsync_len	= 10, /*???*/
- 		.lower_margin	= 2, /*???*/
- 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
- 		.vmode		= FB_VMODE_NONINTERLACED,
- 	},
- 	{
- 		/* Emerging ET0700G0DH6 800 x 480 display. 
- 		 * 152.4 mm x 91.44 mm display area.
- 		 */
- 		.name		= "ET0700",
- 		.refresh	= 60,
- 		.xres		= 800,
- 		.yres		= 480,
- 		.pixclock	= KHZ2PICOS(33260),
- 		.left_margin	= 10, /*???*/
- 		.hsync_len 	= 41, /*???*/
- 		.right_margin 	= 16, /*???*/
- 		.upper_margin	= 2, /*???*/
- 		.vsync_len	= 10, /*???*/
- 		.lower_margin	= 2, /*???*/
- 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
- 		.vmode		= FB_VMODE_NONINTERLACED,
- 	},
 };
 
 static unsigned long tx28_videomem = SZ_2M;
@@ -585,21 +620,15 @@ static struct platform_device tx28_pwm_backlight = {
 	},
 };
 
-static const iomux_cfg_t tx28_fb_pads[] __initconst = {
-	MX28_PAD_PWM0__GPIO_3_16,
-	MX28_PAD_LCD_RESET__GPIO_3_30,
-	MX28_PAD_LCD_ENABLE__GPIO_1_31,
-};
-
 static const struct gpio tx28_lcd_gpios[] __initconst = {
 	{
 		.gpio = TX28_STK5_GPIO_LCD_ENABLE,
-		.flags = GPIOF_OUT_INIT_HIGH,
+		.flags = GPIOF_OUT_INIT_LOW,
 		.label = "lcd-enable",
 	},
 	{
 		.gpio = TX28_STK5_GPIO_LCD_RESET,
-		.flags = GPIOF_OUT_INIT_HIGH,
+		.flags = GPIOF_OUT_INIT_LOW,
 		.label = "lcd-reset",
 	},
 	{
@@ -659,9 +688,6 @@ static void __init tx28_init_fb(void)
 	pm_power_off = tx28_power_off;
 
 	gpio_request_array(tx28_lcd_gpios, ARRAY_SIZE(tx28_lcd_gpios));
-
-	mxs_iomux_setup_multiple_pads(tx28_fb_pads,
-				ARRAY_SIZE(tx28_fb_pads));
 
 	mx28_add_mxs_pwm(0);
 	pdev = mx28_add_mxsfb(&tx28_fb_pdata);
@@ -1056,7 +1082,7 @@ static int __init tx28_lcd_backlight_init(void)
 	 */
 #if defined(CONFIG_BACKLIGHT_PWM) || defined(CONFIG_BACKLIGHT_PWM_MODULE)
 	printk(KERN_DEBUG "%s: Setting up PWM backlight control\n", __func__);
-	mxs_iomux_setup_pad(MX28_PAD_PWM0__PWM_0 | LCD_MODE);
+	mxs_iomux_setup_pad(MX28_PAD_PWM0__PWM_0 | TX28_LCD_PAD_CTRL);
 #else
 	printk(KERN_DEBUG "%s: Switching LCD backlight on\n", __func__);
 	gpio_free(TX28_STK5_GPIO_BACKLIGHT);
