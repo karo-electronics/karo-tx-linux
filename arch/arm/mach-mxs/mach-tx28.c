@@ -718,12 +718,6 @@ static const struct mxs_mmc_platform_data tx28_mmc0_pdata __initconst = {
 	.flags = SLOTF_4_BIT_CAPABLE,
 };
 
-static const struct mxs_mmc_platform_data tx28_mmc2_pdata __initconst = {
-	.wp_gpio = -EINVAL,
-	.cd_gpio = -EINVAL,
-	.flags = SLOTF_4_BIT_CAPABLE,
-};
-
 static struct mtd_partition tx28_mtd_parts[] = {
 /*
  * This partition is written with SW ECC and thus not accessible
@@ -1028,7 +1022,6 @@ static void __init tx28_stk5v3_init(void)
 {
 	tx28_board_init();
 	gpio_led_register_device(0, &tx28_stk5v3_led_data);
-	mx28_add_mxs_mmc(2, &tx28_mmc2_pdata);
 
 	if (tx28_otg_mode != TX28_OTG_MODE_HOST)
 		mx28_add_flexcan(0, NULL);
