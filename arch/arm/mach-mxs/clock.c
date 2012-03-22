@@ -56,22 +56,59 @@ static void __clk_disable(struct clk *clk)
 	if (!(--clk->usecount)) {
 		if (clk->disable)
 			clk->disable(clk);
-		__clk_disable(clk->parent);
 	}
 }
 
 static int __clk_enable(struct clk *clk)
 {
-	if (clk == NULL || IS_ERR(clk))
+	if (clk == NULL)
+		return 0;
+
+	if (IS_ERR(clk))
 		return -EINVAL;
 
-	if (clk->usecount++ == 0) {
-		__clk_enable(clk->parent);
-
-		if (clk->enable)
-			clk->enable(clk);
+	if (clk->usecount == 0) {
+		if (clk->enable) {
+			int ret = clk->enable(clk);
+			if (ret)
+				return ret;
+		}
 	}
+	clk->usecount++;
+
 	return 0;
+}
+
+static void __clk_unprepare(struct clk *clk)
+{
+	if (clk == NULL || IS_ERR(clk))
+		return;
+
+	if (clk->parent)
+		__clk_unprepare(clk->parent);
+
+	__clk_disable(clk);
+}
+
+static int __clk_prepare(struct clk *clk)
+{
+	int ret;
+
+	if (clk == NULL)
+		return 0;
+
+	if (IS_ERR(clk))
+		return -EINVAL;
+
+	ret = __clk_prepare(clk->parent);
+	if (ret)
+		return ret;
+
+	ret = __clk_enable(clk);
+	if (ret)
+		__clk_unprepare(clk->parent);
+
+	return ret;
 }
 
 /*
@@ -86,11 +123,18 @@ int clk_prepare(struct clk *clk)
 {
 	int ret = 0;
 
-	if (clk == NULL || IS_ERR(clk))
+	if (clk == NULL)
+		return 0;
+
+	if (IS_ERR(clk))
 		return -EINVAL;
 
 	mutex_lock(&clocks_mutex);
-	ret = __clk_enable(clk);
+	if (clk->prepared++ == 0) {
+		ret = __clk_prepare(clk);
+		if (ret)
+			clk->prepared--;
+	}
 	mutex_unlock(&clocks_mutex);
 
 	return ret;
@@ -103,20 +147,52 @@ void clk_unprepare(struct clk *clk)
 		return;
 
 	mutex_lock(&clocks_mutex);
-	__clk_disable(clk);
+	if (WARN_ON(!clk->prepared && !(clk->flags & CLK_WARNED))) {
+		pr_err("clk_unprepare() called without clk_prepare()\n");
+		clk->flags |= CLK_WARNED;
+	}
+	if (WARN_ON(clk->prepared == 1 && clk->usecount > 1)) {
+		pr_err("unbalanced calls (%d) to clk_enable()/clk_disable() before clk_unprepare()\n",
+			clk->usecount);
+		clk->flags |= CLK_WARNED;
+	}
+	if (!(--clk->prepared))
+		__clk_unprepare(clk);
 	mutex_unlock(&clocks_mutex);
 }
 EXPORT_SYMBOL(clk_unprepare);
 
 int clk_enable(struct clk *clk)
 {
+	if (clk == NULL)
+		return 0;
+
+	if (IS_ERR(clk))
+		return -EINVAL;
+
+	if (WARN_ON(!clk->prepared && !(clk->flags & CLK_WARNED))) {
+		pr_err("clk_enable() called without clk_prepare()\n");
+		clk->flags |= CLK_WARNED;
+	}
+	clk->usecount++;
 	return 0;
 }
 EXPORT_SYMBOL(clk_enable);
 
 void clk_disable(struct clk *clk)
 {
-	/* nothing to do */
+	if (clk == NULL || IS_ERR(clk))
+		return;
+
+	if (WARN_ON(!clk->prepared && !(clk->flags & CLK_WARNED))) {
+		pr_err("clk_disable() called without clk_prepare()\n");
+		clk->flags |= CLK_WARNED;
+	}
+	if (WARN_ON(clk->usecount <= 1 && !(clk->flags & CLK_WARNED))) {
+		pr_err("unbalanced clk_disable()\n");
+		clk->flags |= CLK_WARNED;
+	}
+	clk->usecount--;
 }
 EXPORT_SYMBOL(clk_disable);
 
