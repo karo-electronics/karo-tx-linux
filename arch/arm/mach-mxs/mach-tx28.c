@@ -323,10 +323,7 @@ static void tx28_stk5_tsc2007_exit(void)
 
 static int tx28_stk5_get_pendown(void)
 {
-	int val = gpio_get_value(TSC2007_PEN_GPIO);
-
-	pr_info("%s: TS pen is %s\n", __func__, val ? "up" : "down");
-	return !val;
+	return !gpio_get_value(TSC2007_PEN_GPIO);
 }
 
 static struct tsc2007_platform_data tx28_stk5_tsc2007_pdata = {
@@ -866,20 +863,6 @@ static void __init tx28_add_usb(void)
 {
 	int ret;
 
-	printk(KERN_DEBUG "tx28_otg_mode is: ");
-	switch (tx28_otg_mode) {
-	case TX28_OTG_MODE_HOST:
-		printk(KERN_CONT "HOST\n");
-		break;
-
-	case TX28_OTG_MODE_DEVICE:
-		printk(KERN_CONT "DEVICE\n");
-		break;
-
-	default:
-		printk(KERN_CONT "unknown\n");
-	}
-
 	if (tx28_otg_mode == TX28_OTG_MODE_DEVICE) {
 		ret = tx28_udc_init();
 		if (ret == 0) {
@@ -909,15 +892,11 @@ static void tx28_flexcan_xcvr_enable(int id, int enable)
 	static int tx28_flexcan_xcvr_on;
 
 	if (enable) {
-		if (tx28_flexcan_xcvr_on++ == 0) {
-			printk(KERN_DEBUG "Enabling flexcan transceiver\n");
+		if (tx28_flexcan_xcvr_on++ == 0)
 			gpio_set_value(TX28_STK5_GPIO_FLEXCAN_XCVR_EN, 0);
-		}
 	} else {
-		if (--tx28_flexcan_xcvr_on == 0) {
-			printk(KERN_DEBUG "Disabling flexcan transceiver\n");
+		if (--tx28_flexcan_xcvr_on == 0)
 			gpio_set_value(TX28_STK5_GPIO_FLEXCAN_XCVR_EN, 1);
-		}
 		WARN_ON(tx28_flexcan_xcvr_on < 0);
 	}
 }
@@ -1091,10 +1070,8 @@ static int __init tx28_lcd_backlight_init(void)
 	 * the pwm.
 	 */
 #if defined(CONFIG_BACKLIGHT_PWM) || defined(CONFIG_BACKLIGHT_PWM_MODULE)
-	printk(KERN_DEBUG "%s: Setting up PWM backlight control\n", __func__);
 	mxs_iomux_setup_pad(MX28_PAD_PWM0__PWM_0 | TX28_LCD_PAD_CTRL);
 #else
-	printk(KERN_DEBUG "%s: Switching LCD backlight on\n", __func__);
 	gpio_free(TX28_STK5_GPIO_BACKLIGHT);
 	ret = gpio_request_one(TX28_STK5_GPIO_BACKLIGHT, GPIOF_OUT_INIT_LOW,
 			"LCD Backlight");
