@@ -857,7 +857,7 @@ static int __init tx28_udc_init(void)
 	if (IS_ERR(clk))
 		return PTR_ERR(clk);
 
-	ret = clk_enable(clk);
+	ret = clk_prepare_enable(clk);
 	clk_put(clk);
 	return ret;
 }
@@ -871,9 +871,11 @@ static void __init tx28_add_usb(void)
 	case TX28_OTG_MODE_HOST:
 		printk(KERN_CONT "HOST\n");
 		break;
+
 	case TX28_OTG_MODE_DEVICE:
 		printk(KERN_CONT "DEVICE\n");
 		break;
+
 	default:
 		printk(KERN_CONT "unknown\n");
 	}
@@ -1030,11 +1032,15 @@ static void __init tx28_stk5v3_init(void)
 
 static void __init tx28_stk5v4_init(void)
 {
+	if (tx28_otg_mode == TX28_OTG_MODE_HOST) {
+		pr_warn("USBOTG port cannot be used for HOST function on STK5 v4\n");
+		tx28_otg_mode = TX28_OTG_MODE_NONE;
+	}
+
 	tx28_board_init();
 	tx28_add_fec1();
 
-	if (tx28_otg_mode != TX28_OTG_MODE_HOST)
-		tx28_add_flexcan(0);
+	tx28_add_flexcan(0);
 	tx28_add_flexcan(1);
 }
 
