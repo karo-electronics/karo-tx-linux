@@ -486,6 +486,7 @@ void iio_device_register_trigger_consumer(struct iio_dev *indio_dev)
 	indio_dev->groups[indio_dev->groupcounter++] =
 		&iio_trigger_consumer_attr_group;
 }
+EXPORT_SYMBOL(iio_device_register_trigger_consumer);
 
 void iio_device_unregister_trigger_consumer(struct iio_dev *indio_dev)
 {
@@ -493,6 +494,7 @@ void iio_device_unregister_trigger_consumer(struct iio_dev *indio_dev)
 	if (indio_dev->trig)
 		iio_put_trigger(indio_dev->trig);
 }
+EXPORT_SYMBOL(iio_device_unregister_trigger_consumer);
 
 int iio_triggered_buffer_postenable(struct iio_dev *indio_dev)
 {
