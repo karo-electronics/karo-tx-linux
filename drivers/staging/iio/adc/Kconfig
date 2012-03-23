@@ -206,10 +206,21 @@ config MXS_LRADC
 	tristate "Freescale i.MX23/i.MX28 LRADC"
 	depends on ARCH_MXS
 	help
-	  Say yes here to build support for i.MX23/i.MX28 LRADC convertor
+	  Say yes here to build support for i.MX23/i.MX28 LRADC converter
 	  built into these chips.
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called mxs-lradc.
 
+config MXS_LRADC_TS
+	tristate "Freescale i.MX23/i.MX28 LRADC touchcontroller driver"
+	depends on MXS_LRADC
+	select IIO_TRIGGER
+	help
+	  Say yes here to build the touchcontroller driver for the
+	  i.MX23/i.MX28 LRADC converter
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called mxs-lradc-ts.
+	
 endmenu
