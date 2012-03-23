@@ -972,6 +972,37 @@ static int __init tx28_saif_init(void)
 	return 0;
 }
 
+/* LRADC & Touchscreen */
+#define	RES_IRQ(id, res)	{ .name = id, .start = (res), .end = (res), .flags = IORESOURCE_IRQ }
+
+static struct resource mxs_lradc_rsrc[] = {
+	{
+		.start	= 0x80050000,
+		.end	= 0x80050000 + SZ_8K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	RES_IRQ("LRADC CH0", MX28_INT_LRADC_CH0),
+	RES_IRQ("LRADC CH1", MX28_INT_LRADC_CH1),
+	RES_IRQ("LRADC CH2", MX28_INT_LRADC_CH2),
+	RES_IRQ("LRADC CH3", MX28_INT_LRADC_CH3),
+	RES_IRQ("LRADC CH4", MX28_INT_LRADC_CH4),
+	RES_IRQ("LRADC CH5", MX28_INT_LRADC_CH5),
+	RES_IRQ("LRADC CH6", MX28_INT_LRADC_CH6),
+	RES_IRQ("LRADC CH7", MX28_INT_LRADC_CH7),
+};
+
+static struct platform_device mxs_lradc = {
+	.name		= "mxs-lradc",
+	.id		= -1,
+	.resource	= mxs_lradc_rsrc,
+	.num_resources	= ARRAY_SIZE(mxs_lradc_rsrc),
+};
+
+static struct platform_device mxs_lradc_ts = {
+	.name		= "mxs-lradc-ts",
+	.id		= -1,
+};
+
 static void __init tx28_board_init(void)
 {
 	mxs_iomux_setup_multiple_pads(tx28_stk5v3_pads,
@@ -997,6 +1028,9 @@ static void __init tx28_board_init(void)
 	tx28_add_gpmi_nand();
 
 	tx28_saif_init();
+
+	platform_device_register(&mxs_lradc);
+	platform_device_register(&mxs_lradc_ts);
 }
 
 static void __init tx28_stk5v3_init(void)
