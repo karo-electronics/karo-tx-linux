@@ -116,21 +116,16 @@ static int mxs_gpio_set_irq_type(struct irq_data *d, unsigned int type)
 
 static void mxs_gpio_toggle_irq_level(struct mxs_gpio_port *port, int offset)
 {
-	int ret;
-	int invert;
 	int gpio = port->id * 32 + offset;
 	u32 pin_mask = 1 << offset;
 	void __iomem *pin_addr = port->base + PINCTRL_IRQPOL(port->id);
-	void __iomem *ack_addr = port->base + PINCTRL_IRQSTAT(port->id);
+//	void __iomem *ack_addr = port->base + PINCTRL_IRQSTAT(port->id);
 
-	if (gpio_get_value(gpio)) {
+	if (gpio_get_value(gpio))
 		writel(pin_mask, pin_addr + MXS_CLR);
-		invert = 0;
-	} else {
+	else
 		writel(pin_mask, pin_addr + MXS_SET);
-		invert = 1;
-	}
-	writel(pin_mask, ack_addr + MXS_CLR);
+//	writel(pin_mask, ack_addr + MXS_CLR);
 }
 
 /* MXS has one interrupt *per* gpio port */
