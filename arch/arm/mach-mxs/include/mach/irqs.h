@@ -25,7 +25,7 @@
  * within sensible limits.
  */
 #define MXS_BOARD_IRQ_START	(MXS_GPIO_IRQ_START + MXS_GPIO_IRQS)
-#define MXS_BOARD_IRQS		16
+#define MXS_BOARD_IRQS		(2 * 16)
 
 #define NR_IRQS			(MXS_BOARD_IRQ_START + MXS_BOARD_IRQS)
 
