@@ -1,6 +1,7 @@
 #
 # Makefile for industrial I/O ADC drivers
 #
+ccflags-y += -DDEBUG
 
 max1363-y := max1363_core.o
 max1363-y += max1363_ring.o
