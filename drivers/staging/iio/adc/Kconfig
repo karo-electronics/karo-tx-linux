@@ -214,7 +214,7 @@ config MXS_LRADC
 
 config MXS_LRADC_TS
 	tristate "Freescale i.MX23/i.MX28 LRADC touchcontroller driver"
-	depends on MXS_LRADC
+	depends on MXS_LRADC && IIO_TRIGGER
 	help
 	  Say yes here to build the touchcontroller driver for the
 	  i.MX23/i.MX28 LRADC converter
