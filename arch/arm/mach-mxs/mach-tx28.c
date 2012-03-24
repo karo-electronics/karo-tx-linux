@@ -973,7 +973,12 @@ static int __init tx28_saif_init(void)
 }
 
 /* LRADC & Touchscreen */
-#define	RES_IRQ(id, res)	{ .name = id, .start = (res), .end = (res), .flags = IORESOURCE_IRQ }
+#define	RES_IRQ(id, res) {		\
+	.name = id,			\
+	.start = (res),			\
+	.end = (res),			\
+	.flags = IORESOURCE_IRQ,	\
+}
 
 static struct resource mxs_lradc_rsrc[] = {
 	{
@@ -990,6 +995,8 @@ static struct resource mxs_lradc_rsrc[] = {
 	RES_IRQ("LRADC CH6", MX28_INT_LRADC_CH6),
 	RES_IRQ("LRADC CH7", MX28_INT_LRADC_CH7),
 	RES_IRQ("LRADC TOUCH", MX28_INT_LRADC_TOUCH),
+	RES_IRQ("LRADC THRESH0", MX28_INT_LRADC_THRESH0),
+	RES_IRQ("LRADC THRESH1", MX28_INT_LRADC_THRESH1),
 	RES_IRQ("LRADC BUTTON0", MX28_INT_LRADC_BUTTON0),
 	RES_IRQ("LRADC BUTTON1", MX28_INT_LRADC_BUTTON1),
 };
