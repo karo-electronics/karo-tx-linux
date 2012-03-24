@@ -23,10 +23,14 @@
 #include <mach/common.h>
 
 #include "../iio.h"
+#include "../machine.h"
+#include "../driver.h"
+#include "../trigger.h"
 #include "../sysfs.h"
 
 #define NUM_ADC_CHANNELS	8
 #define NUM_DELAY_CHANNELS	4
+#define NUM_TRIGGERS		3
 
 #define	MAPPING_USED		(1 << 7)
 #define	MAPPING_XXX		(1 << 6)
@@ -44,6 +48,7 @@ struct mxs_lradc_mapped_channel {
 
 struct mxs_lradc_drv_data {
 	struct iio_dev			*iio[NUM_DELAY_CHANNELS];
+	struct iio_trigger		*trig[NUM_TRIGGERS];
 	void __iomem			*mmio_base;
 
 	spinlock_t			lock;
@@ -52,6 +57,8 @@ struct mxs_lradc_drv_data {
 
 	struct mxs_lradc_mapped_channel	ch[NUM_ADC_CHANNELS];
 	uint8_t				ch_oversample[2 * NUM_ADC_CHANNELS];
+
+	uint32_t			status_mask;
 };
 
 struct mxs_lradc_data {
@@ -97,6 +104,14 @@ struct mxs_lradc_data {
 #define	LRADC_CTRL4				0x140
 #define	LRADC_CTRL4_LRADCSELECT_MASK(n)		(0xf << ((n) * 4))
 #define	LRADC_CTRL4_LRADCSELECT_OFFSET(n)	((n) * 4)
+
+#define	LRADC_STATUS				0x40
+#define	LRADC_STATUS_TOUCH_DETECT_OFFSET	0
+#define	LRADC_STATUS_TOUCH_DETECT_MASK		(1 << 0)
+#define	LRADC_STATUS_BUTTON0_DETECT_OFFSET	1
+#define	LRADC_STATUS_BUTTON0_DETECT_MASK	(1 << 1)
+#define	LRADC_STATUS_BUTTON1_DETECT_OFFSET	2
+#define	LRADC_STATUS_BUTTON1_DETECT_MASK	(1 << 2)
 
 /*
  * Global IIO attributes
@@ -367,6 +382,24 @@ static int mxs_lradc_write_raw(struct iio_dev *iio_dev,
 	return -EINVAL;
 }
 
+static irqreturn_t mxs_lradc_handle_trigger(int irq, void *data)
+{
+	struct iio_trigger *trig = data;
+	struct mxs_lradc_drv_data *drv_data = trig->private_data;
+	uint32_t reg = readl(drv_data->mmio_base + LRADC_STATUS);
+
+	reg ^= drv_data->status_mask;
+	if (reg & LRADC_STATUS_TOUCH_DETECT_MASK)
+		iio_trigger_poll(data, 0);
+	if (reg & LRADC_STATUS_BUTTON0_DETECT_MASK)
+		iio_trigger_poll(data, 1);
+	if (reg & LRADC_STATUS_TOUCH_DETECT_MASK)
+		iio_trigger_poll(data, 2);
+
+	drv_data->status_mask ^= reg;
+	return IRQ_HANDLED;
+}
+
 static irqreturn_t mxs_lradc_handle_irq(int irq, void *data)
 {
 	struct mxs_lradc_drv_data *drv_data = data;
@@ -390,80 +423,95 @@ static const struct iio_info mxs_lradc_iio_info = {
 	.attrs			= &mxs_lradc_attr_group,
 };
 
-static const struct iio_chan_spec mxs_lradc_chan_spec[] = {
-	[0] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 0, 0,
+#define LRADC_IIO_CHAN(_type, _name, _ds_name,		\
+		_chan, _inf_mask, _stype) {		\
+		.type = _type,				\
+		.modified = IIO_NO_MOD,			\
+		.indexed = 1,				\
+		.processed_val = IIO_RAW,		\
+		.extend_name = _name,			\
+		.datasheet_name = _ds_name,		\
+		.channel = _chan,			\
+		.info_mask = _inf_mask,			\
+		.address = _chan,			\
+		.scan_index = _chan,			\
+		.scan_type = _stype,			\
+		}
+
+static struct iio_chan_spec mxs_lradc_chan_spec[] = {
+	[0] = LRADC_IIO_CHAN(IIO_VOLTAGE, NULL, NULL, 0,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		0, 0, IIO_ST('u', 18, 32, 0), 0),
-	[1] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 1, 0,
+		IIO_ST('u', 18, 32, 0)),
+	[1] = LRADC_IIO_CHAN(IIO_VOLTAGE, NULL, NULL, 1,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		1, 1, IIO_ST('u', 18, 32, 0), 0),
-	[2] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 2, 0,
+		IIO_ST('u', 18, 32, 0)),
+	[2] = LRADC_IIO_CHAN(IIO_VOLTAGE, "xp", "TS X+", 2,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		2, 2, IIO_ST('u', 18, 32, 0), 0),
-	[3] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 3, 0,
+		IIO_ST('u', 18, 32, 0)),
+	[3] = LRADC_IIO_CHAN(IIO_VOLTAGE, "xm", "TS X-", 3,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		3, 3, IIO_ST('u', 18, 32, 0), 0),
-	[4] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 4, 0,
+		IIO_ST('u', 18, 32, 0)),
+	[4] = LRADC_IIO_CHAN(IIO_VOLTAGE, "yp", "TS Y+", 4,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		4, 4, IIO_ST('u', 18, 32, 0), 0),
-	[5] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 5, 0,
+		IIO_ST('u', 18, 32, 0)),
+	[5] = LRADC_IIO_CHAN(IIO_VOLTAGE, "ym", "TS Y-", 5,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		5, 5, IIO_ST('u', 18, 32, 0), 0),
-	[6] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 6, 0,
+		IIO_ST('u', 18, 32, 0)),
+	[6] = LRADC_IIO_CHAN(IIO_VOLTAGE, "wiper", "TS WIPER", 6,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		6, 6, IIO_ST('u', 18, 32, 0), 0),
+		IIO_ST('u', 18, 32, 0)),
 	/* VBATT */
-	[7] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 7, 0,
+	[7] = LRADC_IIO_CHAN(IIO_VOLTAGE, "vbatt", "VBatt", 7,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		7, 7, IIO_ST('u', 18, 32, 0), 0),
+		IIO_ST('u', 18, 32, 0)),
 	/* Temp sense 0 */
-	[8] = IIO_CHAN(IIO_TEMP, IIO_NO_MOD, 1, IIO_RAW, NULL, 8, 0,
+	[8] = LRADC_IIO_CHAN(IIO_TEMP, "temp0", "Temp Sense 0", 8,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		8, 8, IIO_ST('u', 18, 32, 0), 0),
+		IIO_ST('u', 18, 32, 0)),
 	/* Temp sense 1 */
-	[9] = IIO_CHAN(IIO_TEMP, IIO_NO_MOD, 1, IIO_RAW, NULL, 9, 0,
+	[9] = LRADC_IIO_CHAN(IIO_TEMP, "temp1", "Temp Sense 1", 9,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		9, 9, IIO_ST('u', 18, 32, 0), 0),
+		IIO_ST('u', 18, 32, 0)),
 	/* VDDIO */
-	[10] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 10, 0,
+	[10] = LRADC_IIO_CHAN(IIO_VOLTAGE, "vddio", "VDDIO", 10,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		10, 10, IIO_ST('u', 18, 32, 0), 0),
+		IIO_ST('u', 18, 32, 0)),
 	/* VTH */
-	[11] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 11, 0,
+	[11] = LRADC_IIO_CHAN(IIO_VOLTAGE, "vth", "VTH", 11,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		11, 11, IIO_ST('u', 18, 32, 0), 0),
+		IIO_ST('u', 18, 32, 0)),
 	/* VDDA */
-	[12] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 12, 0,
+	[12] = LRADC_IIO_CHAN(IIO_VOLTAGE, "vdda", "VDDA", 12,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		12, 12, IIO_ST('u', 18, 32, 0), 0),
+		IIO_ST('u', 18, 32, 0)),
 	/* VDDD */
-	[13] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 13, 0,
+	[13] = LRADC_IIO_CHAN(IIO_VOLTAGE, "vddd", "VDDD", 13,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		13, 13, IIO_ST('u', 18, 32, 0), 0),
+		IIO_ST('u', 18, 32, 0)),
 	/* VBG */
-	[14] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 14, 0,
+	[14] = LRADC_IIO_CHAN(IIO_VOLTAGE, "vbg", "VBG", 14,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		14, 14, IIO_ST('u', 18, 32, 0), 0),
+		IIO_ST('u', 18, 32, 0)),
 	/* VDD5V */
-	[15] = IIO_CHAN(IIO_VOLTAGE, IIO_NO_MOD, 1, IIO_RAW, NULL, 15, 0,
+	[15] = LRADC_IIO_CHAN(IIO_VOLTAGE, "vdd5v", "VDD5V", 15,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
-		15, 15, IIO_ST('u', 18, 32, 0), 0),
+		IIO_ST('u', 18, 32, 1)),
 };
 
 static void mxs_lradc_config(struct mxs_lradc_drv_data *drv_data)
@@ -500,6 +548,34 @@ static void mxs_lradc_config(struct mxs_lradc_drv_data *drv_data)
 
 }
 */
+
+/*
+struct iio_map {
+        const char *adc_channel_label; // datasheet_name
+        const char *consumer_dev_name;
+        const char *consumer_channel;
+*/
+
+static struct iio_map mxs_lradc_chan_map[] = {
+	{ "TS X+", "mxs-lradc-ts", "in_voltage2_xp_raw", },
+	{ "TS Y+", "mxs-lradc-ts", "in_voltage3_yp_raw", },
+	{ "TS X-", "mxs-lradc-ts", "in_voltage4_xm_raw", },
+	{ "TS Y-", "mxs-lradc-ts", "in_voltage5_ym_raw", },
+	{ "TS WIPER", "mxs-lradc-ts", "in_voltage6_wiper_raw", },
+	{ /* end of list sentinel */ }
+};
+
+static int mxs_lradc_set_trigger_state(struct iio_trigger *trig, bool state)
+{
+
+	return 0;
+}
+
+static const struct iio_trigger_ops mxs_lradc_trigger_ops = {
+	.owner = THIS_MODULE,
+	.set_trigger_state = mxs_lradc_set_trigger_state,
+};
+
 static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 {
 	struct mxs_lradc_data *data[NUM_DELAY_CHANNELS];
@@ -554,6 +630,11 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 		spin_lock_init(&data[i]->lock);
 
 		drv_data->iio[i] = iio;
+
+		ret = iio_map_array_register(drv_data->iio[i],
+					mxs_lradc_chan_map);
+		if (ret)
+			goto err_free_dev;
 	}
 
 	for (i = 0; i < NUM_ADC_CHANNELS; i++)
@@ -568,7 +649,7 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 	if (r == NULL) {
 		dev_err(&pdev->dev, "No I/O memory resource defined\n");
 		ret = -ENODEV;
-		goto err1;
+		goto err2;
 	}
 
 	r = devm_request_mem_region(&pdev->dev, r->start,
@@ -576,7 +657,7 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 	if (r == NULL) {
 		dev_err(&pdev->dev, "Failed to request I/O memory\n");
 		ret = -EBUSY;
-		goto err1;
+		goto err2;
 	}
 
 	drv_data->mmio_base = devm_ioremap(&pdev->dev, r->start,
@@ -584,7 +665,7 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 	if (!drv_data->mmio_base) {
 		dev_err(&pdev->dev, "Failed to map I/O memory\n");
 		ret = -ENOMEM;
-		goto err1;
+		goto err2;
 	}
 
 	/*
@@ -596,7 +677,7 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "IRQ resource[%d] not defined\n",
 				irq);
 			ret = -ENODEV;
-			goto err1;
+			goto err2;
 		}
 
 		ret = request_irq(r->start, mxs_lradc_handle_irq, 0,
@@ -604,7 +685,7 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 		if (ret) {
 			dev_err(&pdev->dev, "request_irq %i failed: %d\n",
 				irq, ret);
-			goto err1;
+			goto err2;
 		}
 	}
 
@@ -616,8 +697,48 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 		if (ret) {
 			dev_err(&pdev->dev, "Failed to register IIO device\n");
 			ret = -EBUSY;
-			goto err2;
+			goto err3;
 		}
+	}
+
+	/*
+	 * Register triggers
+	 */
+	for (i = 0; i < NUM_TRIGGERS; i++) {
+		struct iio_trigger *trig;
+
+		irq = platform_get_irq(pdev, NUM_ADC_CHANNELS + i);
+		if (irq <= 0) {
+			dev_err(&pdev->dev, "IRQ resource[%d] not defined\n",
+				irq);
+			ret = irq ?: -ENODEV;
+			goto err4;
+		}
+
+		trig = iio_allocate_trigger("mxs_lradc-trig%d", i);
+		if (trig == NULL) {
+			ret = -ENOMEM;
+			goto err4;
+		}
+
+		drv_data->trig[i] = trig;
+
+		trig->dev.parent = &pdev->dev;
+		trig->ops = &mxs_lradc_trigger_ops;
+		trig->private_data = drv_data;
+
+		ret = request_irq(irq, mxs_lradc_handle_trigger, 0,
+				trig->name, trig);
+		if (ret) {
+			dev_err(&pdev->dev, "request_irq %i failed: %d\n",
+				irq, ret);
+			ret = -EBUSY;
+			goto err_free_trigger;
+		}
+
+		ret = iio_trigger_register(trig);
+		if (ret)
+			goto err_free_irq;
 	}
 
 	devres_remove_group(&pdev->dev, mxs_lradc_probe);
@@ -626,13 +747,32 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 
 	return 0;
 
-err2:
+err4:
+	while (--i >= 0) {
+		iio_trigger_unregister(drv_data->trig[i]);
+		irq = platform_get_irq(pdev, NUM_ADC_CHANNELS + i);
+
+	err_free_irq:
+		free_irq(irq, drv_data->trig[i]);
+
+	err_free_trigger:
+		iio_free_trigger(drv_data->trig[i]);
+	}
+
+	i = NUM_ADC_CHANNELS;
+err3:
 	while (--i >= 0)
+	err_free_dev:
 		iio_device_unregister(drv_data->iio[i]);
+
+err2:
+	i = NUM_DELAY_CHANNELS;
 err1:
-	for (i = 0; i < NUM_DELAY_CHANNELS; i++)
-		if (drv_data->iio[i])
-			iio_free_device(drv_data->iio[i]);
+	while (--i >= 0) {
+		dev_err(&pdev->dev, "Unregistering iio_map[%d]\n", i);
+		iio_map_array_unregister(drv_data->iio[i], mxs_lradc_chan_map);
+		iio_free_device(drv_data->iio[i]);
+	}
 err0:
 	devres_release_group(&pdev->dev, mxs_lradc_probe);
 	return ret;
@@ -641,21 +781,40 @@ err0:
 static int __devexit mxs_lradc_remove(struct platform_device *pdev)
 {
 	struct mxs_lradc_drv_data *drv_data = dev_get_drvdata(&pdev->dev);
-	struct resource *r;
-	int i, irq;
+	int i;
 
 	for (i = 0; i < NUM_DELAY_CHANNELS; i++) {
+		dev_dbg(&pdev->dev, "%s: Unregistering iio_dev %p\n", __func__,
+			drv_data->iio[i]);
+		iio_map_array_unregister(drv_data->iio[i], mxs_lradc_chan_map);
 		iio_device_unregister(drv_data->iio[i]);
-
-	for (i = 0; i < NUM_ADC_CHANNELS; i++) {
-		r = platform_get_resource(pdev, IORESOURCE_IRQ, irq);
-		if (r != NULL)
-			free_irq(r->start, drv_data);
 	}
 
+	for (i = 0; i < NUM_ADC_CHANNELS; i++) {
+		int irq = platform_get_irq(pdev, i);
 
-	for (i = 0; i < NUM_DELAY_CHANNELS; i++)
+		if (irq > 0) {
+			dev_dbg(&pdev->dev, "%s: Freeing IRQ%u\n", __func__,
+				irq);
+			free_irq(irq, drv_data);
+		}
+	}
+	for (i = 0; i < NUM_TRIGGERS; i++) {
+		int irq = platform_get_irq(pdev, i + NUM_ADC_CHANNELS);
+
+		if (irq > 0) {
+			dev_dbg(&pdev->dev, "%s: Freeing IRQ%u\n", __func__,
+				irq);
+			free_irq(irq, drv_data->trig[i]);
+		}
+		iio_free_trigger(drv_data->trig[i]);
+	}
+
+	for (i = 0; i < NUM_DELAY_CHANNELS; i++) {
+		dev_dbg(&pdev->dev, "%s: Freeing iio_dev %p\n", __func__,
+			drv_data->iio[i]);
 		iio_free_device(drv_data->iio[i]);
+	}
 	return 0;
 }
 
