@@ -13,7 +13,6 @@
  * GNU General Public License for more details.
  *
  */
-#define DEBUG
 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -25,6 +24,7 @@
 #include "../iio.h"
 #include "../driver.h"
 #include "../consumer.h"
+#include "../trigger.h"
 #include "../iio_core_trigger.h"
 
 #define MAX_18BIT		((1 << 18) - 1)
@@ -55,12 +55,18 @@ static irqreturn_t mxs_lradc_ts_pendown(int irq, void *data)
 static int mxs_lradc_ts_open(struct input_dev *input_dev)
 {
 	struct mxs_lradc_ts *ts = input_get_drvdata(input_dev);
+
+	if (!try_module_get(ts->iio_dev->chrdev.owner))
+		return -EAGAIN;
+
 	return 0;
 }
 
 static void mxs_lradc_ts_close(struct input_dev *input_dev)
 {
 	struct mxs_lradc_ts *ts = input_get_drvdata(input_dev);
+
+	module_put(ts->iio_dev->chrdev.owner);
 }
 
 static int __devinit mxs_lradc_ts_of_init(struct platform_device *pdev,
@@ -70,12 +76,31 @@ static int __devinit mxs_lradc_ts_of_init(struct platform_device *pdev,
 	return 0;
 }
 
+static struct iio_dev *mxs_lradc_ts_find_trigger(struct iio_channel *chan,
+						const char *name)
+{
+	for (; chan->indio_dev != NULL; chan++) {
+		if (chan->indio_dev->trig == NULL) {
+			dev_dbg(&chan->indio_dev->dev,
+				"%s: device %s has no trigger\n", __func__,
+				chan->indio_dev->name);
+			continue;
+		}
+		if (strcmp(chan->indio_dev->trig->name, name) == 0) {
+			dev_dbg(&chan->indio_dev->dev,
+				"%s: found trigger %s on device %s\n", __func__,
+				name, chan->indio_dev->name);
+			return chan->indio_dev;
+		}
+	}
+	return NULL;
+}
+
 static int __devinit mxs_lradc_ts_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct mxs_lradc_ts_plat_data *pdata = pdev->dev.platform_data;
 	struct mxs_lradc_ts *ts;
-	int i;
 
 	ts = devm_kzalloc(&pdev->dev, sizeof(struct mxs_lradc_ts), GFP_KERNEL);
 	if (ts == NULL)
@@ -127,16 +152,12 @@ static int __devinit mxs_lradc_ts_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	for (i = 0; ts->channels[i].indio_dev != NULL; i++) {
-		u32 val;
-
-		dev_dbg(&pdev->dev, "%s: Registering trigger consumer for chan %d indio_dev %p\n",
-			__func__, i, ts->channels[i].indio_dev);
-		iio_device_register_trigger_consumer(ts->channels[i].indio_dev);
-		iio_st_read_channel_raw(&ts->channels[i], &val);
-		dev_dbg(&pdev->dev, "%s: read %u from channel %i\n", __func__,
-			val, i);
+	ts->iio_dev = mxs_lradc_ts_find_trigger(ts->channels, "pendetect");
+	if (ts->iio_dev == NULL) {
+		ret = -ENODEV;
+		goto err;
 	}
+	ts->trigger = ts->iio_dev->trig;
 
 	platform_set_drvdata(pdev, ts);
 
@@ -153,7 +174,6 @@ static int __devexit mxs_lradc_ts_remove(struct platform_device *pdev)
 {
 	struct mxs_lradc_ts *ts = platform_get_drvdata(pdev);
 
-	iio_device_unregister_trigger_consumer(ts->iio_dev);
 	iio_st_channel_release_all(ts->channels);
 	input_free_device(ts->input_dev);
 	return 0;
