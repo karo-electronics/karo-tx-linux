@@ -226,7 +226,6 @@ static inline s64 iio_get_time_ns(void)
 	(INDIO_BUFFER_TRIGGERED | INDIO_BUFFER_HARDWARE)
 
 struct iio_trigger; /* forward declaration */
-struct iio_dev;
 
 /**
  * struct iio_info - constant information about device
