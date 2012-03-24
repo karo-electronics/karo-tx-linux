@@ -25,6 +25,9 @@
 #include "../iio.h"
 #include "../sysfs.h"
 
+#define NUM_ADC_CHANNELS	8
+#define NUM_DELAY_CHANNELS	4
+
 #define	MAPPING_USED		(1 << 7)
 #define	MAPPING_XXX		(1 << 6)
 #define	MAPPING_SET_SLOT(m)	(((m) & 0x3) << 4)
@@ -40,15 +43,15 @@ struct mxs_lradc_mapped_channel {
 };
 
 struct mxs_lradc_drv_data {
-	struct iio_dev			*iio[4];
+	struct iio_dev			*iio[NUM_DELAY_CHANNELS];
 	void __iomem			*mmio_base;
 
 	spinlock_t			lock;
 
 	uint16_t			claimed;
 
-	struct mxs_lradc_mapped_channel	ch[8];
-	uint8_t				ch_oversample[16];
+	struct mxs_lradc_mapped_channel	ch[NUM_ADC_CHANNELS];
+	uint8_t				ch_oversample[2 * NUM_ADC_CHANNELS];
 };
 
 struct mxs_lradc_data {
@@ -182,7 +185,7 @@ static int mxs_lradc_can_claim_channel(struct iio_dev *iio_dev,
 			count++;
 
 	/* Too many channels claimed */
-	if (count == 8)
+	if (count >= NUM_ADC_CHANNELS)
 		return -EINVAL;
 
 	return 0;
@@ -208,7 +211,7 @@ static int mxs_lradc_claim_channel(struct iio_dev *iio_dev,
 	data->claimed |= 1 << chan->address;
 
 	/* Map the channel */
-	for (i = 0; i < 8; i++)
+	for (i = 0; i < NUM_ADC_CHANNELS; i++)
 		if (!(drv_data->ch[i].mapping & MAPPING_USED))
 			break;
 
@@ -304,7 +307,7 @@ static int mxs_lradc_read_raw(struct iio_dev *iio_dev,
 		 * Once we are here, the channel is mapped by us already.
 		 * Find the mapping.
 		 */
-		for (i = 0; i < 8; i++) {
+		for (i = 0; i < NUM_ADC_CHANNELS; i++) {
 			if (!(drv_data->ch[i].mapping & MAPPING_USED))
 				continue;
 
@@ -370,7 +373,7 @@ static irqreturn_t mxs_lradc_handle_irq(int irq, void *data)
 	uint32_t reg = readl(drv_data->mmio_base + LRADC_CTRL1);
 	int i;
 
-	for (i = 0; i < 8; i++)
+	for (i = 0; i < NUM_ADC_CHANNELS; i++)
 		if (reg & LRADC_CTRL1_LRADC_IRQ(i)) {
 			drv_data->ch[i].wq_done = true;
 			wake_up_interruptible(&drv_data->ch[i].wq);
@@ -482,7 +485,7 @@ static void mxs_lradc_config(struct mxs_lradc_drv_data *drv_data)
 	__mxs_setl(freq, drv_data->mmio_base + LRADC_CTRL3);
 
 	/* The delay channels constantly retrigger themself */
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < NUM_DELAY_CHANNELS; i++)
 		__mxs_setl(LRADC_DELAY_KICK |
 			(1 << (LRADC_DELAY_TRIGGER_DELAYS_OFFSET + i)) |
 			0x7ff,	/* FIXME */
@@ -499,7 +502,7 @@ static void mxs_lradc_config(struct mxs_lradc_drv_data *drv_data)
 */
 static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 {
-	struct mxs_lradc_data *data[4];
+	struct mxs_lradc_data *data[NUM_DELAY_CHANNELS];
 	struct mxs_lradc_drv_data *drv_data;
 	struct iio_dev *iio;
 	struct resource *r;
@@ -527,8 +530,8 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 	/*
 	 * IIO ops
 	 */
-	for (i = 0; i < 4; i++) {
-		iio = iio_allocate_device(sizeof(*data));
+	for (i = 0; i < NUM_DELAY_CHANNELS; i++) {
+		iio = iio_allocate_device(sizeof(*data[i]));
 		if (!iio) {
 			dev_err(&pdev->dev,
 				"Failed to allocate IIO device %i\n", i);
@@ -553,7 +556,7 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 		drv_data->iio[i] = iio;
 	}
 
-	for (i = 0; i < 8; i++)
+	for (i = 0; i < NUM_ADC_CHANNELS; i++)
 		init_waitqueue_head(&drv_data->ch[i].wq);
 
 	dev_set_drvdata(&pdev->dev, drv_data);
@@ -587,10 +590,11 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 	/*
 	 * Allocate IRQ
 	 */
-	for (irq = 0; irq < 8; irq++) {
+	for (irq = 0; irq < NUM_ADC_CHANNELS; irq++) {
 		r = platform_get_resource(pdev, IORESOURCE_IRQ, irq);
 		if (r == NULL) {
-			dev_err(&pdev->dev, "No IRQ resource defined\n");
+			dev_err(&pdev->dev, "IRQ resource[%d] not defined\n",
+				irq);
 			ret = -ENODEV;
 			goto err1;
 		}
@@ -607,7 +611,7 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 	/*
 	 * Register IIO device
 	 */
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < NUM_DELAY_CHANNELS; i++) {
 		ret = iio_device_register(drv_data->iio[i]);
 		if (ret) {
 			dev_err(&pdev->dev, "Failed to register IIO device\n");
@@ -626,7 +630,7 @@ err2:
 	while (--i >= 0)
 		iio_device_unregister(drv_data->iio[i]);
 err1:
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < NUM_DELAY_CHANNELS; i++)
 		if (drv_data->iio[i])
 			iio_free_device(drv_data->iio[i]);
 err0:
@@ -640,18 +644,18 @@ static int __devexit mxs_lradc_remove(struct platform_device *pdev)
 	struct resource *r;
 	int i, irq;
 
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < NUM_DELAY_CHANNELS; i++) {
 		iio_device_unregister(drv_data->iio[i]);
 
-	for (irq = 0; irq < 8; irq++) {
+	for (i = 0; i < NUM_ADC_CHANNELS; i++) {
 		r = platform_get_resource(pdev, IORESOURCE_IRQ, irq);
 		if (r != NULL)
 			free_irq(r->start, drv_data);
 	}
 
-	for (i = 0; i < 4; i++)
-		iio_free_device(drv_data->iio[i]);
 
+	for (i = 0; i < NUM_DELAY_CHANNELS; i++)
+		iio_free_device(drv_data->iio[i]);
 	return 0;
 }
 
