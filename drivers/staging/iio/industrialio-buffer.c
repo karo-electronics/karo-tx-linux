@@ -557,7 +557,7 @@ int iio_scan_mask_set(struct iio_dev *indio_dev,
 	const unsigned long *mask;
 	unsigned long *trialmask;
 
-	trialmask = kmalloc(sizeof(*trialmask)*
+	trialmask = kzalloc(sizeof(*trialmask)*
 			    BITS_TO_LONGS(indio_dev->masklength),
 			    GFP_KERNEL);
 
@@ -678,7 +678,7 @@ int iio_update_demux(struct iio_dev *indio_dev)
 			if (in_loc % length)
 				in_loc += length - in_loc % length;
 		}
-		p = kmalloc(sizeof(*p), GFP_KERNEL);
+		p = kzalloc(sizeof(*p), GFP_KERNEL);
 		if (p == NULL) {
 			ret = -ENOMEM;
 			goto error_clear_mux_table;
@@ -698,7 +698,7 @@ int iio_update_demux(struct iio_dev *indio_dev)
 	}
 	/* Relies on scan_timestamp being last */
 	if (buffer->scan_timestamp) {
-		p = kmalloc(sizeof(*p), GFP_KERNEL);
+		p = kzalloc(sizeof(*p), GFP_KERNEL);
 		if (p == NULL) {
 			ret = -ENOMEM;
 			goto error_clear_mux_table;

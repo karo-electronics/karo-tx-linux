@@ -132,7 +132,7 @@ struct iio_channel *iio_st_channel_get(const char *name,
 	if (c == NULL)
 		return ERR_PTR(-ENODEV);
 
-	channel = kmalloc(sizeof(*channel), GFP_KERNEL);
+	channel = kzalloc(sizeof(*channel), GFP_KERNEL);
 	if (channel == NULL)
 		return ERR_PTR(-ENOMEM);
 

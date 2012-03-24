@@ -47,7 +47,7 @@ static inline int __iio_allocate_sw_ring_buffer(struct iio_sw_ring_buffer *ring,
 	if ((length == 0) || (bytes_per_datum == 0))
 		return -EINVAL;
 	__iio_update_buffer(&ring->buf, bytes_per_datum, length);
-	ring->data = kmalloc(length*ring->buf.bytes_per_datum, GFP_ATOMIC);
+	ring->data = kzalloc(length*ring->buf.bytes_per_datum, GFP_ATOMIC);
 	ring->read_p = NULL;
 	ring->write_p = NULL;
 	ring->half_p = NULL;
@@ -163,7 +163,7 @@ static int iio_read_first_n_sw_rb(struct iio_buffer *r,
 	/* Limit size to whole of ring buffer */
 	bytes_to_rip = min_t(size_t, buffer_size, n);
 
-	data = kmalloc(bytes_to_rip, GFP_KERNEL);
+	data = kzalloc(bytes_to_rip, GFP_KERNEL);
 	if (data == NULL) {
 		ret = -ENOMEM;
 		goto error_ret;
