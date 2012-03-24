@@ -157,6 +157,11 @@ static struct attribute *mxs_lradc_attributes[] = {
 	NULL,
 };
 
+static struct attribute_group mxs_lradc_attr_group = {
+	.name = "mxs-lradc",
+	.attrs = mxs_lradc_attributes,
+};
+
 static int mxs_lradc_can_claim_channel(struct iio_dev *iio_dev,
 			const struct iio_chan_spec *chan)
 {
@@ -295,7 +300,7 @@ static int mxs_lradc_read_raw(struct iio_dev *iio_dev,
 			return ret;
 		}
 
-		/* 
+		/*
 		 * Once we are here, the channel is mapped by us already.
 		 * Find the mapping.
 		 */
@@ -317,9 +322,7 @@ static int mxs_lradc_read_raw(struct iio_dev *iio_dev,
 
 		ret = wait_event_interruptible(drv_data->ch[i].wq,
 					drv_data->ch[i].wq_done);
-		if (ret)
-			ret = -EINTR;
-		else {
+		if (ret == 0) {
 			*val = readl(drv_data->mmio_base + LRADC_CH(i)) &
 					LRADC_CH_VALUE_MASK;
 			*val /= (drv_data->ch_oversample[chan->address] + 1);
@@ -372,8 +375,7 @@ static irqreturn_t mxs_lradc_handle_irq(int irq, void *data)
 			drv_data->ch[i].wq_done = true;
 			wake_up_interruptible(&drv_data->ch[i].wq);
 		}
-
-	__mxs_clrl(0xffff, drv_data->mmio_base + LRADC_CTRL1);
+	__mxs_clrl(reg, drv_data->mmio_base + LRADC_CTRL1);
 
 	return IRQ_HANDLED;
 }
@@ -382,6 +384,7 @@ static const struct iio_info mxs_lradc_iio_info = {
 	.driver_module		= THIS_MODULE,
 	.read_raw		= mxs_lradc_read_raw,
 	.write_raw		= mxs_lradc_write_raw,
+	.attrs			= &mxs_lradc_attr_group,
 };
 
 static const struct iio_chan_spec mxs_lradc_chan_spec[] = {
@@ -509,7 +512,7 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 	 */
 	if (!devres_open_group(&pdev->dev, mxs_lradc_probe, GFP_KERNEL)) {
 		dev_err(&pdev->dev, "Can't open resource group\n");
-		goto err0;
+		return -ENOMEM;
 	}
 
 	drv_data = devm_kzalloc(&pdev->dev, sizeof(*drv_data), GFP_KERNEL);
@@ -521,7 +524,7 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 
 	spin_lock_init(&drv_data->lock);
 
-	/* 
+	/*
 	 * IIO ops
 	 */
 	for (i = 0; i < 4; i++) {
@@ -540,7 +543,6 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 		/* Channels */
 		iio->channels = mxs_lradc_chan_spec;
 		iio->num_channels = ARRAY_SIZE(mxs_lradc_chan_spec);
-		iio->attrs = mxs_lradc_attributes;
 
 		data[i] = iio_priv(iio);
 		data[i]->drv_data = drv_data;
@@ -574,10 +576,11 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 		goto err1;
 	}
 
-	drv_data->mmio_base = devm_ioremap(&pdev->dev, r->start, resource_size(r));
+	drv_data->mmio_base = devm_ioremap(&pdev->dev, r->start,
+					resource_size(r));
 	if (!drv_data->mmio_base) {
 		dev_err(&pdev->dev, "Failed to map I/O memory\n");
-		ret = -EBUSY;
+		ret = -ENOMEM;
 		goto err1;
 	}
 
@@ -592,10 +595,11 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 			goto err1;
 		}
 
-		ret = request_irq(r->start, mxs_lradc_handle_irq, 0, r->name, drv_data);
+		ret = request_irq(r->start, mxs_lradc_handle_irq, 0,
+				r->name, drv_data);
 		if (ret) {
-			dev_err(&pdev->dev, "request_irq %i failed: %d\n", irq, ret);
-			ret = -EBUSY;
+			dev_err(&pdev->dev, "request_irq %i failed: %d\n",
+				irq, ret);
 			goto err1;
 		}
 	}
