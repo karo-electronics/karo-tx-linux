@@ -14,6 +14,11 @@
 #include <linux/workqueue.h>
 #include <linux/sched.h>
 #include <linux/poll.h>
+
+#ifdef DEBUG
+#define __debug_var	industrialio_debug
+#endif
+
 #include "ring_sw.h"
 #include "trigger.h"
 

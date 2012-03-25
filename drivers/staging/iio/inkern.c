@@ -11,6 +11,10 @@
 #include <linux/slab.h>
 #include <linux/mutex.h>
 
+#ifdef DEBUG
+#define __debug_var industrialio_debug
+#endif
+
 #include "iio.h"
 #include "iio_core.h"
 #include "machine.h"
@@ -35,18 +39,24 @@ int iio_map_array_register(struct iio_dev *indio_dev, struct iio_map *maps)
 		return 0;
 
 	mutex_lock(&iio_map_list_lock);
+	DBG(0, "%s: Registering %p chan_map %p\n", __func__,
+		indio_dev, maps);
 	while (maps[i].consumer_dev_name != NULL) {
 		mapi = kzalloc(sizeof(*mapi), GFP_KERNEL);
 		if (mapi == NULL) {
 			ret = -ENOMEM;
 			goto error_ret;
 		}
+		DBG(0, "%s: Registering entry %p '%s','%s','%s' @ %p\n",
+			__func__, &maps[i], maps[i].adc_channel_label,
+			maps[i].consumer_dev_name, maps[i].consumer_channel, mapi);
 		mapi->map = &maps[i];
 		mapi->indio_dev = indio_dev;
 		list_add(&mapi->l, &iio_map_list);
 		i++;
 	}
 error_ret:
+	DBG(0, "%s: Done\n", __func__);
 	mutex_unlock(&iio_map_list_lock);
 
 	return ret;
@@ -69,22 +79,32 @@ int iio_map_array_unregister(struct iio_dev *indio_dev,
 		return 0;
 
 	mutex_lock(&iio_map_list_lock);
+	DBG(0, "%s: Unregistering %p chan_map %p\n", __func__,
+		indio_dev, maps);
 	while (maps[i].consumer_dev_name != NULL) {
+		DBG(0, "%s: Unregistering entry %p '%s','%s'\n",
+			__func__, &maps[i], maps[i].adc_channel_label,
+			maps[i].consumer_dev_name);
 		found_it = false;
 		list_for_each_entry(mapi, &iio_map_list, l)
 			if (&maps[i] == mapi->map) {
 				list_del(&mapi->l);
+				DBG(0, "Freeing %p\n", mapi);
 				kfree(mapi);
 				found_it = true;
 				break;
 			}
 		if (found_it == false) {
+			pr_err("%s: Entry %p '%s','%s' for dev %p not found\n",
+				__func__, &maps[i], maps[i].adc_channel_label,
+				maps[i].consumer_dev_name, indio_dev);
 			ret = -ENODEV;
 			goto error_ret;
 		}
 		i++;
 	}
 error_ret:
+	DBG(0, "%s: Done\n", __func__);
 	mutex_unlock(&iio_map_list_lock);
 
 	return ret;
@@ -98,12 +118,25 @@ static const struct iio_chan_spec
 	int i;
 	const struct iio_chan_spec *chan = NULL;
 
-	for (i = 0; i < indio_dev->num_channels; i++)
+	DBG(0, "%s: Searching channel '%s' out of %u channels from dev %p\n",
+		__func__, name, indio_dev->num_channels, indio_dev);
+	for (i = 0; i < indio_dev->num_channels; i++) {
+		DBG(0, "%s: dev %p '%s' chan[%d] ds name: '%s'\n",
+			__func__, indio_dev, indio_dev->name, i,
+			indio_dev->channels[i].datasheet_name);
 		if (indio_dev->channels[i].datasheet_name &&
 		    strcmp(name, indio_dev->channels[i].datasheet_name) == 0) {
 			chan = &indio_dev->channels[i];
 			break;
 		}
+	}
+	if (chan)
+		DBG(0, "%s: found channel %p '%s'\n",
+			__func__, chan, chan->datasheet_name);
+	else
+		DBG(0, "%s: channel '%s' not found\n",
+			__func__, name);
+
 	return chan;
 }
 
@@ -119,15 +152,27 @@ struct iio_channel *iio_st_channel_get(const char *name,
 
 	/* first find matching entry the channel map */
 	mutex_lock(&iio_map_list_lock);
+	DBG(0, "%s: Searching for channel '%s' for device '%s'\n",
+		__func__, channel_name, name);
 	list_for_each_entry(c_i, &iio_map_list, l) {
+		DBG(0, "label='%s' dev='%s' key='%s'\n",
+			c_i->map->adc_channel_label, c_i->map->consumer_dev_name,
+			c_i->map->consumer_channel);
 		if ((name && strcmp(name, c_i->map->consumer_dev_name) != 0) ||
 		    (channel_name &&
-		     strcmp(channel_name, c_i->map->consumer_channel) != 0))
+		     strcmp(channel_name, c_i->map->adc_channel_label) != 0))
 			continue;
 		c = c_i;
 		get_device(&c->indio_dev->dev);
 		break;
 	}
+	if (c)
+		DBG(0, "found channel label='%s' dev='%s' key='%s' on iio_dev %p\n",
+			c->map->adc_channel_label, c->map->consumer_dev_name,
+			c->map->consumer_channel, c->indio_dev);
+	else
+		pr_err("Channel '%s' not found for device %s\n",
+			channel_name, name);
 	mutex_unlock(&iio_map_list_lock);
 	if (c == NULL)
 		return ERR_PTR(-ENODEV);
@@ -138,11 +183,19 @@ struct iio_channel *iio_st_channel_get(const char *name,
 
 	channel->indio_dev = c->indio_dev;
 
-	if (c->map->adc_channel_label)
+	if (c->map->adc_channel_label) {
 		channel->channel =
 			iio_chan_spec_from_name(channel->indio_dev,
 						c->map->adc_channel_label);
-
+		if (channel->channel == NULL) {
+			pr_err("%s: could not get chan_spec for '%s' on %p\n",
+				__func__, c->map->adc_channel_label,
+				channel->indio_dev);
+			put_device(&c->indio_dev->dev);
+			kfree(channel);
+			channel = ERR_PTR(-EINVAL);
+		}
+	}
 	return channel;
 }
 EXPORT_SYMBOL_GPL(iio_st_channel_get);
@@ -160,7 +213,7 @@ struct iio_channel *iio_st_channel_get_all(const char *name)
 	struct iio_map_internal *c = NULL;
 	int nummaps = 0;
 	int mapind = 0;
-	int i, ret;
+	int ret;
 
 	if (name == NULL)
 		return ERR_PTR(-EINVAL);
@@ -186,7 +239,12 @@ struct iio_channel *iio_st_channel_get_all(const char *name)
 	}
 
 	/* for each map fill in the chans element */
+	DBG(0, "%s: Searching channels for '%s'\n", __func__,
+		name);
 	list_for_each_entry(c, &iio_map_list, l) {
+		DBG(0, "label='%s' dev='%s' key='%s'\n",
+			c->map->adc_channel_label, c->map->consumer_dev_name,
+			c->map->consumer_channel);
 		if (name && strcmp(name, c->map->consumer_dev_name) != 0)
 			continue;
 		chans[mapind].indio_dev = c->indio_dev;
@@ -195,7 +253,8 @@ struct iio_channel *iio_st_channel_get_all(const char *name)
 						c->map->adc_channel_label);
 		if (chans[mapind].channel == NULL) {
 			ret = -EINVAL;
-			put_device(&chans[mapind].indio_dev->dev);
+			pr_err("No channel '%s' found\n",
+				c->map->adc_channel_label);
 			goto error_free_chans;
 		}
 		get_device(&chans[mapind].indio_dev->dev);
@@ -209,9 +268,9 @@ struct iio_channel *iio_st_channel_get_all(const char *name)
 	return chans;
 
 error_free_chans:
-	for (i = 0; i < nummaps; i++)
-		if (chans[i].indio_dev)
-			put_device(&chans[i].indio_dev->dev);
+	while (--mapind >= 0)
+		if (chans[mapind].indio_dev)
+			put_device(&chans[mapind].indio_dev->dev);
 	kfree(chans);
 error_ret:
 	mutex_unlock(&iio_map_list_lock);

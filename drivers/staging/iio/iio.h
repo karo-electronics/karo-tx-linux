@@ -10,6 +10,21 @@
 #ifndef _INDUSTRIAL_IO_H_
 #define _INDUSTRIAL_IO_H_
 
+#ifdef DEBUG
+extern int industrialio_debug;
+#ifndef __debug_var
+#define __debug_var	debug
+#endif
+#ifndef dbg_lvl
+#define dbg_lvl(n)	(__debug_var > (n))
+#endif
+#else
+#define dbg_lvl(n)	0
+#endif
+#define DBG(n, fmt...) do { if (dbg_lvl(n)) printk(KERN_DEBUG fmt); } while (0)
+#define DEV_DBG(n, dev, fmt...) do { if (dbg_lvl(n)) printk(KERN_DEBUG fmt); } while (0)
+#define _DBG(n, fmt...) do { printk(KERN_DEBUG fmt); } while (0)
+
 #include <linux/device.h>
 #include <linux/cdev.h>
 #include "types.h"

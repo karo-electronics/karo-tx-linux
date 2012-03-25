@@ -12,6 +12,7 @@
 #ifndef _IIO_TRIGGER_H_
 #define _IIO_TRIGGER_H_
 
+
 struct iio_subirq {
 	bool enabled;
 };
@@ -81,11 +82,13 @@ static inline struct iio_trigger *to_iio_trigger(struct device *d)
 static inline void iio_put_trigger(struct iio_trigger *trig)
 {
 	module_put(trig->ops->owner);
+	DBG(0, "%s: Releasing trigger %p\n", __func__, trig);
 	put_device(&trig->dev);
 };
 
 static inline void iio_get_trigger(struct iio_trigger *trig)
 {
+	DBG(0, "%s: Requesting trigger %p\n", __func__, trig);
 	get_device(&trig->dev);
 	__module_get(trig->ops->owner);
 };

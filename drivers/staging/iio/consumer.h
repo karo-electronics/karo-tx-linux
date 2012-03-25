@@ -11,9 +11,6 @@
 #define _IIO_INKERN_CONSUMER_H
 #include "types.h"
 
-struct iio_dev;
-struct iio_chan_spec;
-
 /**
  * struct iio_channel - everything needed for a consumer to use a channel
  * @indio_dev:		Device on which the channel exists.

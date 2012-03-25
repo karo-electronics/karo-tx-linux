@@ -23,6 +23,16 @@
 #include <linux/slab.h>
 #include <linux/anon_inodes.h>
 #include <linux/debugfs.h>
+
+#ifdef DEBUG
+#define __debug_var	industrialio_debug
+int industrialio_debug = 1;
+module_param(industrialio_debug, int, S_IRUGO | S_IWUSR);
+#else
+static int industrialio_debug;
+module_param(industrialio_debug, int, 0);
+#endif
+
 #include "iio.h"
 #include "iio_core.h"
 #include "iio_core_trigger.h"
@@ -741,11 +751,15 @@ static void iio_dev_release(struct device *device)
 {
 	struct iio_dev *indio_dev = container_of(device, struct iio_dev, dev);
 	cdev_del(&indio_dev->chrdev);
+	_DBG(0, "%s: Release iio_dev %p modes=%08x\n", __func__, indio_dev,
+		indio_dev->modes);
 	if (indio_dev->modes & INDIO_BUFFER_TRIGGERED)
 		iio_device_unregister_trigger_consumer(indio_dev);
 	iio_device_unregister_eventset(indio_dev);
 	iio_device_unregister_sysfs(indio_dev);
 	iio_device_unregister_debugfs(indio_dev);
+	_DBG(0, "%s: Freeing iio_dev %p\n", __func__, indio_dev);
+	kfree(indio_dev);
 }
 
 static struct device_type iio_dev_type = {
@@ -762,6 +776,14 @@ struct iio_dev *iio_allocate_device(int sizeof_priv)
 	if (sizeof_priv) {
 		alloc_size = ALIGN(alloc_size, IIO_ALIGN);
 		alloc_size += sizeof_priv;
+		DBG(0, "%s: alloc_size = %u + %u + %u + %u = %u\n", __func__,
+			sizeof(struct iio_dev),
+			ALIGN(alloc_size, IIO_ALIGN - sizeof(struct iio_dev)),
+			sizeof_priv, IIO_ALIGN - 1, alloc_size + IIO_ALIGN - 1);
+	} else {
+		DBG(0, "%s: alloc_size = %u + %u = %u\n", __func__,
+			sizeof(struct iio_dev), IIO_ALIGN - 1,
+			alloc_size + IIO_ALIGN - 1);
 	}
 	/* ensure 32-byte alignment of whole construct ? */
 	alloc_size += IIO_ALIGN - 1;
@@ -785,6 +807,8 @@ struct iio_dev *iio_allocate_device(int sizeof_priv)
 			return NULL;
 		}
 		dev_set_name(&dev->dev, "iio:device%d", dev->id);
+		get_device(&dev->dev);
+		DBG(0, "%s: Allocated iio_dev %p\n", __func__, dev);
 	}
 
 	return dev;
@@ -795,7 +819,9 @@ void iio_free_device(struct iio_dev *dev)
 {
 	if (dev) {
 		ida_simple_remove(&iio_ida, dev->id);
-		kfree(dev);
+		DBG(0, "%s: Releasing iio_dev %p!\n", __func__, dev);
+		put_device(&dev->dev);
+//		kfree(dev);
 	}
 }
 EXPORT_SYMBOL(iio_free_device);

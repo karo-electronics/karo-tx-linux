@@ -15,11 +15,16 @@
 #include <linux/list.h>
 #include <linux/slab.h>
 
+#ifdef DEBUG
+#define __debug_var	industrialio_debug
+#endif
+
 #include "iio.h"
 #include "trigger.h"
 #include "iio_core.h"
 #include "iio_core_trigger.h"
 #include "trigger_consumer.h"
+
 
 /* RFC - Question of approach
  * Make the common case (single sensor single trigger)
@@ -173,7 +178,7 @@ void iio_trigger_notify_done(struct iio_trigger *trig)
 	trig->use_count--;
 	if (trig->use_count == 0 && trig->ops && trig->ops->try_reenable)
 		if (trig->ops->try_reenable(trig))
-			/* Missed and interrupt so launch new poll now */
+			/* Missed an interrupt so launch new poll now */
 			iio_trigger_poll(trig, 0);
 }
 EXPORT_SYMBOL(iio_trigger_notify_done);
@@ -214,6 +219,7 @@ static int iio_trigger_attach_poll_func(struct iio_trigger *trig,
 	bool notinuse
 		= bitmap_empty(trig->pool, CONFIG_IIO_CONSUMERS_PER_TRIGGER);
 
+	get_device(&pf->indio_dev->dev);
 	/* Prevent the module being removed whilst attached to a trigger */
 	__module_get(pf->indio_dev->info->driver_module);
 	pf->irq = iio_trigger_get_irq(trig);
@@ -234,7 +240,7 @@ static int iio_trigger_attach_poll_func(struct iio_trigger *trig,
 	return ret;
 }
 
-static int iio_trigger_dettach_poll_func(struct iio_trigger *trig,
+static int iio_trigger_detach_poll_func(struct iio_trigger *trig,
 					 struct iio_poll_func *pf)
 {
 	int ret = 0;
@@ -250,6 +256,7 @@ static int iio_trigger_dettach_poll_func(struct iio_trigger *trig,
 	iio_trigger_put_irq(trig, pf->irq);
 	free_irq(pf->irq, pf);
 	module_put(pf->indio_dev->info->driver_module);
+	put_device(&pf->indio_dev->dev);
 
 error_ret:
 	return ret;
@@ -277,6 +284,7 @@ struct iio_poll_func
 	pf = kmalloc(sizeof *pf, GFP_KERNEL);
 	if (pf == NULL)
 		return NULL;
+
 	va_start(vargs, fmt);
 	pf->name = kvasprintf(GFP_KERNEL, fmt, vargs);
 	va_end(vargs);
@@ -284,6 +292,7 @@ struct iio_poll_func
 		kfree(pf);
 		return NULL;
 	}
+	DBG(0, "%s: Allocated pollfunc %p\n", __func__, pf);
 	pf->h = h;
 	pf->thread = thread;
 	pf->type = type;
@@ -296,6 +305,7 @@ EXPORT_SYMBOL_GPL(iio_alloc_pollfunc);
 void iio_dealloc_pollfunc(struct iio_poll_func *pf)
 {
 	kfree(pf->name);
+	DBG(0, "%s: Freeing pollfunc %p\n", __func__, pf);
 	kfree(pf);
 }
 EXPORT_SYMBOL_GPL(iio_dealloc_pollfunc);
@@ -401,6 +411,7 @@ static void iio_trig_release(struct device *device)
 			       CONFIG_IIO_CONSUMERS_PER_TRIGGER);
 	}
 	kfree(trig->name);
+	DBG(0, "%s: Freeing trigger %p\n", __func__, trig);
 	kfree(trig);
 }
 
@@ -469,6 +480,7 @@ struct iio_trigger *iio_allocate_trigger(const char *fmt, ...)
 					  IRQ_NOPROBE);
 		}
 		get_device(&trig->dev);
+		DBG(0, "%s: Allocated trigger %p\n", __func__, trig);
 	}
 	return trig;
 }
@@ -476,6 +488,7 @@ EXPORT_SYMBOL(iio_allocate_trigger);
 
 void iio_free_trigger(struct iio_trigger *trig)
 {
+	DBG(0, "%s: Releasing trigger %p\n", __func__, trig);
 	if (trig)
 		put_device(&trig->dev);
 }
@@ -483,6 +496,7 @@ EXPORT_SYMBOL(iio_free_trigger);
 
 void iio_device_register_trigger_consumer(struct iio_dev *indio_dev)
 {
+	_DBG(0, "%s: dev=%p\n", __func__, indio_dev);
 	indio_dev->groups[indio_dev->groupcounter++] =
 		&iio_trigger_consumer_attr_group;
 }
@@ -490,9 +504,12 @@ EXPORT_SYMBOL(iio_device_register_trigger_consumer);
 
 void iio_device_unregister_trigger_consumer(struct iio_dev *indio_dev)
 {
-	/* Clean up and associated but not attached triggers references */
+	/* Clean up any associated but not attached triggers references */
+	_DBG(0, "%s: dev=%p\n", __func__, indio_dev);
+#if 0
 	if (indio_dev->trig)
 		iio_put_trigger(indio_dev->trig);
+#endif
 }
 EXPORT_SYMBOL(iio_device_unregister_trigger_consumer);
 
@@ -505,7 +522,7 @@ EXPORT_SYMBOL(iio_triggered_buffer_postenable);
 
 int iio_triggered_buffer_predisable(struct iio_dev *indio_dev)
 {
-	return iio_trigger_dettach_poll_func(indio_dev->trig,
+	return iio_trigger_detach_poll_func(indio_dev->trig,
 					     indio_dev->pollfunc);
 }
 EXPORT_SYMBOL(iio_triggered_buffer_predisable);

@@ -5,6 +5,7 @@
  *
  * Licensed under the GPL-2 or later.
  */
+#undef DEBUG
 
 #include <linux/interrupt.h>
 #include <linux/device.h>
@@ -22,15 +23,31 @@
 #include <mach/mxs.h>
 #include <mach/common.h>
 
+#ifdef DEBUG
+static int debug = 1;
+module_param(debug, int, S_IRUGO | S_IWUSR);
+#else
+static int debug;
+module_param(debug, int, 0);
+#endif
+
 #include "../iio.h"
+#include "../sysfs.h"
 #include "../machine.h"
 #include "../driver.h"
+#ifdef CONFIG_IIO_TRIGGER
 #include "../trigger.h"
-#include "../sysfs.h"
+#include "../trigger_consumer.h"
+#endif
+#include "../kfifo_buf.h"
+#include "../ring_sw.h"
 
+/* number of ADCs */
 #define NUM_ADC_CHANNELS	8
+/* number of analog inputs (muxed to one of the above ADCs */
+#define NUM_HW_CHANNELS		16
 #define NUM_DELAY_CHANNELS	4
-#define NUM_TRIGGERS		3
+#define NUM_TRIGGERS		1
 
 #define	MAPPING_USED		(1 << 7)
 #define	MAPPING_XXX		(1 << 6)
@@ -44,11 +61,19 @@ struct mxs_lradc_mapped_channel {
 	uint16_t			chan_data;
 	uint16_t			mapping;
 	uint32_t			users;
+	bool				buffered;
+};
+
+struct mxs_lradc_trigger {
+	size_t				id;
+	int				irq;
+	struct mxs_lradc_drv_data	*drv_data;
 };
 
 struct mxs_lradc_drv_data {
 	struct iio_dev			*iio[NUM_DELAY_CHANNELS];
-	struct iio_trigger		*trig[NUM_TRIGGERS];
+	struct iio_dev			*trig[NUM_TRIGGERS];
+
 	void __iomem			*mmio_base;
 
 	spinlock_t			lock;
@@ -56,7 +81,7 @@ struct mxs_lradc_drv_data {
 	uint16_t			claimed;
 
 	struct mxs_lradc_mapped_channel	ch[NUM_ADC_CHANNELS];
-	uint8_t				ch_oversample[2 * NUM_ADC_CHANNELS];
+	uint8_t				ch_oversample[NUM_HW_CHANNELS];
 
 	uint32_t			status_mask;
 };
@@ -91,8 +116,35 @@ struct mxs_lradc_data {
 #define	LRADC_DELAY_DELAY_OFFSET		0
 
 #define	LRADC_CTRL0				0x00
+#define LRADC_CTRL0_ONCHIP_GROUNDREF		(1 << 26)
+#define LRADC_CTRL0_BUTTON1_DETECT_ENABLE	(1 << 25)
+#define LRADC_CTRL0_BUTTON0_DETECT_ENABLE	(1 << 24)
+#define LRADC_CTRL0_TOUCH_DETECT_ENABLE		(1 << 23)
+#define LRADC_CTRL0_TOUCH_SCREEN_TYPE		(1 << 22)
+#define LRADC_CTRL0_TOUCH_SCREEN_TYPE_4WIRE	(0 << 22)
+#define LRADC_CTRL0_TOUCH_SCREEN_TYPE_5WIRE	(1 << 22)
+#define LRADC_CTRL0_YNLRSW			(1 << 21)
+#define LRADC_CTRL0_YPLLSW_MASK			(3 << 19)
+#define LRADC_CTRL0_YPLLSW_LOW			(2 << 19)
+#define LRADC_CTRL0_YPLLSW_HIGH			(1 << 19)
+#define LRADC_CTRL0_YPLLSW_OFF			(0 << 19)
+#define LRADC_CTRL0_XNURSW_MASK			(3 << 17)
+#define LRADC_CTRL0_XNURSW_LOW			(2 << 17)
+#define LRADC_CTRL0_XNURSW_HIGH			(1 << 17)
+#define LRADC_CTRL0_XNURSW_OFF			(0 << 17)
+#define LRADC_CTRL0_XPULSW			(1 << 16)
 
 #define	LRADC_CTRL1				0x10
+#define	LRADC_CTRL1_LRADC_BUTTON1_IRQ_EN	(1 << 28)
+#define	LRADC_CTRL1_LRADC_BUTTON0_IRQ_EN	(1 << 27)
+#define	LRADC_CTRL1_LRADC_THRESH1_IRQ_EN	(1 << 26)
+#define	LRADC_CTRL1_LRADC_THRESH0_IRQ_EN	(1 << 25)
+#define	LRADC_CTRL1_LRADC_TOUCH_IRQ_EN		(1 << 24)
+#define	LRADC_CTRL1_LRADC_BUTTON1_IRQ		(1 << 12)
+#define	LRADC_CTRL1_LRADC_BUTTON0_IRQ		(1 << 11)
+#define	LRADC_CTRL1_LRADC_THRESH1_IRQ		(1 << 10)
+#define	LRADC_CTRL1_LRADC_THRESH0_IRQ		(1 << 9)
+#define	LRADC_CTRL1_LRADC_TOUCH_IRQ		(1 << 8)
 #define	LRADC_CTRL1_LRADC_IRQ(n)		(1 << (n))
 #define	LRADC_CTRL1_LRADC_IRQ_EN(n)		(1 << ((n) + 16))
 
@@ -106,12 +158,9 @@ struct mxs_lradc_data {
 #define	LRADC_CTRL4_LRADCSELECT_OFFSET(n)	((n) * 4)
 
 #define	LRADC_STATUS				0x40
-#define	LRADC_STATUS_TOUCH_DETECT_OFFSET	0
-#define	LRADC_STATUS_TOUCH_DETECT_MASK		(1 << 0)
-#define	LRADC_STATUS_BUTTON0_DETECT_OFFSET	1
-#define	LRADC_STATUS_BUTTON0_DETECT_MASK	(1 << 1)
-#define	LRADC_STATUS_BUTTON1_DETECT_OFFSET	2
-#define	LRADC_STATUS_BUTTON1_DETECT_MASK	(1 << 2)
+#define	LRADC_STATUS_TOUCH_DETECT		(1 << 0)
+#define	LRADC_STATUS_BUTTON0_DETECT		(1 << 1)
+#define	LRADC_STATUS_BUTTON1_DETECT		(1 << 2)
 
 /*
  * Global IIO attributes
@@ -193,15 +242,15 @@ static int mxs_lradc_can_claim_channel(struct iio_dev *iio_dev,
 
 	/* Check if someone else didn't claim this */
 	if (drv_data->claimed & (1 << chan->address))
-		return -EINVAL;
+		return -EBUSY;
 
-	for (i = 0; i < 16; i++)
+	for (i = 0; i < NUM_HW_CHANNELS; i++)
 		if (drv_data->claimed & (1 << i))
 			count++;
 
 	/* Too many channels claimed */
 	if (count >= NUM_ADC_CHANNELS)
-		return -EINVAL;
+		return -EAGAIN;
 
 	return 0;
 }
@@ -255,7 +304,7 @@ static int mxs_lradc_claim_channel(struct iio_dev *iio_dev,
 	__mxs_setl(LRADC_CTRL1_LRADC_IRQ_EN(i),
 		drv_data->mmio_base + LRADC_CTRL1);
 
-	/* Set out channel to be triggers by this delay queue */
+	/* Set out channel to be triggered by this delay queue */
 	__mxs_setl(1 << (LRADC_DELAY_TRIGGER_LRADCS_OFFSET + i),
 		drv_data->mmio_base + LRADC_DELAY(data->id));
 
@@ -263,7 +312,7 @@ static int mxs_lradc_claim_channel(struct iio_dev *iio_dev,
 
 err:
 	spin_unlock_irqrestore(&drv_data->lock, gflags);
-	return -EINVAL;
+	return ret;
 }
 
 static void mxs_lradc_relinquish_channel(struct iio_dev *iio_dev,
@@ -312,6 +361,9 @@ static int mxs_lradc_read_raw(struct iio_dev *iio_dev,
 	case 0:
 		spin_lock_irqsave(&data->lock, lflags);
 
+		DBG(0, "%s: Reading channel %ld '%s' CTRL0=%08x\n", __func__,
+			chan->address, chan->datasheet_name,
+			readl(drv_data->mmio_base + LRADC_CTRL0));
 		ret = mxs_lradc_claim_channel(iio_dev, chan);
 		if (ret) {
 			spin_unlock_irqrestore(&data->lock, lflags);
@@ -382,30 +434,14 @@ static int mxs_lradc_write_raw(struct iio_dev *iio_dev,
 	return -EINVAL;
 }
 
-static irqreturn_t mxs_lradc_handle_trigger(int irq, void *data)
-{
-	struct iio_trigger *trig = data;
-	struct mxs_lradc_drv_data *drv_data = trig->private_data;
-	uint32_t reg = readl(drv_data->mmio_base + LRADC_STATUS);
-
-	reg ^= drv_data->status_mask;
-	if (reg & LRADC_STATUS_TOUCH_DETECT_MASK)
-		iio_trigger_poll(data, 0);
-	if (reg & LRADC_STATUS_BUTTON0_DETECT_MASK)
-		iio_trigger_poll(data, 1);
-	if (reg & LRADC_STATUS_TOUCH_DETECT_MASK)
-		iio_trigger_poll(data, 2);
-
-	drv_data->status_mask ^= reg;
-	return IRQ_HANDLED;
-}
-
 static irqreturn_t mxs_lradc_handle_irq(int irq, void *data)
 {
 	struct mxs_lradc_drv_data *drv_data = data;
 	uint32_t reg = readl(drv_data->mmio_base + LRADC_CTRL1);
 	int i;
 
+	/* mask out disabled interrupts */
+	reg &= reg >> 16;
 	for (i = 0; i < NUM_ADC_CHANNELS; i++)
 		if (reg & LRADC_CTRL1_LRADC_IRQ(i)) {
 			drv_data->ch[i].wq_done = true;
@@ -451,11 +487,11 @@ static struct iio_chan_spec mxs_lradc_chan_spec[] = {
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
 		IIO_ST('u', 18, 32, 0)),
-	[3] = LRADC_IIO_CHAN(IIO_VOLTAGE, "xm", "TS X-", 3,
+	[3] = LRADC_IIO_CHAN(IIO_VOLTAGE, "yp", "TS Y+", 3,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
 		IIO_ST('u', 18, 32, 0)),
-	[4] = LRADC_IIO_CHAN(IIO_VOLTAGE, "yp", "TS Y+", 4,
+	[4] = LRADC_IIO_CHAN(IIO_VOLTAGE, "xm", "TS X-", 4,
 		IIO_CHAN_INFO_SCALE_SEPARATE_BIT |
 		IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT,
 		IIO_ST('u', 18, 32, 0)),
@@ -514,6 +550,7 @@ static struct iio_chan_spec mxs_lradc_chan_spec[] = {
 		IIO_ST('u', 18, 32, 1)),
 };
 
+#if 1
 static void mxs_lradc_config(struct mxs_lradc_drv_data *drv_data)
 {
 	/* FIXME */
@@ -531,6 +568,32 @@ static void mxs_lradc_config(struct mxs_lradc_drv_data *drv_data)
 
 	__mxs_clrl(0x3 << 8, drv_data->mmio_base + LRADC_CTRL3);
 	__mxs_setl(freq, drv_data->mmio_base + LRADC_CTRL3);
+	/* The delay channels constantly retrigger themself */
+	for (i = 0; i < NUM_DELAY_CHANNELS; i++)
+		__mxs_setl(LRADC_DELAY_KICK |
+			(1 << (LRADC_DELAY_TRIGGER_DELAYS_OFFSET + i)) |
+			8,	/* FIXME */
+			drv_data->mmio_base + LRADC_DELAY(i));
+
+	/* Start temperature sensing */
+	writel(0, drv_data->mmio_base + LRADC_CTRL2);
+}
+#else
+#define MXS_LRADC_CONF_TOUCH_DETECT_ENABLE	(1 << 0)
+
+static int mxs_lradc_set_config(struct mxs_lradc_drv_data *drv_data,
+				mxs_lradc_conf_data_t conf,
+				mxs_lradc_conf_data_t mask)
+{
+	if (conf->onchip_ground_ref)
+		__mxs_setl(LRADC_CTRL0_ONCHIP_GROUNDREF,
+			drv_data->mmio_base + LRADC_CTRL0);
+	else
+		__mxs_clrl(LRADC_CTRL0_ONCHIP_GROUNDREF,
+			drv_data->mmio_base + LRADC_CTRL0);
+
+	__mxs_clrl(0x3 << 8, drv_data->mmio_base + LRADC_CTRL3);
+	__mxs_setl(freq, drv_data->mmio_base + LRADC_CTRL3);
 
 	/* The delay channels constantly retrigger themself */
 	for (i = 0; i < NUM_DELAY_CHANNELS; i++)
@@ -542,6 +605,21 @@ static void mxs_lradc_config(struct mxs_lradc_drv_data *drv_data)
 	/* Start temperature sensing */
 	writel(0, drv_data->mmio_base + LRADC_CTRL2);
 }
+
+static void mxs_lradc_config(struct mxs_lradc_drv_data *drv_data)
+{
+	/* FIXME */
+	struct mxs_lradc_conf_data conf = {
+		.freq = 0x3;	/* 6MHz */
+		.onchip_ground_ref = 0,
+	};
+
+	int i;
+
+	mxs_reset_block(drv_data->mmio_base + LRADC_CTRL0);
+
+}
+#endif
 
 /*static void mxs_lradc_config(struct mxs_lradc_pdata *pdata)
 {
@@ -556,6 +634,249 @@ struct iio_map {
         const char *consumer_channel;
 */
 
+#ifdef CONFIG_IIO_TRIGGER
+static int mxs_lradc_enable_pen_detect(struct mxs_lradc_drv_data *drv_data,
+				int enable, int irq)
+{
+	__mxs_clrl(LRADC_CTRL0_YPLLSW_MASK |
+		LRADC_CTRL0_XNURSW_MASK |
+		LRADC_CTRL0_XPULSW |
+		LRADC_CTRL0_YNLRSW,
+		drv_data->mmio_base + LRADC_CTRL0);
+
+	if (enable) {
+
+		/* start touch detection */
+		DBG(0, "%s: setting CTRL0(%08x)\n", __func__,
+			LRADC_CTRL0_TOUCH_DETECT_ENABLE);
+
+		__mxs_setl(LRADC_CTRL0_TOUCH_DETECT_ENABLE,
+			drv_data->mmio_base + LRADC_CTRL0);
+	} else {
+		__mxs_clrl(LRADC_CTRL0_TOUCH_DETECT_ENABLE,
+			drv_data->mmio_base + LRADC_CTRL0);
+	}
+	if (irq) {
+		__mxs_clrl(LRADC_CTRL1_LRADC_TOUCH_IRQ,
+			drv_data->mmio_base + LRADC_CTRL1);
+
+		DBG(0, "%s: setting CTRL1(%08x)\n", __func__,
+			LRADC_CTRL1_LRADC_TOUCH_IRQ_EN);
+
+		__mxs_setl(LRADC_CTRL1_LRADC_TOUCH_IRQ_EN,
+			drv_data->mmio_base + LRADC_CTRL1);
+	} else {
+		DBG(0, "%s: clearing CTRL1(%08x)\n", __func__,
+			LRADC_CTRL1_LRADC_TOUCH_IRQ_EN);
+
+		__mxs_clrl(LRADC_CTRL1_LRADC_TOUCH_IRQ_EN,
+			drv_data->mmio_base + LRADC_CTRL1);
+	}
+	return 0;
+}
+
+static void mxs_lradc_enable_measurement(struct mxs_lradc_drv_data *drv_data,
+					uint32_t mask)
+{
+	uint32_t ctrl0;
+
+	DBG(0, "%s:\n", __func__);
+
+	ctrl0 = readl(drv_data->mmio_base + LRADC_CTRL0);
+	ctrl0 &= ~(LRADC_CTRL0_XNURSW_MASK |
+		LRADC_CTRL0_XPULSW |
+		LRADC_CTRL0_YPLLSW_MASK |
+		LRADC_CTRL0_YNLRSW);
+
+	DBG(0, "%s: writing %08x to CTLR0\n", __func__,
+		ctrl0 | mask);
+	writel(ctrl0 | mask, drv_data->mmio_base + LRADC_CTRL0);
+}
+
+static void mxs_lradc_enable_x_measurement(struct mxs_lradc_drv_data *drv_data)
+{
+	DBG(0, "%s:\n", __func__);
+	mxs_lradc_enable_measurement(drv_data, LRADC_CTRL0_YPLLSW_HIGH |
+				LRADC_CTRL0_YNLRSW);
+}
+
+static void mxs_lradc_enable_y_measurement(struct mxs_lradc_drv_data *drv_data)
+{
+	DBG(0, "%s:\n", __func__);
+	mxs_lradc_enable_measurement(drv_data, LRADC_CTRL0_XNURSW_LOW |
+					LRADC_CTRL0_XPULSW);
+}
+
+static struct iio_chan_spec mxs_lradc_event_chan_spec[] = {
+	[0] = {
+		.type = IIO_VOLTAGE,
+		.datasheet_name = "pendetect",
+		.channel = 0,
+		.address = 0,
+		.indexed = 1,
+		.scan_index = 0,
+		.scan_type = IIO_ST('u', 1, 1, 0),
+	},
+	[1] = {
+		.type = IIO_VOLTAGE,
+		.datasheet_name = "threshold0",
+		.channel = 1,
+		.address = 1,
+		.indexed = 1,
+		.scan_index = 1,
+		.scan_type = IIO_ST('u', 1, 1, 0),
+	},
+	[2] = {
+		.type = IIO_VOLTAGE,
+		.datasheet_name = "threshold1",
+		.channel = 2,
+		.address = 2,
+		.indexed = 1,
+		.scan_index = 2,
+		.scan_type = IIO_ST('u', 1, 1, 0),
+	},
+	[3] = {
+		.type = IIO_VOLTAGE,
+		.datasheet_name = "button0",
+		.channel = 3,
+		.address = 3,
+		.indexed = 1,
+		.scan_index = 3,
+		.scan_type = IIO_ST('u', 1, 1, 0),
+	},
+	[4] = {
+		.type = IIO_VOLTAGE,
+		.datasheet_name = "button1",
+		.channel = 4,
+		.address = 4,
+		.indexed = 1,
+		.scan_index = 4,
+		.scan_type = IIO_ST('u', 1, 1, 0),
+	},
+};
+
+static int mxs_lradc_event_read_raw(struct iio_dev *iio_dev,
+				const struct iio_chan_spec *chan,
+				int *val, int *val2, long m)
+{
+	DBG(0, "%s: dev %p chan %p val %p val2 %p m %ld\n",
+		__func__, iio_dev, chan, val, val2, m);
+	return IIO_VAL_INT;
+}
+
+static int mxs_lradc_event_write_raw(struct iio_dev *iio_dev,
+				const struct iio_chan_spec *chan,
+				int val, int val2, long m)
+{
+	DBG(0, "%s: dev %p chan %p val %i val2 %i m %ld\n",
+		__func__, iio_dev, chan, val, val2, m);
+	return 0;
+}
+
+static int mxs_lradc_read_event_config(struct iio_dev *iio, u64 code)
+{
+	struct iio_trigger *trig = iio->trig;
+	struct mxs_lradc_trigger *trg = trig->private_data;
+	struct mxs_lradc_drv_data *drv_data = trg->drv_data;
+
+	drv_data->status_mask = readl(drv_data->mmio_base + LRADC_STATUS);
+	DBG(0, "%s: %p %llu status %08x\n", __func__, iio, code,
+		drv_data->status_mask);
+	return drv_data->status_mask & LRADC_STATUS_TOUCH_DETECT;
+}
+
+static int mxs_lradc_read_event_value(struct iio_dev *iio,
+				u64 code, int *val)
+{
+	DBG(0, "%s: %p %llu\n", __func__, iio, code);
+	return 0;
+}
+
+enum MXS_LRADC_TS_STATE {
+	STATE_DETECT,
+	STATE_PENDOWN,
+	STATE_MEASURE_X,
+	STATE_MEASURE_Y,
+	STATE_MEASURE_P,
+};
+
+static int mxs_lradc_write_event_config(struct iio_dev *iio,
+				u64 code, int state)
+{
+	struct iio_trigger *trig = iio->trig;
+	struct mxs_lradc_trigger *trg = trig->private_data;
+	struct mxs_lradc_drv_data *drv_data = trg->drv_data;
+
+	DBG(0, "%s: %p %llu: %d\n", __func__, iio, code, state);
+	switch (state) {
+	case STATE_DETECT:
+		mxs_lradc_enable_pen_detect(drv_data, 1, 1);
+		break;
+
+	case STATE_PENDOWN:
+		mxs_lradc_enable_pen_detect(drv_data, 1, 0);
+		break;
+
+	case STATE_MEASURE_X:
+		mxs_lradc_enable_pen_detect(drv_data, 0, 0);
+		mxs_lradc_enable_x_measurement(drv_data);
+		break;
+
+	case STATE_MEASURE_Y:
+		mxs_lradc_enable_y_measurement(drv_data);
+		break;
+
+	case STATE_MEASURE_P:
+		mxs_lradc_enable_pen_detect(drv_data, 1, 0);
+		break;
+	}
+	return 0;
+}
+
+static int mxs_lradc_write_event_value(struct iio_dev *iio,
+				u64 code, int val)
+{
+	DBG(0, "%s: %p %llu: %d\n", __func__, iio, code, val);
+	return 0;
+}
+
+static const struct iio_info mxs_lradc_event_iio_info = {
+	.driver_module		= THIS_MODULE,
+	.read_raw		= mxs_lradc_event_read_raw,
+	.write_raw		= mxs_lradc_event_write_raw,
+	.read_event_value	= mxs_lradc_read_event_value,
+	.read_event_config	= mxs_lradc_read_event_config,
+	.write_event_value	= mxs_lradc_write_event_value,
+	.write_event_config	= mxs_lradc_write_event_config,
+};
+
+static irqreturn_t mxs_lradc_handle_trigger(int irq, void *data)
+{
+	struct iio_trigger *trig = data;
+	struct mxs_lradc_trigger *trg = trig->private_data;
+	struct mxs_lradc_drv_data *drv_data = trg->drv_data;
+
+	uint32_t ctrl1 = readl(drv_data->mmio_base + LRADC_CTRL1);
+	s64 ts = iio_get_time_ns();
+	int id;
+
+	dev_dbg(&trig->dev, "%s: Handling IRQ %d\n", __func__, irq);
+
+	drv_data->status_mask = readl(drv_data->mmio_base + LRADC_STATUS);
+	/* mask out disabled interrupts */
+	ctrl1 &= ctrl1 >> 16;
+	for (id = 0; id < NUM_TRIGGERS; id++) {
+		if (ctrl1 & LRADC_CTRL1_LRADC_IRQ(id + 8)) {
+			DBG(0, "Handling trigger %p '%s' id: %d\n",
+				trig, trig->name, id);
+			iio_trigger_poll(trig, ts);
+		}
+	}
+	__mxs_clrl(ctrl1, drv_data->mmio_base + LRADC_CTRL1);
+
+	return IRQ_HANDLED;
+}
+
 static struct iio_map mxs_lradc_chan_map[] = {
 	{ "TS X+", "mxs-lradc-ts", "in_voltage2_xp_raw", },
 	{ "TS Y+", "mxs-lradc-ts", "in_voltage3_yp_raw", },
@@ -565,9 +886,19 @@ static struct iio_map mxs_lradc_chan_map[] = {
 	{ /* end of list sentinel */ }
 };
 
+static struct iio_map mxs_lradc_event_chan_map[] = {
+	{ "pendetect", "mxs-lradc-ts", "pendetect", },
+	{ /* end of list sentinel */ }
+};
+
 static int mxs_lradc_set_trigger_state(struct iio_trigger *trig, bool state)
 {
+	struct mxs_lradc_trigger *trg = trig->private_data;
+	struct mxs_lradc_drv_data *drv_data = trg->drv_data;
 
+	DBG(0, "%s: trigger %p id %d '%s' -> %d\n", __func__,
+		trig, trig->id, trig->name, state);
+	mxs_lradc_enable_pen_detect(drv_data, state, state);
 	return 0;
 }
 
@@ -576,9 +907,172 @@ static const struct iio_trigger_ops mxs_lradc_trigger_ops = {
 	.set_trigger_state = mxs_lradc_set_trigger_state,
 };
 
+static const char *mxs_lradc_trigger_names[] = {
+	"pendetect",
+	"threshold0",
+	"threshold1",
+	"button0",
+	"button1",
+};
+
+static inline void mxs_lradc_remove_trigger(struct iio_dev *iio)
+{
+	if (iio == NULL)
+		return;
+
+	DBG(0, "Unregistering iio_map %p from %p\n",
+		mxs_lradc_event_chan_map, iio);
+	iio_map_array_unregister(iio, mxs_lradc_event_chan_map);
+
+	DBG(0, "%s: Unregistering trigger %s\n", __func__,
+		iio->trig->name);
+	iio_trigger_unregister(iio->trig);
+
+	DBG(0, "%s: Unregistering iio_dev %p\n", __func__,
+		iio->trig->name);
+	iio_device_unregister(iio);
+
+	DBG(0, "%s: Freeing trigger %p\n", __func__,
+		iio->trig);
+	iio_free_trigger(iio->trig);
+
+	DBG(0, "%s: Freeing iio_dev %p\n", __func__, iio);
+	iio_free_device(iio);
+}
+
+static inline void mxs_lradc_remove_triggers(struct mxs_lradc_drv_data *drv_data)
+{
+	int i;
+
+	for (i = 0; i < NUM_TRIGGERS; i++)
+		mxs_lradc_remove_trigger(drv_data->trig[i]);
+}
+
+static int mxs_lradc_alloc_trigger(struct platform_device *pdev,
+				struct mxs_lradc_drv_data *drv_data, int index)
+{
+	int ret;
+	struct iio_trigger *trig;
+	struct mxs_lradc_trigger *data;
+	struct iio_dev *iio;
+	int irq;
+
+	irq = platform_get_irq(pdev, NUM_ADC_CHANNELS + index);
+	if (irq <= 0) {
+		dev_err(&pdev->dev, "IRQ resource[%d] not defined\n", irq);
+		return irq ?: -ENODEV;
+	}
+
+	iio = iio_allocate_device(sizeof(*data));
+	if (iio == NULL)
+		return -ENOMEM;
+
+	iio->name = pdev->name;
+	iio->dev.parent = &pdev->dev;
+	iio->info = &mxs_lradc_event_iio_info;
+	iio->modes = INDIO_BUFFER_TRIGGERED;
+	/* Channels */
+	iio->channels = mxs_lradc_event_chan_spec;
+	iio->num_channels = ARRAY_SIZE(mxs_lradc_event_chan_spec);
+
+	data = iio_priv(iio);
+
+	trig = iio_allocate_trigger(mxs_lradc_trigger_names[index]);
+	if (trig == NULL) {
+		ret = -ENOMEM;
+		goto err_free_dev;
+	}
+
+	data->id = index + NUM_ADC_CHANNELS;
+	data->drv_data = drv_data;
+	data->irq = irq;
+
+	trig->dev.parent = &pdev->dev;
+	trig->ops = &mxs_lradc_trigger_ops;
+	trig->private_data = data;
+
+	ret = devm_request_irq(&pdev->dev, irq, mxs_lradc_handle_trigger, 0,
+			trig->name, trig);
+	if (ret) {
+		dev_err(&pdev->dev, "devm_request_irq %i failed: %d\n",
+			irq, ret);
+		ret = -EBUSY;
+		goto err_free_trigger;
+	}
+
+	ret = iio_trigger_register(trig);
+	if (ret)
+		goto err_free_trigger;
+
+	ret = iio_map_array_register(iio, mxs_lradc_event_chan_map);
+	if (ret)
+		goto err_trigger_unregister;
+
+	iio->trig = trig;
+
+	ret = iio_device_register(iio);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to register Trigger IIO device\n");
+		goto err_iio_map_unregister;
+	}
+	drv_data->trig[index] = iio;
+
+	DBG(0, "%s: Created iio_dev[%d] %p '%s' trigger %p '%s'\n",
+		__func__, index, iio, iio->name, trig, trig->name);
+
+	return 0;
+
+err_iio_map_unregister:
+	iio_map_array_unregister(iio, mxs_lradc_event_chan_map);
+
+err_trigger_unregister:
+	iio_trigger_unregister(trig);
+
+err_free_trigger:
+	iio_free_trigger(trig);
+err_free_dev:
+	iio_free_device(iio);
+
+	return ret;
+}
+
+static int __devinit mxs_lradc_install_triggers(struct platform_device *pdev,
+			struct mxs_lradc_drv_data *drv_data)
+{
+	int ret;
+	int i;
+
+	/*
+	 * Register triggers
+	 */
+	for (i = 0; i < NUM_TRIGGERS; i++) {
+		ret = mxs_lradc_alloc_trigger(pdev, drv_data, i);
+		if (ret)
+			goto err;
+	}
+
+	return 0;
+
+err:
+	while (--i >= 0)
+		mxs_lradc_remove_trigger(drv_data->trig[i]);
+
+	return ret;
+}
+#else
+static inline int mxs_lradc_install_triggers(struct platform_device *pdev,
+			struct mxs_lradc_drv_data *drv_data)
+{
+	return 0;
+}
+
+static inline void mxs_lradc_remove_triggers(struct mxs_lradc_drv_data *drv_data)
+{
+}
+#endif
+
 static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 {
-	struct mxs_lradc_data *data[NUM_DELAY_CHANNELS];
 	struct mxs_lradc_drv_data *drv_data;
 	struct iio_dev *iio;
 	struct resource *r;
@@ -607,7 +1101,9 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 	 * IIO ops
 	 */
 	for (i = 0; i < NUM_DELAY_CHANNELS; i++) {
-		iio = iio_allocate_device(sizeof(*data[i]));
+		struct mxs_lradc_data *data;
+
+		iio = iio_allocate_device(sizeof(*data));
 		if (!iio) {
 			dev_err(&pdev->dev,
 				"Failed to allocate IIO device %i\n", i);
@@ -623,18 +1119,13 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 		iio->channels = mxs_lradc_chan_spec;
 		iio->num_channels = ARRAY_SIZE(mxs_lradc_chan_spec);
 
-		data[i] = iio_priv(iio);
-		data[i]->drv_data = drv_data;
-		data[i]->id = i;
+		data = iio_priv(iio);
+		data->drv_data = drv_data;
+		data->id = i;
 
-		spin_lock_init(&data[i]->lock);
+		spin_lock_init(&data->lock);
 
 		drv_data->iio[i] = iio;
-
-		ret = iio_map_array_register(drv_data->iio[i],
-					mxs_lradc_chan_map);
-		if (ret)
-			goto err_free_dev;
 	}
 
 	for (i = 0; i < NUM_ADC_CHANNELS; i++)
@@ -680,10 +1171,10 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 			goto err2;
 		}
 
-		ret = request_irq(r->start, mxs_lradc_handle_irq, 0,
-				r->name, drv_data);
+		ret = devm_request_irq(&pdev->dev, r->start,
+				mxs_lradc_handle_irq, 0, r->name, drv_data);
 		if (ret) {
-			dev_err(&pdev->dev, "request_irq %i failed: %d\n",
+			dev_err(&pdev->dev, "devm_request_irq %i failed: %d\n",
 				irq, ret);
 			goto err2;
 		}
@@ -693,53 +1184,20 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 	 * Register IIO device
 	 */
 	for (i = 0; i < NUM_DELAY_CHANNELS; i++) {
+		ret = iio_map_array_register(drv_data->iio[i], mxs_lradc_chan_map);
+		if (ret)
+			goto err3;
+
 		ret = iio_device_register(drv_data->iio[i]);
 		if (ret) {
 			dev_err(&pdev->dev, "Failed to register IIO device\n");
-			ret = -EBUSY;
-			goto err3;
+			goto err3a;
 		}
 	}
 
-	/*
-	 * Register triggers
-	 */
-	for (i = 0; i < NUM_TRIGGERS; i++) {
-		struct iio_trigger *trig;
-
-		irq = platform_get_irq(pdev, NUM_ADC_CHANNELS + i);
-		if (irq <= 0) {
-			dev_err(&pdev->dev, "IRQ resource[%d] not defined\n",
-				irq);
-			ret = irq ?: -ENODEV;
-			goto err4;
-		}
-
-		trig = iio_allocate_trigger("mxs_lradc-trig%d", i);
-		if (trig == NULL) {
-			ret = -ENOMEM;
-			goto err4;
-		}
-
-		drv_data->trig[i] = trig;
-
-		trig->dev.parent = &pdev->dev;
-		trig->ops = &mxs_lradc_trigger_ops;
-		trig->private_data = drv_data;
-
-		ret = request_irq(irq, mxs_lradc_handle_trigger, 0,
-				trig->name, trig);
-		if (ret) {
-			dev_err(&pdev->dev, "request_irq %i failed: %d\n",
-				irq, ret);
-			ret = -EBUSY;
-			goto err_free_trigger;
-		}
-
-		ret = iio_trigger_register(trig);
-		if (ret)
-			goto err_free_irq;
-	}
+	ret = mxs_lradc_install_triggers(pdev, drv_data);
+	if (ret)
+		goto err3;
 
 	devres_remove_group(&pdev->dev, mxs_lradc_probe);
 
@@ -747,32 +1205,17 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 
 	return 0;
 
-err4:
-	while (--i >= 0) {
-		iio_trigger_unregister(drv_data->trig[i]);
-		irq = platform_get_irq(pdev, NUM_ADC_CHANNELS + i);
-
-	err_free_irq:
-		free_irq(irq, drv_data->trig[i]);
-
-	err_free_trigger:
-		iio_free_trigger(drv_data->trig[i]);
-	}
-
-	i = NUM_ADC_CHANNELS;
 err3:
-	while (--i >= 0)
-	err_free_dev:
+	while (--i >= 0) {
+		iio_map_array_unregister(drv_data->iio[i], mxs_lradc_chan_map);
+	err3a:
 		iio_device_unregister(drv_data->iio[i]);
-
+	}
 err2:
 	i = NUM_DELAY_CHANNELS;
 err1:
-	while (--i >= 0) {
-		dev_err(&pdev->dev, "Unregistering iio_map[%d]\n", i);
-		iio_map_array_unregister(drv_data->iio[i], mxs_lradc_chan_map);
+	while (--i >= 0)
 		iio_free_device(drv_data->iio[i]);
-	}
 err0:
 	devres_release_group(&pdev->dev, mxs_lradc_probe);
 	return ret;
@@ -783,31 +1226,16 @@ static int __devexit mxs_lradc_remove(struct platform_device *pdev)
 	struct mxs_lradc_drv_data *drv_data = dev_get_drvdata(&pdev->dev);
 	int i;
 
+	mxs_lradc_remove_triggers(drv_data);
+
 	for (i = 0; i < NUM_DELAY_CHANNELS; i++) {
-		dev_dbg(&pdev->dev, "%s: Unregistering iio_dev %p\n", __func__,
-			drv_data->iio[i]);
+		dev_dbg(&pdev->dev, "%s: Unregistering iio_map %p for %p\n",
+			__func__, mxs_lradc_chan_map, drv_data->iio[i]);
 		iio_map_array_unregister(drv_data->iio[i], mxs_lradc_chan_map);
+
+		dev_dbg(&pdev->dev, "%s: Unregistering iio_dev %p\n",
+			__func__, drv_data->iio[i]);
 		iio_device_unregister(drv_data->iio[i]);
-	}
-
-	for (i = 0; i < NUM_ADC_CHANNELS; i++) {
-		int irq = platform_get_irq(pdev, i);
-
-		if (irq > 0) {
-			dev_dbg(&pdev->dev, "%s: Freeing IRQ%u\n", __func__,
-				irq);
-			free_irq(irq, drv_data);
-		}
-	}
-	for (i = 0; i < NUM_TRIGGERS; i++) {
-		int irq = platform_get_irq(pdev, i + NUM_ADC_CHANNELS);
-
-		if (irq > 0) {
-			dev_dbg(&pdev->dev, "%s: Freeing IRQ%u\n", __func__,
-				irq);
-			free_irq(irq, drv_data->trig[i]);
-		}
-		iio_free_trigger(drv_data->trig[i]);
 	}
 
 	for (i = 0; i < NUM_DELAY_CHANNELS; i++) {
