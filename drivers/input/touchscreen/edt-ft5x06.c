@@ -49,6 +49,7 @@
 
 struct edt_ft5x06_i2c_ts_data {
 	struct i2c_client *client;
+	unsigned char rdbuf[26];
 	struct input_dev *input;
 	int irq;
 	int irq_pin;
@@ -65,7 +66,7 @@ struct edt_ft5x06_i2c_ts_data {
 };
 
 static int edt_ft5x06_ts_readwrite(struct i2c_client *client,
-				   u16 wr_len, u8 *wr_buf,
+				   u16 wr_len, const u8 *wr_buf,
 				   u16 rd_len, u8 *rd_buf)
 {
 	struct i2c_msg wrmsg[2];
@@ -76,7 +77,7 @@ static int edt_ft5x06_ts_readwrite(struct i2c_client *client,
 		wrmsg[i].addr  = client->addr;
 		wrmsg[i].flags = 0;
 		wrmsg[i].len = wr_len;
-		wrmsg[i].buf = wr_buf;
+		wrmsg[i].buf = (u8 *)wr_buf; /* de-constify */
 		i++;
 	}
 	if (rd_len) {
@@ -100,19 +101,15 @@ static int edt_ft5x06_ts_readwrite(struct i2c_client *client,
 static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 {
 	struct edt_ft5x06_i2c_ts_data *tsdata = dev_id;
-	unsigned char touching = 0;
-	unsigned char rdbuf[26], wrbuf[1];
+	unsigned char touching;
+	static const unsigned char cmd = 0xf9;
 	int i, have_abs, type, ret;
 
-	memset(wrbuf, 0, sizeof(wrbuf));
-	memset(rdbuf, 0, sizeof(rdbuf));
-
-	wrbuf[0] = 0xf9;
+	memset(tsdata->rdbuf, 0, sizeof(tsdata->rdbuf));
 
 	mutex_lock(&tsdata->mutex);
-	ret = edt_ft5x06_ts_readwrite(tsdata->client,
-				      1, wrbuf,
-				      sizeof(rdbuf), rdbuf);
+	ret = edt_ft5x06_ts_readwrite(tsdata->client, 1, &cmd,
+				      sizeof(tsdata->rdbuf), tsdata->rdbuf);
 	mutex_unlock(&tsdata->mutex);
 	if (ret < 0) {
 		dev_err(&tsdata->client->dev,
@@ -120,16 +117,19 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 		goto out;
 	}
 
-	if (rdbuf[0] != 0xaa || rdbuf[1] != 0xaa || rdbuf[2] != 26) {
+	if (tsdata->rdbuf[0] != 0xaa || tsdata->rdbuf[1] != 0xaa ||
+		tsdata->rdbuf[2] != sizeof(tsdata->rdbuf) ||
+		tsdata->rdbuf[3] > (sizeof(tsdata->rdbuf) - 8) / 4) {
 		dev_err(&tsdata->client->dev,
-			"Unexpected header: %02x%02x%02x!\n",
-			rdbuf[0], rdbuf[1], rdbuf[2]);
+			"Unexpected header: %02x%02x%02x%02x!\n",
+			tsdata->rdbuf[0], tsdata->rdbuf[1],
+			tsdata->rdbuf[2], tsdata->rdbuf[3]);
 	}
 
 	have_abs = 0;
-	touching = rdbuf[3];
+	touching = tsdata->rdbuf[3];
 	for (i = 0; i < touching; i++) {
-		type = rdbuf[i*4+5] >> 6;
+		type = tsdata->rdbuf[i*4+5] >> 6;
 		/* ignore Touch Down and Reserved events */
 		if (type == 0x01 || type == 0x03)
 			continue;
@@ -138,19 +138,21 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 			input_report_key(tsdata->input, BTN_TOUCH,    1);
 			input_report_abs(tsdata->input, ABS_PRESSURE, 1);
 			input_report_abs(tsdata->input, ABS_X,
-					 ((rdbuf[i*4+5] << 8) |
-					  rdbuf[i*4+6]) & 0x0fff);
+					 ((tsdata->rdbuf[i*4+5] << 8) |
+					  tsdata->rdbuf[i*4+6]) & 0x0fff);
 			input_report_abs(tsdata->input, ABS_Y,
-					 ((rdbuf[i*4+7] << 8) |
-					  rdbuf[i*4+8]) & 0x0fff);
+					 ((tsdata->rdbuf[i*4+7] << 8) |
+					  tsdata->rdbuf[i*4+8]) & 0x0fff);
 			have_abs = 1;
 		}
 		input_report_abs(tsdata->input, ABS_MT_POSITION_X,
-				 ((rdbuf[i*4+5] << 8) | rdbuf[i*4+6]) & 0x0fff);
+				 ((tsdata->rdbuf[i*4+5] << 8) |
+					 tsdata->rdbuf[i*4+6]) & 0x0fff);
 		input_report_abs(tsdata->input, ABS_MT_POSITION_Y,
-				 ((rdbuf[i*4+7] << 8) | rdbuf[i*4+8]) & 0x0fff);
+				 ((tsdata->rdbuf[i*4+7] << 8) |
+					 tsdata->rdbuf[i*4+8]) & 0x0fff);
 		input_report_abs(tsdata->input, ABS_MT_TRACKING_ID,
-				 (rdbuf[i*4+7] >> 4) & 0x0f);
+				 (tsdata->rdbuf[i*4+7] >> 4) & 0x0f);
 		input_mt_sync(tsdata->input);
 	}
 	if (!have_abs) {
@@ -189,7 +191,7 @@ static int edt_ft5x06_i2c_register_write(struct edt_ft5x06_i2c_ts_data *tsdata,
 static int edt_ft5x06_i2c_register_read(struct edt_ft5x06_i2c_ts_data *tsdata,
 					u8 addr)
 {
-	u8 wrbuf[2], rdbuf[2];
+	u8 wrbuf[2];
 	int ret;
 
 	wrbuf[0]  = tsdata->factory_mode ? 0xf3 : 0xfc;
@@ -200,16 +202,17 @@ static int edt_ft5x06_i2c_register_read(struct edt_ft5x06_i2c_ts_data *tsdata,
 
 	ret = edt_ft5x06_ts_readwrite(tsdata->client,
 				      2, wrbuf,
-				      2, rdbuf);
+				      2, tsdata->rdbuf);
 
 	enable_irq(tsdata->irq);
 
-	if ((wrbuf[0] ^ wrbuf[1] ^ rdbuf[0]) != rdbuf[1])
+	if ((wrbuf[0] ^ wrbuf[1] ^ tsdata->rdbuf[0]) != tsdata->rdbuf[1])
 		dev_err(&tsdata->client->dev,
 			"crc error: 0x%02x expected, got 0x%02x\n",
-			(wrbuf[0] ^ wrbuf[1] ^ rdbuf[0]), rdbuf[1]);
+			(wrbuf[0] ^ wrbuf[1] ^ tsdata->rdbuf[0]),
+			tsdata->rdbuf[1]);
 
-	return ret < 0 ? ret : rdbuf[0];
+	return ret < 0 ? ret : tsdata->rdbuf[0];
 }
 
 static ssize_t edt_ft5x06_i2c_setting_show(struct device *dev,
@@ -519,7 +522,6 @@ static int edt_ft5x06_i2c_ts_probe(struct i2c_client *client,
 	struct edt_ft5x06_platform_data *pdata;
 	struct input_dev *input;
 	int error;
-	u8 rdbuf[23];
 	char *model_name, *fw_version;
 
 	dev_dbg(&client->dev, "probing for EDT FT5x06 I2C\n");
@@ -583,7 +585,7 @@ static int edt_ft5x06_i2c_ts_probe(struct i2c_client *client,
 
 	tsdata->factory_mode = 0;
 
-	if (edt_ft5x06_ts_readwrite(client, 1, "\xbb", 22, rdbuf) < 0) {
+	if (edt_ft5x06_ts_readwrite(client, 1, "\xbb", 22, tsdata->rdbuf) < 0) {
 		dev_err(&client->dev, "probing failed\n");
 		error = -ENODEV;
 		goto err_free_irq_pin;
@@ -605,13 +607,13 @@ static int edt_ft5x06_i2c_ts_probe(struct i2c_client *client,
 	mutex_unlock(&tsdata->mutex);
 
 	/* remove last '$' end marker */
-	rdbuf[22] = '\0';
-	if (rdbuf[21] == '$')
-		rdbuf[21] = '\0';
+	tsdata->rdbuf[22] = '\0';
+	if (tsdata->rdbuf[21] == '$')
+		tsdata->rdbuf[21] = '\0';
 
-	model_name = rdbuf + 1;
+	model_name = tsdata->rdbuf + 1;
 	/* look for Model/Version separator */
-	fw_version = strchr(rdbuf, '*');
+	fw_version = strchr(tsdata->rdbuf, '*');
 
 	if (fw_version) {
 		fw_version[0] = '\0';
