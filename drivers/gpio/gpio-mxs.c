@@ -119,13 +119,11 @@ static void mxs_gpio_toggle_irq_level(struct mxs_gpio_port *port, int offset)
 	int gpio = port->id * 32 + offset;
 	u32 pin_mask = 1 << offset;
 	void __iomem *pin_addr = port->base + PINCTRL_IRQPOL(port->id);
-//	void __iomem *ack_addr = port->base + PINCTRL_IRQSTAT(port->id);
 
 	if (gpio_get_value(gpio))
 		writel(pin_mask, pin_addr + MXS_CLR);
 	else
 		writel(pin_mask, pin_addr + MXS_SET);
-//	writel(pin_mask, ack_addr + MXS_CLR);
 }
 
 /* MXS has one interrupt *per* gpio port */
@@ -142,7 +140,6 @@ static void mxs_gpio_irq_handler(u32 irq, struct irq_desc *desc)
 
 	while (irq_stat != 0) {
 		int irqoffset = fls(irq_stat) - 1;
-
 		generic_handle_irq(gpio_irq_no_base + irqoffset);
 		if (test_bit(irqoffset, &port->bothedge))
 			mxs_gpio_toggle_irq_level(port, irqoffset);
@@ -189,6 +186,7 @@ static void __init mxs_gpio_init_gc(struct mxs_gpio_port *port)
 	ct->chip.irq_set_wake = mxs_gpio_set_wake_irq;
 	ct->regs.ack = PINCTRL_IRQSTAT(port->id) + MXS_CLR;
 	ct->regs.mask = PINCTRL_IRQEN(port->id);
+
 	irq_setup_generic_chip(gc, IRQ_MSK(32), 0, IRQ_NOREQUEST, 0);
 }
 
