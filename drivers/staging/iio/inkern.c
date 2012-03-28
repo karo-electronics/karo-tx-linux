@@ -39,24 +39,18 @@ int iio_map_array_register(struct iio_dev *indio_dev, struct iio_map *maps)
 		return 0;
 
 	mutex_lock(&iio_map_list_lock);
-	DBG(0, "%s: Registering %p chan_map %p\n", __func__,
-		indio_dev, maps);
 	while (maps[i].consumer_dev_name != NULL) {
 		mapi = kzalloc(sizeof(*mapi), GFP_KERNEL);
 		if (mapi == NULL) {
 			ret = -ENOMEM;
 			goto error_ret;
 		}
-		DBG(0, "%s: Registering entry %p '%s','%s','%s' @ %p\n",
-			__func__, &maps[i], maps[i].adc_channel_label,
-			maps[i].consumer_dev_name, maps[i].consumer_channel, mapi);
 		mapi->map = &maps[i];
 		mapi->indio_dev = indio_dev;
 		list_add(&mapi->l, &iio_map_list);
 		i++;
 	}
 error_ret:
-	DBG(0, "%s: Done\n", __func__);
 	mutex_unlock(&iio_map_list_lock);
 
 	return ret;
@@ -79,17 +73,11 @@ int iio_map_array_unregister(struct iio_dev *indio_dev,
 		return 0;
 
 	mutex_lock(&iio_map_list_lock);
-	DBG(0, "%s: Unregistering %p chan_map %p\n", __func__,
-		indio_dev, maps);
 	while (maps[i].consumer_dev_name != NULL) {
-		DBG(0, "%s: Unregistering entry %p '%s','%s'\n",
-			__func__, &maps[i], maps[i].adc_channel_label,
-			maps[i].consumer_dev_name);
 		found_it = false;
 		list_for_each_entry(mapi, &iio_map_list, l)
 			if (&maps[i] == mapi->map) {
 				list_del(&mapi->l);
-				DBG(0, "Freeing %p\n", mapi);
 				kfree(mapi);
 				found_it = true;
 				break;
@@ -104,7 +92,6 @@ int iio_map_array_unregister(struct iio_dev *indio_dev,
 		i++;
 	}
 error_ret:
-	DBG(0, "%s: Done\n", __func__);
 	mutex_unlock(&iio_map_list_lock);
 
 	return ret;
@@ -118,24 +105,13 @@ static const struct iio_chan_spec
 	int i;
 	const struct iio_chan_spec *chan = NULL;
 
-	DBG(0, "%s: Searching channel '%s' out of %u channels from dev %p\n",
-		__func__, name, indio_dev->num_channels, indio_dev);
 	for (i = 0; i < indio_dev->num_channels; i++) {
-		DBG(0, "%s: dev %p '%s' chan[%d] ds name: '%s'\n",
-			__func__, indio_dev, indio_dev->name, i,
-			indio_dev->channels[i].datasheet_name);
 		if (indio_dev->channels[i].datasheet_name &&
 		    strcmp(name, indio_dev->channels[i].datasheet_name) == 0) {
 			chan = &indio_dev->channels[i];
 			break;
 		}
 	}
-	if (chan)
-		DBG(0, "%s: found channel %p '%s'\n",
-			__func__, chan, chan->datasheet_name);
-	else
-		DBG(0, "%s: channel '%s' not found\n",
-			__func__, name);
 
 	return chan;
 }
@@ -152,12 +128,7 @@ struct iio_channel *iio_st_channel_get(const char *name,
 
 	/* first find matching entry the channel map */
 	mutex_lock(&iio_map_list_lock);
-	DBG(0, "%s: Searching for channel '%s' for device '%s'\n",
-		__func__, channel_name, name);
 	list_for_each_entry(c_i, &iio_map_list, l) {
-		DBG(0, "label='%s' dev='%s' key='%s'\n",
-			c_i->map->adc_channel_label, c_i->map->consumer_dev_name,
-			c_i->map->consumer_channel);
 		if ((name && strcmp(name, c_i->map->consumer_dev_name) != 0) ||
 		    (channel_name &&
 		     strcmp(channel_name, c_i->map->adc_channel_label) != 0))
@@ -166,13 +137,7 @@ struct iio_channel *iio_st_channel_get(const char *name,
 		get_device(&c->indio_dev->dev);
 		break;
 	}
-	if (c)
-		DBG(0, "found channel label='%s' dev='%s' key='%s' on iio_dev %p\n",
-			c->map->adc_channel_label, c->map->consumer_dev_name,
-			c->map->consumer_channel, c->indio_dev);
-	else
-		pr_err("Channel '%s' not found for device %s\n",
-			channel_name, name);
+
 	mutex_unlock(&iio_map_list_lock);
 	if (c == NULL)
 		return ERR_PTR(-ENODEV);
@@ -239,12 +204,7 @@ struct iio_channel *iio_st_channel_get_all(const char *name)
 	}
 
 	/* for each map fill in the chans element */
-	DBG(0, "%s: Searching channels for '%s'\n", __func__,
-		name);
 	list_for_each_entry(c, &iio_map_list, l) {
-		DBG(0, "label='%s' dev='%s' key='%s'\n",
-			c->map->adc_channel_label, c->map->consumer_dev_name,
-			c->map->consumer_channel);
 		if (name && strcmp(name, c->map->consumer_dev_name) != 0)
 			continue;
 		chans[mapind].indio_dev = c->indio_dev;

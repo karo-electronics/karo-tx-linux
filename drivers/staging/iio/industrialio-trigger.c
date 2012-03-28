@@ -14,11 +14,6 @@
 #include <linux/interrupt.h>
 #include <linux/list.h>
 #include <linux/slab.h>
-
-#ifdef DEBUG
-#define __debug_var	industrialio_debug
-#endif
-
 #include "iio.h"
 #include "trigger.h"
 #include "iio_core.h"
@@ -292,7 +287,6 @@ struct iio_poll_func
 		kfree(pf);
 		return NULL;
 	}
-	DBG(0, "%s: Allocated pollfunc %p\n", __func__, pf);
 	pf->h = h;
 	pf->thread = thread;
 	pf->type = type;
@@ -305,7 +299,6 @@ EXPORT_SYMBOL_GPL(iio_alloc_pollfunc);
 void iio_dealloc_pollfunc(struct iio_poll_func *pf)
 {
 	kfree(pf->name);
-	DBG(0, "%s: Freeing pollfunc %p\n", __func__, pf);
 	kfree(pf);
 }
 EXPORT_SYMBOL_GPL(iio_dealloc_pollfunc);
@@ -411,7 +404,6 @@ static void iio_trig_release(struct device *device)
 			       CONFIG_IIO_CONSUMERS_PER_TRIGGER);
 	}
 	kfree(trig->name);
-	DBG(0, "%s: Freeing trigger %p\n", __func__, trig);
 	kfree(trig);
 }
 
@@ -480,7 +472,6 @@ struct iio_trigger *iio_allocate_trigger(const char *fmt, ...)
 					  IRQ_NOPROBE);
 		}
 		get_device(&trig->dev);
-		DBG(0, "%s: Allocated trigger %p\n", __func__, trig);
 	}
 	return trig;
 }
@@ -488,7 +479,6 @@ EXPORT_SYMBOL(iio_allocate_trigger);
 
 void iio_free_trigger(struct iio_trigger *trig)
 {
-	DBG(0, "%s: Releasing trigger %p\n", __func__, trig);
 	if (trig)
 		put_device(&trig->dev);
 }
@@ -496,7 +486,6 @@ EXPORT_SYMBOL(iio_free_trigger);
 
 void iio_device_register_trigger_consumer(struct iio_dev *indio_dev)
 {
-	_DBG(0, "%s: dev=%p\n", __func__, indio_dev);
 	indio_dev->groups[indio_dev->groupcounter++] =
 		&iio_trigger_consumer_attr_group;
 }
@@ -505,7 +494,6 @@ EXPORT_SYMBOL(iio_device_register_trigger_consumer);
 void iio_device_unregister_trigger_consumer(struct iio_dev *indio_dev)
 {
 	/* Clean up any associated but not attached triggers references */
-	_DBG(0, "%s: dev=%p\n", __func__, indio_dev);
 #if 0
 	if (indio_dev->trig)
 		iio_put_trigger(indio_dev->trig);
