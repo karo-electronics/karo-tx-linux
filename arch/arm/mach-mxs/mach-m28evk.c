@@ -320,31 +320,6 @@ static struct mxs_mmc_platform_data m28evk_mmc_pdata[] __initdata = {
 	},
 };
 
-#define	RES_IRQ(id, res)	{ .name = id, .start = (res), .end = (res), .flags = IORESOURCE_IRQ }
-
-static struct resource mxs_lradc_rsrc[] = {
-	[0] = {
-		.start	= 0x80050000,
-		.end	= 0x80050000 + SZ_8K - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	RES_IRQ("LRADC CH0", MX28_INT_LRADC_CH0),
-	RES_IRQ("LRADC CH1", MX28_INT_LRADC_CH1),
-	RES_IRQ("LRADC CH2", MX28_INT_LRADC_CH2),
-	RES_IRQ("LRADC CH3", MX28_INT_LRADC_CH3),
-	RES_IRQ("LRADC CH4", MX28_INT_LRADC_CH4),
-	RES_IRQ("LRADC CH5", MX28_INT_LRADC_CH5),
-	RES_IRQ("LRADC CH6", MX28_INT_LRADC_CH6),
-	RES_IRQ("LRADC CH7", MX28_INT_LRADC_CH7),
-};
-
-static struct platform_device mxs_lradc = {
-	.name		= "mxs-lradc",
-	.id		= -1,
-	.resource	= mxs_lradc_rsrc,
-	.num_resources	= ARRAY_SIZE(mxs_lradc_rsrc),
-};
-
 static void __init m28evk_init(void)
 {
 	mxs_iomux_setup_multiple_pads(m28evk_pads, ARRAY_SIZE(m28evk_pads));
@@ -372,8 +347,6 @@ static void __init m28evk_init(void)
 	mx28_add_mxs_i2c(0);
 	i2c_register_board_info(0, m28_stk5v3_i2c_boardinfo,
 			ARRAY_SIZE(m28_stk5v3_i2c_boardinfo));
-
-	platform_device_register(&mxs_lradc);
 }
 
 static void __init m28evk_timer_init(void)
