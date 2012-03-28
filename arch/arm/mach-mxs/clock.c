@@ -51,7 +51,8 @@ static void __clk_disable(struct clk *clk)
 {
 	if (clk == NULL || IS_ERR(clk))
 		return;
-	WARN_ON(!clk->usecount);
+	if (WARN_ON(!clk->usecount))
+		return;
 
 	if (!(--clk->usecount)) {
 		if (clk->disable)
@@ -75,6 +76,7 @@ static int __clk_enable(struct clk *clk)
 		}
 	}
 	clk->usecount++;
+	BUG_ON(clk->usecount == 0);
 
 	return 0;
 }
@@ -134,6 +136,8 @@ int clk_prepare(struct clk *clk)
 		ret = __clk_prepare(clk);
 		if (ret)
 			clk->prepared--;
+	} else {
+		BUG_ON(clk->prepared == 0);
 	}
 	mutex_unlock(&clocks_mutex);
 
@@ -175,6 +179,7 @@ int clk_enable(struct clk *clk)
 		clk->flags |= CLK_WARNED;
 	}
 	clk->usecount++;
+	BUG_ON(clk->usecount == 0);
 	return 0;
 }
 EXPORT_SYMBOL(clk_enable);
@@ -192,7 +197,8 @@ void clk_disable(struct clk *clk)
 		pr_err("unbalanced clk_disable()\n");
 		clk->flags |= CLK_WARNED;
 	}
-	clk->usecount--;
+	if (!WARN_ON(clk->usecount == 0))
+		clk->usecount--;
 }
 EXPORT_SYMBOL(clk_disable);
 
