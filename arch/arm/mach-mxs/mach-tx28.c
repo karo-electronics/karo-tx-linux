@@ -40,10 +40,13 @@
 #define TX28_STK5_GPIO_LED		MXS_GPIO_NR(4, 10)
 #define TX28_STK5_GPIO_USBHOST_VBUSEN	MXS_GPIO_NR(3, 27)
 #define TX28_STK5_GPIO_USBOTG_VBUSEN	MXS_GPIO_NR(0, 18)
+
 #define TX28_STK5_GPIO_FLEXCAN_XCVR_EN	MXS_GPIO_NR(1, 0)
+
 #define TX28_STK5_GPIO_BACKLIGHT	MXS_GPIO_NR(3, 16)
 #define TX28_STK5_GPIO_LCD_ENABLE	MXS_GPIO_NR(1, 31)
 #define TX28_STK5_GPIO_LCD_RESET	MXS_GPIO_NR(3, 30)
+
 #define TX28_STK5_GPIO_EDT_IRQ		MXS_GPIO_NR(2, 5)
 #define TX28_STK5_GPIO_EDT_RESET	MXS_GPIO_NR(2, 6)
 #define TX28_STK5_GPIO_EDT_WAKE		MXS_GPIO_NR(4, 9)
@@ -344,7 +347,8 @@ static struct pca953x_platform_data tx28_pca953x_pdata = {
 #endif
 };
 
-#if defined CONFIG_TOUCHSCREEN_EDT_FT5X06 || defined CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE
+#if defined(CONFIG_TOUCHSCREEN_EDT_FT5X06) || \
+	defined(CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE)
 static struct edt_ft5x06_platform_data edt_ft5x06_pdata = {
 	.irq_pin = TX28_STK5_GPIO_EDT_IRQ,
 	.reset_pin = TX28_STK5_GPIO_EDT_RESET,
@@ -365,7 +369,8 @@ static struct i2c_board_info tx28_stk5v3_i2c_boardinfo[] __initdata = {
 	}, {
 		I2C_BOARD_INFO("sgtl5000", 0x0a),
 	},
-#if defined CONFIG_TOUCHSCREEN_EDT_FT5X06 || defined CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE
+#if defined(CONFIG_TOUCHSCREEN_EDT_FT5X06) || \
+	defined(CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE)
 	{
 		I2C_BOARD_INFO("edt-ft5x06", 0x38),
 		.platform_data  = &edt_ft5x06_pdata,
