@@ -20,19 +20,7 @@
 #include <linux/input.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
-
-#ifdef DEBUG
-static int debug = 1;
-module_param(debug, int, S_IRUGO | S_IWUSR);
-#define dbg_lvl(n)	(debug > (n))
-#else
-static int debug;
-module_param(debug, int, 0);
-#endif
-
-#define DBG(n, fmt...) do { if (dbg_lvl(n)) printk(KERN_DEBUG fmt); } while (0)
-#define DEV_DBG(n, dev, fmt...) do { if (dbg_lvl(n)) printk(KERN_DEBUG fmt); } while (0)
-
+#include <linux/delay.h>
 #include "../iio.h"
 #include "../driver.h"
 #include "../consumer.h"
@@ -40,22 +28,21 @@ module_param(debug, int, 0);
 #include "../trigger_consumer.h"
 #include "../iio_core_trigger.h"
 
-#define MAX_12BIT		((1 << 12) - 1)
+#include "mxs-lradc.h"
 
-static struct mxs_lradc_ts_plat_data {
-	const char *channel_name;
-	unsigned int debounce_delay_ms;
-} default_mxs_lradc_ts_pdata = {
-	.debounce_delay_ms = 0,
-};
+#define MAX_12BIT			((1 << 12) - 1)
+#define MAX_16BIT			((1 << 16) - 1)
+#define TOUCH_DEBOUNCE_TOLERANCE	100
+#define TRIGGER_DELAY			8
 
-enum MXS_LRADC_TS_STATE {
-	STATE_DETECT,
-	STATE_PENDOWN,
-	STATE_MEASURE_X,
-	STATE_MEASURE_Y,
-	STATE_MEASURE_P,
-};
+static unsigned int debounce_delay_us = 100;
+module_param(debounce_delay_us, int, S_IRUGO | S_IWUSR);
+
+static unsigned int oversample_count = 1;
+module_param(oversample_count, int, S_IRUGO | S_IWUSR);
+
+static unsigned int precharge_delay_us = 10;
+module_param(precharge_delay_us, int, S_IRUGO | S_IWUSR);
 
 enum {
 	TS_CHAN_DETECT,
@@ -77,10 +64,8 @@ struct mxs_lradc_ts {
 	const struct iio_info *info;
 
 	struct input_dev *input_dev;
-	unsigned int debounce_delay;
 
 	enum MXS_LRADC_TS_STATE state;
-	unsigned pendown:1;
 	uint16_t x;
 	uint16_t y;
 	uint16_t p;
@@ -91,9 +76,6 @@ static irqreturn_t mxs_lradc_ts_pendown(int irq, void *p)
 	struct iio_poll_func *pf = p;
 
 	pf->timestamp = iio_get_time_ns();
-
-	DEV_DBG(1, &pf->indio_dev->dev, "%s: iio_dev %p trigger %p\n", __func__,
-		pf->indio_dev, pf->indio_dev->trig);
 	return IRQ_WAKE_THREAD;
 }
 
@@ -103,116 +85,160 @@ static int mxs_lradc_ts_read_value(struct mxs_lradc_ts *ts, int chan_id)
 	struct iio_dev *iio_dev = ts->channels[chan_id]->indio_dev;
 	const struct iio_chan_spec *chan = ts->channels[chan_id]->channel;
 	const struct iio_info *info = iio_dev->info;
-	int val = -1;
+	int val, val2;
 
-	info->write_raw(iio_dev, chan, 0, 0, IIO_CHAN_INFO_OVERSAMPLE_COUNT);
+	if (oversample_count > 32)
+		oversample_count = 32;
+	else if (oversample_count == 0)
+		oversample_count = 1;
+
+	info->write_raw(iio_dev, chan, oversample_count, 0, IIO_CHAN_INFO_OVERSAMPLE_COUNT);
+
+	info->write_raw(iio_dev, chan, TRIGGER_DELAY, 0, IIO_CHAN_INFO_TRIGGER_DELAY);
 	ret = info->read_raw(iio_dev, chan, &val, NULL, 0);
-	DEV_DBG(1, &iio_dev->dev, "%s: read_raw(%d) returned %d (val=%08x)\n",
-		__func__, chan_id, ret, val);
+	if (ret != IIO_VAL_INT)
+		goto err;
+#if 1
+	return val;
+#else
+	info->write_raw(iio_dev, chan, TRIGGER_DELAY, 0, IIO_CHAN_INFO_TRIGGER_DELAY);
+	ret = info->read_raw(iio_dev, chan, &val2, NULL, 0);
+	if (ret != IIO_VAL_INT)
+		goto err;
 
-	if (ret == IIO_VAL_INT)
-		return val;
+	if (abs(val - val2) < TOUCH_DEBOUNCE_TOLERANCE)
+		return (val + val2) / 2;
 
+	return -EINVAL;
+#endif
+err:
+	dev_err(&ts->input_dev->dev, "Error reading data from chan %d\n", chan_id);
 	ts->state = STATE_DETECT;
 	return ret;
 }
 
 static struct mxs_lradc_ts *_ts;
 
-#include <linux/sched.h>
-
 static irqreturn_t mxs_lradc_ts_state_machine(int irq, void *p)
 {
 	int ret;
-	struct iio_poll_func *pf = p;
 	struct mxs_lradc_ts *ts = _ts;
 	const struct iio_chan_spec *chan = ts->detect_chan;
+	unsigned int yn, xp;
+	int pd = 1;
 
 	do {
-		enum MXS_LRADC_TS_STATE old_state = ts->state;
+		ts->info->write_event_config(ts->trig_dev,
+					chan->address, ts->state);
 
-	switch (ts->state) {
-	case STATE_DETECT:
-		DEV_DBG(1, &pf->indio_dev->dev, "%s: state %d\n", __func__, ts->state);
-		ts->state = STATE_PENDOWN;
-		break;
+		switch (ts->state) {
+		case STATE_DETECT:
+			ts->state = STATE_PENDOWN;
+			pd = 1;
+			break;
 
-	case STATE_PENDOWN:
-		DEV_DBG(1, &pf->indio_dev->dev, "%s: state %d\n", __func__, ts->state);
+		case STATE_PENDOWN:
+			if (debounce_delay_us) {
+				if (debounce_delay_us > 1000)
+					msleep(debounce_delay_us / 1000);
+				udelay(debounce_delay_us % 1000);
+			}
+			ret = ts->info->read_event_config(ts->trig_dev,
+								chan->address);
+			if (ret == pd)
+				ts->state = ret ? STATE_IDLE : STATE_DETECT;
+			pd = ret;
+			break;
 
-		if (ts->debounce_delay)
-			schedule_timeout(ts->debounce_delay);
-		ret = ts->info->read_event_config(ts->trig_dev, chan->address);
-		if (ret == 0) {
+		case STATE_IDLE:
+			udelay(precharge_delay_us);
+			ts->state = STATE_MEASURE_Y;
+			break;
+
+		case STATE_MEASURE_Y:
+			ret = mxs_lradc_ts_read_value(ts, TS_CHAN_XP);
+			if (ret < 0)
+				break;
+
+			ts->y = ret;
+			ts->state = STATE_MEASURE_X;
+			break;
+
+		case STATE_MEASURE_X:
+			ret = mxs_lradc_ts_read_value(ts, TS_CHAN_YP);
+			if (ret < 0)
+				break;
+
+			ts->x = ret;
+			ts->state = STATE_MEASURE_P;
+			break;
+
+		case STATE_MEASURE_P:
+			ret = mxs_lradc_ts_read_value(ts, TS_CHAN_XP);
+			if (ret < 0)
+				break;
+			xp = ret;
+
+			ret = mxs_lradc_ts_read_value(ts, TS_CHAN_YM);
+			if (ret < 0)
+				break;
+			yn = ret;
+
+			/*
+			 * Calculate pressure from touch contact resistance:
+			 * R = r_xplate * x / 4096 * (yn - xp) / xp
+			 *
+			 * pressure is inverse proportional to R:
+			 * P = xp * 4096 / r_xplate / x / (yn - xp)
+			 *
+			 * scaled to max possible range avoiding overflow
+			 * P = xp * 4096 * 256 / x / (yn - xp)
+			 */
+			if (xp > 0 && yn > xp && ts->x > 0) {
+				int p = xp * 4096 * 256 / ts->x / (yn - xp);
+
+				if (p == 0) {
+					/* discard bogus measurement */
+					ts->state = STATE_PENDOWN;
+					break;
+				} else if (p > MAX_16BIT) {
+					ts->p = MAX_16BIT;
+				} else {
+					ts->p = p;
+				}
+			} else {
+				ts->state = STATE_PENDOWN;
+				break;
+			}
+
+			ts->state = STATE_DONE;
+			break;
+
+		case STATE_DONE:
+			WARN_ON(!ts->p);
+			input_report_key(ts->input_dev, BTN_TOUCH, !!ts->p);
+			input_report_abs(ts->input_dev, ABS_X, ts->x);
+			input_report_abs(ts->input_dev, ABS_Y, ts->y);
+			input_report_abs(ts->input_dev, ABS_PRESSURE, ts->p);
+			input_sync(ts->input_dev);
+			ts->state = STATE_PENDOWN;
+			break;
+
+		default:
+			WARN_ONCE(1, "MXS LRADC-TS: Unhandled state %d\n",
+				ts->state);
 			ts->state = STATE_DETECT;
-			DEV_DBG(0, &pf->indio_dev->dev, "%s: new state %d\n", __func__, ts->state);
-			break;
 		}
-
-		ts->state = STATE_MEASURE_X;
-		break;
-
-	case STATE_MEASURE_X:
-		DEV_DBG(1, &pf->indio_dev->dev, "%s: state %d\n", __func__, ts->state);
-
-		ret = mxs_lradc_ts_read_value(ts, TS_CHAN_XP);
-		DBG(1, "%s: read %04x from XP\n", __func__, ret);
-		if (ret > 4000)
-			_DBG(1, "%s: read %04x from XP\n", __func__, ret);
-		if (ret < 0)
-			break;
-
-		/* For some reason the X and Y results are swapped! */
-		ts->y = ret;
-
-		ts->state = STATE_MEASURE_Y;
-		break;
-
-	case STATE_MEASURE_Y:
-		DEV_DBG(1, &pf->indio_dev->dev, "%s: state %d\n", __func__, ts->state);
-
-		ret = mxs_lradc_ts_read_value(ts, TS_CHAN_YP);
-		DBG(1, "%s: read %04x from YP\n", __func__, ret);
-		if (ret > 4000)
-			_DBG(1, "%s: read %04x from XP\n", __func__, ret);
-		if (ret < 0)
-			break;
-
-		/* For some reason the X and Y results are swapped! */
-		ts->x = ret;
-
-		ts->state = STATE_MEASURE_P;
-		break;
-
-	case STATE_MEASURE_P:
-		DEV_DBG(1, &pf->indio_dev->dev, "%s: state %d\n", __func__, ts->state);
-
-		ts->pendown = 1;
-		DEV_DBG(0, &ts->input_dev->dev, "Reporting PEN DOWN %u %u\n",
-			ts->x, ts->y);
-		input_report_key(ts->input_dev, BTN_TOUCH, 1);
-		input_report_abs(ts->input_dev, ABS_X, ts->x);
-		input_report_abs(ts->input_dev, ABS_Y, ts->y);
-		input_report_abs(ts->input_dev, ABS_PRESSURE, 1);
-		input_sync(ts->input_dev);
-		ts->state = STATE_PENDOWN;
-		break;
-	}
-	DEV_DBG(1, &pf->indio_dev->dev, "%s: state %d -> %d\n", __func__,
-		old_state, ts->state);
-
-	ts->info->write_event_config(ts->trig_dev, chan->address, ts->state);
 	} while (ts->state != STATE_DETECT);
 
-	if (ts->pendown) {
-		DEV_DBG(0, &ts->input_dev->dev, "Reporting PEN UP\n");
+	ts->info->write_event_config(ts->trig_dev, chan->address, ts->state);
+
+	if (ts->p) {
 		input_report_key(ts->input_dev, BTN_TOUCH, 0);
 		input_report_abs(ts->input_dev, ABS_PRESSURE, 0);
 		input_sync(ts->input_dev);
-		ts->pendown = 0;
+		ts->p = 0;
 	}
-	DEV_DBG(1, &pf->indio_dev->dev, "%s: Notifying trigger %p\n", __func__,
-		ts->trigger);
 	iio_trigger_notify_done(ts->trigger);
 	return IRQ_HANDLED;
 }
@@ -222,15 +248,11 @@ static int mxs_lradc_ts_open(struct input_dev *input_dev)
 	int ret;
 	struct mxs_lradc_ts *ts = input_get_drvdata(input_dev);
 
-	dev_dbg(&input_dev->dev, "%s: Getting module\n", __func__);
 	if (!try_module_get(ts->trig_dev->info->driver_module))
 		return -EAGAIN;
 
 	ts->state = STATE_DETECT;
 
-	dev_dbg(&input_dev->dev, "%s: Allocating pollfunc to %p trigger %p '%s'\n",
-		__func__, ts->trig_dev, ts->trig_dev->trig,
-		ts->trig_dev->trig ? ts->trig_dev->trig->name : NULL);
 	ts->trig_dev->pollfunc = iio_alloc_pollfunc(mxs_lradc_ts_pendown,
 				mxs_lradc_ts_state_machine, 0,
 				ts->trig_dev, ts->trigger->name);
@@ -245,21 +267,17 @@ static int mxs_lradc_ts_open(struct input_dev *input_dev)
 	 */
 	_ts = ts;
 
-	dev_dbg(&input_dev->dev, "%s: Attaching pollfunc\n", __func__);
 	ret = iio_triggered_buffer_postenable(ts->trig_dev);
 	if (ret)
 		goto err_dealloc_pollfunc;
-	dev_dbg(&input_dev->dev, "%s: done\n", __func__);
+
 	return 0;
 
 err_dealloc_pollfunc:
-	dev_dbg(&input_dev->dev, "%s: Deallocating pollfunc\n", __func__);
 	iio_dealloc_pollfunc(ts->trig_dev->pollfunc);
 
 err:
-	dev_dbg(&input_dev->dev, "%s: Releasing module\n", __func__);
 	module_put(ts->trig_dev->info->driver_module);
-	dev_dbg(&input_dev->dev, "%s: done\n", __func__);
 	return 0;
 }
 
@@ -267,22 +285,15 @@ static void mxs_lradc_ts_close(struct input_dev *input_dev)
 {
 	struct mxs_lradc_ts *ts = input_get_drvdata(input_dev);
 
-	dev_dbg(&input_dev->dev, "%s: Detaching pollfunc\n", __func__);
+	ts->state = STATE_DISABLE;
+	ts->info->write_event_config(ts->trig_dev,
+				ts->detect_chan->address, ts->state);
+
 	iio_triggered_buffer_predisable(ts->trig_dev);
 
-	dev_dbg(&input_dev->dev, "%s: Deallocating pollfunc\n", __func__);
 	iio_dealloc_pollfunc(ts->trig_dev->pollfunc);
 
-	dev_dbg(&input_dev->dev, "%s: Releasing module\n", __func__);
 	module_put(ts->trig_dev->info->driver_module);
-	dev_dbg(&input_dev->dev, "%s: done\n", __func__);
-}
-
-static int __devinit mxs_lradc_ts_of_init(struct platform_device *pdev,
-	struct mxs_lradc_ts_plat_data *pdata)
-{
-	*pdata = default_mxs_lradc_ts_pdata;
-	return 0;
 }
 
 static const char *mxs_lradc_channel_names[TS_NUM_CHANNELS] __devinitdata = {
@@ -294,7 +305,7 @@ static const char *mxs_lradc_channel_names[TS_NUM_CHANNELS] __devinitdata = {
 	[TS_CHAN_WIPER] = "TS WIPER",
 };
 
-static void __devinit mxs_lradc_ts_put_channels(struct mxs_lradc_ts *ts)
+static inline void mxs_lradc_ts_put_channels(struct mxs_lradc_ts *ts)
 {
 	int i;
 
@@ -318,11 +329,10 @@ static int __devinit mxs_lradc_ts_get_channels(struct platform_device *pdev,
 				ret = PTR_ERR(ts->channels[i]);
 			else
 				ret = -ENODEV;
+			dev_err(&pdev->dev, "Failed to get ADC channels: %d\n",
+				ret);
 			goto err;
 		}
-		dev_dbg(&pdev->dev, "%s: Got iio channel[%d] %p '%s'\n",
-			__func__, i, ts->channels[i],
-			ts->channels[i]->channel->extend_name);
 	}
 	return 0;
 err:
@@ -336,29 +346,18 @@ err:
 static int __devinit mxs_lradc_ts_probe(struct platform_device *pdev)
 {
 	int ret;
-	struct mxs_lradc_ts_plat_data *pdata = pdev->dev.platform_data;
 	struct mxs_lradc_ts *ts;
 
 	ts = devm_kzalloc(&pdev->dev, sizeof(struct mxs_lradc_ts), GFP_KERNEL);
 	if (ts == NULL)
 		return -ENOMEM;
 
-	if (pdata == NULL) {
-		pdata = devm_kzalloc(&pdev->dev,
-				sizeof(struct mxs_lradc_ts_plat_data),
-				GFP_KERNEL);
-		if (pdata == NULL)
-			return -ENOMEM;
-
-		ret = mxs_lradc_ts_of_init(pdev, pdata);
-		if (ret)
-			return ret;
-	}
-	if (pdata->debounce_delay_ms)
-		ts->debounce_delay =
-			msecs_to_jiffies(pdata->debounce_delay_ms);
-
 	ret = mxs_lradc_ts_get_channels(pdev, ts);
+	if (ret == -ENODEV)
+		/* if deferred driver init is available this could be retried
+		 * after the mxs_lradc driver is loaded
+		 */
+		return -EAGAIN;
 	if (ret)
 		return ret;
 
@@ -366,8 +365,6 @@ static int __devinit mxs_lradc_ts_probe(struct platform_device *pdev)
 	ts->trig_dev = ts->channels[TS_CHAN_DETECT]->indio_dev;
 	ts->info = ts->trig_dev->info;
 	ts->trigger = ts->trig_dev->trig;
-	dev_dbg(&pdev->dev, "%s: iio_dev=%p info=%p trigger=%p\n", __func__,
-		ts->trig_dev, ts->info, ts->trigger);
 
 	ts->input_dev = input_allocate_device();
 	if (ts->input_dev == NULL) {
@@ -397,15 +394,14 @@ static int __devinit mxs_lradc_ts_probe(struct platform_device *pdev)
 
 	input_set_abs_params(ts->input_dev, ABS_X, 0, MAX_12BIT, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_Y, 0, MAX_12BIT, 0, 0);
-	input_set_abs_params(ts->input_dev, ABS_PRESSURE, 0, MAX_12BIT, 0, 0);
+	input_set_abs_params(ts->input_dev, ABS_PRESSURE, 0, MAX_16BIT, 0, 0);
 
 	platform_set_drvdata(pdev, ts);
 
 	ret = input_register_device(ts->input_dev);
 	if (ret)
 		goto err_free_dev;
-	dev_dbg(&ts->input_dev->dev, "%s driver registered\n",
-		ts->input_dev->name);
+
 	return 0;
 
 err_free_dev:
@@ -420,13 +416,8 @@ static int __devexit mxs_lradc_ts_remove(struct platform_device *pdev)
 {
 	struct mxs_lradc_ts *ts = platform_get_drvdata(pdev);
 
-	dev_dbg(&ts->input_dev->dev, "%s: Releasing iio channels %p\n",
-		__func__, ts->channels);
-
 	mxs_lradc_ts_put_channels(ts);
 
-	dev_dbg(&ts->input_dev->dev, "%s: Unregistering input device %p\n",
-		__func__, ts->input_dev);
 	input_unregister_device(ts->input_dev);
 	return 0;
 }
@@ -443,27 +434,21 @@ static struct platform_driver mxs_lradc_ts_driver = {
 #if 1
 module_platform_driver(mxs_lradc_ts_driver);
 #else
-/*
-LRADC 2 - 6 can be used for 4/5-wire touch-screen control. LRADC 6 can be used for the wiper of 5-
-wire touch-screen controller and external temperature sensing, but they cannot be enabled at the
-same time in hardware configuration.
- LRADC 5 can be used for Y- of 4-wire and LR of 5-wire;
- LRADC 4 can be used for X- of 4-wire and UR of 5-wire;
- LRADC 3 can be used for Y+ of 4-wire and LL of 5-wire;
- LRADC 2 can be used for X+ and UR of 5-wire;
- For pull-up or pull-down switch control on LRADC2~5 pins, please refer to HW_LRADC_CTRL0 register.
-*/
-
-static int mxs_lradc_ts_init(void)
+static int __init mxs_lradc_ts_init(void)
 {
 	int ret;
 
-	ret = platform_driver_register(&mxs_lradc_ts_driver);
+	ret = platform_driver_probe(&mxs_lradc_ts_driver, mxs_lradc_ts_probe);
+	if (ret)
+		pr_err("Failed to install MXS LRADC Touchscreen driver: %d\n",
+			ret);
+	else
+		pr_info("MXS LRADC Touchscreen driver registered\n");
 	return ret;
 }
 module_init(mxs_lradc_ts_init);
 
-static void mxs_lradc_ts_exit(void)
+static void __exit mxs_lradc_ts_exit(void)
 {
 	platform_driver_unregister(&mxs_lradc_ts_driver);
 }
