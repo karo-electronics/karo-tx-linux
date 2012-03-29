@@ -948,6 +948,17 @@ static void __init tx28_add_flexcan(unsigned int id)
 	mx28_add_flexcan(id, &tx28_flexcan_pdata[id]);
 }
 
+/* SAIF */
+static const struct mxs_saif_platform_data tx28_mxs_saif0_pdata __initconst = {
+	.master_mode = 1,
+	.master_id = 0,
+};
+
+static const struct mxs_saif_platform_data tx28_mxs_saif1_pdata __initconst = {
+	.master_mode = 0,
+	.master_id = 0,
+};
+
 static int __init tx28_saif_init(void)
 {
 	void __iomem *digctrl_base = ioremap(MX28_DIGCTL_BASE_ADDR, SZ_4K);
@@ -963,9 +974,9 @@ static int __init tx28_saif_init(void)
 	tx28_add_regulators();
 
 	/* register audio playback device */
-	mx28_add_saif(0, NULL);
+	mx28_add_saif(0, &tx28_mxs_saif0_pdata);
 	/* register audio capture device */
-	mx28_add_saif(1, NULL);
+	mx28_add_saif(1, &tx28_mxs_saif1_pdata);
 
 	mxs_add_platform_device("mxs-sgtl5000", 0, NULL, 0,
 				NULL, 0);
