@@ -113,7 +113,7 @@ struct taos_lux {
 
 /* This structure is intentionally large to accommodate updates via sysfs. */
 /* Sized to 11 = max 10 segments + 1 termination segment */
-/* Assumption is one and only one type of glass used  */
+/* Assumption is is one and only one type of glass used  */
 static struct taos_lux taos_device_lux[11] = {
 	{  9830,  8520, 15729 },
 	{ 12452, 10807, 23344 },
@@ -884,10 +884,9 @@ fail2:
 	return ret;
 }
 
-#ifdef CONFIG_PM_SLEEP
-static int taos_suspend(struct device *dev)
+static int taos_suspend(struct i2c_client *client, pm_message_t state)
 {
-	struct iio_dev *indio_dev = i2c_get_clientdata(to_i2c_client(dev));
+	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 	struct tsl2583_chip *chip = iio_priv(indio_dev);
 	int ret = 0;
 
@@ -902,9 +901,9 @@ static int taos_suspend(struct device *dev)
 	return ret;
 }
 
-static int taos_resume(struct device *dev)
+static int taos_resume(struct i2c_client *client)
 {
-	struct iio_dev *indio_dev = i2c_get_clientdata(to_i2c_client(dev));
+	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 	struct tsl2583_chip *chip = iio_priv(indio_dev);
 	int ret = 0;
 
@@ -917,11 +916,6 @@ static int taos_resume(struct device *dev)
 	return ret;
 }
 
-static SIMPLE_DEV_PM_OPS(taos_pm_ops, taos_suspend, taos_resume);
-#define TAOS_PM_OPS (&taos_pm_ops)
-#else
-#define TAOS_PM_OPS NULL
-#endif
 
 static int __devexit taos_remove(struct i2c_client *client)
 {
@@ -943,9 +937,10 @@ MODULE_DEVICE_TABLE(i2c, taos_idtable);
 static struct i2c_driver taos_driver = {
 	.driver = {
 		.name = "tsl2583",
-		.pm = TAOS_PM_OPS,
 	},
 	.id_table = taos_idtable,
+	.suspend	= taos_suspend,
+	.resume		= taos_resume,
 	.probe = taos_probe,
 	.remove = __devexit_p(taos_remove),
 };

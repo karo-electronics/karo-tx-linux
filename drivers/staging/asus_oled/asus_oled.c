@@ -159,6 +159,7 @@ static void setup_packet_header(struct asus_oled_packet *packet, char flags,
 
 static void enable_oled(struct asus_oled_dev *odev, uint8_t enabl)
 {
+	int a;
 	int retval;
 	int act_len;
 	struct asus_oled_packet *packet;
@@ -177,15 +178,17 @@ static void enable_oled(struct asus_oled_dev *odev, uint8_t enabl)
 	else
 		packet->bitmap[0] = 0xae;
 
-	retval = usb_bulk_msg(odev->udev,
-		usb_sndbulkpipe(odev->udev, 2),
-		packet,
-		sizeof(struct asus_oled_header) + 1,
-		&act_len,
-		-1);
+	for (a = 0; a < 1; a++) {
+		retval = usb_bulk_msg(odev->udev,
+			usb_sndbulkpipe(odev->udev, 2),
+			packet,
+			sizeof(struct asus_oled_header) + 1,
+			&act_len,
+			-1);
 
-	if (retval)
-		dev_dbg(&odev->udev->dev, "retval = %d\n", retval);
+		if (retval)
+			dev_dbg(&odev->udev->dev, "retval = %d\n", retval);
+	}
 
 	odev->enabled = enabl;
 

@@ -232,7 +232,17 @@ static struct platform_driver iio_bfin_tmr_trigger_driver = {
 	.remove = __devexit_p(iio_bfin_tmr_trigger_remove),
 };
 
-module_platform_driver(iio_bfin_tmr_trigger_driver);
+static int __init iio_bfin_tmr_trig_init(void)
+{
+	return platform_driver_register(&iio_bfin_tmr_trigger_driver);
+}
+module_init(iio_bfin_tmr_trig_init);
+
+static void __exit iio_bfin_tmr_trig_exit(void)
+{
+	platform_driver_unregister(&iio_bfin_tmr_trigger_driver);
+}
+module_exit(iio_bfin_tmr_trig_exit);
 
 MODULE_AUTHOR("Michael Hennerich <hennerich@blackfin.uclinux.org>");
 MODULE_DESCRIPTION("Blackfin system timer based trigger for the iio subsystem");

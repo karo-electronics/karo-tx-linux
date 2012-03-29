@@ -33,8 +33,8 @@
  *        from _dts_glob and dts_defs etc.. which are defined for
  *        windows.
  */
-
-#include "crystalhd.h"
+#include "crystalhd_misc.h"
+#include "crystalhd_hw.h"
 
 enum crystalhd_state {
 	BC_LINK_INVALID		= 0x00,

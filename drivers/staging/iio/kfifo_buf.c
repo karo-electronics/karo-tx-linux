@@ -59,6 +59,21 @@ static struct attribute_group iio_kfifo_attribute_group = {
 	.name = "buffer",
 };
 
+struct iio_buffer *iio_kfifo_allocate(struct iio_dev *indio_dev)
+{
+	struct iio_kfifo *kf;
+
+	kf = kzalloc(sizeof *kf, GFP_KERNEL);
+	if (!kf)
+		return NULL;
+	kf->update_needed = true;
+	iio_buffer_init(&kf->buffer);
+	kf->buffer.attrs = &iio_kfifo_attribute_group;
+
+	return &kf->buffer;
+}
+EXPORT_SYMBOL(iio_kfifo_allocate);
+
 static int iio_get_bytes_per_datum_kfifo(struct iio_buffer *r)
 {
 	return r->bytes_per_datum;
@@ -89,6 +104,12 @@ static int iio_set_length_kfifo(struct iio_buffer *r, int length)
 	return 0;
 }
 
+void iio_kfifo_free(struct iio_buffer *r)
+{
+	kfree(iio_to_kfifo(r));
+}
+EXPORT_SYMBOL(iio_kfifo_free);
+
 static int iio_store_to_kfifo(struct iio_buffer *r,
 			      u8 *data,
 			      s64 timestamp)
@@ -116,7 +137,7 @@ static int iio_read_first_n_kfifo(struct iio_buffer *r,
 	return copied;
 }
 
-static const struct iio_buffer_access_funcs kfifo_access_funcs = {
+const struct iio_buffer_access_funcs kfifo_access_funcs = {
 	.store_to = &iio_store_to_kfifo,
 	.read_first_n = &iio_read_first_n_kfifo,
 	.request_update = &iio_request_update_kfifo,
@@ -125,27 +146,6 @@ static const struct iio_buffer_access_funcs kfifo_access_funcs = {
 	.get_length = &iio_get_length_kfifo,
 	.set_length = &iio_set_length_kfifo,
 };
-
-struct iio_buffer *iio_kfifo_allocate(struct iio_dev *indio_dev)
-{
-	struct iio_kfifo *kf;
-
-	kf = kzalloc(sizeof *kf, GFP_KERNEL);
-	if (!kf)
-		return NULL;
-	kf->update_needed = true;
-	iio_buffer_init(&kf->buffer);
-	kf->buffer.attrs = &iio_kfifo_attribute_group;
-	kf->buffer.access = &kfifo_access_funcs;
-
-	return &kf->buffer;
-}
-EXPORT_SYMBOL(iio_kfifo_allocate);
-
-void iio_kfifo_free(struct iio_buffer *r)
-{
-	kfree(iio_to_kfifo(r));
-}
-EXPORT_SYMBOL(iio_kfifo_free);
+EXPORT_SYMBOL(kfifo_access_funcs);
 
 MODULE_LICENSE("GPL");

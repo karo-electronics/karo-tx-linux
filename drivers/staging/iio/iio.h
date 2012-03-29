@@ -26,7 +26,7 @@ enum iio_data_type {
 
 /* Could add the raw attributes as well - allowing buffer only devices */
 enum iio_chan_info_enum {
-	/* 0 is reserved for raw attributes */
+	/* 0 is reserverd for raw attributes */
 	IIO_CHAN_INFO_SCALE = 1,
 	IIO_CHAN_INFO_OFFSET,
 	IIO_CHAN_INFO_CALIBSCALE,
@@ -36,8 +36,6 @@ enum iio_chan_info_enum {
 	IIO_CHAN_INFO_QUADRATURE_CORRECTION_RAW,
 	IIO_CHAN_INFO_AVERAGE_RAW,
 	IIO_CHAN_INFO_LOW_PASS_FILTER_3DB_FREQUENCY,
-	IIO_CHAN_INFO_OVERSAMPLE_COUNT,
-	IIO_CHAN_INFO_TRIGGER_DELAY,
 };
 
 #define IIO_CHAN_INFO_SHARED_BIT(type) BIT(type*2)
@@ -83,10 +81,6 @@ enum iio_chan_info_enum {
 #define IIO_CHAN_INFO_LOW_PASS_FILTER_3DB_FREQUENCY_SEPARATE_BIT \
 	IIO_CHAN_INFO_SEPARATE_BIT(			       \
 		IIO_CHAN_INFO_LOW_PASS_FILTER_3DB_FREQUENCY)
-#define IIO_CHAN_INFO_OVERSAMPLE_COUNT_SEPARATE_BIT		\
-	IIO_CHAN_INFO_SEPARATE_BIT(IIO_CHAN_INFO_OVERSAMPLE_COUNT)
-#define IIO_CHAN_INFO_OVERSAMPLE_COUNT_SHARED_BIT		\
-	IIO_CHAN_INFO_SHARED_BIT(IIO_CHAN_INFO_OVERSAMPLE_COUNT)
 
 enum iio_endian {
 	IIO_CPU,
@@ -94,29 +88,10 @@ enum iio_endian {
 	IIO_LE,
 };
 
-struct iio_chan_spec;
-struct iio_dev;
-
-/**
- * struct iio_chan_spec_ext_info - Extended channel info attribute
- * @name:	Info attribute name
- * @shared:	Whether this attribute is shared between all channels.
- * @read:	Read callback for this info attribute, may be NULL.
- * @write:	Write callback for this info attribute, may be NULL.
- */
-struct iio_chan_spec_ext_info {
-	const char *name;
-	bool shared;
-	ssize_t (*read)(struct iio_dev *, struct iio_chan_spec const *,
-			char *buf);
-	ssize_t (*write)(struct iio_dev *, struct iio_chan_spec const *,
-			const char *buf, size_t len);
-};
-
 /**
  * struct iio_chan_spec - specification of a single channel
  * @type:		What type of measurement is the channel making.
- * @channel:		What number or name do we wish to assign the channel.
+ * @channel:		What number or name do we wish to asign the channel.
  * @channel2:		If there is a second number for a differential
  *			channel then this is it. If modified is set then the
  *			value here specifies the modifier.
@@ -132,14 +107,11 @@ struct iio_chan_spec_ext_info {
  * @info_mask:		What information is to be exported about this channel.
  *			This includes calibbias, scale etc.
  * @event_mask:	What events can this channel produce.
- * @ext_info:		Array of extended info attributes for this channel.
- *			The array is NULL terminated, the last element should
- *			have it's name field set to NULL.
  * @extend_name:	Allows labeling of channel attributes with an
  *			informative name. Note this has no effect codes etc,
  *			unlike modifiers.
  * @datasheet_name:	A name used in in kernel mapping of channels. It should
- *			correspond to the first name that the channel is referred
+ *			corrspond to the first name that the channel is referred
  *			to by in the datasheet (e.g. IND), or the nearest
  *			possible compound name (e.g. IND-INC).
  * @processed_val:	Flag to specify the data access attribute should be
@@ -169,7 +141,6 @@ struct iio_chan_spec {
 	} scan_type;
 	long			info_mask;
 	long			event_mask;
-	const struct iio_chan_spec_ext_info *ext_info;
 	char			*extend_name;
 	const char		*datasheet_name;
 	unsigned		processed_val:1;
@@ -226,7 +197,14 @@ static inline s64 iio_get_time_ns(void)
 #define INDIO_ALL_BUFFER_MODES					\
 	(INDIO_BUFFER_TRIGGERED | INDIO_BUFFER_HARDWARE)
 
+/* Vast majority of this is set by the industrialio subsystem on a
+ * call to iio_device_register. */
+#define IIO_VAL_INT 1
+#define IIO_VAL_INT_PLUS_MICRO 2
+#define IIO_VAL_INT_PLUS_NANO 3
+
 struct iio_trigger; /* forward declaration */
+struct iio_dev;
 
 /**
  * struct iio_info - constant information about device
@@ -248,7 +226,7 @@ struct iio_trigger; /* forward declaration */
  * @write_event_config:	set if the event is enabled.
  * @read_event_value:	read a value associated with the event. Meaning
  *			is event dependant. event_code specifies which event.
- * @write_event_value:	write the value associated with the event.
+ * @write_event_value:	write the value associate with the event.
  *			Meaning is event dependent.
  * @validate_trigger:	function to validate the trigger when the
  *			current trigger gets changed.
@@ -291,9 +269,6 @@ struct iio_info {
 				struct iio_trigger *trig);
 	int (*update_scan_mode)(struct iio_dev *indio_dev,
 				const unsigned long *scan_mask);
-	int (*debugfs_reg_access)(struct iio_dev *indio_dev,
-				  unsigned reg, unsigned writeval,
-				  unsigned *readval);
 };
 
 /**
@@ -335,14 +310,11 @@ struct iio_buffer_setup_ops {
  * @chan_attr_group:	[INTERN] group for all attrs in base directory
  * @name:		[DRIVER] name of the device.
  * @info:		[DRIVER] callbacks and constant info from driver
- * @info_exist_lock:	[INTERN] lock to prevent use during removal
  * @chrdev:		[INTERN] associated character device
  * @groups:		[INTERN] attribute groups
  * @groupcounter:	[INTERN] index of next attribute group
  * @flags:		[INTERN] file ops related flags including busy flag.
- * @debugfs_dentry:	[INTERN] device specific debugfs dentry.
- * @cached_reg_addr:	[INTERN] cached register address for debugfs reads.
- */
+ **/
 struct iio_dev {
 	int				id;
 
@@ -355,9 +327,9 @@ struct iio_dev {
 	struct iio_buffer		*buffer;
 	struct mutex			mlock;
 
-	const unsigned long		*available_scan_masks;
+	unsigned long			*available_scan_masks;
 	unsigned			masklength;
-	const unsigned long		*active_scan_mask;
+	unsigned long			*active_scan_mask;
 	struct iio_trigger		*trig;
 	struct iio_poll_func		*pollfunc;
 
@@ -368,7 +340,6 @@ struct iio_dev {
 	struct attribute_group		chan_attr_group;
 	const char			*name;
 	const struct iio_info		*info;
-	struct mutex			info_exist_lock;
 	const struct iio_buffer_setup_ops	*setup_ops;
 	struct cdev			chrdev;
 #define IIO_MAX_GROUPS 6
@@ -376,10 +347,6 @@ struct iio_dev {
 	int				groupcounter;
 
 	unsigned long			flags;
-#if defined(CONFIG_DEBUG_FS)
-	struct dentry			*debugfs_dentry;
-	unsigned			cached_reg_addr;
-#endif
 };
 
 /**
@@ -456,21 +423,5 @@ static inline bool iio_buffer_enabled(struct iio_dev *indio_dev)
 	return indio_dev->currentmode
 		& (INDIO_BUFFER_TRIGGERED | INDIO_BUFFER_HARDWARE);
 };
-
-/**
- * iio_get_debugfs_dentry() - helper function to get the debugfs_dentry
- * @indio_dev:		IIO device info structure for device
- **/
-#if defined(CONFIG_DEBUG_FS)
-static inline struct dentry *iio_get_debugfs_dentry(struct iio_dev *indio_dev)
-{
-	return indio_dev->debugfs_dentry;
-};
-#else
-static inline struct dentry *iio_get_debugfs_dentry(struct iio_dev *indio_dev)
-{
-	return NULL;
-};
-#endif
 
 #endif /* _INDUSTRIAL_IO_H_ */

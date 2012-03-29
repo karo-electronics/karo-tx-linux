@@ -95,6 +95,15 @@ void gh_delete(struct gh_t_hash_tab *hash_tab)
 }
 
 /*
+ *  ======== gh_exit ========
+ */
+
+void gh_exit(void)
+{
+	/* Do nothing */
+}
+
+/*
  *  ======== gh_find ========
  */
 
@@ -110,6 +119,15 @@ void *gh_find(struct gh_t_hash_tab *hash_tab, void *key)
 	}
 
 	return NULL;
+}
+
+/*
+ *  ======== gh_init ========
+ */
+
+void gh_init(void)
+{
+	/* Do nothing */
 }
 
 /*

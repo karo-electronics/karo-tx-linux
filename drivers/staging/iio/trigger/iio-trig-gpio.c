@@ -160,7 +160,17 @@ static struct platform_driver iio_gpio_trigger_driver = {
 	},
 };
 
-module_platform_driver(iio_gpio_trigger_driver);
+static int __init iio_gpio_trig_init(void)
+{
+	return platform_driver_register(&iio_gpio_trigger_driver);
+}
+module_init(iio_gpio_trig_init);
+
+static void __exit iio_gpio_trig_exit(void)
+{
+	platform_driver_unregister(&iio_gpio_trigger_driver);
+}
+module_exit(iio_gpio_trig_exit);
 
 MODULE_AUTHOR("Jonathan Cameron <jic23@cam.ac.uk>");
 MODULE_DESCRIPTION("Example gpio trigger for the iio subsystem");

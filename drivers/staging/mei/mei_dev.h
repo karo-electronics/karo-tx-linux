@@ -1,7 +1,7 @@
 /*
  *
  * Intel Management Engine Interface (Intel MEI) Linux driver
- * Copyright (c) 2003-2012, Intel Corporation.
+ * Copyright (c) 2003-2011, Intel Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -29,8 +29,6 @@
 #define MEI_START_WD_DATA_SIZE         20
 #define MEI_WD_PARAMS_SIZE             4
 #define MEI_WD_STATE_INDEPENDENCE_MSG_SENT       (1 << 0)
-
-#define MEI_RD_MSG_BUF_SIZE           (128 * sizeof(u32))
 
 /*
  * MEI PCI Device object
@@ -89,7 +87,7 @@ enum mei_states {
 	MEI_POWER_UP
 };
 
-/* init clients states*/
+/* init clients  states*/
 enum mei_init_clients_states {
 	MEI_START_MESSAGE = 0,
 	MEI_ENUM_CLIENTS_MESSAGE,
@@ -127,7 +125,7 @@ enum mei_cb_major_types {
  */
 struct mei_message_data {
 	u32 size;
-	unsigned char *data;
+	char *data;
 } __packed;
 
 
@@ -221,7 +219,7 @@ struct mei_device {
 	bool need_reset;
 
 	u32 extra_write_index;
-	unsigned char rd_msg_buf[MEI_RD_MSG_BUF_SIZE];	/* control messages */
+	u32 rd_msg_buf[128];	/* used for control messages */
 	u32 wr_msg_buf[128];	/* used for control messages */
 	u32 ext_msg_buf[8];	/* for control responses */
 	u32 rd_msg_hdr;

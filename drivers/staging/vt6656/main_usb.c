@@ -1657,8 +1657,8 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		{
 			char essid[IW_ESSID_MAX_SIZE+1];
 			if (wrq->u.essid.pointer) {
-				iwctl_giwessid(dev, NULL,
-					    &(wrq->u.essid), essid);
+				rc = iwctl_giwessid(dev, NULL,
+						    &(wrq->u.essid), essid);
 				if (copy_to_user(wrq->u.essid.pointer,
 						         essid,
 						         wrq->u.essid.length) )
@@ -1698,13 +1698,14 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 
 	// Get the current bit-rate
 	case SIOCGIWRATE:
-		iwctl_giwrate(dev, NULL, &(wrq->u.bitrate), NULL);
+
+		rc = iwctl_giwrate(dev, NULL, &(wrq->u.bitrate), NULL);
 		break;
 
 	// Set the desired RTS threshold
 	case SIOCSIWRTS:
 
-		rc = iwctl_siwrts(dev, &(wrq->u.rts));
+		rc = iwctl_siwrts(dev, NULL, &(wrq->u.rts), NULL);
 		break;
 
 	// Get the current RTS threshold
@@ -1732,7 +1733,7 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 
 		// Get mode of operation
 	case SIOCGIWMODE:
-		iwctl_giwmode(dev, NULL, &(wrq->u.mode), NULL);
+		rc = iwctl_giwmode(dev, NULL, &(wrq->u.mode), NULL);
 		break;
 
 		// Set WEP keys and mode
@@ -1810,7 +1811,7 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		{
 			struct iw_range range;
 
-			iwctl_giwrange(dev, NULL, &(wrq->u.data), (char *) &range);
+			rc = iwctl_giwrange(dev, NULL, &(wrq->u.data), (char *) &range);
 			if (copy_to_user(wrq->u.data.pointer, &range, sizeof(struct iw_range)))
 				rc = -EFAULT;
 		}
