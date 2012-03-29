@@ -489,9 +489,9 @@ ssize_t iio_buffer_show_enable(struct device *dev,
 EXPORT_SYMBOL(iio_buffer_show_enable);
 
 /* note NULL used as error indicator as it doesn't make sense. */
-static unsigned long *iio_scan_mask_match(unsigned long *av_masks,
+static const unsigned long *iio_scan_mask_match(const unsigned long *av_masks,
 					  unsigned int masklength,
-					  unsigned long *mask)
+					  const unsigned long *mask)
 {
 	if (bitmap_empty(mask, masklength))
 		return NULL;
@@ -554,10 +554,10 @@ EXPORT_SYMBOL(iio_sw_buffer_preenable);
 int iio_scan_mask_set(struct iio_dev *indio_dev,
 		      struct iio_buffer *buffer, int bit)
 {
-	unsigned long *mask;
+	const unsigned long *mask;
 	unsigned long *trialmask;
 
-	trialmask = kmalloc(sizeof(*trialmask)*
+	trialmask = kzalloc(sizeof(*trialmask)*
 			    BITS_TO_LONGS(indio_dev->masklength),
 			    GFP_KERNEL);
 
@@ -678,7 +678,7 @@ int iio_update_demux(struct iio_dev *indio_dev)
 			if (in_loc % length)
 				in_loc += length - in_loc % length;
 		}
-		p = kmalloc(sizeof(*p), GFP_KERNEL);
+		p = kzalloc(sizeof(*p), GFP_KERNEL);
 		if (p == NULL) {
 			ret = -ENOMEM;
 			goto error_clear_mux_table;
@@ -698,7 +698,7 @@ int iio_update_demux(struct iio_dev *indio_dev)
 	}
 	/* Relies on scan_timestamp being last */
 	if (buffer->scan_timestamp) {
-		p = kmalloc(sizeof(*p), GFP_KERNEL);
+		p = kzalloc(sizeof(*p), GFP_KERNEL);
 		if (p == NULL) {
 			ret = -ENOMEM;
 			goto error_clear_mux_table;

@@ -40,10 +40,13 @@
 #define TX28_STK5_GPIO_LED		MXS_GPIO_NR(4, 10)
 #define TX28_STK5_GPIO_USBHOST_VBUSEN	MXS_GPIO_NR(3, 27)
 #define TX28_STK5_GPIO_USBOTG_VBUSEN	MXS_GPIO_NR(0, 18)
+
 #define TX28_STK5_GPIO_FLEXCAN_XCVR_EN	MXS_GPIO_NR(1, 0)
+
 #define TX28_STK5_GPIO_BACKLIGHT	MXS_GPIO_NR(3, 16)
 #define TX28_STK5_GPIO_LCD_ENABLE	MXS_GPIO_NR(1, 31)
 #define TX28_STK5_GPIO_LCD_RESET	MXS_GPIO_NR(3, 30)
+
 #define TX28_STK5_GPIO_EDT_IRQ		MXS_GPIO_NR(2, 5)
 #define TX28_STK5_GPIO_EDT_RESET	MXS_GPIO_NR(2, 6)
 #define TX28_STK5_GPIO_EDT_WAKE		MXS_GPIO_NR(4, 9)
@@ -344,7 +347,8 @@ static struct pca953x_platform_data tx28_pca953x_pdata = {
 #endif
 };
 
-#if defined CONFIG_TOUCHSCREEN_EDT_FT5X06 || defined CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE
+#if defined(CONFIG_TOUCHSCREEN_EDT_FT5X06) || \
+	defined(CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE)
 static struct edt_ft5x06_platform_data edt_ft5x06_pdata = {
 	.irq_pin = TX28_STK5_GPIO_EDT_IRQ,
 	.reset_pin = TX28_STK5_GPIO_EDT_RESET,
@@ -365,7 +369,8 @@ static struct i2c_board_info tx28_stk5v3_i2c_boardinfo[] __initdata = {
 	}, {
 		I2C_BOARD_INFO("sgtl5000", 0x0a),
 	},
-#if defined CONFIG_TOUCHSCREEN_EDT_FT5X06 || defined CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE
+#if defined(CONFIG_TOUCHSCREEN_EDT_FT5X06) || \
+	defined(CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE)
 	{
 		I2C_BOARD_INFO("edt-ft5x06", 0x38),
 		.platform_data  = &edt_ft5x06_pdata,
@@ -983,6 +988,47 @@ static int __init tx28_saif_init(void)
 	return 0;
 }
 
+/* LRADC & Touchscreen */
+#define	RES_IRQ(id, res) {		\
+	.name = id,			\
+	.start = (res),			\
+	.end = (res),			\
+	.flags = IORESOURCE_IRQ,	\
+}
+
+static struct resource mxs_lradc_rsrc[] = {
+	{
+		.start	= 0x80050000,
+		.end	= 0x80050000 + SZ_8K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	RES_IRQ("LRADC CH0", MX28_INT_LRADC_CH0),
+	RES_IRQ("LRADC CH1", MX28_INT_LRADC_CH1),
+	RES_IRQ("LRADC CH2", MX28_INT_LRADC_CH2),
+	RES_IRQ("LRADC CH3", MX28_INT_LRADC_CH3),
+	RES_IRQ("LRADC CH4", MX28_INT_LRADC_CH4),
+	RES_IRQ("LRADC CH5", MX28_INT_LRADC_CH5),
+	RES_IRQ("LRADC CH6", MX28_INT_LRADC_CH6),
+	RES_IRQ("LRADC CH7", MX28_INT_LRADC_CH7),
+	RES_IRQ("LRADC TOUCH", MX28_INT_LRADC_TOUCH),
+	RES_IRQ("LRADC THRESH0", MX28_INT_LRADC_THRESH0),
+	RES_IRQ("LRADC THRESH1", MX28_INT_LRADC_THRESH1),
+	RES_IRQ("LRADC BUTTON0", MX28_INT_LRADC_BUTTON0),
+	RES_IRQ("LRADC BUTTON1", MX28_INT_LRADC_BUTTON1),
+};
+
+static struct platform_device mxs_lradc = {
+	.name		= "mxs-lradc",
+	.id		= -1,
+	.resource	= mxs_lradc_rsrc,
+	.num_resources	= ARRAY_SIZE(mxs_lradc_rsrc),
+};
+
+static struct platform_device mxs_lradc_ts = {
+	.name		= "mxs-lradc-ts",
+	.id		= -1,
+};
+
 static void __init tx28_board_init(void)
 {
 	mxs_iomux_setup_multiple_pads(tx28_stk5v3_pads,
@@ -1008,6 +1054,9 @@ static void __init tx28_board_init(void)
 	tx28_add_gpmi_nand();
 
 	tx28_saif_init();
+
+	platform_device_register(&mxs_lradc);
+	platform_device_register(&mxs_lradc_ts);
 }
 
 static void __init tx28_stk5v3_init(void)

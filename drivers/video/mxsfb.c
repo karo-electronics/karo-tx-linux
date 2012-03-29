@@ -759,7 +759,7 @@ static int __devinit mxsfb_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct mxsfb_info *host;
 	struct fb_info *fb_info;
-	struct fb_modelist *modelist = NULL;
+	struct fb_videomode *fbmode = NULL;
 	int i, ret;
 
 	if (!pdata) {
@@ -819,15 +819,18 @@ static int __devinit mxsfb_probe(struct platform_device *pdev)
 		fb_add_videomode(&pdata->mode_list[i], &fb_info->modelist);
 		if (mode && strlen(mode) > 0 &&
 			strcmp(mode, pdata->mode_list[i].name) == 0) {
-			modelist = list_first_entry(&fb_info->modelist,
-						struct fb_modelist, list);
+			fbmode = &pdata->mode_list[i];
 		}
 	}
-	if (modelist == NULL)
-		modelist = list_first_entry(&fb_info->modelist,
-					struct fb_modelist, list);
-
-	fb_videomode_to_var(&fb_info->var, &modelist->mode);
+	if (fbmode == NULL) {
+		if (list_empty(&fb_info->modelist)) {
+			ret = -ENOENT;
+			goto error_register;
+		}
+		fbmode = &list_first_entry(&fb_info->modelist,
+					struct fb_modelist, list)->mode;
+	}
+	fb_videomode_to_var(&fb_info->var, fbmode);
 
 	/* init the color fields */
 	mxsfb_check_var(&fb_info->var, fb_info);
