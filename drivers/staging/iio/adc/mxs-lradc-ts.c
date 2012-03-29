@@ -85,34 +85,24 @@ static int mxs_lradc_ts_read_value(struct mxs_lradc_ts *ts, int chan_id)
 	struct iio_dev *iio_dev = ts->channels[chan_id]->indio_dev;
 	const struct iio_chan_spec *chan = ts->channels[chan_id]->channel;
 	const struct iio_info *info = iio_dev->info;
-	int val, val2;
+	int val;
 
 	if (oversample_count > 32)
 		oversample_count = 32;
 	else if (oversample_count == 0)
 		oversample_count = 1;
 
-	info->write_raw(iio_dev, chan, oversample_count, 0, IIO_CHAN_INFO_OVERSAMPLE_COUNT);
+	info->write_raw(iio_dev, chan, oversample_count, 0,
+			IIO_CHAN_INFO_OVERSAMPLE_COUNT);
 
-	info->write_raw(iio_dev, chan, TRIGGER_DELAY, 0, IIO_CHAN_INFO_TRIGGER_DELAY);
+	info->write_raw(iio_dev, chan, TRIGGER_DELAY, 0,
+			IIO_CHAN_INFO_TRIGGER_DELAY);
 	ret = info->read_raw(iio_dev, chan, &val, NULL, 0);
-	if (ret != IIO_VAL_INT)
-		goto err;
-#if 1
-	return val;
-#else
-	info->write_raw(iio_dev, chan, TRIGGER_DELAY, 0, IIO_CHAN_INFO_TRIGGER_DELAY);
-	ret = info->read_raw(iio_dev, chan, &val2, NULL, 0);
-	if (ret != IIO_VAL_INT)
-		goto err;
+	if (ret == IIO_VAL_INT)
+		return val;
 
-	if (abs(val - val2) < TOUCH_DEBOUNCE_TOLERANCE)
-		return (val + val2) / 2;
-
-	return -EINVAL;
-#endif
-err:
-	dev_err(&ts->input_dev->dev, "Error reading data from chan %d\n", chan_id);
+	dev_err(&ts->input_dev->dev,
+		"Error reading data from chan %d\n", chan_id);
 	ts->state = STATE_DETECT;
 	return ret;
 }
@@ -431,30 +421,9 @@ static struct platform_driver mxs_lradc_ts_driver = {
 	.remove = mxs_lradc_ts_remove,
 };
 
-#if 1
 module_platform_driver(mxs_lradc_ts_driver);
-#else
-static int __init mxs_lradc_ts_init(void)
-{
-	int ret;
-
-	ret = platform_driver_probe(&mxs_lradc_ts_driver, mxs_lradc_ts_probe);
-	if (ret)
-		pr_err("Failed to install MXS LRADC Touchscreen driver: %d\n",
-			ret);
-	else
-		pr_info("MXS LRADC Touchscreen driver registered\n");
-	return ret;
-}
-module_init(mxs_lradc_ts_init);
-
-static void __exit mxs_lradc_ts_exit(void)
-{
-	platform_driver_unregister(&mxs_lradc_ts_driver);
-}
-module_exit(mxs_lradc_ts_exit);
-#endif
 
 MODULE_AUTHOR("Lothar Waßmann <LW@KARO-electronics.de>");
 MODULE_DESCRIPTION("MXS LRADC Touchcontroller driver");
 MODULE_LICENSE("GPL v2");
+MODULE_ALIAS("platform:mxs-lradc-ts");

@@ -881,7 +881,8 @@ static inline void mxs_lradc_remove_trigger(struct iio_dev *iio)
 	iio_free_device(iio);
 }
 
-static inline void mxs_lradc_remove_triggers(struct mxs_lradc_drv_data *drv_data)
+static inline void mxs_lradc_remove_triggers(
+			struct mxs_lradc_drv_data *drv_data)
 {
 	int i;
 
@@ -893,7 +894,7 @@ static inline void mxs_lradc_remove_triggers(struct mxs_lradc_drv_data *drv_data
 }
 
 static int mxs_lradc_install_trigger(struct platform_device *pdev,
-				struct mxs_lradc_drv_data *drv_data, int index)
+			struct mxs_lradc_drv_data *drv_data, int index)
 {
 	int ret;
 	struct iio_trigger *trig;
@@ -1007,12 +1008,13 @@ err:
 }
 #else
 static inline int mxs_lradc_install_triggers(struct platform_device *pdev,
-			struct mxs_lradc_drv_data *drv_data)
+		struct mxs_lradc_drv_data *drv_data)
 {
 	return 0;
 }
 
-static inline void mxs_lradc_remove_triggers(struct mxs_lradc_drv_data *drv_data)
+static inline void mxs_lradc_remove_triggers(
+		struct mxs_lradc_drv_data *drv_data)
 {
 }
 #endif
@@ -1139,7 +1141,8 @@ static int __devinit mxs_lradc_probe(struct platform_device *pdev)
 	 * Register IIO device
 	 */
 	for (i = 0; i < NUM_DELAY_CHANNELS; i++) {
-		ret = iio_map_array_register(drv_data->iio[i], mxs_lradc_chan_map);
+		ret = iio_map_array_register(drv_data->iio[i],
+					mxs_lradc_chan_map);
 		if (ret)
 			goto err3;
 
@@ -1208,3 +1211,4 @@ module_platform_driver(mxs_lradc_driver);
 MODULE_AUTHOR("Marek Vasut <marek.vasut@...>");
 MODULE_DESCRIPTION("Freescale i.MX23/i.MX28 LRADC driver");
 MODULE_LICENSE("GPL v2");
+MODULE_ALIAS("platform:mxs-lradc");
