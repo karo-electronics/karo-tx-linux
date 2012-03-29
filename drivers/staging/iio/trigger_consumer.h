@@ -29,6 +29,7 @@ struct iio_poll_func {
 	char *name;
 	int irq;
 	s64 timestamp;
+//	void *pf_private;
 };
 
 
@@ -37,6 +38,7 @@ struct iio_poll_func
 		    irqreturn_t (*thread)(int irq, void *p),
 		    int type,
 		    struct iio_dev *indio_dev,
+//		void *private_data,
 		    const char *fmt,
 		    ...);
 void iio_dealloc_pollfunc(struct iio_poll_func *pf);
