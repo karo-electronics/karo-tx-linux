@@ -24,6 +24,7 @@
 #include <linux/regulator/machine.h>
 #include <linux/regulator/fixed.h>
 #include <linux/mtd/partitions.h>
+#include <linux/input/matrix_keypad.h>
 
 #include <video/platform_lcd.h>
 #include <linux/input/edt-ft5x06.h>
@@ -54,6 +55,8 @@
 #define TX28_GPIO_IN_PAD_CTRL		(MXS_PAD_3V3 | MXS_PAD_4MA | \
 					MXS_PAD_PULLUP)
 #define TX28_LCD_PAD_CTRL		(MXS_PAD_3V3 | MXS_PAD_4MA)
+
+#define TX28_PCA9554_GPIO_BASE		160
 
 static const iomux_cfg_t tx28_stk5v3_pads[] __initconst = {
 	/* LED */
@@ -305,6 +308,8 @@ static int __init tx28_add_spi_gpio(void)
 	return ret;
 }
 
+/* I2C devices */
+
 /* Touchscreen */
 #define TSC2007_PEN_GPIO		MXS_GPIO_NR(3, 20)
 
@@ -338,15 +343,7 @@ static struct tsc2007_platform_data tx28_stk5_tsc2007_pdata = {
 	.exit_platform_hw = tx28_stk5_tsc2007_exit,
 };
 
-static struct pca953x_platform_data tx28_pca953x_pdata = {
-	.gpio_base	= 160,
-#ifdef CONFIG_GPIO_PCA953X_IRQ
-	.irq_base	= 128,
-#else
-	.irq_base	= -1,
-#endif
-};
-
+/* Multitouch controller */
 #if defined(CONFIG_TOUCHSCREEN_EDT_FT5X06) || \
 	defined(CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE)
 static struct edt_ft5x06_platform_data edt_ft5x06_pdata = {
@@ -354,6 +351,64 @@ static struct edt_ft5x06_platform_data edt_ft5x06_pdata = {
 	.reset_pin = TX28_STK5_GPIO_EDT_RESET,
 };
 #endif
+
+/* Keypad via I2C GPIO extender */
+static const char *const tx28_keypad_gpio_names[] = {
+	"col0",
+	"col1",
+	"col2",
+	"col3",
+	"row0",
+	"row1",
+	"row2",
+	"row3",
+};
+
+static struct pca953x_platform_data tx28_pca953x_pdata = {
+	.gpio_base	= TX28_PCA9554_GPIO_BASE,
+#ifdef CONFIG_GPIO_PCA953X_IRQ
+	.irq_base	= MXS_BOARD_IRQ_START,
+#else
+	.irq_base	= -1,
+#endif
+	.names = tx28_keypad_gpio_names,
+};
+
+static const unsigned int tx28_kpd_col_gpios[] = {
+	TX28_PCA9554_GPIO_BASE + 0,
+	TX28_PCA9554_GPIO_BASE + 1,
+	TX28_PCA9554_GPIO_BASE + 2,
+	TX28_PCA9554_GPIO_BASE + 3,
+};
+
+static const unsigned int tx28_kpd_row_gpios[] = {
+	TX28_PCA9554_GPIO_BASE + 4,
+	TX28_PCA9554_GPIO_BASE + 5,
+	TX28_PCA9554_GPIO_BASE + 6,
+	TX28_PCA9554_GPIO_BASE + 7,
+};
+
+static const uint32_t tx28_keycodes[] = {
+	KEY(0, 0, KEY_LEFT),
+	KEY(0, 1, KEY_ENTER),
+	KEY(0, 2, KEY_RIGHT),
+};
+
+static struct matrix_keymap_data tx28_default_keymap = {
+	.keymap = tx28_keycodes,
+	.keymap_size = ARRAY_SIZE(tx28_keycodes),
+};
+
+static const struct matrix_keypad_platform_data tx28_kpd_data __initconst = {
+	.keymap_data = &tx28_default_keymap,
+	.row_gpios = tx28_kpd_row_gpios,
+	.num_row_gpios = ARRAY_SIZE(tx28_kpd_row_gpios),
+	.col_gpios = tx28_kpd_col_gpios,
+	.num_col_gpios = ARRAY_SIZE(tx28_kpd_col_gpios),
+	.wakeup = true,
+	.active_low = true,
+	.no_autorepeat = true,
+};
 
 static struct i2c_board_info tx28_stk5v3_i2c_boardinfo[] __initdata = {
 	{
@@ -1054,6 +1109,9 @@ static void __init tx28_board_init(void)
 	tx28_add_gpmi_nand();
 
 	tx28_saif_init();
+
+	mxs_add_platform_device("matrix-keypad", 0, NULL, 0,
+				&tx28_kpd_data, sizeof(tx28_kpd_data));
 
 	platform_device_register(&mxs_lradc);
 	platform_device_register(&mxs_lradc_ts);
