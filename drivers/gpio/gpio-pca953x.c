@@ -356,12 +356,13 @@ static int pca953x_irq_set_type(struct irq_data *d, unsigned int type)
 	uint16_t level = d->irq - chip->irq_base;
 	uint16_t mask = 1 << level;
 
+#if 0
 	if (!(type & IRQ_TYPE_EDGE_BOTH)) {
 		dev_err(&chip->client->dev, "irq %d: unsupported type %d\n",
 			d->irq, type);
 		return -EINVAL;
 	}
-
+#endif
 	if (type & IRQ_TYPE_EDGE_FALLING)
 		chip->irq_trig_fall |= mask;
 	else
@@ -475,15 +476,24 @@ static int pca953x_irq_setup(struct pca953x_chip *chip,
 		mutex_init(&chip->irq_lock);
 
 		chip->irq_base = irq_alloc_descs(-1, irq_base, chip->gpio_chip.ngpio, -1);
-		if (chip->irq_base < 0)
+		if (chip->irq_base < 0) {
+			dev_err(&client->dev, "Failed to allocate IRQ descriptor: %d\n",
+				chip->irq_base);
 			goto out_failed;
+		}
 
 		for (lvl = 0; lvl < chip->gpio_chip.ngpio; lvl++) {
 			int irq = lvl + chip->irq_base;
 
 			irq_clear_status_flags(irq, IRQ_NOREQUEST);
-			irq_set_chip_data(irq, chip);
+			ret = irq_set_chip_data(irq, chip);
+			if (ret) {
+				dev_err(&client->dev, "irq_set_chip_data() failed with: %d\n", ret);
+			}
 			irq_set_chip(irq, &pca953x_irq_chip);
+			if (ret) {
+				dev_err(&client->dev, "irq_set_chip() failed with: %d\n", ret);
+			}
 			irq_set_nested_thread(irq, true);
 #ifdef CONFIG_ARM
 			set_irq_flags(irq, IRQF_VALID);
