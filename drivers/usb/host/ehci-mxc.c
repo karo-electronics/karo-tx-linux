@@ -175,11 +175,11 @@ static int ehci_mxc_drv_probe(struct platform_device *pdev)
 		dev_err(dev, "Failed to get USB clock: %d\n", ret);
 		goto err_clk;
 	}
-	clk_enable(priv->usbclk);
+	clk_prepare_enable(priv->usbclk);
 
 	priv->ahbclk = clk_get(dev, "usb_ahb");
 	if (!IS_ERR(priv->ahbclk))
-		clk_enable(priv->ahbclk);
+		clk_prepare_enable(priv->ahbclk);
 	else if (priv->ahbclk == ERR_PTR(-ENOENT))
 		priv->ahbclk = NULL;
 	else {
@@ -189,7 +189,7 @@ static int ehci_mxc_drv_probe(struct platform_device *pdev)
 	/* "dr" device may have its own clock */
 	priv->phyclk = clk_get(dev, "usb_phy");
 	if (!IS_ERR(priv->phyclk))
-		clk_enable(priv->phyclk);
+		clk_prepare_enable(priv->phyclk);
 	else if (priv->phyclk == ERR_PTR(-ENOENT))
 		priv->phyclk = NULL;
 	else {
@@ -282,16 +282,16 @@ err_add:
 		pdata->exit(pdev);
 err_init:
 	if (priv->phyclk) {
-		clk_disable(priv->phyclk);
+		clk_disable_unprepare(priv->phyclk);
 		clk_put(priv->phyclk);
 	}
 err_clk_phy:
 	if (priv->ahbclk) {
-		clk_disable(priv->ahbclk);
+		clk_disable_unprepare(priv->ahbclk);
 		clk_put(priv->ahbclk);
 	}
 err_clk_ahb:
-	clk_disable(priv->usbclk);
+	clk_disable_unprepare(priv->usbclk);
 	clk_put(priv->usbclk);
 err_clk:
 	iounmap(hcd->regs);
@@ -323,14 +323,14 @@ static int __exit ehci_mxc_drv_remove(struct platform_device *pdev)
 	usb_put_hcd(hcd);
 	platform_set_drvdata(pdev, NULL);
 
-	clk_disable(priv->usbclk);
+	clk_disable_unprepare(priv->usbclk);
 	clk_put(priv->usbclk);
 	if (priv->ahbclk) {
-		clk_disable(priv->ahbclk);
+		clk_disable_unprepare(priv->ahbclk);
 		clk_put(priv->ahbclk);
 	}
 	if (priv->phyclk) {
-		clk_disable(priv->phyclk);
+		clk_disable_unprepare(priv->phyclk);
 		clk_put(priv->phyclk);
 	}
 

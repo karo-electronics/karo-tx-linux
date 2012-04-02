@@ -100,7 +100,7 @@ void iio_simple_dummy_unconfigure_buffer(struct iio_dev *indio_dev);
 #else
 static inline int iio_simple_dummy_configure_buffer(struct iio_dev *indio_dev)
 {
-	return 0;
+	return -EOPNOTSUPP;
 };
 static inline
 void iio_simple_dummy_unconfigure_buffer(struct iio_dev *indio_dev)

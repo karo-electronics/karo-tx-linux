@@ -25,12 +25,18 @@
 
 struct module;
 
+enum clk_flags {
+	CLK_WARNED = 0x01,
+};
+
 struct clk {
 	int id;
 	/* Source clock this clk depends on */
 	struct clk *parent;
 	/* Reference count of clock enable/disable */
 	__s8 usecount;
+	/* Reference count of clock prepare/unprepare */
+	__s8 prepared;
 	/* Register bit position for clock's enable/disable control. */
 	u8 enable_shift;
 	/* Register address for clock's enable/disable control. */

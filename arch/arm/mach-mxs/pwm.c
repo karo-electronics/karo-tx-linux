@@ -128,7 +128,7 @@ int pwm_enable(struct pwm_device *pwm)
 	dev_dbg(pwm->dev, "enable\n");
 
 	if (!pwm->enabled) {
-		rc = clk_enable(pwm->clk);
+		rc = clk_prepare_enable(pwm->clk);
 		if (!rc) {
 			pwm->enabled = 1;
 			__pwm_enable(pwm, 1);
@@ -152,7 +152,7 @@ void pwm_disable(struct pwm_device *pwm)
 		 */
 		usleep_range(pwm->period_us, pwm->period_us * 2);
 		__pwm_enable(pwm, 0);
-		clk_disable(pwm->clk);
+		clk_disable_unprepare(pwm->clk);
 		pwm->enabled = 0;
 	}
 }

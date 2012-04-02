@@ -193,4 +193,34 @@ config MAX1363_RING_BUFFER
 	  Say yes here to include ring buffer support in the MAX1363
 	  ADC driver.
 
+config LPC32XX_ADC
+	tristate "NXP LPC32XX ADC"
+	depends on ARCH_LPC32XX && !TOUCHSCREEN_LPC32XX
+	help
+	  Say yes here to build support for the integrated ADC inside the
+	  LPC32XX SoC. Note that this feature uses the same hardware as the
+	  touchscreen driver, so you can only select one of the two drivers
+	  (lpc32xx_adc or lpc32xx_ts). Provides direct access via sysfs.
+
+config MXS_LRADC
+	tristate "Freescale i.MX23/i.MX28 LRADC"
+	depends on ARCH_MXS
+	help
+	  Say yes here to build support for i.MX23/i.MX28 LRADC converter
+	  built into these chips.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called mxs-lradc.
+
+config MXS_LRADC_TS
+	tristate "Freescale i.MX23/i.MX28 LRADC touchcontroller driver"
+	depends on MXS_LRADC
+	select IIO_TRIGGER
+	help
+	  Say yes here to build the touchcontroller driver for the
+	  i.MX23/i.MX28 LRADC converter
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called mxs-lradc-ts.
+	
 endmenu

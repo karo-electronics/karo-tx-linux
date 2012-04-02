@@ -24,6 +24,7 @@
 #include <linux/regulator/machine.h>
 #include <linux/regulator/fixed.h>
 #include <linux/mtd/partitions.h>
+#include <linux/input/matrix_keypad.h>
 
 #include <video/platform_lcd.h>
 #include <linux/input/edt-ft5x06.h>
@@ -40,15 +41,22 @@
 #define TX28_STK5_GPIO_LED		MXS_GPIO_NR(4, 10)
 #define TX28_STK5_GPIO_USBHOST_VBUSEN	MXS_GPIO_NR(3, 27)
 #define TX28_STK5_GPIO_USBOTG_VBUSEN	MXS_GPIO_NR(0, 18)
+
 #define TX28_STK5_GPIO_FLEXCAN_XCVR_EN	MXS_GPIO_NR(1, 0)
+
 #define TX28_STK5_GPIO_BACKLIGHT	MXS_GPIO_NR(3, 16)
 #define TX28_STK5_GPIO_LCD_ENABLE	MXS_GPIO_NR(1, 31)
 #define TX28_STK5_GPIO_LCD_RESET	MXS_GPIO_NR(3, 30)
+
 #define TX28_STK5_GPIO_EDT_IRQ		MXS_GPIO_NR(2, 5)
 #define TX28_STK5_GPIO_EDT_RESET	MXS_GPIO_NR(2, 6)
+#define TX28_STK5_GPIO_EDT_WAKE		MXS_GPIO_NR(4, 9)
 
 #define TX28_GPIO_IN_PAD_CTRL		(MXS_PAD_3V3 | MXS_PAD_4MA | \
 					MXS_PAD_PULLUP)
+#define TX28_LCD_PAD_CTRL		(MXS_PAD_3V3 | MXS_PAD_4MA)
+
+#define TX28_PCA9554_GPIO_BASE		160
 
 static const iomux_cfg_t tx28_stk5v3_pads[] __initconst = {
 	/* LED */
@@ -56,41 +64,40 @@ static const iomux_cfg_t tx28_stk5v3_pads[] __initconst = {
 		MXS_PAD_3V3 | MXS_PAD_4MA | MXS_PAD_NOPULL,
 
 	/* framebuffer */
-#define LCD_MODE (MXS_PAD_3V3 | MXS_PAD_4MA)
-	MX28_PAD_LCD_D00__LCD_D0 | LCD_MODE,
-	MX28_PAD_LCD_D01__LCD_D1 | LCD_MODE,
-	MX28_PAD_LCD_D02__LCD_D2 | LCD_MODE,
-	MX28_PAD_LCD_D03__LCD_D3 | LCD_MODE,
-	MX28_PAD_LCD_D04__LCD_D4 | LCD_MODE,
-	MX28_PAD_LCD_D05__LCD_D5 | LCD_MODE,
-	MX28_PAD_LCD_D06__LCD_D6 | LCD_MODE,
-	MX28_PAD_LCD_D07__LCD_D7 | LCD_MODE,
-	MX28_PAD_LCD_D08__LCD_D8 | LCD_MODE,
-	MX28_PAD_LCD_D09__LCD_D9 | LCD_MODE,
-	MX28_PAD_LCD_D10__LCD_D10 | LCD_MODE,
-	MX28_PAD_LCD_D11__LCD_D11 | LCD_MODE,
-	MX28_PAD_LCD_D12__LCD_D12 | LCD_MODE,
-	MX28_PAD_LCD_D13__LCD_D13 | LCD_MODE,
-	MX28_PAD_LCD_D14__LCD_D14 | LCD_MODE,
-	MX28_PAD_LCD_D15__LCD_D15 | LCD_MODE,
-	MX28_PAD_LCD_D16__LCD_D16 | LCD_MODE,
-	MX28_PAD_LCD_D17__LCD_D17 | LCD_MODE,
-	MX28_PAD_LCD_D18__LCD_D18 | LCD_MODE,
-	MX28_PAD_LCD_D19__LCD_D19 | LCD_MODE,
-	MX28_PAD_LCD_D20__LCD_D20 | LCD_MODE,
-	MX28_PAD_LCD_D21__LCD_D21 | LCD_MODE,
-	MX28_PAD_LCD_D22__LCD_D22 | LCD_MODE,
-	MX28_PAD_LCD_D23__LCD_D23 | LCD_MODE,
-	MX28_PAD_LCD_RD_E__LCD_VSYNC | LCD_MODE,
-	MX28_PAD_LCD_WR_RWN__LCD_HSYNC | LCD_MODE,
-	MX28_PAD_LCD_RS__LCD_DOTCLK | LCD_MODE,
-	MX28_PAD_LCD_CS__LCD_CS | LCD_MODE,
-	MX28_PAD_LCD_VSYNC__LCD_VSYNC | LCD_MODE,
-	MX28_PAD_LCD_HSYNC__LCD_HSYNC | LCD_MODE,
-	MX28_PAD_LCD_DOTCLK__LCD_DOTCLK | LCD_MODE,
-	MX28_PAD_LCD_ENABLE__GPIO_1_31 | LCD_MODE,
-	MX28_PAD_LCD_RESET__GPIO_3_30 | LCD_MODE,
-	MX28_PAD_PWM0__GPIO_3_16 | LCD_MODE,
+	MX28_PAD_LCD_D00__LCD_D0 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D01__LCD_D1 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D02__LCD_D2 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D03__LCD_D3 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D04__LCD_D4 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D05__LCD_D5 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D06__LCD_D6 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D07__LCD_D7 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D08__LCD_D8 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D09__LCD_D9 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D10__LCD_D10 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D11__LCD_D11 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D12__LCD_D12 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D13__LCD_D13 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D14__LCD_D14 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D15__LCD_D15 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D16__LCD_D16 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D17__LCD_D17 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D18__LCD_D18 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D19__LCD_D19 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D20__LCD_D20 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D21__LCD_D21 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D22__LCD_D22 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_D23__LCD_D23 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_RD_E__LCD_VSYNC | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_WR_RWN__LCD_HSYNC | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_RS__LCD_DOTCLK | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_CS__LCD_CS | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_VSYNC__LCD_VSYNC | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_HSYNC__LCD_HSYNC | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_DOTCLK__LCD_DOTCLK | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_ENABLE__GPIO_1_31 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_LCD_RESET__GPIO_3_30 | TX28_LCD_PAD_CTRL,
+	MX28_PAD_PWM0__GPIO_3_16 | TX28_LCD_PAD_CTRL,
 
 	/* UART1 */
 	MX28_PAD_AUART0_CTS__DUART_RX,
@@ -143,17 +150,27 @@ static const iomux_cfg_t tx28_stk5v3_pads[] __initconst = {
 	MX28_PAD_SAIF0_SDATA0__SAIF0_SDATA0,
 	MX28_PAD_SAIF1_SDATA0__SAIF0_SDATA1,
 
-	/* USB Host */
-	MX28_PAD_SPDIF__GPIO_3_27 | MXS_PAD_CTRL,	/* USB host vbusen */
-	MX28_PAD_GPMI_CE2N__GPIO_0_18 | MXS_PAD_CTRL,	/* USB otg vbusen */
-	MX28_PAD_PWM2__USB0_ID |
-		MXS_PAD_3V3 | MXS_PAD_4MA | MXS_PAD_PULLUP,
+	/* SAIF1 */
+	MX28_PAD_LCD_DOTCLK__GPIO_1_30 | TX28_GPIO_IN_PAD_CTRL,
+
+	MX28_PAD_AUART2_RTS__SAIF1_LRCLK,
+	MX28_PAD_AUART2_CTS__SAIF1_BITCLK,
+	MX28_PAD_LCD_VSYNC__SAIF1_SDATA0,
+	MX28_PAD_LCD_HSYNC__SAIF1_SDATA1,
+
+	/* USBH port */
+	MX28_PAD_SPDIF__GPIO_3_27 | MXS_PAD_CTRL,	/* USBH_VBUSEN */
+	MX28_PAD_JTAG_RTCK__GPIO_4_20 | TX28_GPIO_IN_PAD_CTRL,	/* USBH_OC */
+
+	/* USBOTG Port */
+	MX28_PAD_GPMI_CE2N__GPIO_0_18 | MXS_PAD_CTRL,	/* USBOTG_VBUSEN */
+	MX28_PAD_GPMI_CE3N__GPIO_0_19 | TX28_GPIO_IN_PAD_CTRL,	/* USBOTG_OC */
+	MX28_PAD_PWM2__USB0_ID | TX28_GPIO_IN_PAD_CTRL,
 
 	/* EDT Touchscreen */
-	MX28_PAD_SSP0_DATA5__GPIO_2_5 |
-		MXS_PAD_3V3 | MXS_PAD_4MA | MXS_PAD_PULLUP,
-	MX28_PAD_SSP0_DATA6__GPIO_2_6 |
-		MXS_PAD_3V3 | MXS_PAD_4MA | MXS_PAD_PULLUP,
+	MX28_PAD_SSP0_DATA5__GPIO_2_5 | TX28_GPIO_IN_PAD_CTRL,
+	MX28_PAD_SSP0_DATA6__GPIO_2_6 | TX28_GPIO_IN_PAD_CTRL,
+	MX28_PAD_ENET0_RXD2__GPIO_4_9 | TX28_GPIO_IN_PAD_CTRL,
 };
 
 static const struct gpio_led tx28_stk5v3_leds[] __initconst = {
@@ -280,16 +297,18 @@ static int __init tx28_add_spi_gpio(void)
 
 	ret = platform_device_register(&tx28_spi_gpio0_device);
 	if (ret)
-		printk(KERN_ERR "Failed to register SPI0 device: %d\n", ret);
+		pr_err("Failed to register SPI0 device: %d\n", ret);
 
 	mxs_iomux_setup_multiple_pads(tx28_spi_gpio1_pads,
 				ARRAY_SIZE(tx28_spi_gpio1_pads));
 
 	ret = platform_device_register(&tx28_spi_gpio1_device);
 	if (ret)
-		printk(KERN_ERR "Failed to register SPI1 device: %d\n", ret);
+		pr_err("Failed to register SPI1 device: %d\n", ret);
 	return ret;
 }
+
+/* I2C devices */
 
 /* Touchscreen */
 #define TSC2007_PEN_GPIO		MXS_GPIO_NR(3, 20)
@@ -312,10 +331,7 @@ static void tx28_stk5_tsc2007_exit(void)
 
 static int tx28_stk5_get_pendown(void)
 {
-	int val = gpio_get_value(TSC2007_PEN_GPIO);
-
-	pr_info("%s: TS pen is %s\n", __func__, val ? "up" : "down");
-	return !val;
+	return !gpio_get_value(TSC2007_PEN_GPIO);
 }
 
 static struct tsc2007_platform_data tx28_stk5_tsc2007_pdata = {
@@ -327,21 +343,72 @@ static struct tsc2007_platform_data tx28_stk5_tsc2007_pdata = {
 	.exit_platform_hw = tx28_stk5_tsc2007_exit,
 };
 
-static struct pca953x_platform_data tx28_pca953x_pdata = {
-	.gpio_base	= 160,
-#ifdef CONFIG_GPIO_PCA953X_IRQ
-	.irq_base	= 128,
-#else
-	.irq_base	= -1,
-#endif
-};
-
-#if defined CONFIG_TOUCHSCREEN_EDT_FT5X06 || defined CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE
+/* Multitouch controller */
+#if defined(CONFIG_TOUCHSCREEN_EDT_FT5X06) || \
+	defined(CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE)
 static struct edt_ft5x06_platform_data edt_ft5x06_pdata = {
 	.irq_pin = TX28_STK5_GPIO_EDT_IRQ,
 	.reset_pin = TX28_STK5_GPIO_EDT_RESET,
 };
 #endif
+
+/* Keypad via I2C GPIO extender */
+static const char *const tx28_keypad_gpio_names[] = {
+	"col0",
+	"col1",
+	"col2",
+	"col3",
+	"row0",
+	"row1",
+	"row2",
+	"row3",
+};
+
+static struct pca953x_platform_data tx28_pca953x_pdata = {
+	.gpio_base	= TX28_PCA9554_GPIO_BASE,
+#ifdef CONFIG_GPIO_PCA953X_IRQ
+	.irq_base	= MXS_BOARD_IRQ_START,
+#else
+	.irq_base	= -1,
+#endif
+	.names = tx28_keypad_gpio_names,
+};
+
+static const unsigned int tx28_kpd_col_gpios[] = {
+	TX28_PCA9554_GPIO_BASE + 0,
+	TX28_PCA9554_GPIO_BASE + 1,
+	TX28_PCA9554_GPIO_BASE + 2,
+	TX28_PCA9554_GPIO_BASE + 3,
+};
+
+static const unsigned int tx28_kpd_row_gpios[] = {
+	TX28_PCA9554_GPIO_BASE + 4,
+	TX28_PCA9554_GPIO_BASE + 5,
+	TX28_PCA9554_GPIO_BASE + 6,
+	TX28_PCA9554_GPIO_BASE + 7,
+};
+
+static const uint32_t tx28_keycodes[] = {
+	KEY(0, 0, KEY_LEFT),
+	KEY(0, 1, KEY_ENTER),
+	KEY(0, 2, KEY_RIGHT),
+};
+
+static struct matrix_keymap_data tx28_default_keymap = {
+	.keymap = tx28_keycodes,
+	.keymap_size = ARRAY_SIZE(tx28_keycodes),
+};
+
+static const struct matrix_keypad_platform_data tx28_kpd_data __initconst = {
+	.keymap_data = &tx28_default_keymap,
+	.row_gpios = tx28_kpd_row_gpios,
+	.num_row_gpios = ARRAY_SIZE(tx28_kpd_row_gpios),
+	.col_gpios = tx28_kpd_col_gpios,
+	.num_col_gpios = ARRAY_SIZE(tx28_kpd_col_gpios),
+	.wakeup = true,
+	.active_low = true,
+	.no_autorepeat = true,
+};
 
 static struct i2c_board_info tx28_stk5v3_i2c_boardinfo[] __initdata = {
 	{
@@ -357,7 +424,8 @@ static struct i2c_board_info tx28_stk5v3_i2c_boardinfo[] __initdata = {
 	}, {
 		I2C_BOARD_INFO("sgtl5000", 0x0a),
 	},
-#if defined CONFIG_TOUCHSCREEN_EDT_FT5X06 || defined CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE
+#if defined(CONFIG_TOUCHSCREEN_EDT_FT5X06) || \
+	defined(CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE)
 	{
 		I2C_BOARD_INFO("edt-ft5x06", 0x38),
 		.platform_data  = &edt_ft5x06_pdata,
@@ -410,29 +478,136 @@ static void __init tx28_add_regulators(void)
 
 static struct fb_videomode tx28_vmodes[] = {
 	{
+		/* Standard VGA timing */
+		.name		= "VGA",
+		.refresh	= 60,
+		.xres		= 640,
+		.yres		= 480,
+		.pixclock	= KHZ2PICOS(25175),
+		.left_margin	= 48,
+		.hsync_len	= 96,
+		.right_margin	= 16,
+		.upper_margin	= 33,
+		.vsync_len	= 2,
+		.lower_margin	= 10,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
 		/* Emerging ETV570 640 x 480 display. Syncs low active,
 		 * DE high active, 115.2 mm x 86.4 mm display area
+		 * VGA compatible timing
 		 */
-		.name = "ETV570",
-		.refresh = 60,
-		.xres = 640,
-		.yres = 480,
-		.pixclock = KHZ2PICOS(25175),
-		.left_margin = 114,
-		.hsync_len = 30,
-		.right_margin = 16,
-		.upper_margin = 32,
-		.vsync_len = 3,
-		.lower_margin = 10,
-		.sync = FB_SYNC_DATA_ENABLE_HIGH_ACT,
-		.vmode = FB_VMODE_NONINTERLACED,
+		.name		= "ETV570",
+		.refresh	= 60,
+		.xres		= 640,
+		.yres		= 480,
+		.pixclock	= KHZ2PICOS(25175),
+		.left_margin	= 114,
+		.hsync_len	= 30,
+		.right_margin	= 16,
+		.upper_margin	= 32,
+		.vsync_len	= 3,
+		.lower_margin	= 10,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
+		/* Emerging ET0350G0DH6 320 x 240 display.
+		 * 70.08 mm x 52.56 mm display area.
+		 */
+		.name		= "ET0350",
+		.refresh	= 60,
+		.xres		= 320,
+		.yres		= 240,
+		.pixclock	= KHZ2PICOS(6500),
+		.left_margin	= 68 - 34,
+		.hsync_len	= 34,
+		.right_margin	= 20,
+		.upper_margin	= 18 - 3,
+		.vsync_len	= 3,
+		.lower_margin	= 4,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
+		/* Emerging ET0430G0DH6 480 x 272 display.
+		 * 95.04 mm x 53.856 mm display area.
+		 */
+		.name		= "ET0430",
+		.refresh	= 60,
+		.xres		= 480,
+		.yres		= 272,
+		.pixclock	= KHZ2PICOS(9000),
+		.left_margin	= 2,
+		.hsync_len	= 41,
+		.right_margin	= 2,
+		.upper_margin	= 2,
+		.vsync_len	= 10,
+		.lower_margin	= 2,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
+		/* Emerging ET0500G0DH6 800 x 480 display.
+		 * 109.6 mm x 66.4 mm display area.
+		 */
+		.name		= "ET0500",
+		.refresh	= 60,
+		.xres		= 800,
+		.yres		= 480,
+		.pixclock	= KHZ2PICOS(33260),
+		.left_margin	= 216 - 128,
+		.hsync_len	= 128,
+		.right_margin	= 1056 - 800 - 216,
+		.upper_margin	= 35 - 2,
+		.vsync_len	= 2,
+		.lower_margin	= 525 - 480 - 35,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
+		/* Emerging ETQ570G0DH6 320 x 240 display.
+		 * 115.2 mm x 86.4 mm display area.
+		 */
+		.name		= "ETQ570",
+		.refresh	= 60,
+		.xres		= 320,
+		.yres		= 240,
+		.pixclock	= KHZ2PICOS(6400),
+		.left_margin	= 38,
+		.hsync_len	= 30,
+		.right_margin	= 30,
+		.upper_margin	= 16, /* 15 according to datasheet */
+		.vsync_len	= 3, /* TVP -> 1>x>5 */
+		.lower_margin	= 4, /* 4.5 according to datasheet */
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
+	},
+	{
+		/* Emerging ET0700G0DH6 800 x 480 display.
+		 * 152.4 mm x 91.44 mm display area.
+		 */
+		.name		= "ET0700",
+		.refresh	= 60,
+		.xres		= 800,
+		.yres		= 480,
+		.pixclock	= KHZ2PICOS(33260),
+		.left_margin	= 216 - 128,
+		.hsync_len	= 128,
+		.right_margin	= 1056 - 800 - 216,
+		.upper_margin	= 35 - 2,
+		.vsync_len	= 2,
+		.lower_margin	= 525 - 480 - 35,
+		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
+		.vmode		= FB_VMODE_NONINTERLACED,
 	},
 	{
 		.name		= "tx15",
 		.refresh	= 55,
 		.xres		= 400,
 		.yres		= 240,
-		.pixclock	= 120000,
+		.pixclock	= KHZ2PICOS(8333),
 		.left_margin	= 80,
 		.right_margin	= 100,
 		.upper_margin	= 5,
@@ -447,7 +622,7 @@ static struct fb_videomode tx28_vmodes[] = {
 		.refresh	= 60,
 		.xres		= 800,
 		.yres		= 256,
-		.pixclock	= 50000,
+		.pixclock	= KHZ2PICOS(20000),
 		.left_margin	= 254,
 		.right_margin	= 1,
 		.upper_margin	= 58,
@@ -456,24 +631,6 @@ static struct fb_videomode tx28_vmodes[] = {
 		.vsync_len	= 1,
 		.sync		= FB_SYNC_DATA_ENABLE_HIGH_ACT,
 		.vmode		= FB_VMODE_NONINTERLACED,
-	},
-	{
-		/* Emerging ETV0430 480 x 272 display. Syncs low active,
-		 * DE high active, 115.2 mm x 86.4 mm display area
-		 */
-		.name = "ETV0430",
-		.refresh = 60,
-		.xres = 480,
-		.yres = 272,
-		.pixclock = KHZ2PICOS(8999),
-		.left_margin = 2,
-		.right_margin = 2,
-		.hsync_len = 41,
-		.upper_margin = 2,
-		.lower_margin = 2,
-		.vsync_len = 10,
-		.sync = FB_SYNC_DATA_ENABLE_HIGH_ACT,
-		.vmode = FB_VMODE_NONINTERLACED,
 	},
 };
 
@@ -531,21 +688,15 @@ static struct platform_device tx28_pwm_backlight = {
 	},
 };
 
-static const iomux_cfg_t tx28_fb_pads[] __initconst = {
-	MX28_PAD_PWM0__GPIO_3_16,
-	MX28_PAD_LCD_RESET__GPIO_3_30,
-	MX28_PAD_LCD_ENABLE__GPIO_1_31,
-};
-
 static const struct gpio tx28_lcd_gpios[] __initconst = {
 	{
 		.gpio = TX28_STK5_GPIO_LCD_ENABLE,
-		.flags = GPIOF_OUT_INIT_HIGH,
+		.flags = GPIOF_OUT_INIT_LOW,
 		.label = "lcd-enable",
 	},
 	{
 		.gpio = TX28_STK5_GPIO_LCD_RESET,
-		.flags = GPIOF_OUT_INIT_HIGH,
+		.flags = GPIOF_OUT_INIT_LOW,
 		.label = "lcd-reset",
 	},
 	{
@@ -606,9 +757,6 @@ static void __init tx28_init_fb(void)
 
 	gpio_request_array(tx28_lcd_gpios, ARRAY_SIZE(tx28_lcd_gpios));
 
-	mxs_iomux_setup_multiple_pads(tx28_fb_pads,
-				ARRAY_SIZE(tx28_fb_pads));
-
 	mx28_add_mxs_pwm(0);
 	pdev = mx28_add_mxsfb(&tx28_fb_pdata);
 
@@ -624,12 +772,6 @@ static void __init tx28_init_fb(void)
 static const struct mxs_mmc_platform_data tx28_mmc0_pdata __initconst = {
 	.wp_gpio = -EINVAL,
 	.cd_gpio = MXS_GPIO_NR(2, 9),
-	.flags = SLOTF_4_BIT_CAPABLE,
-};
-
-static const struct mxs_mmc_platform_data tx28_mmc2_pdata __initconst = {
-	.wp_gpio = -EINVAL,
-	.cd_gpio = -EINVAL,
 	.flags = SLOTF_4_BIT_CAPABLE,
 };
 
@@ -708,12 +850,12 @@ static int __init tx28_add_gpmi_nand(void)
 	ret = mxs_iomux_setup_multiple_pads(tx28_gpmi_pads,
 			ARRAY_SIZE(tx28_gpmi_pads));
 	if (ret) {
-		printk(KERN_ERR "Failed to setup GPMI pads: %d\n", ret);
+		pr_err("Failed to setup GPMI pads: %d\n", ret);
 		return ret;
 	}
 	pdev = mx28_add_gpmi_nand(&tx28_gpmi_pdata);
 	if (!pdev) {
-		printk(KERN_ERR "Failed to add GPMI device\n");
+		pr_err("Failed to add GPMI device\n");
 		return -ENOMEM;
 	}
 	return 0;
@@ -772,7 +914,7 @@ static int __init tx28_udc_init(void)
 	if (IS_ERR(clk))
 		return PTR_ERR(clk);
 
-	ret = clk_enable(clk);
+	ret = clk_prepare_enable(clk);
 	clk_put(clk);
 	return ret;
 }
@@ -780,18 +922,6 @@ static int __init tx28_udc_init(void)
 static void __init tx28_add_usb(void)
 {
 	int ret;
-
-	printk(KERN_DEBUG "tx28_otg_mode is: ");
-	switch (tx28_otg_mode) {
-	case TX28_OTG_MODE_HOST:
-		printk(KERN_CONT "HOST\n");
-		break;
-	case TX28_OTG_MODE_DEVICE:
-		printk(KERN_CONT "DEVICE\n");
-		break;
-	default:
-		printk(KERN_CONT "unknown\n");
-	}
 
 	if (tx28_otg_mode == TX28_OTG_MODE_DEVICE) {
 		ret = tx28_udc_init();
@@ -822,15 +952,11 @@ static void tx28_flexcan_xcvr_enable(int id, int enable)
 	static int tx28_flexcan_xcvr_on;
 
 	if (enable) {
-		if (tx28_flexcan_xcvr_on++ == 0) {
-			printk(KERN_DEBUG "Enabling flexcan transceiver\n");
+		if (tx28_flexcan_xcvr_on++ == 0)
 			gpio_set_value(TX28_STK5_GPIO_FLEXCAN_XCVR_EN, 0);
-		}
 	} else {
-		if (--tx28_flexcan_xcvr_on == 0) {
-			printk(KERN_DEBUG "Disabling flexcan transceiver\n");
+		if (--tx28_flexcan_xcvr_on == 0)
 			gpio_set_value(TX28_STK5_GPIO_FLEXCAN_XCVR_EN, 1);
-		}
 		WARN_ON(tx28_flexcan_xcvr_on < 0);
 	}
 }
@@ -869,7 +995,7 @@ static void __init tx28_add_flexcan(unsigned int id)
 		mxs_iomux_setup_pad(MX28_PAD_LCD_D00__GPIO_1_0);
 		if (gpio_request_one(TX28_STK5_GPIO_FLEXCAN_XCVR_EN,
 					GPIOF_OUT_INIT_LOW, "FLEXCAN") != 0) {
-			printk(KERN_ERR "Failed to request GPIO for flexcan transceiver\n");
+			pr_err("Failed to request flexcan transceiver enable GPIO\n");
 			return;
 		}
 		first = 0;
@@ -881,6 +1007,17 @@ static void __init tx28_add_flexcan(unsigned int id)
 
 	mx28_add_flexcan(id, &tx28_flexcan_pdata[id]);
 }
+
+/* SAIF */
+static const struct mxs_saif_platform_data tx28_mxs_saif0_pdata __initconst = {
+	.master_mode = 1,
+	.master_id = 0,
+};
+
+static const struct mxs_saif_platform_data tx28_mxs_saif1_pdata __initconst = {
+	.master_mode = 0,
+	.master_id = 0,
+};
 
 static int __init tx28_saif_init(void)
 {
@@ -897,14 +1034,55 @@ static int __init tx28_saif_init(void)
 	tx28_add_regulators();
 
 	/* register audio playback device */
-	mx28_add_saif(0, NULL);
+	mx28_add_saif(0, &tx28_mxs_saif0_pdata);
 	/* register audio capture device */
-	mx28_add_saif(1, NULL);
+	mx28_add_saif(1, &tx28_mxs_saif1_pdata);
 
 	mxs_add_platform_device("mxs-sgtl5000", 0, NULL, 0,
 				NULL, 0);
 	return 0;
 }
+
+/* LRADC & Touchscreen */
+#define	RES_IRQ(id, res) {		\
+	.name = id,			\
+	.start = (res),			\
+	.end = (res),			\
+	.flags = IORESOURCE_IRQ,	\
+}
+
+static struct resource mxs_lradc_rsrc[] = {
+	{
+		.start	= 0x80050000,
+		.end	= 0x80050000 + SZ_8K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	RES_IRQ("LRADC CH0", MX28_INT_LRADC_CH0),
+	RES_IRQ("LRADC CH1", MX28_INT_LRADC_CH1),
+	RES_IRQ("LRADC CH2", MX28_INT_LRADC_CH2),
+	RES_IRQ("LRADC CH3", MX28_INT_LRADC_CH3),
+	RES_IRQ("LRADC CH4", MX28_INT_LRADC_CH4),
+	RES_IRQ("LRADC CH5", MX28_INT_LRADC_CH5),
+	RES_IRQ("LRADC CH6", MX28_INT_LRADC_CH6),
+	RES_IRQ("LRADC CH7", MX28_INT_LRADC_CH7),
+	RES_IRQ("LRADC TOUCH", MX28_INT_LRADC_TOUCH),
+	RES_IRQ("LRADC THRESH0", MX28_INT_LRADC_THRESH0),
+	RES_IRQ("LRADC THRESH1", MX28_INT_LRADC_THRESH1),
+	RES_IRQ("LRADC BUTTON0", MX28_INT_LRADC_BUTTON0),
+	RES_IRQ("LRADC BUTTON1", MX28_INT_LRADC_BUTTON1),
+};
+
+static struct platform_device mxs_lradc = {
+	.name		= "mxs-lradc",
+	.id		= -1,
+	.resource	= mxs_lradc_rsrc,
+	.num_resources	= ARRAY_SIZE(mxs_lradc_rsrc),
+};
+
+static struct platform_device mxs_lradc_ts = {
+	.name		= "mxs-lradc-ts",
+	.id		= -1,
+};
 
 static void __init tx28_board_init(void)
 {
@@ -931,13 +1109,18 @@ static void __init tx28_board_init(void)
 	tx28_add_gpmi_nand();
 
 	tx28_saif_init();
+
+	mxs_add_platform_device("matrix-keypad", 0, NULL, 0,
+				&tx28_kpd_data, sizeof(tx28_kpd_data));
+
+	platform_device_register(&mxs_lradc);
+	platform_device_register(&mxs_lradc_ts);
 }
 
 static void __init tx28_stk5v3_init(void)
 {
 	tx28_board_init();
 	gpio_led_register_device(0, &tx28_stk5v3_led_data);
-	mx28_add_mxs_mmc(2, &tx28_mmc2_pdata);
 
 	if (tx28_otg_mode != TX28_OTG_MODE_HOST)
 		mx28_add_flexcan(0, NULL);
@@ -946,11 +1129,15 @@ static void __init tx28_stk5v3_init(void)
 
 static void __init tx28_stk5v4_init(void)
 {
+	if (tx28_otg_mode == TX28_OTG_MODE_HOST) {
+		pr_warn("USBOTG port cannot be used for HOST function on STK5 v4\n");
+		tx28_otg_mode = TX28_OTG_MODE_NONE;
+	}
+
 	tx28_board_init();
 	tx28_add_fec1();
 
-	if (tx28_otg_mode != TX28_OTG_MODE_HOST)
-		tx28_add_flexcan(0);
+	tx28_add_flexcan(0);
 	tx28_add_flexcan(1);
 }
 
@@ -1001,10 +1188,8 @@ static int __init tx28_lcd_backlight_init(void)
 	 * the pwm.
 	 */
 #if defined(CONFIG_BACKLIGHT_PWM) || defined(CONFIG_BACKLIGHT_PWM_MODULE)
-	printk(KERN_DEBUG "%s: Setting up PWM backlight control\n", __func__);
-	mxs_iomux_setup_pad(MX28_PAD_PWM0__PWM_0 | LCD_MODE);
+	mxs_iomux_setup_pad(MX28_PAD_PWM0__PWM_0 | TX28_LCD_PAD_CTRL);
 #else
-	printk(KERN_DEBUG "%s: Switching LCD backlight on\n", __func__);
 	gpio_free(TX28_STK5_GPIO_BACKLIGHT);
 	ret = gpio_request_one(TX28_STK5_GPIO_BACKLIGHT, GPIOF_OUT_INIT_LOW,
 			"LCD Backlight");
