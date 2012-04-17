@@ -1,0 +1,6 @@
+Ka-Ro electronics SoM Device Tree Bindings
+------------------------------------------
+
+i.MX53 TX53-xxxx module
+Required root not properties:
+    - compatible = "karo,tx53", "fsl,imx53";
