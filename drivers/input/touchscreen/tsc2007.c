@@ -19,6 +19,7 @@
  *  it under the terms of the GNU General Public License version 2 as
  *  published by the Free Software Foundation.
  */
+#define DEBUG
 
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -26,6 +27,8 @@
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
 #include <linux/i2c/tsc2007.h>
+#include <linux/of_gpio.h>
+#include <linux/gpio.h>
 
 #define TSC2007_MEASURE_TEMP0		(0x0 << 4)
 #define TSC2007_MEASURE_AUX		(0x2 << 4)
@@ -82,6 +85,9 @@ struct tsc2007 {
 
 	int			(*get_pendown_state)(void);
 	void			(*clear_penirq)(void);
+
+	int			pendown_gpio;
+	int			pendown_active_high;
 };
 
 static inline int tsc2007_xfer(struct tsc2007 *tsc, u8 cmd)
@@ -140,6 +146,16 @@ static u32 tsc2007_calculate_pressure(struct tsc2007 *tsc, struct ts_event *tc)
 	}
 
 	return rt;
+}
+
+/* cludge to work around lack of parameters for get_pendown_state() */
+static struct tsc2007 *__tsc2007;
+static int tsc2007_pendown_gpio_state(void)
+{
+	struct tsc2007 *ts = __tsc2007;
+	int gpio_val = gpio_get_value(ts->pendown_gpio);
+
+	return !gpio_val ^ ts->pendown_active_high;
 }
 
 static bool tsc2007_is_pen_down(struct tsc2007 *ts)
@@ -273,17 +289,63 @@ static void tsc2007_close(struct input_dev *input_dev)
 	tsc2007_stop(ts);
 }
 
+static inline void tsc2007_get_of_prop_u16(struct device *dev, struct device_node *dp,
+				const char *name, u16 *var)
+{
+	const unsigned long *prop = of_get_property(dp, name, NULL);
+
+	if (prop) {
+		*var = be32_to_cpu(*prop);
+		dev_dbg(dev, "Got value %d(%04x) for property '%s'\n",
+			*var, *var, name);
+	} else {
+		dev_err(dev, "Property %s not found\n", name);
+	}
+}
+
+static inline void tsc2007_get_of_prop_ulong(struct device *dev, struct device_node *dp,
+				const char *name, unsigned long *var)
+{
+	const unsigned long *prop = of_get_property(dp, name, NULL);
+
+	if (prop) {
+		*var = be32_to_cpu(*prop);
+		dev_dbg(dev, "Got value %ld(%08lx) for property '%s'\n",
+			*var, *var, name);
+	} else {
+		dev_err(dev, "Property %s not found\n", name);
+	}
+}
+
+static inline void tsc2007_get_of_prop_int(struct device *dev, struct device_node *dp,
+				const char *name, int *var)
+{
+	const unsigned long *prop = of_get_property(dp, name, NULL);
+
+	if (prop) {
+		*var = be32_to_cpu(*prop);
+		dev_dbg(dev, "Got value %d(%08x) for property '%s'\n",
+			*var, *var, name);
+	} else {
+		dev_err(dev, "Property %s not found\n", name);
+	}
+}
+
 static int __devinit tsc2007_probe(struct i2c_client *client,
 				   const struct i2c_device_id *id)
 {
 	struct tsc2007 *ts;
+	struct device_node *dp = client->dev.of_node;
 	struct tsc2007_platform_data *pdata = client->dev.platform_data;
 	struct input_dev *input_dev;
 	int err;
 
 	if (!pdata) {
-		dev_err(&client->dev, "platform data is required!\n");
-		return -EINVAL;
+		if (!of_find_property(dp, "model", NULL)) {
+			dev_err(&client->dev,
+				"platform data or OF properties required!\n");
+			return -EINVAL;
+		}
 	}
 
 	if (!i2c_check_functionality(client->adapter,
@@ -302,16 +364,75 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 	ts->input = input_dev;
 	init_waitqueue_head(&ts->wait);
 
-	ts->model             = pdata->model;
-	ts->x_plate_ohms      = pdata->x_plate_ohms;
-	ts->max_rt            = pdata->max_rt ? : MAX_12BIT;
-	ts->poll_delay        = pdata->poll_delay ? : 1;
-	ts->poll_period       = pdata->poll_period ? : 1;
-	ts->get_pendown_state = pdata->get_pendown_state;
-	ts->clear_penirq      = pdata->clear_penirq;
+	if (pdata) {
+		ts->model             = pdata->model;
+		ts->x_plate_ohms      = pdata->x_plate_ohms;
+		ts->max_rt            = pdata->max_rt ? : MAX_12BIT;
+		ts->poll_delay        = pdata->poll_delay ? : 1;
+		ts->poll_period       = pdata->poll_period ? : 1;
+		ts->get_pendown_state = pdata->get_pendown_state;
+		ts->clear_penirq      = pdata->clear_penirq;
 
-	if (pdata->x_plate_ohms == 0) {
-		dev_err(&client->dev, "x_plate_ohms is not set up in platform data");
+		input_set_abs_params(input_dev, ABS_X, 0, MAX_12BIT,
+				pdata->fuzzx, 0);
+		input_set_abs_params(input_dev, ABS_Y, 0, MAX_12BIT,
+				pdata->fuzzy, 0);
+		input_set_abs_params(input_dev, ABS_PRESSURE, 0, MAX_12BIT,
+				pdata->fuzzz, 0);
+	} else {
+		struct device *dev = &client->dev;
+		enum of_gpio_flags gpio_flags;
+		int fuzzx = 0, fuzzy = 0, fuzzz = 0;
+		const char *model;
+
+		err = of_property_read_string(dp, "model",
+					&model);
+		if (err == 0)
+			ts->model = simple_strtoul(model, NULL, 0);
+
+		dev_info(&client->dev, "TSC2xxx Controller model %02d\n",
+			ts->model);
+
+		/* setup defaults */
+		ts->max_rt = MAX_12BIT;
+		ts->poll_delay = 1;
+		ts->poll_period = 1;
+
+		tsc2007_get_of_prop_u16(dev, dp, "x-plate-ohms",
+					&ts->x_plate_ohms);
+		tsc2007_get_of_prop_u16(dev, dp, "max-rt",
+					&ts->max_rt);
+		tsc2007_get_of_prop_ulong(dev, dp, "poll-delay",
+					&ts->poll_delay);
+		tsc2007_get_of_prop_ulong(dev, dp, "poll-period",
+					&ts->poll_period);
+		tsc2007_get_of_prop_int(dev, dp, "fuzzx",
+					&fuzzx);
+		tsc2007_get_of_prop_int(dev, dp, "fuzzy",
+					&fuzzy);
+		tsc2007_get_of_prop_int(dev, dp, "fuzzz",
+					&fuzzz);
+
+		ts->pendown_gpio = of_get_named_gpio_flags(dp,
+				"pendown-gpio", 0, &gpio_flags);
+		dev_dbg(&client->dev, "pendown GPIO: %d\n", ts->pendown_gpio);
+		if (gpio_is_valid(ts->pendown_gpio)) {
+			if (!(gpio_flags & OF_GPIO_ACTIVE_LOW)) {
+				dev_err(dev, "pendown gpio is active HIGH\n");
+				ts->pendown_active_high = 1;
+			}
+			__tsc2007 = ts;
+			ts->get_pendown_state = tsc2007_pendown_gpio_state;
+		}
+		input_set_abs_params(input_dev, ABS_X, 0, MAX_12BIT, fuzzx, 0);
+		input_set_abs_params(input_dev, ABS_Y, 0, MAX_12BIT, fuzzy, 0);
+		input_set_abs_params(input_dev, ABS_PRESSURE, 0, MAX_12BIT,
+				fuzzz, 0);
+	}
+
+	if (ts->x_plate_ohms == 0) {
+		dev_err(&client->dev,
+			"x_plate_ohms is not set up in platform data");
 		err = -EINVAL;
 		goto err_free_mem;
 	}
@@ -331,12 +452,7 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 	input_dev->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 	input_dev->keybit[BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH);
 
-	input_set_abs_params(input_dev, ABS_X, 0, MAX_12BIT, pdata->fuzzx, 0);
-	input_set_abs_params(input_dev, ABS_Y, 0, MAX_12BIT, pdata->fuzzy, 0);
-	input_set_abs_params(input_dev, ABS_PRESSURE, 0, MAX_12BIT,
-			pdata->fuzzz, 0);
-
-	if (pdata->init_platform_hw)
+	if (pdata && pdata->init_platform_hw)
 		pdata->init_platform_hw();
 
 	err = request_threaded_irq(ts->irq, tsc2007_hard_irq, tsc2007_soft_irq,
@@ -354,11 +470,14 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, ts);
 
+	dev_set_drvdata(&client->dev, ts);
+	device_init_wakeup(&client->dev, 1);
+
 	return 0;
 
  err_free_irq:
 	free_irq(ts->irq, ts);
-	if (pdata->exit_platform_hw)
+	if (pdata && pdata->exit_platform_hw)
 		pdata->exit_platform_hw();
  err_free_mem:
 	input_free_device(input_dev);
@@ -373,7 +492,7 @@ static int __devexit tsc2007_remove(struct i2c_client *client)
 
 	free_irq(ts->irq, ts);
 
-	if (pdata->exit_platform_hw)
+	if (pdata && pdata->exit_platform_hw)
 		pdata->exit_platform_hw();
 
 	input_unregister_device(ts->input);
@@ -381,6 +500,30 @@ static int __devexit tsc2007_remove(struct i2c_client *client)
 
 	return 0;
 }
+
+#ifdef CONFIG_PM
+static int tsc2007_suspend(struct device *dev)
+{
+	struct tsc2007	*ts = dev_get_drvdata(dev);
+
+	if (device_may_wakeup(dev)) {
+		dev_dbg(dev, "Enabling wakeup\n");
+		enable_irq_wake(ts->irq);
+	}
+	return 0;
+}
+
+static int tsc2007_resume(struct device *dev)
+{
+	struct tsc2007	*ts = dev_get_drvdata(dev);
+
+	if (device_may_wakeup(dev))
+		disable_irq_wake(ts->irq);
+	return 0;
+}
+#endif
+
+static SIMPLE_DEV_PM_OPS(tsc2007_pm_ops, tsc2007_suspend, tsc2007_resume);
 
 static const struct i2c_device_id tsc2007_idtable[] = {
 	{ "tsc2007", 0 },
@@ -392,7 +535,8 @@ MODULE_DEVICE_TABLE(i2c, tsc2007_idtable);
 static struct i2c_driver tsc2007_driver = {
 	.driver = {
 		.owner	= THIS_MODULE,
-		.name	= "tsc2007"
+		.name	= "tsc2007",
+		.pm	= &tsc2007_pm_ops,
 	},
 	.id_table	= tsc2007_idtable,
 	.probe		= tsc2007_probe,
