@@ -24,6 +24,7 @@
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
+#include <linux/of_mtd.h>
 #include <linux/interrupt.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>
@@ -31,11 +32,12 @@
 #include <linux/err.h>
 #include <linux/io.h>
 #include <linux/irq.h>
-#include <linux/completion.h>
 
 #include <asm/mach/flash.h>
 #include <mach/mxc_nand.h>
 #include <mach/hardware.h>
+
+#define MXC_NAND_TIMEOUT	(1 * HZ)
 
 #define DRIVER_NAME "mxc_nand"
 
@@ -121,6 +123,7 @@
 #define NFC_V3_CONFIG2_NUM_ADDR_PHASE0		(1 << 5)
 #define NFC_V3_CONFIG2_ECC_MODE_8		(1 << 6)
 #define NFC_V3_CONFIG2_PPB(x)			(((x) & 0x3) << 7)
+#define MX53_CONFIG2_PPB(x)			(((x) & 0x3) << 8)
 #define NFC_V3_CONFIG2_NUM_ADDR_PHASE1(x)	(((x) & 0x3) << 12)
 #define NFC_V3_CONFIG2_INT_MSK			(1 << 15)
 #define NFC_V3_CONFIG2_ST_CMD(x)		(((x) & 0xff) << 24)
@@ -136,6 +139,7 @@
 
 #define NFC_V3_IPC			(host->regs_ip + 0x2C)
 #define NFC_V3_IPC_CREQ			(1 << 0)
+#define NFC_V3_IPC_CACK			(1 << 1)
 #define NFC_V3_IPC_INT			(1 << 31)
 
 #define NFC_V3_DELAY_LINE		(host->regs_ip + 0x34)
@@ -143,6 +147,7 @@
 struct mxc_nand_host {
 	struct mtd_info		mtd;
 	struct nand_chip	nand;
+	struct mtd_partition	*parts;
 	struct device		*dev;
 
 	void			*spare0;
@@ -242,7 +247,7 @@ static struct nand_ecclayout nandv2_hw_eccoob_4k = {
 	}
 };
 
-static const char *part_probes[] = { "RedBoot", "cmdlinepart", NULL };
+static const char *part_probes[] = { "cmdlinepart", "RedBoot", NULL };
 
 static irqreturn_t mxc_nfc_irq(int irq, void *dev_id)
 {
@@ -251,7 +256,7 @@ static irqreturn_t mxc_nfc_irq(int irq, void *dev_id)
 	if (!host->check_int(host))
 		return IRQ_NONE;
 
-	host->irq_control(host, 0);
+	disable_irq_nosync(host->irq);
 
 	complete(&host->op_completion);
 
@@ -286,20 +291,6 @@ static int check_int_v1_v2(struct mxc_nand_host *host)
 	return 1;
 }
 
-/*
- * It has been observed that the i.MX21 cannot read the CONFIG2:INT bit
- * if interrupts are masked (CONFIG1:INT_MSK is set). To handle this, the
- * driver can enable/disable the irq line rather than simply masking the
- * interrupts.
- */
-static void irq_control_mx21(struct mxc_nand_host *host, int activate)
-{
-	if (activate)
-		enable_irq(host->irq);
-	else
-		disable_irq_nosync(host->irq);
-}
-
 static void irq_control_v1_v2(struct mxc_nand_host *host, int activate)
 {
 	uint16_t tmp;
@@ -317,6 +308,8 @@ static void irq_control_v1_v2(struct mxc_nand_host *host, int activate)
 static void irq_control_v3(struct mxc_nand_host *host, int activate)
 {
 	uint32_t tmp;
+	const int max_loops = 100;
+	int loops = 0;
 
 	tmp = readl(NFC_V3_CONFIG2);
 
@@ -325,7 +318,20 @@ static void irq_control_v3(struct mxc_nand_host *host, int activate)
 	else
 		tmp |= NFC_V3_CONFIG2_INT_MSK;
 
+	writel(readl(NFC_V3_IPC) | NFC_V3_IPC_CREQ, NFC_V3_IPC);
+	while (!(readl(NFC_V3_IPC) & NFC_V3_IPC_CACK)) {
+		if (loops++ < max_loops)
+			break;
+		udelay(1);
+	}
+	if (WARN_ON(!(readl(NFC_V3_IPC) & NFC_V3_IPC_CACK))) {
+		printk(KERN_ERR "%s: IPC_CACK not set after %uus\n", __func__,
+			loops);
+	}
+
 	writel(tmp, NFC_V3_CONFIG2);
+
+	writel(readl(NFC_V3_IPC) & ~(NFC_V3_IPC_CREQ | NFC_V3_IPC_CACK), NFC_V3_IPC);
 }
 
 /* This function polls the NANDFC to wait for the basic operation to
@@ -336,11 +342,15 @@ static void wait_op_done(struct mxc_nand_host *host, int useirq)
 	int max_retries = 8000;
 
 	if (useirq) {
-		if (!host->check_int(host)) {
-			INIT_COMPLETION(host->op_completion);
-			host->irq_control(host, 1);
-			wait_for_completion(&host->op_completion);
-		}
+			int ret;
+
+			enable_irq(host->irq);
+			ret = wait_for_completion_timeout(&host->op_completion,
+							MXC_NAND_TIMEOUT);
+			if (ret == 0) {
+				disable_irq(host->irq);
+				printk(KERN_ERR "Wait for NAND interrupt timed out\n");
+			}
 	} else {
 		while (max_retries-- > 0) {
 			if (host->check_int(host))
@@ -400,7 +410,7 @@ static void send_addr_v3(struct mxc_nand_host *host, uint16_t addr, int islast)
 	/* send out address */
 	writel(NFC_ADDR, NFC_V3_LAUNCH);
 
-	wait_op_done(host, 0);
+	wait_op_done(host, islast);
 }
 
 /* This function sends an address (or partial address) to the
@@ -493,7 +503,7 @@ static void send_read_id_v1_v2(struct mxc_nand_host *host)
 
 static uint16_t get_dev_status_v3(struct mxc_nand_host *host)
 {
-	writew(NFC_STATUS, NFC_V3_LAUNCH);
+	writel(NFC_STATUS, NFC_V3_LAUNCH);
 	wait_op_done(host, true);
 
 	return readl(NFC_V3_CONFIG1) >> 16;
@@ -812,9 +822,6 @@ static void preset_v1_v2(struct mtd_info *mtd)
 	if (nfc_is_v21())
 		config1 |= NFC_V2_CONFIG1_FP_INT;
 
-	if (!cpu_is_mx21())
-		config1 |= NFC_V1_V2_CONFIG1_INT_MSK;
-
 	if (nfc_is_v21() && mtd->writesize) {
 		uint16_t pages_per_block = mtd->erasesize / mtd->writesize;
 
@@ -822,7 +829,7 @@ static void preset_v1_v2(struct mtd_info *mtd)
 		if (host->eccsize == 4)
 			config1 |= NFC_V2_CONFIG1_ECC_MODE_4;
 
-		config1 |= NFC_V2_CONFIG1_PPB(ffs(pages_per_block) - 6);
+		config1 |= NFC_V2_CONFIG1_PPB(ffs(pages_per_block) - 5);
 	} else {
 		host->eccsize = 1;
 	}
@@ -845,7 +852,7 @@ static void preset_v1_v2(struct mtd_info *mtd)
 		writew(0xffff, NFC_V21_UNLOCKEND_BLKADDR3);
 	} else if (nfc_is_v1()) {
 		writew(0x0, NFC_V1_UNLOCKSTART_BLKADDR);
-		writew(0xffff, NFC_V1_UNLOCKEND_BLKADDR);
+		writew(0x4000, NFC_V1_UNLOCKEND_BLKADDR);
 	} else
 		BUG();
 
@@ -862,6 +869,7 @@ static void preset_v3(struct mtd_info *mtd)
 
 	writel(NFC_V3_CONFIG1_RBA(0), NFC_V3_CONFIG1);
 	writel(NFC_V3_IPC_CREQ, NFC_V3_IPC);
+	WARN_ON(!(readl(NFC_V3_IPC) & NFC_V3_IPC_CACK));
 
 	/* Unlock the internal RAM Buffer */
 	writel(NFC_V3_WRPROT_BLS_UNLOCK | NFC_V3_WRPROT_UNLOCK,
@@ -872,13 +880,10 @@ static void preset_v3(struct mtd_info *mtd)
 		writel(0x0 |	(0xffff << 16),
 				NFC_V3_WRPROT_UNLOCK_BLK_ADD0 + (i << 2));
 
-	writel(0, NFC_V3_IPC);
-
 	config2 = NFC_V3_CONFIG2_ONE_CYCLE |
 		NFC_V3_CONFIG2_2CMD_PHASES |
 		NFC_V3_CONFIG2_SPAS(mtd->oobsize >> 1) |
 		NFC_V3_CONFIG2_ST_CMD(0x70) |
-		NFC_V3_CONFIG2_INT_MSK |
 		NFC_V3_CONFIG2_NUM_ADDR_PHASE0;
 
 	if (chip->ecc.mode == NAND_ECC_HW)
@@ -898,7 +903,10 @@ static void preset_v3(struct mtd_info *mtd)
 	}
 
 	if (mtd->writesize) {
-		config2 |= NFC_V3_CONFIG2_PPB(ffs(mtd->erasesize / mtd->writesize) - 6);
+		if (cpu_is_mx53())
+			config2 |= MX53_CONFIG2_PPB(ffs(mtd->erasesize / mtd->writesize) - 5);
+		else
+			config2 |= NFC_V3_CONFIG2_PPB(ffs(mtd->erasesize / mtd->writesize) - 5);
 		host->eccsize = get_eccsize(mtd);
 		if (host->eccsize == 8)
 			config2 |= NFC_V3_CONFIG2_ECC_MODE_8;
@@ -918,6 +926,7 @@ static void preset_v3(struct mtd_info *mtd)
 	writel(config3, NFC_V3_CONFIG3);
 
 	writel(0, NFC_V3_DELAY_LINE);
+	writel(0, NFC_V3_IPC);
 }
 
 /* Used by the upper layer to write command to NAND Flash for
@@ -1013,8 +1022,8 @@ static uint8_t bbt_pattern[] = { 'B', 'b', 't', '0' };
 static uint8_t mirror_pattern[] = { '1', 't', 'b', 'B' };
 
 static struct nand_bbt_descr bbt_main_descr = {
-	.options = NAND_BBT_LASTBLOCK | NAND_BBT_CREATE | NAND_BBT_WRITE
-	    | NAND_BBT_2BIT | NAND_BBT_VERSION | NAND_BBT_PERCHIP,
+	.options = NAND_BBT_LASTBLOCK | NAND_BBT_WRITE |
+		NAND_BBT_2BIT | NAND_BBT_VERSION | NAND_BBT_PERCHIP,
 	.offs = 0,
 	.len = 4,
 	.veroffs = 4,
@@ -1023,8 +1032,8 @@ static struct nand_bbt_descr bbt_main_descr = {
 };
 
 static struct nand_bbt_descr bbt_mirror_descr = {
-	.options = NAND_BBT_LASTBLOCK | NAND_BBT_CREATE | NAND_BBT_WRITE
-	    | NAND_BBT_2BIT | NAND_BBT_VERSION | NAND_BBT_PERCHIP,
+	.options = NAND_BBT_LASTBLOCK | NAND_BBT_WRITE |
+		NAND_BBT_2BIT | NAND_BBT_VERSION | NAND_BBT_PERCHIP,
 	.offs = 0,
 	.len = 4,
 	.veroffs = 4,
@@ -1041,6 +1050,44 @@ static int __init mxcnd_probe(struct platform_device *pdev)
 	struct resource *res;
 	int err = 0;
 	struct nand_ecclayout *oob_smallpage, *oob_largepage;
+
+	if (!pdata) {
+		struct device_node *np = pdev->dev.of_node;
+		nand_ecc_modes_t ecc_mode;
+
+		if (!np) {
+			dev_err(&pdev->dev,
+				"No platform data and no OF properties\n");
+			return -ENODEV;
+		}
+
+		pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
+		if (!pdata)
+			return -ENOMEM;
+
+		pdata->width = of_get_nand_bus_width(np);
+		if (pdata->width < 0) {
+			dev_err(&pdev->dev,
+				"Invalid nand-bus-width specified in DT\n");
+			return pdata->width;
+		}
+
+		ecc_mode = of_get_nand_ecc_mode(np);
+		if (ecc_mode == NAND_ECC_HW) {
+			pdata->hw_ecc = 1;
+		} else if (ecc_mode != NAND_ECC_SOFT) {
+			dev_err(&pdev->dev,
+				"Unsupported ECC mode specified in DT\n");
+			return -EINVAL;
+		}
+
+		pdata->flash_bbt = of_get_nand_on_flash_bbt(np);
+
+		if (of_get_property(np, "nand-create-bbt", NULL)) {
+			bbt_main_descr.options |= NAND_BBT_CREATE;
+			bbt_mirror_descr.options |= NAND_BBT_CREATE;
+		}
+	}
 
 	/* Allocate memory for MTD device structure and private data */
 	host = kzalloc(sizeof(struct mxc_nand_host) + NAND_MAX_PAGESIZE +
@@ -1072,7 +1119,7 @@ static int __init mxcnd_probe(struct platform_device *pdev)
 	this->read_buf = mxc_nand_read_buf;
 	this->verify_buf = mxc_nand_verify_buf;
 
-	host->clk = clk_get(&pdev->dev, "nfc");
+	host->clk = clk_get(&pdev->dev, NULL);
 	if (IS_ERR(host->clk)) {
 		err = PTR_ERR(host->clk);
 		goto eclk;
@@ -1103,10 +1150,7 @@ static int __init mxcnd_probe(struct platform_device *pdev)
 		host->send_read_id = send_read_id_v1_v2;
 		host->get_dev_status = get_dev_status_v1_v2;
 		host->check_int = check_int_v1_v2;
-		if (cpu_is_mx21())
-			host->irq_control = irq_control_mx21;
-		else
-			host->irq_control = irq_control_v1_v2;
+		host->irq_control = irq_control_v1_v2;
 	}
 
 	if (nfc_is_v21()) {
@@ -1180,30 +1224,23 @@ static int __init mxcnd_probe(struct platform_device *pdev)
 	init_completion(&host->op_completion);
 
 	host->irq = platform_get_irq(pdev, 0);
-
-	/*
-	 * mask the interrupt. For i.MX21 explicitely call
-	 * irq_control_v1_v2 to use the mask bit. We can't call
-	 * disable_irq_nosync() for an interrupt we do not own yet.
-	 */
-	if (cpu_is_mx21())
-		irq_control_v1_v2(host, 0);
-	else
-		host->irq_control(host, 0);
-
-	err = request_irq(host->irq, mxc_nfc_irq, IRQF_DISABLED, DRIVER_NAME, host);
-	if (err)
+	if (host->irq < 0)
 		goto eirq;
 
 	host->irq_control(host, 0);
+
+	err = request_irq(host->irq, mxc_nfc_irq, 0, DRIVER_NAME, host);
+	if (err)
+		goto eirq;
+
+	disable_irq(host->irq);
 
 	/*
 	 * Now that the interrupt is disabled make sure the interrupt
 	 * mask bit is cleared on i.MX21. Otherwise we can't read
 	 * the interrupt status bit on this machine.
 	 */
-	if (cpu_is_mx21())
-		irq_control_v1_v2(host, 1);
+	host->irq_control(host, 1);
 
 	/* first scan to find the device and get the page size */
 	if (nand_scan_ident(mtd, nfc_is_v21() ? 4 : 1, NULL)) {
@@ -1220,10 +1257,9 @@ static int __init mxcnd_probe(struct platform_device *pdev)
 		this->ecc.layout = &nandv2_hw_eccoob_4k;
 
 	/* second phase scan */
-	if (nand_scan_tail(mtd)) {
-		err = -ENXIO;
+	err = nand_scan_tail(mtd);
+	if (err)
 		goto escan;
-	}
 
 	if (this->ecc.mode == NAND_ECC_HW) {
 		if (nfc_is_v1())
@@ -1231,6 +1267,8 @@ static int __init mxcnd_probe(struct platform_device *pdev)
 		else
 			this->ecc.strength = (host->eccsize == 4) ? 4 : 8;
 	}
+
+	mtd->flags &= ~MTD_OOB_WRITEABLE;
 
 	/* Register the partitions */
 	mtd_device_parse_register(mtd, part_probes, NULL, pdata->parts,
@@ -1258,8 +1296,6 @@ static int __devexit mxcnd_remove(struct platform_device *pdev)
 {
 	struct mxc_nand_host *host = platform_get_drvdata(pdev);
 
-	clk_put(host->clk);
-
 	platform_set_drvdata(pdev, NULL);
 
 	nand_release(&host->mtd);
@@ -1267,6 +1303,11 @@ static int __devexit mxcnd_remove(struct platform_device *pdev)
 	if (host->regs_ip)
 		iounmap(host->regs_ip);
 	iounmap(host->base);
+
+	if (host->clk_act)
+		clk_disable(host->clk);
+	clk_put(host->clk);
+
 	kfree(host);
 
 	return 0;
@@ -1274,7 +1315,7 @@ static int __devexit mxcnd_remove(struct platform_device *pdev)
 
 static struct platform_driver mxcnd_driver = {
 	.driver = {
-		   .name = DRIVER_NAME,
+		.name = DRIVER_NAME,
 	},
 	.remove = __devexit_p(mxcnd_remove),
 };

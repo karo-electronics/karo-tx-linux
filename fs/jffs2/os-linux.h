@@ -21,8 +21,8 @@ struct kvec;
 
 #define JFFS2_INODE_INFO(i) (list_entry(i, struct jffs2_inode_info, vfs_inode))
 #define OFNI_EDONI_2SFFJ(f)  (&(f)->vfs_inode)
-#define JFFS2_SB_INFO(sb) (sb->s_fs_info)
-#define OFNI_BS_2SFFJ(c)  ((struct super_block *)c->os_priv)
+#define JFFS2_SB_INFO(sb) ((sb)->s_fs_info)
+#define OFNI_BS_2SFFJ(c)  ((struct super_block *)(c)->os_priv)
 
 
 #define JFFS2_F_I_SIZE(f) (OFNI_EDONI_2SFFJ(f)->i_size)
@@ -61,7 +61,7 @@ static inline void jffs2_init_inode_info(struct jffs2_inode_info *f)
 
 #define jffs2_is_readonly(c) (OFNI_BS_2SFFJ(c)->s_flags & MS_RDONLY)
 
-#define SECTOR_ADDR(x) ( (((unsigned long)(x) / c->sector_size) * c->sector_size) )
+#define SECTOR_ADDR(x) ( (((unsigned long)(x) / (c)->sector_size) * (c)->sector_size) )
 #ifndef CONFIG_JFFS2_FS_WRITEBUFFER
 
 
@@ -98,15 +98,15 @@ static inline void jffs2_init_inode_info(struct jffs2_inode_info *f)
 
 #else /* NAND and/or ECC'd NOR support present */
 
-#define jffs2_is_writebuffered(c) (c->wbuf != NULL)
+#define jffs2_is_writebuffered(c) ((c)->wbuf != NULL)
 
 #ifdef CONFIG_JFFS2_SUMMARY
-#define jffs2_can_mark_obsolete(c) (0)
+#define jffs2_can_mark_obsolete(c) 0
 #else
-#define jffs2_can_mark_obsolete(c) (c->mtd->flags & (MTD_BIT_WRITEABLE))
+#define jffs2_can_mark_obsolete(c) ((c)->mtd->flags & (MTD_BIT_WRITEABLE))
 #endif
 
-#define jffs2_cleanmarker_oob(c) (c->mtd->type == MTD_NANDFLASH)
+#define jffs2_cleanmarker_oob(c) ((c)->mtd->type == MTD_NANDFLASH && ((c)->mtd->flags & MTD_OOB_WRITEABLE))
 
 #define jffs2_wbuf_dirty(c) (!!(c)->wbuf_len)
 
@@ -125,14 +125,14 @@ int jffs2_flush_wbuf_pad(struct jffs2_sb_info *c);
 int jffs2_nand_flash_setup(struct jffs2_sb_info *c);
 void jffs2_nand_flash_cleanup(struct jffs2_sb_info *c);
 
-#define jffs2_dataflash(c) (c->mtd->type == MTD_DATAFLASH)
+#define jffs2_dataflash(c) ((c)->mtd->type == MTD_DATAFLASH)
 int jffs2_dataflash_setup(struct jffs2_sb_info *c);
 void jffs2_dataflash_cleanup(struct jffs2_sb_info *c);
-#define jffs2_ubivol(c) (c->mtd->type == MTD_UBIVOLUME)
+#define jffs2_ubivol(c) ((c)->mtd->type == MTD_UBIVOLUME)
 int jffs2_ubivol_setup(struct jffs2_sb_info *c);
 void jffs2_ubivol_cleanup(struct jffs2_sb_info *c);
 
-#define jffs2_nor_wbuf_flash(c) (c->mtd->type == MTD_NORFLASH && ! (c->mtd->flags & MTD_BIT_WRITEABLE))
+#define jffs2_nor_wbuf_flash(c) ((c)->mtd->type == MTD_NORFLASH && ! ((c)->mtd->flags & MTD_BIT_WRITEABLE))
 int jffs2_nor_wbuf_flash_setup(struct jffs2_sb_info *c);
 void jffs2_nor_wbuf_flash_cleanup(struct jffs2_sb_info *c);
 
