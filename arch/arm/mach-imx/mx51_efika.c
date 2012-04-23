@@ -41,7 +41,7 @@
 
 #include "devices-imx51.h"
 #include "efika.h"
-#include "cpu_op-mx51.h"
+#include "cpu_op-mx5.h"
 
 #define MX51_USB_CTRL_1_OFFSET          0x10
 #define MX51_USB_CTRL_UH1_EXT_CLK_EN    (1 << 25)

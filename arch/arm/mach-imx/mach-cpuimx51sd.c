@@ -37,7 +37,7 @@
 #include <asm/mach/time.h>
 
 #include "devices-imx51.h"
-#include "cpu_op-mx51.h"
+#include "cpu_op-mx5.h"
 
 #define USBH1_RST		IMX_GPIO_NR(2, 28)
 #define ETH_RST			IMX_GPIO_NR(2, 31)

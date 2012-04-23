@@ -30,7 +30,7 @@
 #include <asm/mach/time.h>
 
 #include "devices-imx51.h"
-#include "cpu_op-mx51.h"
+#include "cpu_op-mx5.h"
 
 #define BABBAGE_USB_HUB_RESET	IMX_GPIO_NR(1, 7)
 #define BABBAGE_USBH1_STP	IMX_GPIO_NR(1, 27)
@@ -241,6 +241,8 @@ static inline void babbage_fec_reset(void)
 /* This function is board specific as the bit mask for the plldiv will also
 be different for other Freescale SoCs, thus a common bitmask is not
 possible and cannot get place in /plat-mxc/ehci.c.*/
+extern int mx51_initialize_usb_hw(int port, unsigned int flags);
+
 static int initialize_otg_port(struct platform_device *pdev)
 {
 	u32 v;

@@ -11,20 +11,5 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-#include <linux/bug.h>
-#include <linux/types.h>
-#include <mach/hardware.h>
-#include <linux/kernel.h>
-
-static struct cpu_op mx51_cpu_op[] = {
-	{
-	.cpu_rate = 160000000,},
-	{
-	.cpu_rate = 800000000,},
-};
-
-struct cpu_op *mx51_get_cpu_op(int *op)
-{
-	*op = ARRAY_SIZE(mx51_cpu_op);
-	return mx51_cpu_op;
-}
+extern struct cpu_op *mx51_get_cpu_op(int *op);
+extern struct cpu_op *mx53_get_cpu_op(int *op);
