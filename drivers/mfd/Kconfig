@@ -881,6 +881,12 @@ config MFD_ANATOP
 	  MFD controller. This controller embeds regulator and
 	  thermal devices for Freescale i.MX platforms.
 
+config GENERIC_GPIO_SWITCH
+       tristate "Generic GPIO switch"
+       help
+         Provide a generic GPIO interface for drivers that require some
+	 external logic for the device they serve to operate.
+
 endmenu
 endif
 
