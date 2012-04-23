@@ -127,8 +127,6 @@ static inline u32 _get_mux(struct clk *parent, struct clk *m0,
 		return 3;
 	else
 		BUG();
-
-	return -EINVAL;
 }
 
 static inline void __iomem *_mx51_get_pll_base(struct clk *pll)
@@ -760,7 +758,7 @@ static struct clk pll1_main_clk = {
 };
 
 /* Clock tree block diagram (WIP):
- * 	CCM: Clock Controller Module
+ *	CCM: Clock Controller Module
  *
  * PLL output -> |
  *               | CCM Switcher -> CCM_CLK_ROOT_GEN ->
@@ -1101,11 +1099,13 @@ static struct clk uart_root_clk = {
 /* USBOH3 */
 CLK_GET_RATE(usboh3, 1, USBOH3)
 CLK_SET_PARENT(usboh3, 1, USBOH3)
+CLK_SET_RATE(usboh3, 1, USBOH3)
 
 static struct clk usboh3_clk = {
 	.parent = &pll2_sw_clk,
 	.get_rate = clk_usboh3_get_rate,
 	.set_parent = clk_usboh3_set_parent,
+	.set_rate = clk_usboh3_set_rate,
 	.enable = _clk_ccgr_enable,
 	.disable = _clk_ccgr_disable,
 	.enable_reg = MXC_CCM_CCGR2,
@@ -1120,7 +1120,7 @@ static struct clk usb_ahb_clk = {
 	.enable_shift = MXC_CCM_CCGRx_CG13_OFFSET,
 };
 
-static int clk_usb_phy1_set_parent(struct clk *clk, struct clk *parent)
+static int clk_usb_phy_set_parent(struct clk *clk, struct clk *parent)
 {
 	u32 reg;
 
@@ -1134,12 +1134,33 @@ static int clk_usb_phy1_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static struct clk usb_phy1_clk = {
+static struct clk mx51_usb_phy_clk = {
 	.parent = &pll3_sw_clk,
-	.set_parent = clk_usb_phy1_set_parent,
+	.set_parent = clk_usb_phy_set_parent,
 	.enable = _clk_ccgr_enable,
 	.enable_reg = MXC_CCM_CCGR2,
 	.enable_shift = MXC_CCM_CCGRx_CG0_OFFSET,
+	.disable = _clk_ccgr_disable,
+};
+
+static struct clk mx53_usb_phy_clk = {
+	.parent = &pll3_sw_clk,
+	.set_parent = clk_usb_phy_set_parent,
+};
+
+static struct clk mx53_usb_phy1_clk = {
+	.parent = &mx53_usb_phy_clk,
+	.enable = _clk_ccgr_enable,
+	.enable_reg = MXC_CCM_CCGR4,
+	.enable_shift = MXC_CCM_CCGRx_CG5_OFFSET,
+	.disable = _clk_ccgr_disable,
+};
+
+static struct clk mx53_usb_phy2_clk = {
+	.parent = &mx53_usb_phy_clk,
+	.enable = _clk_ccgr_enable,
+	.enable_reg = MXC_CCM_CCGR4,
+	.enable_shift = MXC_CCM_CCGRx_CG6_OFFSET,
 	.disable = _clk_ccgr_disable,
 };
 
@@ -1280,10 +1301,14 @@ DEFINE_CLOCK(gpt_ipg_clk, 0, MXC_CCM_CCGR2, MXC_CCM_CCGRx_CG10_OFFSET,
 DEFINE_CLOCK(gpt_clk, 0, MXC_CCM_CCGR2, MXC_CCM_CCGRx_CG9_OFFSET,
 	NULL,  NULL, &ipg_clk, &gpt_ipg_clk);
 
+DEFINE_CLOCK(pwm1_ipg_clk, 0, MXC_CCM_CCGR2, MXC_CCM_CCGRx_CG5_OFFSET,
+	NULL, NULL, &ipg_perclk, NULL);
 DEFINE_CLOCK(pwm1_clk, 0, MXC_CCM_CCGR2, MXC_CCM_CCGRx_CG6_OFFSET,
+	NULL, NULL, &pwm1_ipg_clk, NULL);
+DEFINE_CLOCK(pwm2_ipg_clk, 1, MXC_CCM_CCGR2, MXC_CCM_CCGRx_CG7_OFFSET,
 	NULL, NULL, &ipg_perclk, NULL);
-DEFINE_CLOCK(pwm2_clk, 0, MXC_CCM_CCGR2, MXC_CCM_CCGRx_CG8_OFFSET,
-	NULL, NULL, &ipg_perclk, NULL);
+DEFINE_CLOCK(pwm2_clk, 1, MXC_CCM_CCGR2, MXC_CCM_CCGRx_CG8_OFFSET,
+	NULL, NULL, &pwm2_ipg_clk, NULL);
 
 /* I2C */
 DEFINE_CLOCK(i2c1_clk, 0, MXC_CCM_CCGR1, MXC_CCM_CCGRx_CG9_OFFSET,
@@ -1340,12 +1365,15 @@ DEFINE_CLOCK(sdma_clk, 1, MXC_CCM_CCGR4, MXC_CCM_CCGRx_CG15_OFFSET,
 		NULL, NULL, &ahb_clk, NULL);
 
 /* eSDHC */
+DEFINE_CLOCK(tmax2_clk, 0, MXC_CCM_CCGR1, MXC_CCM_CCGRx_CG1_OFFSET,
+	NULL, NULL, NULL, NULL);
+
 DEFINE_CLOCK_FULL(esdhc1_ipg_clk, 0, MXC_CCM_CCGR3, MXC_CCM_CCGRx_CG0_OFFSET,
-	NULL,  NULL, _clk_max_enable, _clk_max_disable, &ipg_clk, NULL);
+	NULL,  NULL, _clk_max_enable, _clk_max_disable, &ipg_clk, &tmax2_clk);
 DEFINE_CLOCK_MAX(esdhc1_clk, 0, MXC_CCM_CCGR3, MXC_CCM_CCGRx_CG1_OFFSET,
 	clk_esdhc1, &pll2_sw_clk, &esdhc1_ipg_clk);
 DEFINE_CLOCK_FULL(esdhc2_ipg_clk, 1, MXC_CCM_CCGR3, MXC_CCM_CCGRx_CG2_OFFSET,
-	NULL,  NULL, _clk_max_enable, _clk_max_disable, &ipg_clk, NULL);
+	NULL,  NULL, _clk_max_enable, _clk_max_disable, &ipg_clk, &tmax2_clk);
 DEFINE_CLOCK_FULL(esdhc3_ipg_clk, 2, MXC_CCM_CCGR3, MXC_CCM_CCGRx_CG4_OFFSET,
 	NULL,  NULL, _clk_max_enable, _clk_max_disable, &ipg_clk, NULL);
 DEFINE_CLOCK_FULL(esdhc4_ipg_clk, 3, MXC_CCM_CCGR3, MXC_CCM_CCGRx_CG6_OFFSET,
@@ -1385,11 +1413,11 @@ static struct clk esdhc2_mx53_clk = {
 	.enable_shift = MXC_CCM_CCGRx_CG3_OFFSET,
 	.enable  = _clk_max_enable,
 	.disable = _clk_max_disable,
-	.secondary = &esdhc3_ipg_clk,
+	.secondary = &esdhc2_ipg_clk,
 };
 
 DEFINE_CLOCK_MAX(esdhc3_mx53_clk, 2, MXC_CCM_CCGR3, MXC_CCM_CCGRx_CG5_OFFSET,
-	clk_esdhc3_mx53, &pll2_sw_clk, &esdhc2_ipg_clk);
+	clk_esdhc3_mx53, &pll2_sw_clk, &esdhc3_ipg_clk);
 
 static struct clk esdhc4_mx53_clk = {
 	.id = 3,
@@ -1411,7 +1439,7 @@ static struct clk sata_clk = {
 };
 
 static struct clk ahci_phy_clk = {
-	.parent = &usb_phy1_clk,
+	.parent = &mx53_usb_phy_clk,
 };
 
 static struct clk ahci_dma_clk = {
@@ -1439,6 +1467,36 @@ DEFINE_CLOCK(ipu_di1_clk, 0, MXC_CCM_CCGR6, MXC_CCM_CCGRx_CG6_OFFSET,
 DEFINE_CLOCK(pata_clk, 0, MXC_CCM_CCGR4, MXC_CCM_CCGRx_CG0_OFFSET,
 		NULL, NULL, &ipg_clk, &spba_clk);
 
+/* Flexcan */
+static int clk_flexcan_set_parent(struct clk *clk, struct clk *parent)
+{
+	u32 reg, mux;
+
+	mux = _get_mux(parent, &ipg_clk, &ckih_clk,
+			&ckih2_clk, &lp_apm_clk);
+	reg = __raw_readl(MXC_CCM_CSCMR2) &
+		~MXC_CCM_CSCMR2_CAN_CLK_SEL_MASK;
+	reg |= mux << MXC_CCM_CSCMR2_CAN_CLK_SEL_OFFSET;
+	__raw_writel(reg, MXC_CCM_CSCMR2);
+
+	return 0;
+}
+
+static struct clk flexcan_root_clk = {
+	.parent = &ipg_clk,
+	.set_parent = clk_flexcan_set_parent,
+};
+
+DEFINE_CLOCK(flexcan1_serclk, 0, MXC_CCM_CCGR6, MXC_CCM_CCGRx_CG11_OFFSET,
+		NULL, NULL, &flexcan_root_clk, NULL);
+DEFINE_CLOCK(flexcan1_clk, 0, MXC_CCM_CCGR6, MXC_CCM_CCGRx_CG10_OFFSET,
+		NULL, NULL, &ipg_clk, &flexcan1_serclk);
+
+DEFINE_CLOCK(flexcan2_serclk, 0, MXC_CCM_CCGR4, MXC_CCM_CCGRx_CG4_OFFSET,
+		NULL, NULL, &flexcan_root_clk, NULL);
+DEFINE_CLOCK(flexcan2_clk, 1, MXC_CCM_CCGR4, MXC_CCM_CCGRx_CG3_OFFSET,
+		NULL, NULL, &ipg_clk, &flexcan2_serclk);
+
 #define _REGISTER_CLOCK(d, n, c) \
        { \
 		.dev_id = d, \
@@ -1454,21 +1512,25 @@ static struct clk_lookup mx51_lookups[] = {
 	_REGISTER_CLOCK(NULL, "gpt", gpt_clk)
 	/* i.mx51 has the i.mx27 type fec */
 	_REGISTER_CLOCK("imx27-fec.0", NULL, fec_clk)
-	_REGISTER_CLOCK("mxc_pwm.0", "pwm", pwm1_clk)
-	_REGISTER_CLOCK("mxc_pwm.1", "pwm", pwm2_clk)
+	_REGISTER_CLOCK("imx27-pwm.0", NULL, pwm1_clk)
+	_REGISTER_CLOCK("imx27-pwm.1", NULL, pwm2_clk)
 	_REGISTER_CLOCK("imx-i2c.0", NULL, i2c1_clk)
 	_REGISTER_CLOCK("imx-i2c.1", NULL, i2c2_clk)
 	_REGISTER_CLOCK("imx-i2c.2", NULL, hsi2c_clk)
 	_REGISTER_CLOCK("mxc-ehci.0", "usb", usboh3_clk)
 	_REGISTER_CLOCK("mxc-ehci.0", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("mxc-ehci.0", "usb_phy1", usb_phy1_clk)
+	_REGISTER_CLOCK("mxc-ehci.0", "usb_phy", mx51_usb_phy_clk)
 	_REGISTER_CLOCK("mxc-ehci.1", "usb", usboh3_clk)
 	_REGISTER_CLOCK("mxc-ehci.1", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("mxc-ehci.1", "usb_phy", dummy_clk)
 	_REGISTER_CLOCK("mxc-ehci.2", "usb", usboh3_clk)
 	_REGISTER_CLOCK("mxc-ehci.2", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("mxc-ehci.2", "usb_phy", dummy_clk)
 	_REGISTER_CLOCK("fsl-usb2-udc", "usb", usboh3_clk)
-	_REGISTER_CLOCK("fsl-usb2-udc", "usb_ahb", ahb_clk)
+	_REGISTER_CLOCK("fsl-usb2-udc", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("fsl-usb2-udc", "usb_phy", dummy_clk)
 	_REGISTER_CLOCK("imx-keypad", NULL, dummy_clk)
+	_REGISTER_CLOCK(NULL, "kpp", dummy_clk)
 	_REGISTER_CLOCK("mxc_nand", NULL, nfc_clk)
 	_REGISTER_CLOCK("imx-ssi.0", NULL, ssi1_clk)
 	_REGISTER_CLOCK("imx-ssi.1", NULL, ssi2_clk)
@@ -1508,6 +1570,8 @@ static struct clk_lookup mx53_lookups[] = {
 	_REGISTER_CLOCK(NULL, "gpt", gpt_clk)
 	/* i.mx53 has the i.mx25 type fec */
 	_REGISTER_CLOCK("imx25-fec.0", NULL, fec_clk)
+	_REGISTER_CLOCK("imx27-pwm.0", NULL, pwm1_clk)
+	_REGISTER_CLOCK("imx27-pwm.1", NULL, pwm2_clk)
 	_REGISTER_CLOCK(NULL, "iim_clk", iim_clk)
 	_REGISTER_CLOCK("imx-i2c.0", NULL, i2c1_clk)
 	_REGISTER_CLOCK("imx-i2c.1", NULL, i2c2_clk)
@@ -1515,7 +1579,7 @@ static struct clk_lookup mx53_lookups[] = {
 	/* i.mx53 has the i.mx51 type ecspi */
 	_REGISTER_CLOCK("imx51-ecspi.0", NULL, ecspi1_clk)
 	_REGISTER_CLOCK("imx51-ecspi.1", NULL, ecspi2_clk)
-	/* i.mx53 has the i.mx25 type cspi */
+	/* i.mx53 has the i.mx35 type cspi */
 	_REGISTER_CLOCK("imx35-cspi.0", NULL, cspi_clk)
 	_REGISTER_CLOCK("sdhci-esdhc-imx53.0", NULL, esdhc1_clk)
 	_REGISTER_CLOCK("sdhci-esdhc-imx53.1", NULL, esdhc2_mx53_clk)
@@ -1528,11 +1592,53 @@ static struct clk_lookup mx53_lookups[] = {
 	_REGISTER_CLOCK("imx-ssi.0", NULL, ssi1_clk)
 	_REGISTER_CLOCK("imx-ssi.1", NULL, ssi2_clk)
 	_REGISTER_CLOCK("imx-ssi.2", NULL, ssi3_clk)
-	_REGISTER_CLOCK("imx-keypad", NULL, dummy_clk)
+	_REGISTER_CLOCK("63fcc000.ssi", NULL, ssi1_clk)
+	_REGISTER_CLOCK("50014000.ssi", NULL, ssi2_clk)
+	_REGISTER_CLOCK("63fe8000.ssi", NULL, ssi3_clk)
+	_REGISTER_CLOCK("mxc-ehci.0", "usb", usboh3_clk)
+	_REGISTER_CLOCK("mxc-ehci.0", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("mxc-ehci.0", "usb_phy", mx53_usb_phy1_clk)
+	_REGISTER_CLOCK("mxc-ehci.1", "usb", usboh3_clk)
+	_REGISTER_CLOCK("mxc-ehci.1", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("mxc-ehci.1", "usb_phy", mx53_usb_phy2_clk)
+	_REGISTER_CLOCK("mxc-ehci.2", "usb", usboh3_clk)
+	_REGISTER_CLOCK("mxc-ehci.2", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("mxc-ehci.2", "usb_phy", dummy_clk)
+	_REGISTER_CLOCK("mxc-ehci.3", "usb", usboh3_clk)
+	_REGISTER_CLOCK("mxc-ehci.3", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("mxc-ehci.3", "usb_phy", dummy_clk)
+	_REGISTER_CLOCK("53f80000.mxc-ehci", "usb", usboh3_clk)
+	_REGISTER_CLOCK("53f80000.mxc-ehci", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("53f80000.mxc-ehci", "usb_phy", mx53_usb_phy1_clk)
+	_REGISTER_CLOCK("53f80200.mxc-ehci", "usb", usboh3_clk)
+	_REGISTER_CLOCK("53f80200.mxc-ehci", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("53f80200.mxc-ehci", "usb_phy", mx53_usb_phy2_clk)
+	_REGISTER_CLOCK("53f80400.mxc-ehci", "usb", usboh3_clk)
+	_REGISTER_CLOCK("53f80400.mxc-ehci", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("53f80400.mxc-ehci", "usb_phy", dummy_clk)
+	_REGISTER_CLOCK("53f80600.mxc-ehci", "usb", usboh3_clk)
+	_REGISTER_CLOCK("53f80600.mxc-ehci", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("53f80600.mxc-ehci", "usb_phy", dummy_clk)
+	_REGISTER_CLOCK("fsl-usb2-udc", "usb", usboh3_clk)
+	_REGISTER_CLOCK("fsl-usb2-udc", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("fsl-usb2-udc", "usb_phy", mx53_usb_phy1_clk)
+	_REGISTER_CLOCK("53f80000.fsl-usb2-udc", "usb", usboh3_clk)
+	_REGISTER_CLOCK("53f80000.fsl-usb2-udc", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("53f80000.fsl-usb2-udc", "usb_phy", mx53_usb_phy1_clk)
+	_REGISTER_CLOCK(NULL, "kpp", dummy_clk)
+	_REGISTER_CLOCK("mxc_nand", NULL, nfc_clk)
 	_REGISTER_CLOCK("pata_imx", NULL, pata_clk)
 	_REGISTER_CLOCK("imx53-ahci.0", "ahci", sata_clk)
 	_REGISTER_CLOCK("imx53-ahci.0", "ahci_phy", ahci_phy_clk)
 	_REGISTER_CLOCK("imx53-ahci.0", "ahci_dma", ahci_dma_clk)
+	_REGISTER_CLOCK("imx-ipuv3", NULL, ipu_clk)
+	_REGISTER_CLOCK("imx-ipuv3", "di0", ipu_di0_clk)
+	_REGISTER_CLOCK("imx-ipuv3", "di1", ipu_di1_clk)
+	_REGISTER_CLOCK("flexcan.0", NULL, flexcan1_clk)
+	_REGISTER_CLOCK("flexcan.1", NULL, flexcan2_clk)
+	_REGISTER_CLOCK("imx-audmux", NULL, dummy_clk)
+	_REGISTER_CLOCK("63fd0000.audmux", NULL, dummy_clk)
+	_REGISTER_CLOCK(NULL, "gpc_dvfs", gpc_dvfs_clk)
 };
 
 static void clk_tree_init(void)
@@ -1555,6 +1661,18 @@ static void clk_tree_init(void)
 	__raw_writel(reg, MXC_CCM_CBCDR);
 }
 
+#define pr_clk(clk)	do {					\
+	unsigned long rate = clk_get_rate(&clk##_clk);		\
+	if (rate < 1000000)					\
+		pr_info("CLK: %s: %lu.%03lukHz\n", #clk,	\
+			rate / 1000,				\
+			rate % 1000);				\
+	else							\
+		pr_info("CLK: %s: %lu.%03luMHz\n", #clk,	\
+			rate / 1000000,				\
+			rate / 1000 % 1000);			\
+	} while (0)
+
 int __init mx51_clocks_init(unsigned long ckil, unsigned long osc,
 			unsigned long ckih1, unsigned long ckih2)
 {
@@ -1572,13 +1690,14 @@ int __init mx51_clocks_init(unsigned long ckil, unsigned long osc,
 
 	clk_enable(&cpu_clk);
 	clk_enable(&main_bus_clk);
+	clk_enable(&sdma_clk);
 
 	clk_enable(&iim_clk);
 	imx_print_silicon_rev("i.MX51", mx51_revision());
 	clk_disable(&iim_clk);
 
 	/* move usb_phy_clk to 24MHz */
-	clk_set_parent(&usb_phy1_clk, &osc_clk);
+	clk_set_parent(&mx51_usb_phy_clk, &osc_clk);
 
 	/* set the usboh3_clk parent to pll2_sw_clk */
 	clk_set_parent(&usboh3_clk, &pll2_sw_clk);
@@ -1594,6 +1713,22 @@ int __init mx51_clocks_init(unsigned long ckil, unsigned long osc,
 	/* System timer */
 	mxc_timer_init(&gpt_clk, MX51_IO_ADDRESS(MX51_GPT1_BASE_ADDR),
 		MX51_INT_GPT);
+
+	pr_clk(pll1_main);
+	pr_clk(pll1_sw);
+	pr_clk(pll2_sw);
+	pr_clk(pll3_sw);
+
+	pr_clk(ipg);
+	pr_clk(ckih);
+	pr_clk(ckih2);
+	pr_clk(lp_apm);
+	pr_clk(periph_apm);
+	pr_clk(ssi1);
+
+	pr_clk(usboh3);
+	pr_clk(usb_ahb);
+
 	return 0;
 }
 
@@ -1601,6 +1736,15 @@ int __init mx53_clocks_init(unsigned long ckil, unsigned long osc,
 			unsigned long ckih1, unsigned long ckih2)
 {
 	int i;
+
+	pr_info("CKIL:  %lu.%03lukHz\n",
+		ckil / 1000, ckil % 1000);
+	pr_info("OSC:   %lu.%03luMHz\n",
+		osc / 1000000, osc / 1000 % 1000);
+	pr_info("CKIH1: %lu.%03luMHz\n",
+		ckih1 / 1000000, ckih1 / 1000 % 1000);
+	pr_info("CKIH2: %lu.%03luMHz\n",
+		ckih2 / 1000000, ckih2 / 1000 % 1000);
 
 	external_low_reference = ckil;
 	external_high_reference = ckih1;
@@ -1615,10 +1759,19 @@ int __init mx53_clocks_init(unsigned long ckil, unsigned long osc,
 	clk_set_parent(&uart_root_clk, &pll3_sw_clk);
 	clk_enable(&cpu_clk);
 	clk_enable(&main_bus_clk);
+	clk_enable(&sdma_clk);
 
 	clk_enable(&iim_clk);
 	imx_print_silicon_rev("i.MX53", mx53_revision());
 	clk_disable(&iim_clk);
+
+	/* move usb_phy_clk to 24MHz */
+	clk_set_parent(&mx53_usb_phy_clk, &osc_clk);
+
+	/* set the usboh3_clk parent to pll2_sw_clk */
+	clk_set_parent(&usboh3_clk, &pll2_sw_clk);
+	i = clk_set_rate(&usboh3_clk, 66666666);
+	printk(KERN_INFO "clk_set_rate(usboh3_clk, 6000000) returned %d\n", i);
 
 	/* Set SDHC parents to be PLL2 */
 	clk_set_parent(&esdhc1_clk, &pll2_sw_clk);
@@ -1628,9 +1781,38 @@ int __init mx53_clocks_init(unsigned long ckil, unsigned long osc,
 	clk_set_rate(&esdhc1_clk, 200000000);
 	clk_set_rate(&esdhc3_mx53_clk, 200000000);
 
+	/* set flexcan parents to be IPG */
+	clk_set_parent(&flexcan1_clk, &ipg_clk);
+	clk_set_parent(&flexcan2_clk, &ipg_clk);
+
+	clk_set_parent(&ssi1_clk, &pll3_sw_clk);
+	clk_set_parent(&ssi2_clk, &pll3_sw_clk);
+	clk_set_parent(&ssi3_clk, &pll3_sw_clk);
+
 	/* System timer */
 	mxc_timer_init(&gpt_clk, MX53_IO_ADDRESS(MX53_GPT1_BASE_ADDR),
 		MX53_INT_GPT);
+
+	pr_clk(pll1_main);
+	pr_clk(pll1_sw);
+	pr_clk(pll2_sw);
+	pr_clk(pll3_sw);
+	pr_clk(mx53_pll4_sw);
+
+	pr_clk(ipg);
+	pr_clk(ckih);
+	pr_clk(ckih2);
+	pr_clk(lp_apm);
+	pr_clk(periph_apm);
+	pr_clk(ssi1);
+	pr_clk(flexcan1);
+	pr_clk(flexcan_root);
+
+	pr_clk(usboh3);
+	pr_clk(usb_ahb);
+	pr_clk(mx53_usb_phy1);
+	pr_clk(mx53_usb_phy2);
+
 	return 0;
 }
 
@@ -1646,14 +1828,15 @@ static void __init clk_get_freq_dt(unsigned long *ckil, unsigned long *osc,
 		if (of_property_read_u32(np, "clock-frequency", &rate))
 			continue;
 
-		if (of_device_is_compatible(np, "fsl,imx-ckil"))
+		if (of_device_is_compatible(np, "fsl,imx-ckil")) {
 			*ckil = rate;
-		else if (of_device_is_compatible(np, "fsl,imx-osc"))
+		} else if (of_device_is_compatible(np, "fsl,imx-osc")) {
 			*osc = rate;
-		else if (of_device_is_compatible(np, "fsl,imx-ckih1"))
+		} else if (of_device_is_compatible(np, "fsl,imx-ckih1")) {
 			*ckih1 = rate;
-		else if (of_device_is_compatible(np, "fsl,imx-ckih2"))
+		} else if (of_device_is_compatible(np, "fsl,imx-ckih2")) {
 			*ckih2 = rate;
+		}
 	}
 }
 
