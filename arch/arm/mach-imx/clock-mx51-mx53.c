@@ -1572,6 +1572,7 @@ static struct clk_lookup mx53_lookups[] = {
 	_REGISTER_CLOCK("imx25-fec.0", NULL, fec_clk)
 	_REGISTER_CLOCK("imx27-pwm.0", NULL, pwm1_clk)
 	_REGISTER_CLOCK("imx27-pwm.1", NULL, pwm2_clk)
+	_REGISTER_CLOCK(NULL, "cpu_clk", cpu_clk)
 	_REGISTER_CLOCK(NULL, "iim_clk", iim_clk)
 	_REGISTER_CLOCK("imx-i2c.0", NULL, i2c1_clk)
 	_REGISTER_CLOCK("imx-i2c.1", NULL, i2c2_clk)
