@@ -414,6 +414,9 @@ static int clk_cpu_set_rate(struct clk *clk, unsigned long rate)
 	unsigned long parent_rate;
 
 	parent_rate = clk_get_rate(clk->parent);
+	if (rate > parent_rate)
+		return -EINVAL;
+
 	cpu_podf = parent_rate / rate - 1;
 	/* use post divider to change freq */
 	reg = __raw_readl(MXC_CCM_CACRR);
