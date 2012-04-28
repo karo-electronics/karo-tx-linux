@@ -410,14 +410,15 @@ static unsigned long clk_cpu_get_rate(struct clk *clk)
 
 static int clk_cpu_set_rate(struct clk *clk, unsigned long rate)
 {
-	u32 reg, cpu_podf;
+	u32 reg;
+	int cpu_podf;
 	unsigned long parent_rate;
 
 	parent_rate = clk_get_rate(clk->parent);
-	if (rate > parent_rate)
+	cpu_podf = parent_rate / rate - 1;
+	if (cpu_podf < 0 || cpu_podf > 7)
 		return -EINVAL;
 
-	cpu_podf = parent_rate / rate - 1;
 	/* use post divider to change freq */
 	reg = __raw_readl(MXC_CCM_CACRR);
 	reg &= ~MXC_CCM_CACRR_ARM_PODF_MASK;
@@ -963,7 +964,7 @@ static int _clk_hsc_enable(struct clk *clk)
 	u32 reg;
 
 	_clk_ccgr_enable(clk);
-	/* Handshake with IPU when certain clock rates are changed. */
+	/* Handshake with HSC when certain clock rates are changed. */
 	reg = __raw_readl(MXC_CCM_CCDR);
 	reg &= ~MXC_CCM_CCDR_HSC_HS_MASK;
 	__raw_writel(reg, MXC_CCM_CCDR);
@@ -1520,24 +1521,21 @@ static struct clk_lookup mx51_lookups[] = {
 	_REGISTER_CLOCK("imx-i2c.0", NULL, i2c1_clk)
 	_REGISTER_CLOCK("imx-i2c.1", NULL, i2c2_clk)
 	_REGISTER_CLOCK("imx-i2c.2", NULL, hsi2c_clk)
-	_REGISTER_CLOCK("mxc-ehci.0", "usb", usboh3_clk)
-	_REGISTER_CLOCK("mxc-ehci.0", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("mxc-ehci.0", "usb_phy", mx51_usb_phy_clk)
-	_REGISTER_CLOCK("mxc-ehci.1", "usb", usboh3_clk)
-	_REGISTER_CLOCK("mxc-ehci.1", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("mxc-ehci.1", "usb_phy", dummy_clk)
-	_REGISTER_CLOCK("mxc-ehci.2", "usb", usboh3_clk)
-	_REGISTER_CLOCK("mxc-ehci.2", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("mxc-ehci.2", "usb_phy", dummy_clk)
-	_REGISTER_CLOCK("fsl-usb2-udc", "usb", usboh3_clk)
-	_REGISTER_CLOCK("fsl-usb2-udc", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("fsl-usb2-udc", "usb_phy", dummy_clk)
+	_REGISTER_CLOCK("73f80000.imxotg", "usb", usboh3_clk)
+	_REGISTER_CLOCK("73f80000.imxotg", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("73f80000.imxotg", "phy", mx53_usb_phy1_clk)
+	_REGISTER_CLOCK("73f80200.imxotg", "usb", usboh3_clk)
+	_REGISTER_CLOCK("73f80200.imxotg", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("73f80200.imxotg", "phy", mx53_usb_phy2_clk)
 	_REGISTER_CLOCK("imx-keypad", NULL, dummy_clk)
 	_REGISTER_CLOCK(NULL, "kpp", dummy_clk)
 	_REGISTER_CLOCK("mxc_nand", NULL, nfc_clk)
 	_REGISTER_CLOCK("imx-ssi.0", NULL, ssi1_clk)
 	_REGISTER_CLOCK("imx-ssi.1", NULL, ssi2_clk)
 	_REGISTER_CLOCK("imx-ssi.2", NULL, ssi3_clk)
+	_REGISTER_CLOCK("83fcc000.ssi", NULL, ssi1_clk)
+	_REGISTER_CLOCK("70014000.ssi", NULL, ssi2_clk)
+	_REGISTER_CLOCK("83fe8000.ssi", NULL, ssi3_clk)
 	/* i.mx51 has the i.mx35 type sdma */
 	_REGISTER_CLOCK("imx35-sdma", NULL, sdma_clk)
 	_REGISTER_CLOCK(NULL, "ckih", ckih_clk)
@@ -1561,6 +1559,7 @@ static struct clk_lookup mx51_lookups[] = {
 	_REGISTER_CLOCK("imx-ipuv3", "di1", ipu_di1_clk)
 	_REGISTER_CLOCK(NULL, "gpc_dvfs", gpc_dvfs_clk)
 	_REGISTER_CLOCK("pata_imx", NULL, pata_clk)
+	_REGISTER_CLOCK("83fd0000.audmux", NULL, dummy_clk)
 };
 
 static struct clk_lookup mx53_lookups[] = {
@@ -1599,36 +1598,12 @@ static struct clk_lookup mx53_lookups[] = {
 	_REGISTER_CLOCK("63fcc000.ssi", NULL, ssi1_clk)
 	_REGISTER_CLOCK("50014000.ssi", NULL, ssi2_clk)
 	_REGISTER_CLOCK("63fe8000.ssi", NULL, ssi3_clk)
-	_REGISTER_CLOCK("mxc-ehci.0", "usb", usboh3_clk)
-	_REGISTER_CLOCK("mxc-ehci.0", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("mxc-ehci.0", "usb_phy", mx53_usb_phy1_clk)
-	_REGISTER_CLOCK("mxc-ehci.1", "usb", usboh3_clk)
-	_REGISTER_CLOCK("mxc-ehci.1", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("mxc-ehci.1", "usb_phy", mx53_usb_phy2_clk)
-	_REGISTER_CLOCK("mxc-ehci.2", "usb", usboh3_clk)
-	_REGISTER_CLOCK("mxc-ehci.2", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("mxc-ehci.2", "usb_phy", dummy_clk)
-	_REGISTER_CLOCK("mxc-ehci.3", "usb", usboh3_clk)
-	_REGISTER_CLOCK("mxc-ehci.3", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("mxc-ehci.3", "usb_phy", dummy_clk)
-	_REGISTER_CLOCK("53f80000.mxc-ehci", "usb", usboh3_clk)
-	_REGISTER_CLOCK("53f80000.mxc-ehci", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("53f80000.mxc-ehci", "usb_phy", mx53_usb_phy1_clk)
-	_REGISTER_CLOCK("53f80200.mxc-ehci", "usb", usboh3_clk)
-	_REGISTER_CLOCK("53f80200.mxc-ehci", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("53f80200.mxc-ehci", "usb_phy", mx53_usb_phy2_clk)
-	_REGISTER_CLOCK("53f80400.mxc-ehci", "usb", usboh3_clk)
-	_REGISTER_CLOCK("53f80400.mxc-ehci", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("53f80400.mxc-ehci", "usb_phy", dummy_clk)
-	_REGISTER_CLOCK("53f80600.mxc-ehci", "usb", usboh3_clk)
-	_REGISTER_CLOCK("53f80600.mxc-ehci", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("53f80600.mxc-ehci", "usb_phy", dummy_clk)
-	_REGISTER_CLOCK("fsl-usb2-udc", "usb", usboh3_clk)
-	_REGISTER_CLOCK("fsl-usb2-udc", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("fsl-usb2-udc", "usb_phy", mx53_usb_phy1_clk)
-	_REGISTER_CLOCK("53f80000.fsl-usb2-udc", "usb", usboh3_clk)
-	_REGISTER_CLOCK("53f80000.fsl-usb2-udc", "usb_ahb", usb_ahb_clk)
-	_REGISTER_CLOCK("53f80000.fsl-usb2-udc", "usb_phy", mx53_usb_phy1_clk)
+	_REGISTER_CLOCK("53f80000.imxotg", "usb", usboh3_clk)
+	_REGISTER_CLOCK("53f80000.imxotg", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("53f80000.imxotg", "phy", mx53_usb_phy1_clk)
+	_REGISTER_CLOCK("53f80200.imxotg", "usb", usboh3_clk)
+	_REGISTER_CLOCK("53f80200.imxotg", "usb_ahb", usb_ahb_clk)
+	_REGISTER_CLOCK("53f80200.imxotg", "phy", mx53_usb_phy2_clk)
 	_REGISTER_CLOCK(NULL, "kpp", dummy_clk)
 	_REGISTER_CLOCK("mxc_nand", NULL, nfc_clk)
 	_REGISTER_CLOCK("pata_imx", NULL, pata_clk)
@@ -1653,7 +1628,7 @@ static void clk_tree_init(void)
 
 	/*
 	 * Initialise the IPG PER CLK dividers to 3. IPG_PER_CLK should be at
-	 * 8MHz, its derived from lp_apm.
+	 * 8MHz, it's derived from lp_apm.
 	 *
 	 * FIXME: Verify if true for all boards
 	 */
@@ -1695,6 +1670,7 @@ int __init mx51_clocks_init(unsigned long ckil, unsigned long osc,
 	clk_enable(&cpu_clk);
 	clk_enable(&main_bus_clk);
 	clk_enable(&sdma_clk);
+//	clk_enable(&ipu_clk);
 
 	clk_enable(&iim_clk);
 	imx_print_silicon_rev("i.MX51", mx51_revision());
@@ -1774,8 +1750,7 @@ int __init mx53_clocks_init(unsigned long ckil, unsigned long osc,
 
 	/* set the usboh3_clk parent to pll2_sw_clk */
 	clk_set_parent(&usboh3_clk, &pll2_sw_clk);
-	i = clk_set_rate(&usboh3_clk, 66666666);
-	printk(KERN_INFO "clk_set_rate(usboh3_clk, 6000000) returned %d\n", i);
+//	clk_set_rate(&usboh3_clk, 66666666);
 
 	/* Set SDHC parents to be PLL2 */
 	clk_set_parent(&esdhc1_clk, &pll2_sw_clk);

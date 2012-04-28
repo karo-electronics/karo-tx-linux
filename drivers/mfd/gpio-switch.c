@@ -12,8 +12,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- */
-/*
+ *
  * Provide a generic interface for drivers that require to switch some
  * external hardware such as transceivers, power enable or reset pins
  * for the device they manage to work.
@@ -37,52 +36,53 @@ static int gpio_switch_index;
 
 /* Helper functions; must be called with 'gpio_switch_list_lock' held */
 static struct gpio_sw *gpio_switch_find_gpio(struct device *parent,
-					int gpio, int index)
+					int gpio)
 {
 	struct gpio_sw *sw;
-	int i = 0;
 
-	dev_dbg(parent, "Searching for gpio%u[%d] switch\n",
-		gpio, index);
 	list_for_each_entry(sw, &gpio_switch_list, list) {
-		dev_dbg(sw->parent, "sw=%p parent=%p id=%s gpio=%d index=%d\n",
-			sw, sw->parent, sw->id, sw->gpio, i);
 		if (gpio_is_valid(gpio) && sw->gpio != gpio)
 			continue;
-		if (index < 0 || i++ == index) {
-			dev_dbg(sw->parent, "Found switch %p '%s'[%d] gpio%u\n",
-				sw, sw->label, index, sw->gpio);
-			return sw;
-		}
+		return sw;
 	}
 	return NULL;
 }
 
-static struct gpio_sw *gpio_switch_find_by_node(struct device *parent,
-					const struct device_node *dp)
+static struct gpio_sw *gpio_switch_find_by_phandle(struct device *parent,
+					phandle ph)
 {
 	struct gpio_sw *sw;
-	int i = 0;
+	struct device_node *dp;
 
-	dev_dbg(parent, "Searching for gpio switch %p\n", dp);
+	dp = of_find_node_by_phandle(ph);
+	if (dp == NULL)
+		return NULL;
+
 	list_for_each_entry(sw, &gpio_switch_list, list) {
-		dev_dbg(sw->parent, "sw=%p parent=%p id=%s gpio=%d index=%d\n",
-			sw, sw->parent, sw->id, sw->gpio, i);
-		if (sw->parent && sw->parent->of_node == dp) {
-			dev_dbg(sw->parent, "Found switch %p '%s' gpio%u\n",
-				sw, sw->label, sw->gpio);
+		if (sw->parent && sw->parent->of_node == dp)
 			return sw;
-		}
+	}
+	return NULL;
+}
+
+static struct gpio_sw *gpio_switch_find_by_id(struct device *parent,
+					int id)
+{
+	struct gpio_sw *sw;
+
+	dev_dbg(parent, "Searching for gpio switch %u\n", id);
+	list_for_each_entry(sw, &gpio_switch_list, list) {
+		if (sw->parent && to_platform_device(sw->parent)->id == id)
+			return sw;
 	}
 	return NULL;
 }
 
 static void gpio_switch_delete(struct gpio_sw *sw)
 {
-	dev_dbg(sw->parent, "Deleting gpio switch %p\n", sw);
 	list_del_init(&sw->list);
 	if (!(sw->flags & GPIO_SW_SHARED) ||
-	    !gpio_switch_find_gpio(NULL, sw->gpio, -1))
+	    !gpio_switch_find_gpio(sw->parent, sw->gpio))
 		gpio_free(sw->gpio);
 }
 
@@ -92,7 +92,7 @@ int gpio_switch_register(struct device *parent, const char *id, int gpio,
 {
 	int ret;
 	struct platform_device *pdev;
-	struct gpio_sw *pdata;
+	struct gpio_sw_platform_data *pdata;
 
 	if (!gpio_is_valid(gpio)) {
 		dev_err(parent, "Invalid GPIO %u\n", gpio);
@@ -105,8 +105,6 @@ int gpio_switch_register(struct device *parent, const char *id, int gpio,
 
 	pdata->gpio = gpio;
 	pdata->flags = flags;
-	INIT_LIST_HEAD(&pdata->list);
-	pdata->parent = parent;
 
 	mutex_lock(&gpio_switch_list_lock);
 	pdev = platform_device_alloc("gpio-switch", gpio_switch_index++);
@@ -134,7 +132,6 @@ int gpio_switch_unregister(struct gpio_sw *sw)
 	int ret = -EINVAL;
 	struct gpio_sw *ptr;
 
-	dev_dbg(sw->parent, "Unregistering gpio switch %p\n", sw);
 	mutex_lock(&gpio_switch_list_lock);
 	list_for_each_entry(ptr, &gpio_switch_list, list) {
 		if (sw == ptr) {
@@ -149,30 +146,17 @@ int gpio_switch_unregister(struct gpio_sw *sw)
 EXPORT_SYMBOL(gpio_switch_unregister);
 
 /* Consumer API */
-struct gpio_sw *request_gpio_switch(struct device *dev, const char *id)
+struct gpio_sw *request_gpio_switch(struct device *dev, u32 id)
 {
 	struct gpio_sw *sw;
 	struct device_node *np = dev->of_node;
-	struct device_node *dp;
-	const phandle *ph;
-
-	dev_dbg(dev, "Searching for gpio switch '%s' for dev %p\n",
-		id, dev);
-
-	if (!np)
-		return NULL;
-
-	ph = of_get_property(np, id, NULL);
-	if (!ph)
-		return NULL;
-
-	dp = of_find_node_by_phandle(be32_to_cpu(*ph));
-	if (dp == NULL)
-		return NULL;
 
 	mutex_lock(&gpio_switch_list_lock);
-
-	sw = gpio_switch_find_by_node(dev, dp);
+	if (np) {
+		sw = gpio_switch_find_by_phandle(dev, id);
+	} else {
+		sw = gpio_switch_find_by_id(dev, id);
+	}
 	if (sw) {
 		sw->use_count++;
 	}
@@ -195,10 +179,6 @@ EXPORT_SYMBOL(free_gpio_switch);
 
 void __gpio_switch_set(struct gpio_sw *sw, int on)
 {
-	BUG_ON(!sw);
-
-	dev_dbg(sw->parent, "%ssserting GPIO%u for '%s'\n",
-		on ? "A" : "Dea", sw->gpio, sw->label);
 	gpio_set_value(sw->gpio, !on ^ !(sw->flags & GPIO_SW_ACTIVE_LOW));
 }
 EXPORT_SYMBOL(__gpio_switch_set);
@@ -238,6 +218,25 @@ void gpio_switch_set_resume_state(struct gpio_sw *sw, int resume_state)
 EXPORT_SYMBOL(gpio_switch_set_resume_state);
 
 /* Driver boilerplate */
+static int __devinit gpio_switch_platform_probe(struct platform_device *pdev,
+						struct gpio_sw *sw)
+{
+	struct gpio_sw_platform_data *pdata = pdev->dev.platform_data;
+
+	sw->gpio = pdata->gpio;
+	if (!gpio_is_valid(sw->gpio))
+		return -EINVAL;
+
+	sw->flags = pdata->flags;
+	sw->label = pdata->label;
+	if (pdata->init_state) {
+		if (pdata->init_state == GPIO_SW_INIT_ACTIVE)
+			sw->enable_count++;
+		__gpio_switch_set(sw, sw->enable_count);
+	}
+	return 0;
+}
+
 static int __devinit gpio_switch_dt_probe(struct platform_device *pdev,
 					  struct gpio_sw *sw)
 {
@@ -274,7 +273,7 @@ static int __devinit gpio_switch_dt_probe(struct platform_device *pdev,
 	if (prop) {
 		if (*prop)
 			sw->enable_count++;
-		__gpio_switch_set(sw, *prop);
+		__gpio_switch_set(sw, sw->enable_count);
 	}
 	return 0;
 }
@@ -282,22 +281,25 @@ static int __devinit gpio_switch_dt_probe(struct platform_device *pdev,
 static int __devinit gpio_switch_probe(struct platform_device *pdev)
 {
 	int ret;
-	struct gpio_sw *sw = pdev->dev.platform_data;
+	struct gpio_sw_platform_data *pdata = pdev->dev.platform_data;
+	struct gpio_sw *sw;
 
-	if (!sw) {
-		sw = devm_kzalloc(&pdev->dev, sizeof(*sw), GFP_KERNEL);
-		if (!sw)
-			return -ENOMEM;
+	sw = devm_kzalloc(&pdev->dev, sizeof(*sw), GFP_KERNEL);
+	if (!sw)
+		return -ENOMEM;
 
+	if (pdata) {
+		ret = gpio_switch_platform_probe(pdev, sw);
+	} else {
 		ret = gpio_switch_dt_probe(pdev, sw);
-		if (ret)
-			return ret;
 	}
+	if (ret)
+		return ret;
 	INIT_LIST_HEAD(&sw->list);
 	sw->parent = &pdev->dev;
 
 	if (!(sw->flags & GPIO_SW_SHARED) ||
-	    !gpio_switch_find_gpio(NULL, sw->gpio, -1)) {
+	    !gpio_switch_find_gpio(sw->parent, sw->gpio)) {
 		ret = gpio_request(sw->gpio, sw->label);
 		if (ret) {
 			dev_err(&pdev->dev, "Failed to request GPIO%d '%s'\n",
@@ -312,8 +314,8 @@ static int __devinit gpio_switch_probe(struct platform_device *pdev)
 	list_add(&sw->list, &gpio_switch_list);
 	mutex_unlock(&gpio_switch_list_lock);
 
-	dev_info(&pdev->dev, "GPIO%u registered as %p for '%s'\n",
-		sw->gpio, sw, sw->label ?: "unknown");
+	dev_info(&pdev->dev, "GPIO%u registered for '%s'\n",
+		sw->gpio, sw->label ?: "unknown");
 	return 0;
 }
 
@@ -327,45 +329,6 @@ static int __devexit gpio_switch_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#if 0
-#ifdef CONFIG_PM_SLEEP
-static int gpio_switch_suspend(struct device *dev)
-{
-	struct gpio_sw *sw = dev_get_drvdata(dev);
-
-	if (!sw)
-		return 0;
-
-	if (!(sw->flags & (GPIO_SW_SUSPEND_ON | GPIO_SW_SUSPEND_OFF)))
-		return 0;
-
-	__gpio_switch_set(sw, sw->flags & GPIO_SW_SUSPEND_ON);
-
-	return 0;
-}
-
-static int gpio_switch_resume(struct device *dev)
-{
-	struct gpio_sw *sw = dev_get_drvdata(dev);
-
-	if (!sw)
-		return 0;
-
-	if (sw->flags & (GPIO_SW_RESUME_ON | GPIO_SW_RESUME_OFF))
-		__gpio_switch_set(sw, sw->flags & GPIO_SW_RESUME_ON);
-	else
-		__gpio_switch_set(sw, sw->enable_count);
-
-	return 0;
-}
-#endif
-
-static SIMPLE_DEV_PM_OPS(gpio_switch_pm_ops,
-			 gpio_switch_suspend, gpio_switch_resume);
-#else
-static SIMPLE_DEV_PM_OPS(gpio_switch_pm_ops, NULL, NULL);
-#endif
-
 static struct of_device_id gpio_switch_dt_ids[] = {
 	{ .compatible = "linux,gpio-switch", },
 	{ /* sentinel */ }
@@ -376,7 +339,6 @@ struct platform_driver gpio_switch_driver = {
 		.name = "gpio-switch",
 		.owner = THIS_MODULE,
 		.of_match_table = gpio_switch_dt_ids,
-		.pm = &gpio_switch_pm_ops,
 	},
 	.probe = gpio_switch_probe,
 	.remove = __devexit_p(gpio_switch_remove),

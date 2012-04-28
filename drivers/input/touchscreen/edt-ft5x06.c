@@ -30,8 +30,7 @@
 #include <linux/uaccess.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
-
-#include <linux/gpio.h>
+#include <linux/gpio-switch.h>
 
 #include <linux/input/edt-ft5x06.h>
 
@@ -51,8 +50,8 @@ struct edt_ft5x06_i2c_ts_data {
 	struct i2c_client *client;
 	struct input_dev *input;
 	int irq;
-	int irq_pin;
-	int reset_pin;
+	struct gpio_sw *wake_switch;
+	struct gpio_sw *reset_switch;
 	int num_x;
 	int num_y;
 
@@ -511,73 +510,82 @@ static const struct attribute_group edt_ft5x06_i2c_attr_group = {
 	.attrs = edt_ft5x06_i2c_attrs,
 };
 
+#ifdef CONFIG_OF
+static int edt_ft5x06_i2c_ts_probe_dt(struct device *dev,
+				struct edt_ft5x06_i2c_ts_data *tsdata)
+{
+	struct device_node *np = dev->of_node;
+	const u32 *ph;
+
+	if (!np)
+		return -ENODEV;
+
+	ph = of_get_property(np, "reset-switch", NULL);
+	if (ph)
+		tsdata->reset_switch = request_gpio_switch(dev,
+							be32_to_cpu(*ph));
+	ph = of_get_property(np, "wake-switch", NULL);
+	if (ph)
+		tsdata->wake_switch = request_gpio_switch(dev,
+							be32_to_cpu(*ph));
+	return 0;
+}
+#else
+static inline int edt_ft5x06_i2c_ts_probe_dt(struct device *dev,
+					struct edt_ft5x06_i2c_ts_data *tsdata)
+{
+	return -ENODEV;
+}
+#endif
+
 static int edt_ft5x06_i2c_ts_probe(struct i2c_client *client,
 				   const struct i2c_device_id *id)
 {
-
 	struct edt_ft5x06_i2c_ts_data *tsdata;
 	struct edt_ft5x06_platform_data *pdata;
 	struct input_dev *input;
 	int error;
 	u8 rdbuf[23];
-	char *model_name, *fw_version;
+	const char *model_name;
+	char *fw_version;
 
 	dev_dbg(&client->dev, "probing for EDT FT5x06 I2C\n");
 
-	if (!client->dev.platform_data) {
-		dev_err(&client->dev, "no platform data?\n");
-		return -ENODEV;
-	}
-
-	tsdata = kzalloc(sizeof(*tsdata), GFP_KERNEL);
+	tsdata = devm_kzalloc(&client->dev, sizeof(*tsdata), GFP_KERNEL);
 	if (!tsdata) {
 		dev_err(&client->dev, "failed to allocate driver data!\n");
 		dev_set_drvdata(&client->dev, NULL);
 		return -ENOMEM;
 	}
 
+	tsdata->irq = client->irq;
+
+	pdata = client->dev.platform_data;
+	if (pdata) {
+		tsdata->reset_switch = request_gpio_switch(&client->dev,
+							pdata->reset_switch_id);
+		tsdata->wake_switch = request_gpio_switch(&client->dev,
+							pdata->wake_switch_id);
+	} else {
+		error = edt_ft5x06_i2c_ts_probe_dt(&client->dev, tsdata);
+		if (error) {
+			dev_err(&client->dev, "no platform data?\n");
+			return error;
+		}
+	}
+
 	dev_set_drvdata(&client->dev, tsdata);
 	tsdata->client = client;
-	pdata = client->dev.platform_data;
 
-	tsdata->reset_pin = pdata->reset_pin;
 	mutex_init(&tsdata->mutex);
 
-	if (tsdata->reset_pin >= 0) {
-		error = gpio_request(tsdata->reset_pin, "edt-ft5x06 reset");
-		if (error < 0) {
-			dev_err(&client->dev,
-				"Failed to request GPIO %d as reset pin, error %d\n",
-				 tsdata->reset_pin, error);
-			goto err_free_tsdata;
-		}
-
-		/* this pulls reset down, enabling the low active reset */
-		if (gpio_direction_output(tsdata->reset_pin, 0) < 0) {
-			dev_info(&client->dev, "switching to output failed\n");
-			goto err_free_reset_pin;
-		}
-	}
-
-	/* request IRQ pin */
-	tsdata->irq_pin = pdata->irq_pin;
-	tsdata->irq = gpio_to_irq(tsdata->irq_pin);
-
-	error = gpio_request(tsdata->irq_pin, "edt-ft5x06 irq");
-	if (error < 0) {
-		dev_err(&client->dev,
-			"Failed to request GPIO %d for IRQ %d, error %d\n",
-			tsdata->irq_pin, tsdata->irq, error);
-		goto err_free_reset_pin;
-	}
-	gpio_direction_input(tsdata->irq_pin);
-
-	if (tsdata->reset_pin >= 0) {
-		/* release reset */
-		mdelay(50);
-		gpio_set_value(tsdata->reset_pin, 1);
-		mdelay(100);
-	}
+	/* this pulls reset down, enabling the low active reset */
+	gpio_switch_set(tsdata->reset_switch, 1);
+	gpio_switch_set(tsdata->wake_switch, 1);
+	/* release reset */
+	mdelay(5);
+	gpio_switch_set(tsdata->reset_switch, 0);
+	mdelay(300);
 
 	mutex_lock(&tsdata->mutex);
 
@@ -585,8 +593,9 @@ static int edt_ft5x06_i2c_ts_probe(struct i2c_client *client,
 
 	if (edt_ft5x06_ts_readwrite(client, 1, "\xbb", 22, rdbuf) < 0) {
 		dev_err(&client->dev, "probing failed\n");
+		mutex_unlock(&tsdata->mutex);
 		error = -ENODEV;
-		goto err_free_irq_pin;
+		goto err_free_wake_pin;
 	}
 
 	tsdata->threshold = edt_ft5x06_i2c_register_read(tsdata,
@@ -627,7 +636,7 @@ static int edt_ft5x06_i2c_ts_probe(struct i2c_client *client,
 	if (!input) {
 		dev_err(&client->dev, "failed to allocate input device!\n");
 		error = -ENOMEM;
-		goto err_free_irq_pin;
+		goto err_free_wake_pin;
 	}
 
 	__set_bit(EV_SYN, input->evbit);
@@ -672,44 +681,41 @@ static int edt_ft5x06_i2c_ts_probe(struct i2c_client *client,
 	device_init_wakeup(&client->dev, 1);
 
 	dev_dbg(&tsdata->client->dev,
-		"EDT FT5x06 initialized: IRQ pin %d, Reset pin %d.\n",
-		tsdata->irq_pin, tsdata->reset_pin);
+		"EDT FT5x06 initialized: IRQ %d\n", tsdata->irq);
 
 	return 0;
 
 err_free_irq:
 	free_irq(tsdata->irq, tsdata);
 err_unregister_device:
+	model_name = input->name;
 	input_unregister_device(input);
+	kfree(model_name);
 	input = NULL;
 err_free_input_device:
 	if (input) {
 		kfree(input->name);
 		input_free_device(input);
 	}
-err_free_irq_pin:
-	gpio_free(tsdata->irq_pin);
-err_free_reset_pin:
-	if (tsdata->reset_pin >= 0)
-		gpio_free(tsdata->reset_pin);
-err_free_tsdata:
-	kfree(tsdata);
+err_free_wake_pin:
+	free_gpio_switch(tsdata->wake_switch);
+	free_gpio_switch(tsdata->reset_switch);
+
 	return error;
 }
 
 static int edt_ft5x06_i2c_ts_remove(struct i2c_client *client)
 {
 	struct edt_ft5x06_i2c_ts_data *tsdata = dev_get_drvdata(&client->dev);
+	const char *name = tsdata->input->name;
 
 	sysfs_remove_group(&client->dev.kobj, &edt_ft5x06_i2c_attr_group);
 
 	free_irq(tsdata->irq, tsdata);
-	kfree(tsdata->input->name);
 	input_unregister_device(tsdata->input);
-	gpio_free(tsdata->irq_pin);
-	if (tsdata->reset_pin >= 0)
-		gpio_free(tsdata->reset_pin);
-	kfree(tsdata);
+	kfree(name);
+	free_gpio_switch(tsdata->wake_switch);
+	free_gpio_switch(tsdata->reset_switch);
 
 	return 0;
 }

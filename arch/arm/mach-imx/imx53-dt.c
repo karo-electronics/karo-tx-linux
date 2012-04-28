@@ -10,7 +10,6 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-#include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/irqdomain.h>
 #include <linux/of_irq.h>
@@ -45,6 +44,24 @@ static const struct of_dev_auxdata imx53_auxdata_lookup[] __initconst = {
 	OF_DEV_AUXDATA("fsl,imx53-i2c", MX53_I2C3_BASE_ADDR, "imx-i2c.2", NULL),
 	OF_DEV_AUXDATA("fsl,imx53-sdma", MX53_SDMA_BASE_ADDR, "imx35-sdma", NULL),
 	OF_DEV_AUXDATA("fsl,imx53-wdt", MX53_WDOG1_BASE_ADDR, "imx2-wdt.0", NULL),
+	OF_DEV_AUXDATA("fsl,imx-ipuv3", MX53_IPU_CTRL_BASE_ADDR, "imx-ipuv3", NULL),
+	OF_DEV_AUXDATA("fsl,p1010-flexcan", MX53_CAN1_BASE_ADDR, "flexcan.0", NULL),
+	OF_DEV_AUXDATA("fsl,p1010-flexcan", MX53_CAN2_BASE_ADDR, "flexcan.1", NULL),
+	OF_DEV_AUXDATA("fsl,imx53-pwm", MX53_PWM1_BASE_ADDR, "imx27-pwm.0", NULL),
+	OF_DEV_AUXDATA("fsl,imx53-pwm", MX53_PWM2_BASE_ADDR, "imx27-pwm.1", NULL),
+	OF_DEV_AUXDATA("fsl,imx53-nand", MX53_NFC_AXI_BASE_ADDR, "mxc_nand", NULL),
+	/* make sure the labels exported to sysfs have a reasonable name */
+	OF_DEV_AUXDATA("fsl,imx53-gpio", MX53_GPIO1_BASE_ADDR, "imx31-gpio.0", NULL),
+	OF_DEV_AUXDATA("fsl,imx53-gpio", MX53_GPIO2_BASE_ADDR, "imx31-gpio.1", NULL),
+	OF_DEV_AUXDATA("fsl,imx53-gpio", MX53_GPIO3_BASE_ADDR, "imx31-gpio.2", NULL),
+	OF_DEV_AUXDATA("fsl,imx53-gpio", MX53_GPIO4_BASE_ADDR, "imx31-gpio.3", NULL),
+	OF_DEV_AUXDATA("fsl,imx53-gpio", MX53_GPIO5_BASE_ADDR, "imx31-gpio.4", NULL),
+	OF_DEV_AUXDATA("fsl,imx53-gpio", MX53_GPIO6_BASE_ADDR, "imx31-gpio.5", NULL),
+	OF_DEV_AUXDATA("fsl,imx53-gpio", MX53_GPIO7_BASE_ADDR, "imx31-gpio.6", NULL),
+	OF_DEV_AUXDATA("fsl,imx53-usbphy", 0x53f80800, "53f80800.usbphy", NULL),
+	OF_DEV_AUXDATA("fsl,imx-ssi", MX53_SSI1_BASE_ADDR, "imx-ssi.0", NULL),
+	OF_DEV_AUXDATA("fsl,imx-ssi", MX53_SSI2_BASE_ADDR, "imx-ssi.1", NULL),
+	OF_DEV_AUXDATA("fsl,imx-ssi", MX53_SSI3_BASE_ADDR, "imx-ssi.2", NULL),
 	{ /* sentinel */ }
 };
 
@@ -72,11 +89,25 @@ static const struct of_device_id imx53_irq_match[] __initconst = {
 	{ /* sentinel */ }
 };
 
+#ifndef CONFIG_MACH_MX53_ARD
+#define imx53_ard_common_init		NULL
+#endif
+#ifndef CONFIG_MACH_MX53_EVK
+#define imx53_evk_common_init		NULL
+#endif
+#ifndef CONFIG_MACH_MX53_LOCO
+#define imx53_qsb_common_init		NULL
+#endif
+#ifndef CONFIG_MACH_MX53_SMD
+#define imx53_smd_common_init		NULL
+#endif
+
 static const struct of_device_id imx53_iomuxc_of_match[] __initconst = {
 	{ .compatible = "fsl,imx53-iomuxc-ard", .data = imx53_ard_common_init, },
 	{ .compatible = "fsl,imx53-iomuxc-evk", .data = imx53_evk_common_init, },
 	{ .compatible = "fsl,imx53-iomuxc-qsb", .data = imx53_qsb_common_init, },
 	{ .compatible = "fsl,imx53-iomuxc-smd", .data = imx53_smd_common_init, },
+	{ .compatible = "fsl,imx53-iomuxc-tx53", .data = tx53_of_init, },
 	{ /* sentinel */ }
 };
 
@@ -114,6 +145,7 @@ static const char *imx53_dt_board_compat[] __initdata = {
 	"fsl,imx53-evk",
 	"fsl,imx53-qsb",
 	"fsl,imx53-smd",
+	"karo,tx53",
 	"fsl,imx53",
 	NULL
 };

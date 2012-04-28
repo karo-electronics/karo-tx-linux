@@ -463,7 +463,7 @@ struct fsl_ep {
 struct fsl_udc {
 	struct usb_gadget gadget;
 	struct usb_gadget_driver *driver;
-	struct fsl_usb2_platform_data *pdata;
+	struct imx_otg *pdata;
 	struct completion *done;	/* to make sure release() is done */
 	struct fsl_ep *eps;
 	unsigned int max_ep;
@@ -482,7 +482,6 @@ struct fsl_udc {
 	struct ep_queue_head *ep_qh;	/* Endpoints Queue-Head */
 	struct fsl_req *status_req;	/* ep0 status request */
 	struct dma_pool *td_pool;	/* dma pool for DTD */
-	enum fsl_usb2_phy_modes phy_mode;
 
 	size_t ep_qh_size;		/* size after alignment adjustment*/
 	dma_addr_t ep_qh_dma;		/* dma address of QH */

@@ -22,11 +22,23 @@ struct gpio_sw {
 	unsigned state:1;
 };
 
+enum gpio_sw_initstate {
+	GPIO_SW_INIT_ACTIVE = 1,
+	GPIO_SW_INIT_INACTIVE = 2,
+};
+
+struct gpio_sw_platform_data {
+	const char *label;
+	int gpio;
+	enum gpio_sw_flags flags;
+	int init_state;
+};
+
 extern int gpio_switch_register(struct device *parent, const char *id, int gpio,
 			 enum gpio_sw_flags flags);
 
 extern int gpio_switch_unregister(struct gpio_sw *sw);
-extern struct gpio_sw *request_gpio_switch(struct device *dev, const char *id);
+extern struct gpio_sw *request_gpio_switch(struct device *dev, u32 id);
 extern void free_gpio_switch(struct gpio_sw *sw);
 extern void __gpio_switch_set(struct gpio_sw *sw, int on);
 

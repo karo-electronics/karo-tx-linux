@@ -11,7 +11,8 @@
 
 struct edt_ft5x06_platform_data {
 	int irq_pin;
-	int reset_pin;
+	int reset_switch_id;
+	int wake_switch_id;
 };
 
 #endif /* _EDT_FT5X06_H */

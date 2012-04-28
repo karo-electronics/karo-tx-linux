@@ -86,6 +86,13 @@ config LCD_PLATFORM
 	  This driver provides a platform-device registered LCD power
 	  control interface.
 
+config LCD_OF_GPIO
+	tristate "LCD controls via generic GPIO switch"
+	depends on OF_GPIO && GENERIC_GPIO_SWITCH
+	help
+	  This driver provides an of-device registered LCD power
+	  control interface.
+
 config LCD_TOSA
 	tristate "Sharp SL-6000 LCD Driver"
 	depends on SPI && MACH_TOSA

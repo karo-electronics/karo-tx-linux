@@ -38,8 +38,9 @@ zreladdr-$(CONFIG_SOC_IMX6Q)	+= 0x10008000
 params_phys-$(CONFIG_SOC_IMX6Q)	:= 0x10000100
 initrd_phys-$(CONFIG_SOC_IMX6Q)	:= 0x10800000
 
-dtb-$(CONFIG_MACH_IMX51_DT) += imx51-babbage.dtb
+dtb-$(CONFIG_MACH_IMX51_DT) += imx51-babbage.dtb tx51.dtb
 dtb-$(CONFIG_MACH_IMX53_DT) += imx53-ard.dtb imx53-evk.dtb \
-			       imx53-qsb.dtb imx53-smd.dtb
+			       imx53-qsb.dtb imx53-smd.dtb \
+			       tx53.dtb
 dtb-$(CONFIG_SOC_IMX6Q)	+= imx6q-arm2.dtb \
 			   imx6q-sabrelite.dtb

@@ -2547,6 +2547,8 @@ void usb_remove_hcd(struct usb_hcd *hcd)
 	struct usb_device *rhdev = hcd->self.root_hub;
 
 	dev_info(hcd->self.controller, "remove, state %x\n", hcd->state);
+	if (WARN_ON(!hcd->rh_registered))
+		return;
 
 	usb_get_dev(rhdev);
 	sysfs_remove_group(&rhdev->dev.kobj, &usb_bus_attr_group);
@@ -2565,7 +2567,8 @@ void usb_remove_hcd(struct usb_hcd *hcd)
 #endif
 
 	mutex_lock(&usb_bus_list_lock);
-	usb_disconnect(&rhdev);		/* Sets rhdev to NULL */
+	if (rhdev)
+		usb_disconnect(&rhdev);		/* Sets rhdev to NULL */
 	mutex_unlock(&usb_bus_list_lock);
 
 	/* Prevent any more root-hub status calls from the timer.

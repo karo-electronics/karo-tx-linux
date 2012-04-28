@@ -52,7 +52,8 @@ static void __clk_disable(struct clk *clk)
 {
 	if (clk == NULL || IS_ERR(clk))
 		return;
-	WARN_ON(!clk->usecount);
+	if (WARN_ON(!clk->usecount))
+		return;
 
 	if (!(--clk->usecount)) {
 		if (clk->disable)
@@ -64,7 +65,9 @@ static void __clk_disable(struct clk *clk)
 
 static int __clk_enable(struct clk *clk)
 {
-	if (clk == NULL || IS_ERR(clk))
+	if (clk == NULL)
+		return 0;
+	if (IS_ERR(clk))
 		return -EINVAL;
 
 	if (clk->usecount++ == 0) {
@@ -74,6 +77,9 @@ static int __clk_enable(struct clk *clk)
 		if (clk->enable)
 			clk->enable(clk);
 	}
+	if (clk->usecount > 20)
+		printk(KERN_WARNING "Excessive clk_enable() calls for %p: %d\n",
+			clk, clk->usecount);
 	return 0;
 }
 
@@ -84,7 +90,9 @@ int clk_enable(struct clk *clk)
 {
 	int ret = 0;
 
-	if (clk == NULL || IS_ERR(clk))
+	if (clk == NULL)
+		return 0;
+	if (IS_ERR(clk))
 		return -EINVAL;
 
 	mutex_lock(&clocks_mutex);

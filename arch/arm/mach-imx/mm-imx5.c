@@ -23,21 +23,11 @@
 #include <mach/devices-common.h>
 #include <mach/iomux-v3.h>
 
-static struct clk *gpc_dvfs_clk;
-
 static void imx5_idle(void)
 {
-	/* gpc clock is needed for SRPG */
-	if (gpc_dvfs_clk == NULL) {
-		gpc_dvfs_clk = clk_get(NULL, "gpc_dvfs");
-		if (IS_ERR(gpc_dvfs_clk))
-			return;
-	}
-	clk_enable(gpc_dvfs_clk);
 	mx5_cpu_lp_set(WAIT_UNCLOCKED_POWER_OFF);
-	if (tzic_enable_wake() != 0)
+	if (!tzic_enable_wake())
 		cpu_do_idle();
-	clk_disable(gpc_dvfs_clk);
 }
 
 /*
@@ -111,6 +101,7 @@ void __init imx53_init_early(void)
 	mxc_set_cpu_type(MXC_CPU_MX53);
 	mxc_iomux_v3_init(MX53_IO_ADDRESS(MX53_IOMUXC_BASE_ADDR));
 	mxc_arch_reset_init(MX53_IO_ADDRESS(MX53_WDOG1_BASE_ADDR));
+	arm_pm_idle = imx5_idle;
 }
 
 void __init mx50_init_irq(void)

@@ -34,7 +34,9 @@
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_gpio.h>
 #include <linux/platform_device.h>
+#include <linux/gpio-switch.h>
 
 #define DRV_NAME			"flexcan"
 
@@ -120,7 +122,7 @@
 	(FLEXCAN_ESR_ERR_BUS | FLEXCAN_ESR_ERR_STATE)
 #define FLEXCAN_ESR_ALL_INT \
 	(FLEXCAN_ESR_TWRN_INT | FLEXCAN_ESR_RWRN_INT | \
-	 FLEXCAN_ESR_BOFF_INT | FLEXCAN_ESR_ERR_INT)
+	 FLEXCAN_ESR_BOFF_INT | FLEXCAN_ESR_ERR_INT| FLEXCAN_ESR_WAK_INT)
 
 /* FLEXCAN interrupt flag register (IFLAG) bits */
 #define FLEXCAN_TX_BUF_ID		8
@@ -179,6 +181,7 @@ struct flexcan_priv {
 
 	struct clk *clk;
 	struct flexcan_platform_data *pdata;
+	struct gpio_sw *xcvr_switch;
 };
 
 static struct can_bittiming_const flexcan_bittiming_const = {
@@ -219,12 +222,14 @@ static inline void flexcan_write(u32 val, void __iomem *addr)
 #endif
 
 /*
- * Swtich transceiver on or off
+ * Switch transceiver on or off
  */
 static void flexcan_transceiver_switch(const struct flexcan_priv *priv, int on)
 {
 	if (priv->pdata && priv->pdata->transceiver_switch)
 		priv->pdata->transceiver_switch(on);
+	else
+		gpio_switch_set(priv->xcvr_switch, on);
 }
 
 static inline int flexcan_has_and_handle_berr(const struct flexcan_priv *priv,
@@ -820,6 +825,10 @@ static int flexcan_open(struct net_device *dev)
 	napi_enable(&priv->napi);
 	netif_start_queue(dev);
 
+	err = device_set_wakeup_enable(&dev->dev, 1);
+	if (err)
+		dev_warn(&dev->dev, "Failed to enable wakeup: %d\n", err);
+
 	return 0;
 
  out_close:
@@ -840,6 +849,10 @@ static int flexcan_close(struct net_device *dev)
 
 	free_irq(dev->irq, dev);
 	clk_disable_unprepare(priv->clk);
+
+	int err = device_set_wakeup_enable(&dev->dev, 0);
+	if (err)
+		dev_warn(&dev->dev, "Failed to disable wakeup: %d\n", err);
 
 	close_candev(dev);
 
@@ -931,14 +944,20 @@ static int __devinit flexcan_probe(struct platform_device *pdev)
 	resource_size_t mem_size;
 	int err, irq;
 	u32 clock_freq = 0;
+	struct gpio_sw *xcvr_switch = NULL;
+	struct device_node *np = pdev->dev.of_node;
 
-	if (pdev->dev.of_node) {
+	if (np) {
 		const u32 *clock_freq_p;
+		const u32 *ph;
 
-		clock_freq_p = of_get_property(pdev->dev.of_node,
-						"clock-frequency", NULL);
+		clock_freq_p = of_get_property(np, "clock-frequency", NULL);
 		if (clock_freq_p)
 			clock_freq = *clock_freq_p;
+		ph = of_get_property(np, "transceiver-switch", NULL);
+		if (ph)
+			xcvr_switch = request_gpio_switch(&pdev->dev,
+							be32_to_cpu(*ph));
 	}
 
 	if (!clock_freq) {
@@ -981,6 +1000,7 @@ static int __devinit flexcan_probe(struct platform_device *pdev)
 	dev->flags |= IFF_ECHO;
 
 	priv = netdev_priv(dev);
+	priv->xcvr_switch = xcvr_switch;
 	priv->can.clock.freq = clock_freq;
 	priv->can.bittiming_const = &flexcan_bittiming_const;
 	priv->can.do_set_mode = flexcan_set_mode;
@@ -1003,9 +1023,14 @@ static int __devinit flexcan_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "registering netdev failed\n");
 		goto failed_register;
 	}
+	device_set_wakeup_capable(&dev->dev, 1);
+	if (err)
+		dev_warn(&dev->dev, "Failed to init wakeup: %d\n", err);
+	dev_dbg(&dev->dev, "dev %p can_wakeup=%d\n", &dev->dev,
+		dev->dev.power.can_wakeup);
 
-	dev_info(&pdev->dev, "device registered (reg_base=%p, irq=%d)\n",
-		 priv->base, dev->irq);
+	dev_info(&pdev->dev, "device %p registered (reg_base=%08lx, irq=%d)\n",
+		&pdev->dev, (unsigned long)mem->start, dev->irq);
 
 	return 0;
 
@@ -1019,6 +1044,7 @@ static int __devinit flexcan_probe(struct platform_device *pdev)
 	if (clk)
 		clk_put(clk);
  failed_clock:
+	free_gpio_switch(xcvr_switch);
 	return err;
 }
 
@@ -1035,6 +1061,10 @@ static int __devexit flexcan_remove(struct platform_device *pdev)
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	release_mem_region(mem->start, resource_size(mem));
 
+	device_wakeup_disable(&dev->dev);
+
+	free_gpio_switch(priv->xcvr_switch);
+
 	if (priv->clk)
 		clk_put(priv->clk);
 
@@ -1043,11 +1073,61 @@ static int __devexit flexcan_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int flexcan_suspend(struct device *dev)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct flexcan_priv *priv = netdev_priv(ndev);
+	struct flexcan_regs __iomem *regs = priv->base;
+
+	if (device_may_wakeup(&ndev->dev)) {
+		u32 reg_mcr = flexcan_read(&regs->mcr);
+		u32 reg_esr = flexcan_read(&regs->esr);
+
+		reg_mcr |= FLEXCAN_MCR_SLF_WAK | FLEXCAN_MCR_WAK_MSK;
+		flexcan_write(reg_mcr, &regs->mcr);
+
+		reg_esr |= FLEXCAN_ESR_WAK_INT;
+		flexcan_write(reg_esr, &regs->esr);
+
+		dev_dbg(dev, "Enabling wakeup for IRQ %d\n",
+			ndev->irq);
+		enable_irq_wake(ndev->irq);
+	}
+	return 0;
+}
+
+static int flexcan_resume(struct device *dev)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct flexcan_priv *priv = netdev_priv(ndev);
+	struct flexcan_regs __iomem *regs = priv->base;
+
+	if (device_may_wakeup(&ndev->dev)) {
+		u32 reg_mcr = flexcan_read(&regs->mcr);
+		u32 reg_esr = flexcan_read(&regs->esr);
+
+		reg_mcr &= ~FLEXCAN_MCR_SLF_WAK;
+		flexcan_write(reg_mcr, &regs->mcr);
+
+		reg_esr &= ~FLEXCAN_ESR_WAK_INT;
+		flexcan_write(reg_esr, &regs->esr);
+
+		dev_dbg(dev, "Disabling wakeup for IRQ %d\n",
+			ndev->irq);
+		disable_irq_wake(ndev->irq);
+	}
+	return 0;
+}
+#endif
+
+static SIMPLE_DEV_PM_OPS(flexcan_pm_ops, flexcan_suspend, flexcan_resume);
+
 static struct of_device_id flexcan_of_match[] = {
 	{
 		.compatible = "fsl,p1010-flexcan",
 	},
-	{},
+	{ /*sentinel */ }
 };
 
 static struct platform_driver flexcan_driver = {
@@ -1055,6 +1135,7 @@ static struct platform_driver flexcan_driver = {
 		.name = DRV_NAME,
 		.owner = THIS_MODULE,
 		.of_match_table = flexcan_of_match,
+		.pm = &flexcan_pm_ops,
 	},
 	.probe = flexcan_probe,
 	.remove = __devexit_p(flexcan_remove),

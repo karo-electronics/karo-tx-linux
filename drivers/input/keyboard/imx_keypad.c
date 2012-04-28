@@ -417,8 +417,13 @@ static int __devinit imx_keypad_probe(struct platform_device *pdev)
 	int irq, error, i;
 
 	if (keymap_data == NULL) {
-		dev_err(&pdev->dev, "no keymap defined\n");
-		return -EINVAL;
+		struct device_node *np = pdev->dev.of_node;
+
+		keymap_data = matrix_keyboard_of_fill_keymap(np, "linux,keymap");
+		if (keymap_data == NULL) {
+			dev_err(&pdev->dev, "no keymap defined\n");
+			return -EINVAL;
+		}
 	}
 
 	irq = platform_get_irq(pdev, 0);
@@ -570,8 +575,7 @@ static int __devexit imx_keypad_remove(struct platform_device *pdev)
 #ifdef CONFIG_PM_SLEEP
 static int imx_kbd_suspend(struct device *dev)
 {
-	struct platform_device *pdev = to_platform_device(dev);
-	struct imx_keypad *kbd = platform_get_drvdata(pdev);
+	struct imx_keypad *kbd = dev_get_drvdata(dev);
 	struct input_dev *input_dev = kbd->input_dev;
 
 	/* imx kbd can wake up system even clock is disabled */
@@ -582,7 +586,7 @@ static int imx_kbd_suspend(struct device *dev)
 
 	mutex_unlock(&input_dev->mutex);
 
-	if (device_may_wakeup(&pdev->dev))
+	if (device_may_wakeup(dev))
 		enable_irq_wake(kbd->irq);
 
 	return 0;
@@ -590,11 +594,10 @@ static int imx_kbd_suspend(struct device *dev)
 
 static int imx_kbd_resume(struct device *dev)
 {
-	struct platform_device *pdev = to_platform_device(dev);
-	struct imx_keypad *kbd = platform_get_drvdata(pdev);
+	struct imx_keypad *kbd = dev_get_drvdata(dev);
 	struct input_dev *input_dev = kbd->input_dev;
 
-	if (device_may_wakeup(&pdev->dev))
+	if (device_may_wakeup(dev))
 		disable_irq_wake(kbd->irq);
 
 	mutex_lock(&input_dev->mutex);
@@ -610,10 +613,16 @@ static int imx_kbd_resume(struct device *dev)
 
 static SIMPLE_DEV_PM_OPS(imx_kbd_pm_ops, imx_kbd_suspend, imx_kbd_resume);
 
+static struct of_device_id imx_kbd_dt_ids[] = {
+	{ .compatible = "fsl,imx-keypad", },
+	{ /* sentinel */ }
+};
+
 static struct platform_driver imx_keypad_driver = {
 	.driver		= {
 		.name	= "imx-keypad",
 		.owner	= THIS_MODULE,
+		.of_match_table = imx_kbd_dt_ids,
 		.pm	= &imx_kbd_pm_ops,
 	},
 	.probe		= imx_keypad_probe,

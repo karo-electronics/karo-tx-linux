@@ -262,16 +262,11 @@ static int imx_pcm_fiq_new(struct snd_soc_pcm_runtime *rtd)
 		imx_ssi_fiq_rx_buffer = (unsigned long)buf->area;
 	}
 
-	set_fiq_handler(&imx_ssi_fiq_start,
-		&imx_ssi_fiq_end - &imx_ssi_fiq_start);
-
 	return 0;
 }
 
 static void imx_pcm_fiq_free(struct snd_pcm *pcm)
 {
-	mxc_set_irq_fiq(ssi_irq, 0);
-	release_fiq(&fh);
 	imx_pcm_free(pcm);
 }
 
@@ -291,6 +286,9 @@ static int __devinit imx_soc_platform_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to claim fiq: %d", ret);
 		return ret;
 	}
+
+	set_fiq_handler(&imx_ssi_fiq_start,
+		&imx_ssi_fiq_end - &imx_ssi_fiq_start);
 
 	mxc_set_irq_fiq(ssi->irq, 1);
 	ssi_irq = ssi->irq;
@@ -317,14 +315,16 @@ failed_register:
 
 static int __devexit imx_soc_platform_remove(struct platform_device *pdev)
 {
+	mxc_set_irq_fiq(ssi_irq, 0);
+	release_fiq(&fh);
 	snd_soc_unregister_platform(&pdev->dev);
 	return 0;
 }
 
 static struct platform_driver imx_pcm_driver = {
 	.driver = {
-			.name = "imx-fiq-pcm-audio",
-			.owner = THIS_MODULE,
+		.name = "imx-fiq-pcm-audio",
+		.owner = THIS_MODULE,
 	},
 
 	.probe = imx_soc_platform_probe,

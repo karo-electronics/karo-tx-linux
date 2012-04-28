@@ -18,40 +18,19 @@
 #include <mach/hardware.h>
 #include <mach/clock.h>
 
-static struct cpu_op mx51_cpu_op[] = {
-	{
-		.cpu_rate = 160000000,
-	},
-	{
-		.cpu_rate = 800000000,
-	},
+static struct cpu_op mx5_cpu_op[] = {
+	{ .cpu_rate = 800000000 / 8, },
+	{ .cpu_rate = 800000000 / 7, },
+	{ .cpu_rate = 800000000 / 6, },
+	{ .cpu_rate = 800000000 / 5, },
+	{ .cpu_rate = 800000000 / 4, },
+	{ .cpu_rate = 800000000 / 3, },
+	{ .cpu_rate = 800000000 / 2, },
+	{ .cpu_rate = 800000000 / 1, },
+	{ /* sentinel */ }
 };
 
-static struct cpu_op mx53_cpu_op[] = {
-	{
-		.cpu_rate = 160000000,
-	},
-	{
-		.cpu_rate = 400000000,
-	},
-	{
-		.cpu_rate = 800000000,
-	},
-	{
-		.cpu_rate = 1000000000,
-	},
-	{
-		.cpu_rate = 1300000000,
-	},
-};
-
-struct cpu_op *mx51_get_cpu_op(int *op)
-{
-	*op = ARRAY_SIZE(mx51_cpu_op);
-	return mx51_cpu_op;
-}
-
-struct cpu_op *mx53_get_cpu_op(int *op)
+struct cpu_op *mxc_get_cpu_freq_table(void)
 {
 	struct clk *cpu_clk = clk_get(NULL, "cpu_clk");
 	unsigned long max_freq;
@@ -61,15 +40,9 @@ struct cpu_op *mx53_get_cpu_op(int *op)
 		return NULL;
 
 	max_freq = clk_get_rate(cpu_clk->parent);
-	pr_info("Max. CPU clock is: %lu.%03luMHz\n",
-		max_freq / 1000000, max_freq / 1000 % 1000);
 
-	for (i = 0; i < ARRAY_SIZE(mx53_cpu_op); i++) {
-		if (mx53_cpu_op[i].cpu_rate > max_freq) {
-			mx53_cpu_op[i].cpu_rate = 0;
-			break;
-		}
-	}
-	*op = i;
-	return mx53_cpu_op;
+	for (i = 0; i < ARRAY_SIZE(mx5_cpu_op) - 1; i++)
+		mx5_cpu_op[i].cpu_rate = max_freq / (8 - i);
+
+	return mx5_cpu_op;
 }

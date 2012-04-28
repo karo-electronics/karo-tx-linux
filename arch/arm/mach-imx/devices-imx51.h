@@ -66,6 +66,10 @@ extern const struct imx_imx_keypad_data imx51_imx_keypad_data;
 #define imx51_add_imx_keypad(pdata)	\
 	imx_add_imx_keypad(&imx51_imx_keypad_data, pdata)
 
+extern const struct imx_ipuv3_data imx51_ipuv3_data __initconst;
+#define imx51_add_ipuv3(pdata)	\
+	imx_add_ipuv3(&imx51_ipuv3_data, pdata)
+
 extern const struct imx_pata_imx_data imx51_pata_imx_data;
 #define imx51_add_pata_imx() \
 	imx_add_pata_imx(&imx51_pata_imx_data)

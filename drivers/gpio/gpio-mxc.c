@@ -161,13 +161,10 @@ static int gpio_set_irq_type(struct irq_data *d, u32 type)
 		break;
 	case IRQ_TYPE_EDGE_BOTH:
 		val = gpio_get_value(gpio);
-		if (val) {
+		if (val)
 			edge = GPIO_INT_LOW_LEV;
-			pr_debug("mxc: set GPIO %d to low trigger\n", gpio);
-		} else {
+		else
 			edge = GPIO_INT_HIGH_LEV;
-			pr_debug("mxc: set GPIO %d to high trigger\n", gpio);
-		}
 		port->both_edges |= 1 << (gpio & 31);
 		break;
 	case IRQ_TYPE_LEVEL_LOW:
@@ -202,10 +199,8 @@ static void mxc_flip_edge(struct mxc_gpio_port *port, u32 gpio)
 	val &= ~(0x3 << (bit << 1));
 	if (edge == GPIO_INT_HIGH_LEV) {
 		edge = GPIO_INT_LOW_LEV;
-		pr_debug("mxc: switch GPIO %d to low trigger\n", gpio);
 	} else if (edge == GPIO_INT_LOW_LEV) {
 		edge = GPIO_INT_HIGH_LEV;
-		pr_debug("mxc: switch GPIO %d to high trigger\n", gpio);
 	} else {
 		pr_err("mxc: invalid configuration for GPIO %d: %x\n",
 		       gpio, edge);
@@ -296,13 +291,16 @@ static int gpio_set_wake_irq(struct irq_data *d, u32 enable)
 	return 0;
 }
 
-static void __init mxc_gpio_init_gc(struct mxc_gpio_port *port)
+static int __init mxc_gpio_init_gc(struct mxc_gpio_port *port)
 {
 	struct irq_chip_generic *gc;
 	struct irq_chip_type *ct;
 
 	gc = irq_alloc_generic_chip("gpio-mxc", 1, port->virtual_irq_start,
 				    port->base, handle_level_irq);
+	if (!gc)
+		return -ENOMEM;
+
 	gc->private = port;
 
 	ct = gc->chip_types;
@@ -316,6 +314,7 @@ static void __init mxc_gpio_init_gc(struct mxc_gpio_port *port)
 
 	irq_setup_generic_chip(gc, IRQ_MSK(32), IRQ_GC_INIT_NESTED_LOCK,
 			       IRQ_NOREQUEST, 0);
+	return 0;
 }
 
 static void __devinit mxc_gpio_get_hw(struct platform_device *pdev)
@@ -428,7 +427,7 @@ static int __devinit mxc_gpio_probe(struct platform_device *pdev)
 
 	err = gpiochip_add(&port->bgc.gc);
 	if (err)
-		goto out_bgpio_remove;
+		goto out_iounmap;
 
 	/*
 	 * In dt case, we use gpio number range dynamically
@@ -438,7 +437,9 @@ static int __devinit mxc_gpio_probe(struct platform_device *pdev)
 							     pdev->id * 32);
 
 	/* gpio-mxc can be a generic irq chip */
-	mxc_gpio_init_gc(port);
+	err = mxc_gpio_init_gc(port);
+	if (err)
+		goto out_bgpio_remove;
 
 	list_add_tail(&port->node, &mxc_gpio_ports);
 

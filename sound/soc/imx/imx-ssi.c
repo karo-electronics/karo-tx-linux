@@ -28,7 +28,7 @@
  * value. When we read the same register two times (and the register still
  * contains the same value) these status bits are not set. We work
  * around this by not polling these bits but only wait a fixed delay.
- * 
+ *
  */
 
 #include <linux/clk.h>
@@ -137,6 +137,7 @@ static int imx_ssi_set_dai_fmt(struct snd_soc_dai *cpu_dai, unsigned int fmt)
 	/* DAI clock master masks */
 	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
 	case SND_SOC_DAIFMT_CBM_CFM:
+		scr &= ~SSI_I2S_MODE_MASK;
 		break;
 	default:
 		/* Master mode not implemented, needs handling of clocks. */
@@ -302,12 +303,12 @@ static int imx_ssi_trigger(struct snd_pcm_substream *substream, int cmd,
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		if (ssi->flags & IMX_SSI_DMA)
-			sier_bits = SSI_SIER_TDMAE;
+			sier_bits = SSI_SIER_TDMAE | SSI_SIER_TIE | SSI_SIER_TUE0_EN;
 		else
 			sier_bits = SSI_SIER_TIE | SSI_SIER_TFE0_EN;
 	} else {
 		if (ssi->flags & IMX_SSI_DMA)
-			sier_bits = SSI_SIER_RDMAE;
+			sier_bits = SSI_SIER_RDMAE | SSI_SIER_RIE | SSI_SIER_ROE0_EN;
 		else
 			sier_bits = SSI_SIER_RIE | SSI_SIER_RFF0_EN;
 	}
@@ -515,6 +516,52 @@ struct snd_ac97_bus_ops soc_ac97_ops = {
 };
 EXPORT_SYMBOL_GPL(soc_ac97_ops);
 
+static const struct of_device_id imx_ssi_dt_ids[] = {
+	{ .compatible = "fsl,imx-ssi", },
+	{ /* sentinel */ }
+};
+
+static int imx_ssi_of_probe(struct platform_device *pdev,
+			struct imx_ssi *ssi)
+{
+	struct device_node *np = pdev->dev.of_node;
+	const unsigned long *prop;
+
+	ssi->dma_params_rx.dma = ssi->dma_params_tx.dma = -1;
+
+	prop = of_get_property(np, "rx-dma", NULL);
+	if (prop) {
+		ssi->dma_params_rx.dma = be32_to_cpu(*prop);
+	}
+
+	prop = of_get_property(np, "tx-dma", NULL);
+	if (prop) {
+		ssi->dma_params_tx.dma = be32_to_cpu(*prop);
+	}
+
+	if (ssi->dma_params_rx.dma >= 0 && ssi->dma_params_tx.dma >= 0) {
+		ssi->flags |= IMX_SSI_DMA;
+	} else if ((ssi->dma_params_rx.dma < 0) ^
+		(ssi->dma_params_tx.dma < 0)) {
+		dev_err(&pdev->dev, "Incomplete DMA properties\n");
+		return -EINVAL;
+	}
+
+	if (of_get_property(np, "i2s-slave-mode", NULL))
+		ssi->flags |= IMX_SSI_USE_I2S_SLAVE;
+
+	if (of_get_property(np, "ac97-mode", NULL))
+		ssi->flags |= IMX_SSI_USE_AC97;
+
+	if (of_get_property(np, "i2s-network-mode", NULL))
+		ssi->flags |= IMX_SSI_NET;
+
+	if (of_get_property(np, "i2s-sync-mode", NULL))
+		ssi->flags |= IMX_SSI_SYN;
+
+	return 0;
+}
+
 static int imx_ssi_probe(struct platform_device *pdev)
 {
 	struct resource *res;
@@ -522,28 +569,32 @@ static int imx_ssi_probe(struct platform_device *pdev)
 	struct imx_ssi_platform_data *pdata = pdev->dev.platform_data;
 	int ret = 0;
 	struct snd_soc_dai_driver *dai;
+	unsigned long mapbase;
 
 	ssi = kzalloc(sizeof(*ssi), GFP_KERNEL);
 	if (!ssi)
 		return -ENOMEM;
-	dev_set_drvdata(&pdev->dev, ssi);
+
+	ssi->irq = platform_get_irq(pdev, 0);
 
 	if (pdata) {
 		ssi->ac97_reset = pdata->ac97_reset;
 		ssi->ac97_warm_reset = pdata->ac97_warm_reset;
 		ssi->flags = pdata->flags;
+	} else {
+		ret = imx_ssi_of_probe(pdev, ssi);
+		if (ret)
+			goto failed_clk;
 	}
-
-	ssi->irq = platform_get_irq(pdev, 0);
 
 	ssi->clk = clk_get(&pdev->dev, NULL);
 	if (IS_ERR(ssi->clk)) {
 		ret = PTR_ERR(ssi->clk);
-		dev_err(&pdev->dev, "Cannot get the clock: %d\n",
-			ret);
+		dev_err(&pdev->dev, "Cannot get the '%s' clock: %d\n",
+			dev_name(&pdev->dev), ret);
 		goto failed_clk;
 	}
-	clk_enable(ssi->clk);
+	clk_prepare_enable(ssi->clk);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -557,6 +608,7 @@ static int imx_ssi_probe(struct platform_device *pdev)
 		goto failed_get_resource;
 	}
 
+	mapbase = res->start;
 	ssi->base = ioremap(res->start, resource_size(res));
 	if (!ssi->base) {
 		dev_err(&pdev->dev, "ioremap failed\n");
@@ -599,7 +651,8 @@ static int imx_ssi_probe(struct platform_device *pdev)
 		goto failed_register;
 	}
 
-	ssi->soc_platform_pdev_fiq = platform_device_alloc("imx-fiq-pcm-audio", pdev->id);
+	ssi->soc_platform_pdev_fiq = platform_device_alloc("imx-fiq-pcm-audio",
+							pdev->id);
 	if (!ssi->soc_platform_pdev_fiq) {
 		ret = -ENOMEM;
 		goto failed_pdev_fiq_alloc;
@@ -612,7 +665,8 @@ static int imx_ssi_probe(struct platform_device *pdev)
 		goto failed_pdev_fiq_add;
 	}
 
-	ssi->soc_platform_pdev = platform_device_alloc("imx-pcm-audio", pdev->id);
+	ssi->soc_platform_pdev = platform_device_alloc("imx-pcm-audio",
+						pdev->id);
 	if (!ssi->soc_platform_pdev) {
 		ret = -ENOMEM;
 		goto failed_pdev_alloc;
@@ -624,6 +678,14 @@ static int imx_ssi_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to add platform device\n");
 		goto failed_pdev_add;
 	}
+
+	if (ssi->dma_params_rx.dma >= 0)
+		dev_info(&pdev->dev, "IMX SSI @ 0x%08lx IRQ %u DMA RX: %d TX: %d\n",
+			mapbase, ssi->irq, ssi->dma_params_rx.dma,
+			ssi->dma_params_tx.dma);
+	else
+		dev_info(&pdev->dev, "IMX SSI @ 0x%08lx IRQ %u FIQ\n",
+			mapbase, ssi->irq);
 
 	return 0;
 
@@ -641,7 +703,7 @@ failed_ac97:
 failed_ioremap:
 	release_mem_region(res->start, resource_size(res));
 failed_get_resource:
-	clk_disable(ssi->clk);
+	clk_disable_unprepare(ssi->clk);
 	clk_put(ssi->clk);
 failed_clk:
 	kfree(ssi);
@@ -664,7 +726,7 @@ static int __devexit imx_ssi_remove(struct platform_device *pdev)
 
 	iounmap(ssi->base);
 	release_mem_region(res->start, resource_size(res));
-	clk_disable(ssi->clk);
+	clk_disable_unprepare(ssi->clk);
 	clk_put(ssi->clk);
 	kfree(ssi);
 
@@ -678,6 +740,7 @@ static struct platform_driver imx_ssi_driver = {
 	.driver = {
 		.name = "imx-ssi",
 		.owner = THIS_MODULE,
+		.of_match_table = imx_ssi_dt_ids,
 	},
 };
 

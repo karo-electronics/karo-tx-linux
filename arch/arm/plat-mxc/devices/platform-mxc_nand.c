@@ -56,6 +56,11 @@ const struct imx_mxc_nand_data imx51_mxc_nand_data __initconst =
 	imx_mxc_nandv3_data_entry_single(MX51, SZ_16K);
 #endif
 
+#ifdef CONFIG_SOC_IMX53
+const struct imx_mxc_nand_data imx53_mxc_nand_data __initconst =
+	imx_mxc_nandv3_data_entry_single(MX53, SZ_16K);
+#endif
+
 struct platform_device *__init imx_add_mxc_nand(
 		const struct imx_mxc_nand_data *data,
 		const struct mxc_nand_platform_data *pdata)

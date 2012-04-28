@@ -103,3 +103,5 @@ void imx_pcm_free(struct snd_pcm *pcm)
 	}
 }
 EXPORT_SYMBOL_GPL(imx_pcm_free);
+
+MODULE_LICENSE("GPL");

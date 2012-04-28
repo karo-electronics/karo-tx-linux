@@ -159,7 +159,8 @@ config USB_FSL_USB2
 	tristate "Freescale Highspeed USB DR Peripheral Controller"
 	depends on FSL_SOC || ARCH_MXC
 	select USB_GADGET_DUALSPEED
-	select USB_FSL_MPH_DR_OF if OF
+	select USB_FSL_MPH_DR_OF if FSL_SOC && OF
+	select USB_OTG_UTILS
 	help
 	   Some of Freescale PowerPC processors have a High Speed
 	   Dual-Role(DR) USB controller, which supports device mode.
@@ -271,11 +272,12 @@ config USB_S3C_HSOTG
 config USB_IMX
 	tristate "Freescale i.MX1 USB Peripheral Controller"
 	depends on ARCH_MXC
+	select USB_OTG_UTILS
 	help
 	   Freescale's i.MX1 includes an integrated full speed
 	   USB 1.1 device controller.
 
-	   It has Six fixed-function endpoints, as well as endpoint
+	   It has six fixed-function endpoints, as well as endpoint
 	   zero (for control transfers).
 
 	   Say "y" to link the driver statically, or "m" to build a

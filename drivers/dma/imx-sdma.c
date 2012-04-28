@@ -24,7 +24,7 @@
 #include <linux/mm.h>
 #include <linux/interrupt.h>
 #include <linux/clk.h>
-#include <linux/wait.h>
+#include <linux/delay.h>
 #include <linux/sched.h>
 #include <linux/semaphore.h>
 #include <linux/spinlock.h>
@@ -323,7 +323,7 @@ struct sdma_engine {
 	dma_addr_t			context_phys;
 	struct dma_device		dma_device;
 	struct clk			*clk;
-	struct mutex			channel_0_lock;
+	spinlock_t			channel_0_lock;
 	struct sdma_script_start_addrs	*script_addrs;
 };
 
@@ -401,19 +401,28 @@ static void sdma_enable_channel(struct sdma_engine *sdma, int channel)
 }
 
 /*
- * sdma_run_channel - run a channel and wait till it's done
+ * sdma_run_channel0 - run channel 0 and wait till it's done
  */
-static int sdma_run_channel(struct sdma_channel *sdmac)
+#define SDMA_TIMEOUT_US 500
+
+static int sdma_run_channel0(struct sdma_engine *sdma)
 {
-	struct sdma_engine *sdma = sdmac->sdma;
-	int channel = sdmac->channel;
 	int ret;
+	unsigned long timeout = SDMA_TIMEOUT_US;
 
-	init_completion(&sdmac->done);
+	sdma_enable_channel(sdma, 0);
 
-	sdma_enable_channel(sdma, channel);
-
-	ret = wait_for_completion_timeout(&sdmac->done, HZ);
+	while (!(ret = readl_relaxed(sdma->regs + SDMA_H_INTR) & 1)) {
+		if (timeout-- <= 0)
+			break;
+		udelay(1);
+	}
+	if (ret)
+		/* clear interrupt status */
+		writel_relaxed(ret, sdma->regs + SDMA_H_INTR);
+	else
+		dev_err(sdma->dev, "Timeout waiting for CH0 ready: %08x\n",
+			readl_relaxed(sdma->regs + SDMA_H_INTR));
 
 	return ret ? 0 : -ETIMEDOUT;
 }
@@ -425,16 +434,16 @@ static int sdma_load_script(struct sdma_engine *sdma, void *buf, int size,
 	void *buf_virt;
 	dma_addr_t buf_phys;
 	int ret;
-
-	mutex_lock(&sdma->channel_0_lock);
+	unsigned long flags;
 
 	buf_virt = dma_alloc_coherent(NULL,
 			size,
 			&buf_phys, GFP_KERNEL);
 	if (!buf_virt) {
-		ret = -ENOMEM;
-		goto err_out;
+		return -ENOMEM;
 	}
+
+	spin_lock_irqsave(&sdma->channel_0_lock, flags);
 
 	bd0->mode.command = C0_SETPM;
 	bd0->mode.status = BD_DONE | BD_INTR | BD_WRAP | BD_EXTD;
@@ -444,12 +453,11 @@ static int sdma_load_script(struct sdma_engine *sdma, void *buf, int size,
 
 	memcpy(buf_virt, buf, size);
 
-	ret = sdma_run_channel(&sdma->channel[0]);
+	ret = sdma_run_channel0(sdma);
+
+	spin_unlock_irqrestore(&sdma->channel_0_lock, flags);
 
 	dma_free_coherent(NULL, size, buf_virt, buf_phys);
-
-err_out:
-	mutex_unlock(&sdma->channel_0_lock);
 
 	return ret;
 }
@@ -538,10 +546,6 @@ static void mxc_sdma_handle_channel(struct sdma_channel *sdmac)
 {
 	complete(&sdmac->done);
 
-	/* not interested in channel 0 interrupts */
-	if (sdmac->channel == 0)
-		return;
-
 	if (sdmac->flags & IMX_DMA_SG_LOOP)
 		sdma_handle_channel_loop(sdmac);
 	else
@@ -554,6 +558,8 @@ static irqreturn_t sdma_int_handler(int irq, void *dev_id)
 	unsigned long stat;
 
 	stat = readl_relaxed(sdma->regs + SDMA_H_INTR);
+	/* not interested in channel 0 interrupts */
+	stat &= ~1;
 	writel_relaxed(stat, sdma->regs + SDMA_H_INTR);
 
 	while (stat) {
@@ -659,6 +665,7 @@ static int sdma_load_context(struct sdma_channel *sdmac)
 	struct sdma_context_data *context = sdma->context;
 	struct sdma_buffer_descriptor *bd0 = sdma->channel[0].bd;
 	int ret;
+	unsigned long flags;
 
 	if (sdmac->direction == DMA_DEV_TO_MEM) {
 		load_address = sdmac->pc_from_device;
@@ -676,7 +683,7 @@ static int sdma_load_context(struct sdma_channel *sdmac)
 	dev_dbg(sdma->dev, "event_mask0 = 0x%08x\n", (u32)sdmac->event_mask[0]);
 	dev_dbg(sdma->dev, "event_mask1 = 0x%08x\n", (u32)sdmac->event_mask[1]);
 
-	mutex_lock(&sdma->channel_0_lock);
+	spin_lock_irqsave(&sdma->channel_0_lock, flags);
 
 	memset(context, 0, sizeof(*context));
 	context->channel_state.pc = load_address;
@@ -696,9 +703,9 @@ static int sdma_load_context(struct sdma_channel *sdmac)
 	bd0->buffer_addr = sdma->context_phys;
 	bd0->ext_buffer_addr = 2048 + (sizeof(*context) / 4) * channel;
 
-	ret = sdma_run_channel(&sdma->channel[0]);
+	ret = sdma_run_channel0(sdma);
 
-	mutex_unlock(&sdma->channel_0_lock);
+	spin_unlock_irqrestore(&sdma->channel_0_lock, flags);
 
 	return ret;
 }
@@ -896,7 +903,7 @@ static void sdma_free_chan_resources(struct dma_chan *chan)
 
 	dma_free_coherent(NULL, PAGE_SIZE, sdmac->bd, sdmac->bd_phys);
 
-	clk_disable(sdma->clk);
+	clk_disable_unprepare(sdma->clk);
 }
 
 static struct dma_async_tx_descriptor *sdma_prep_slave_sg(
@@ -1169,12 +1176,12 @@ static void sdma_load_firmware(const struct firmware *fw, void *context)
 	addr = (void *)header + header->script_addrs_start;
 	ram_code = (void *)header + header->ram_code_start;
 
-	clk_enable(sdma->clk);
+	clk_prepare_enable(sdma->clk);
 	/* download the RAM image for SDMA */
 	sdma_load_script(sdma, ram_code,
 			header->ram_code_size,
 			addr->ram_code_start_addr);
-	clk_disable(sdma->clk);
+	clk_disable_unprepare(sdma->clk);
 
 	sdma_add_scripts(sdma, addr);
 
@@ -1216,7 +1223,7 @@ static int __init sdma_init(struct sdma_engine *sdma)
 		return -ENODEV;
 	}
 
-	clk_enable(sdma->clk);
+	clk_prepare_enable(sdma->clk);
 
 	/* Be sure SDMA has not started yet */
 	writel_relaxed(0, sdma->regs + SDMA_H_C0PTR);
@@ -1269,12 +1276,12 @@ static int __init sdma_init(struct sdma_engine *sdma)
 	/* Initializes channel's priorities */
 	sdma_set_channel_priority(&sdma->channel[0], 7);
 
-	clk_disable(sdma->clk);
+	clk_disable_unprepare(sdma->clk);
 
 	return 0;
 
 err_dma_alloc:
-	clk_disable(sdma->clk);
+	clk_disable_unprepare(sdma->clk);
 	dev_err(sdma->dev, "initialisation failed with %d\n", ret);
 	return ret;
 }
@@ -1297,7 +1304,7 @@ static int __init sdma_probe(struct platform_device *pdev)
 	if (!sdma)
 		return -ENOMEM;
 
-	mutex_init(&sdma->channel_0_lock);
+	spin_lock_init(&sdma->channel_0_lock);
 
 	sdma->dev = &pdev->dev;
 
@@ -1415,6 +1422,8 @@ static int __init sdma_probe(struct platform_device *pdev)
 		goto err_init;
 	}
 
+	dev_set_drvdata(&pdev->dev, sdma);
+
 	dev_info(sdma->dev, "initialized\n");
 
 	return 0;
@@ -1440,10 +1449,60 @@ static int __exit sdma_remove(struct platform_device *pdev)
 	return -EBUSY;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static struct sdma_suspend_context {
+	u32 stop_stat;
+	u32 host_ovr;
+} sdma_regs;
+
+static void sdma_save_regs(struct sdma_engine *sdma,
+			struct sdma_suspend_context *ctx)
+{
+	ctx->stop_stat = readl_relaxed(sdma->regs + SDMA_H_STATSTOP);
+	writel_relaxed(ctx->stop_stat, sdma->regs + SDMA_H_STATSTOP);
+
+	ctx->host_ovr = readl_relaxed(sdma->regs + SDMA_H_HOSTOVR);
+	writel_relaxed(0, sdma->regs + SDMA_H_HOSTOVR);
+}
+
+static void sdma_restore_regs(struct sdma_engine *sdma,
+			struct sdma_suspend_context *ctx)
+{
+	writel_relaxed(ctx->host_ovr, sdma->regs + SDMA_H_HOSTOVR);
+	writel_relaxed(ctx->stop_stat, sdma->regs + SDMA_H_START);
+}
+
+static int sdma_suspend(struct device *dev)
+{
+	struct sdma_engine *sdma = dev_get_drvdata(dev);
+
+	/* save status and clear all channel enables */
+	sdma_save_regs(sdma, &sdma_regs);
+
+	/* reschedule */
+	writel_relaxed((1 << 1), sdma->regs + SDMA_H_RESET);
+
+	clk_disable_unprepare(sdma->clk);
+	return 0;
+}
+static int sdma_resume(struct device *dev)
+{
+	struct sdma_engine *sdma = dev_get_drvdata(dev);
+
+	clk_prepare_enable(sdma->clk);
+
+	sdma_restore_regs(sdma, &sdma_regs);
+
+	return 0;
+}
+#endif
+static SIMPLE_DEV_PM_OPS(sdma_pm_ops, sdma_suspend, sdma_resume);
+
 static struct platform_driver sdma_driver = {
 	.driver		= {
 		.name	= "imx-sdma",
 		.of_match_table = sdma_dt_ids,
+		.pm	= &sdma_pm_ops,
 	},
 	.id_table	= sdma_devtypes,
 	.remove		= __exit_p(sdma_remove),

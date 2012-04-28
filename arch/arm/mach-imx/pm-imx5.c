@@ -19,6 +19,18 @@
 #include "crm-regs-imx5.h"
 
 static struct clk *gpc_dvfs_clk;
+static void __iomem *cortexa8_base;
+static void __iomem *srpg_arm_base;
+static void __iomem *ccm_base;
+
+#undef MX51_CORTEXA8_BASE
+#define MX51_CORTEXA8_BASE cortexa8_base
+
+#undef MX51_SRPG_ARM_BASE
+#define MX51_SRPG_ARM_BASE srpg_arm_base
+
+#undef MX51_CCM_BASE
+#define MX51_CCM_BASE ccm_base
 
 /*
  * set cpu low power mode before WFI instruction. This function is called
@@ -29,6 +41,9 @@ void mx5_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 	u32 plat_lpc, arm_srpgcr, ccm_clpcr;
 	u32 empgc0, empgc1;
 	int stop_mode = 0;
+
+	if (!cortexa8_base || !srpg_arm_base || !ccm_base)
+		return;
 
 	/* always allow platform to issue a deep sleep mode request */
 	plat_lpc = __raw_readl(MXC_CORTEXA8_PLAT_LPC) &
@@ -109,7 +124,7 @@ static int mx5_suspend_enter(suspend_state_t state)
 		local_flush_tlb_all();
 		flush_cache_all();
 
-		/*clear the EMPGC0/1 bits */
+		/* clear the EMPGC0/1 bits */
 		__raw_writel(0, MXC_SRPG_EMPGC0_SRPGCR);
 		__raw_writel(0, MXC_SRPG_EMPGC1_SRPGCR);
 	}
@@ -124,7 +139,9 @@ static void mx5_suspend_finish(void)
 
 static int mx5_pm_valid(suspend_state_t state)
 {
-	return (state > PM_SUSPEND_ON && state <= PM_SUSPEND_MAX);
+	pr_info("%s: %d\n", __func__,
+		state > PM_SUSPEND_ON && state <= PM_SUSPEND_MAX);
+	return state > PM_SUSPEND_ON && state <= PM_SUSPEND_MAX;
 }
 
 static const struct platform_suspend_ops mx5_suspend_ops = {
@@ -136,18 +153,38 @@ static const struct platform_suspend_ops mx5_suspend_ops = {
 
 static int __init mx5_pm_init(void)
 {
-	if (!cpu_is_mx51() && !cpu_is_mx53())
+	if (cpu_is_mx50()) {
+		pr_info("Using i.MX50 pm config\n");
+		cortexa8_base = ioremap(MX50_ARM_BASE_ADDR, SZ_16K);
+		srpg_arm_base = ioremap(MX50_GPC_BASE_ADDR + 0x2a0, SZ_16K);
+		ccm_base = ioremap(MX50_CCM_BASE_ADDR, SZ_16K);
+	} else if (cpu_is_mx51()) {
+		pr_info("Using i.MX51 pm config\n");
+		cortexa8_base = ioremap(MX51_ARM_BASE_ADDR, SZ_16K);
+		srpg_arm_base = ioremap(MX51_GPC_BASE_ADDR + 0x2a0, SZ_16K);
+		ccm_base = ioremap(MX51_CCM_BASE_ADDR, SZ_16K);
+	} else if (cpu_is_mx53()) {
+		pr_info("Using i.MX53 pm config\n");
+		cortexa8_base = ioremap(MX53_ARM_BASE_ADDR, SZ_16K);
+		srpg_arm_base = ioremap(MX53_GPC_BASE_ADDR + 0x2a0, SZ_16K);
+		ccm_base = ioremap(MX53_CCM_BASE_ADDR, SZ_16K);
+	} else {
+		pr_err("No pm config\n");
 		return 0;
+	}
+	if (cortexa8_base == NULL || srpg_arm_base == NULL ||
+		ccm_base == NULL)
+		return -ENOMEM;
 
 	if (gpc_dvfs_clk == NULL)
 		gpc_dvfs_clk = clk_get(NULL, "gpc_dvfs");
 
-	if (!IS_ERR(gpc_dvfs_clk)) {
-		if (cpu_is_mx51())
-			suspend_set_ops(&mx5_suspend_ops);
-	} else
-		return -EPERM;
+	if (IS_ERR(gpc_dvfs_clk))
+		return PTR_ERR(gpc_dvfs_clk);
+
+	clk_prepare_enable(gpc_dvfs_clk);
+	suspend_set_ops(&mx5_suspend_ops);
 
 	return 0;
 }
-device_initcall(mx5_pm_init);
+arch_initcall(mx5_pm_init);

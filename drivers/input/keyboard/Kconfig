@@ -366,6 +366,7 @@ config KEYBOARD_MPR121
 config KEYBOARD_IMX
 	tristate "IMX keypad support"
 	depends on ARCH_MXC
+	select INPUT_OF_MATRIX_KEYMAP if USE_OF
 	help
 	  Enable support for IMX keypad port.
 

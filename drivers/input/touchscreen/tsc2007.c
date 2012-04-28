@@ -72,7 +72,6 @@ struct tsc2007 {
 
 	struct i2c_client	*client;
 
-	u16			model;
 	u16			x_plate_ohms;
 	u16			max_rt;
 	unsigned long		poll_delay;
@@ -106,8 +105,6 @@ static inline int tsc2007_xfer(struct tsc2007 *tsc, u8 cmd)
 	 * Where DataLow has [D11-D4], DataHigh has [D3-D0 << 4 | Dummy 4bit].
 	 */
 	val = swab16(data) >> 4;
-
-	dev_dbg(&tsc->client->dev, "data: 0x%x, val: 0x%x\n", data, val);
 
 	return val;
 }
@@ -279,6 +276,8 @@ static int tsc2007_open(struct input_dev *input_dev)
 		return err;
 	}
 
+	device_wakeup_enable(&ts->client->dev);
+
 	return 0;
 }
 
@@ -286,6 +285,7 @@ static void tsc2007_close(struct input_dev *input_dev)
 {
 	struct tsc2007 *ts = input_get_drvdata(input_dev);
 
+	device_wakeup_disable(&ts->client->dev);
 	tsc2007_stop(ts);
 }
 
@@ -294,13 +294,8 @@ static inline void tsc2007_get_of_prop_u16(struct device *dev, struct device_nod
 {
 	const unsigned long *prop = of_get_property(dp, name, NULL);
 
-	if (prop) {
+	if (prop)
 		*var = be32_to_cpu(*prop);
-		dev_dbg(dev, "Got value %d(%04x) for property '%s'\n",
-			*var, *var, name);
-	} else {
-		dev_err(dev, "Property %s not found\n", name);
-	}
 }
 
 static inline void tsc2007_get_of_prop_ulong(struct device *dev, struct device_node *dp,
@@ -308,13 +303,8 @@ static inline void tsc2007_get_of_prop_ulong(struct device *dev, struct device_n
 {
 	const unsigned long *prop = of_get_property(dp, name, NULL);
 
-	if (prop) {
+	if (prop)
 		*var = be32_to_cpu(*prop);
-		dev_dbg(dev, "Got value %ld(%08lx) for property '%s'\n",
-			*var, *var, name);
-	} else {
-		dev_err(dev, "Property %s not found\n", name);
-	}
 }
 
 static inline void tsc2007_get_of_prop_int(struct device *dev, struct device_node *dp,
@@ -322,13 +312,8 @@ static inline void tsc2007_get_of_prop_int(struct device *dev, struct device_nod
 {
 	const unsigned long *prop = of_get_property(dp, name, NULL);
 
-	if (prop) {
+	if (prop)
 		*var = be32_to_cpu(*prop);
-		dev_dbg(dev, "Got value %d(%08x) for property '%s'\n",
-			*var, *var, name);
-	} else {
-		dev_err(dev, "Property %s not found\n", name);
-	}
 }
 
 static int __devinit tsc2007_probe(struct i2c_client *client,
@@ -341,7 +326,7 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 	int err;
 
 	if (!pdata) {
-		if (!of_find_property(dp, "model", NULL)) {
+		if (!of_find_property(dp, "pendown-gpio", NULL)) {
 			dev_err(&client->dev,
 				"platform data or OF properties required!\n");
 			return -EINVAL;
@@ -365,7 +350,6 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 	init_waitqueue_head(&ts->wait);
 
 	if (pdata) {
-		ts->model             = pdata->model;
 		ts->x_plate_ohms      = pdata->x_plate_ohms;
 		ts->max_rt            = pdata->max_rt ? : MAX_12BIT;
 		ts->poll_delay        = pdata->poll_delay ? : 1;
@@ -383,15 +367,6 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 		struct device *dev = &client->dev;
 		enum of_gpio_flags gpio_flags;
 		int fuzzx = 0, fuzzy = 0, fuzzz = 0;
-		const char *model;
-
-		err = of_property_read_string(dp, "model",
-					&model);
-		if (err == 0)
-			ts->model = simple_strtoul(model, NULL, 0);
-
-		dev_info(&client->dev, "TSC2xxx Controller model %02d\n",
-			ts->model);
 
 		/* setup defaults */
 		ts->max_rt = MAX_12BIT;
@@ -415,7 +390,6 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 
 		ts->pendown_gpio = of_get_named_gpio_flags(dp,
 				"pendown-gpio", 0, &gpio_flags);
-		dev_dbg(&client->dev, "pendown GPIO: %d\n", ts->pendown_gpio);
 		if (gpio_is_valid(ts->pendown_gpio)) {
 			if (!(gpio_flags & OF_GPIO_ACTIVE_LOW)) {
 				dev_err(dev, "pendown gpio is active HIGH\n");
@@ -471,7 +445,7 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 	i2c_set_clientdata(client, ts);
 
 	dev_set_drvdata(&client->dev, ts);
-	device_init_wakeup(&client->dev, 1);
+	device_set_wakeup_capable(&client->dev, 1);
 
 	return 0;
 
@@ -506,10 +480,8 @@ static int tsc2007_suspend(struct device *dev)
 {
 	struct tsc2007	*ts = dev_get_drvdata(dev);
 
-	if (device_may_wakeup(dev)) {
-		dev_dbg(dev, "Enabling wakeup\n");
+	if (device_may_wakeup(dev))
 		enable_irq_wake(ts->irq);
-	}
 	return 0;
 }
 
@@ -526,8 +498,8 @@ static int tsc2007_resume(struct device *dev)
 static SIMPLE_DEV_PM_OPS(tsc2007_pm_ops, tsc2007_suspend, tsc2007_resume);
 
 static const struct i2c_device_id tsc2007_idtable[] = {
-	{ "tsc2007", 0 },
-	{ }
+	{ "tsc2007", },
+	{ /* sentinel */ }
 };
 
 MODULE_DEVICE_TABLE(i2c, tsc2007_idtable);

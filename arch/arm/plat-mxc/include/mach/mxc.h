@@ -170,7 +170,7 @@ struct cpu_op {
 
 int tzic_enable_wake(void);
 
-extern struct cpu_op *(*get_cpu_op)(int *op);
+extern struct cpu_op *mxc_get_cpu_freq_table(void);
 #endif
 
 #define cpu_is_mx3()	(cpu_is_mx31() || cpu_is_mx35())

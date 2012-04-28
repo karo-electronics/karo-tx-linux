@@ -9,25 +9,26 @@
 #include <mach/hardware.h>
 #include <mach/devices-common.h>
 
-#define imx_mxc_pwm_data_entry_single(soc, _id, _hwid, _size)		\
+#define imx_mxc_pwm_data_entry_single(soc, _name, _id, _hwid, _size)	\
 	{								\
 		.id = _id,						\
+		.devid = _name,						\
 		.iobase = soc ## _PWM ## _hwid ## _BASE_ADDR,		\
 		.iosize = _size,					\
 		.irq = soc ## _INT_PWM ## _hwid,			\
 	}
-#define imx_mxc_pwm_data_entry(soc, _id, _hwid, _size)			\
-	[_id] = imx_mxc_pwm_data_entry_single(soc, _id, _hwid, _size)
+#define imx_mxc_pwm_data_entry(soc, _name, _id, _hwid, _size)		\
+	[_id] = imx_mxc_pwm_data_entry_single(soc, _name, _id, _hwid, _size)
 
 #ifdef CONFIG_SOC_IMX21
 const struct imx_mxc_pwm_data imx21_mxc_pwm_data __initconst =
-	imx_mxc_pwm_data_entry_single(MX21, 0, , SZ_4K);
+	imx_mxc_pwm_data_entry_single(MX21, "imx1-pwm", 0, , SZ_4K);
 #endif /* ifdef CONFIG_SOC_IMX21 */
 
 #ifdef CONFIG_SOC_IMX25
 const struct imx_mxc_pwm_data imx25_mxc_pwm_data[] __initconst = {
 #define imx25_mxc_pwm_data_entry(_id, _hwid)				\
-	imx_mxc_pwm_data_entry(MX25, _id, _hwid, SZ_16K)
+	imx_mxc_pwm_data_entry(MX25, "imx25-pwm", _id, _hwid, SZ_16K)
 	imx25_mxc_pwm_data_entry(0, 1),
 	imx25_mxc_pwm_data_entry(1, 2),
 	imx25_mxc_pwm_data_entry(2, 3),
@@ -37,17 +38,26 @@ const struct imx_mxc_pwm_data imx25_mxc_pwm_data[] __initconst = {
 
 #ifdef CONFIG_SOC_IMX27
 const struct imx_mxc_pwm_data imx27_mxc_pwm_data __initconst =
-	imx_mxc_pwm_data_entry_single(MX27, 0, , SZ_4K);
+	imx_mxc_pwm_data_entry_single(MX27, "imx27-pwm", 0, , SZ_4K);
 #endif /* ifdef CONFIG_SOC_IMX27 */
 
 #ifdef CONFIG_SOC_IMX51
 const struct imx_mxc_pwm_data imx51_mxc_pwm_data[] __initconst = {
 #define imx51_mxc_pwm_data_entry(_id, _hwid)				\
-	imx_mxc_pwm_data_entry(MX51, _id, _hwid, SZ_16K)
+	imx_mxc_pwm_data_entry(MX51, "imx27-pwm", _id, _hwid, SZ_16K)
 	imx51_mxc_pwm_data_entry(0, 1),
 	imx51_mxc_pwm_data_entry(1, 2),
 };
 #endif /* ifdef CONFIG_SOC_IMX51 */
+
+#ifdef CONFIG_SOC_IMX53
+const struct imx_mxc_pwm_data imx53_mxc_pwm_data[] __initconst = {
+#define imx53_mxc_pwm_data_entry(_id, _hwid)				\
+	imx_mxc_pwm_data_entry(MX53, "imx27-pwm", _id, _hwid, SZ_16K)
+	imx53_mxc_pwm_data_entry(0, 1),
+	imx53_mxc_pwm_data_entry(1, 2),
+};
+#endif /* ifdef CONFIG_SOC_IMX53 */
 
 struct platform_device *__init imx_add_mxc_pwm(
 		const struct imx_mxc_pwm_data *data)
@@ -64,6 +74,6 @@ struct platform_device *__init imx_add_mxc_pwm(
 		},
 	};
 
-	return imx_add_platform_device("mxc_pwm", data->id,
+	return imx_add_platform_device(data->devid, data->id,
 			res, ARRAY_SIZE(res), NULL, 0);
 }

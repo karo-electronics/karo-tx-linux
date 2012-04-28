@@ -618,7 +618,7 @@ out_fail:
 
 static struct of_device_id gpio_keys_of_match[] = {
 	{ .compatible = "gpio-keys", },
-	{ },
+	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, gpio_keys_of_match);
 

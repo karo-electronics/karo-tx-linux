@@ -88,6 +88,7 @@ struct usb_phy {
 	struct device		*dev;
 	const char		*label;
 	unsigned int		 flags;
+	struct module		*owner;
 
 	enum usb_otg_state	state;
 	enum usb_phy_events	last_event;
@@ -96,6 +97,10 @@ struct usb_phy {
 
 	struct usb_phy_io_ops	*io_ops;
 	void __iomem		*io_priv;
+
+	struct list_head	list;
+	const char		*dev_id_host;
+	const char		*dev_id_peripheral;
 
 	/* for notification of usb_phy_events */
 	struct atomic_notifier_head	notifier;
@@ -172,10 +177,18 @@ usb_phy_shutdown(struct usb_phy *x)
 /* for usb host and peripheral controller drivers */
 #ifdef CONFIG_USB_OTG_UTILS
 extern struct usb_phy *usb_get_transceiver(void);
+extern struct usb_phy *usb_find_transceiver(struct device *dev);
 extern void usb_put_transceiver(struct usb_phy *);
 extern const char *otg_state_string(enum usb_otg_state state);
+extern void usb_add_transceiver(struct usb_phy *phy);
+extern void usb_remove_transceiver(struct usb_phy *phy);
 #else
 static inline struct usb_phy *usb_get_transceiver(void)
+{
+	return NULL;
+}
+
+static inline struct usb_phy *usb_find_transceiver(struct device *dev)
 {
 	return NULL;
 }
@@ -187,6 +200,14 @@ static inline void usb_put_transceiver(struct usb_phy *x)
 static inline const char *otg_state_string(enum usb_otg_state state)
 {
 	return NULL;
+}
+
+static inline void usb_add_transceiver(struct usb_phy *phy)
+{
+}
+
+static inline void usb_remove_transceiver(struct usb_phy *phy)
+{
 }
 #endif
 

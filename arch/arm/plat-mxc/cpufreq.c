@@ -28,15 +28,12 @@
 #define CLK32_FREQ	32768
 #define NANOSECOND	(1000 * 1000 * 1000)
 
-struct cpu_op *(*get_cpu_op)(int *op);
-
 static int cpu_freq_khz_min;
 static int cpu_freq_khz_max;
 
 static struct clk *cpu_clk;
 static struct cpufreq_frequency_table *imx_freq_table;
 
-static int cpu_op_nr;
 static struct cpu_op *cpu_op_tbl;
 
 static int set_cpu_freq(int freq)
@@ -50,7 +47,7 @@ static int set_cpu_freq(int freq)
 
 	ret = clk_set_rate(cpu_clk, freq);
 	if (ret != 0) {
-		printk(KERN_DEBUG "cannot set CPU clock rate\n");
+		pr_err("cannot set CPU clock rate: %d\n", ret);
 		return ret;
 	}
 
@@ -70,6 +67,9 @@ static unsigned int mxc_get_speed(unsigned int cpu)
 	if (cpu)
 		return 0;
 
+	pr_debug("CPU clock is: %lu.%03luMHz\n",
+		clk_get_rate(cpu_clk) / 1000000,
+		clk_get_rate(cpu_clk) / 1000 % 1000);
 	return clk_get_rate(cpu_clk) / 1000;
 }
 
@@ -91,7 +91,12 @@ static int mxc_set_target(struct cpufreq_policy *policy,
 	freqs.flags = 0;
 	cpufreq_notify_transition(&freqs, CPUFREQ_PRECHANGE);
 
+	pr_debug("%s: Setting CPU freq to %u.%03uMHz\n", __func__,
+		freq_Hz / 1000000, freq_Hz / 1000 % 1000);
 	ret = set_cpu_freq(freq_Hz);
+	if (ret)
+		pr_err("%s: Failed to set CPU freq to %u.%03uMHz: %d\n", __func__,
+			freq_Hz / 1000000, freq_Hz / 1000 % 1000, ret);
 
 	cpufreq_notify_transition(&freqs, CPUFREQ_POSTCHANGE);
 
@@ -101,44 +106,41 @@ static int mxc_set_target(struct cpufreq_policy *policy,
 static int mxc_cpufreq_init(struct cpufreq_policy *policy)
 {
 	int ret;
-	int i;
+	int i, n;
 
-	printk(KERN_INFO "i.MXC CPU frequency driver\n");
+	pr_info("i.MXC CPU frequency driver\n");
 
-	if (policy->cpu != 0)
+	if (policy->cpu != 0) {
+		pr_err("Bad cpu: %d\n", policy->cpu);
 		return -EINVAL;
-
-	if (!get_cpu_op)
-		return -EINVAL;
-
-	cpu_clk = clk_get(NULL, "cpu_clk");
-	if (IS_ERR(cpu_clk)) {
-		printk(KERN_ERR "%s: failed to get cpu clock\n", __func__);
-		return PTR_ERR(cpu_clk);
 	}
-
-	cpu_op_tbl = get_cpu_op(&cpu_op_nr);
 
 	cpu_freq_khz_min = cpu_op_tbl[0].cpu_rate / 1000;
 	cpu_freq_khz_max = cpu_op_tbl[0].cpu_rate / 1000;
+	for (n = 0; cpu_op_tbl[n].cpu_rate != 0; n++) {
+		if ((cpu_op_tbl[n].cpu_rate / 1000) < cpu_freq_khz_min)
+			cpu_freq_khz_min = cpu_op_tbl[n].cpu_rate / 1000;
 
-	imx_freq_table = kmalloc(
-		sizeof(struct cpufreq_frequency_table) * (cpu_op_nr + 1),
-			GFP_KERNEL);
+		if ((cpu_op_tbl[n].cpu_rate / 1000) > cpu_freq_khz_max)
+			cpu_freq_khz_max = cpu_op_tbl[n].cpu_rate / 1000;
+	}
+
+	cpu_clk = clk_get(NULL, "cpu_clk");
+	if (IS_ERR(cpu_clk)) {
+		pr_err("%s: failed to get cpu clock\n", __func__);
+		return PTR_ERR(cpu_clk);
+	}
+
+	imx_freq_table = kmalloc(sizeof(struct cpufreq_frequency_table) * n,
+				GFP_KERNEL);
 	if (!imx_freq_table) {
 		ret = -ENOMEM;
 		goto err1;
 	}
 
-	for (i = 0; i < cpu_op_nr; i++) {
+	for (i = 0; i < n; i++) {
 		imx_freq_table[i].index = i;
 		imx_freq_table[i].frequency = cpu_op_tbl[i].cpu_rate / 1000;
-
-		if ((cpu_op_tbl[i].cpu_rate / 1000) < cpu_freq_khz_min)
-			cpu_freq_khz_min = cpu_op_tbl[i].cpu_rate / 1000;
-
-		if ((cpu_op_tbl[i].cpu_rate / 1000) > cpu_freq_khz_max)
-			cpu_freq_khz_max = cpu_op_tbl[i].cpu_rate / 1000;
 	}
 
 	imx_freq_table[i].index = i;
@@ -154,8 +156,8 @@ static int mxc_cpufreq_init(struct cpufreq_policy *policy)
 	ret = cpufreq_frequency_table_cpuinfo(policy, imx_freq_table);
 
 	if (ret < 0) {
-		printk(KERN_ERR "%s: failed to register i.MXC CPUfreq with error code %d\n",
-		       __func__, ret);
+		pr_err("failed to register i.MXC CPUfreq with error code %d\n",
+		       ret);
 		goto err;
 	}
 
@@ -188,17 +190,19 @@ static struct cpufreq_driver mxc_driver = {
 	.name = "imx",
 };
 
-static int __devinit mxc_cpufreq_driver_init(void)
+static int __init mxc_cpufreq_driver_init(void)
 {
+	cpu_op_tbl = mxc_get_cpu_freq_table();
+	if (cpu_op_tbl == NULL)
+		return -ENODEV;
 	return cpufreq_register_driver(&mxc_driver);
 }
+module_init(mxc_cpufreq_driver_init);
 
-static void mxc_cpufreq_driver_exit(void)
+static void __exit mxc_cpufreq_driver_exit(void)
 {
 	cpufreq_unregister_driver(&mxc_driver);
 }
-
-module_init(mxc_cpufreq_driver_init);
 module_exit(mxc_cpufreq_driver_exit);
 
 MODULE_AUTHOR("Freescale Semiconductor Inc. Yong Shen <yong.shen@linaro.org>");

@@ -56,7 +56,7 @@ void snd_dmaengine_pcm_set_data(struct snd_pcm_substream *substream, void *data)
 EXPORT_SYMBOL_GPL(snd_dmaengine_pcm_set_data);
 
 /**
- * snd_dmaengine_pcm_get_data - Get dmaeinge substream private data
+ * snd_dmaengine_pcm_get_data - Get dmaengine substream private data
  * @substream: PCM substream
  *
  * Returns the data previously set with snd_dmaengine_pcm_set_data
@@ -243,7 +243,7 @@ static int dmaengine_pcm_request_channel(struct dmaengine_pcm_runtime_data *prtd
  * Note that this function will use private_data field of the substream's
  * runtime. So it is not availabe to your pcm driver implementation. If you need
  * to keep additional data attached to a substream use
- * snd_dmaeinge_pcm_{set,get}_data.
+ * snd_dmaengine_pcm_{set,get}_data.
  */
 int snd_dmaengine_pcm_open(struct snd_pcm_substream *substream,
 	dma_filter_fn filter_fn, void *filter_data)
@@ -286,3 +286,4 @@ int snd_dmaengine_pcm_close(struct snd_pcm_substream *substream)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(snd_dmaengine_pcm_close);
+MODULE_LICENSE("GPL");

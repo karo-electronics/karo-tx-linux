@@ -33,6 +33,16 @@
 #define MXC_USB_PHY_CTR_FUNC2_OFFSET	0xc
 #define MXC_USBH2CTRL_OFFSET		0x14
 
+#define MX53_USB_CTRL0			0x00
+#define MX53_USB_OTG_PHY_CTRL_0		0x08
+#define MX53_USB_OTG_PHY_CTRL_1		0x0c
+#define MX53_USB_CTRL1			0x10
+#define MX53_USBH2_CTRL			0x14
+#define MX53_USBH3_CTRL			0x18
+#define MX53_USB_H1_PHY_CTRL_0		0x1c
+#define MX53_USB_H1_PHY_CTRL_1		0x20
+#define MX53_USB_CLOCKONOFF		0x24
+
 #define MX5_USBOTHER_REGS_OFFSET	0x800
 
 /* USB_PHY_CTRL_FUNC2*/
@@ -47,11 +57,22 @@ struct mxc_usbh_platform_data {
 	struct usb_phy		*otg;
 };
 
-int mx51_initialize_usb_hw(int port, unsigned int flags);
 int mx25_initialize_usb_hw(int port, unsigned int flags);
 int mx31_initialize_usb_hw(int port, unsigned int flags);
 int mx35_initialize_usb_hw(int port, unsigned int flags);
 int mx27_initialize_usb_hw(int port, unsigned int flags);
+
+struct mxc_usbphy_port_data {
+	u32 phy_mode;
+	unsigned ignore_oc:1,
+		enable_wakeup:1;
+};
+
+struct mxc_usbphy_pdata {
+	const char *name;
+	int num_ports;
+	struct mxc_usbphy_port_data *ports;
+};
 
 #endif /* __INCLUDE_ASM_ARCH_MXC_EHCI_H */
 

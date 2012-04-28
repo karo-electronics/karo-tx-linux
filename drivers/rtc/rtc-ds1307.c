@@ -888,7 +888,7 @@ read_rtc:
 			goto exit_irq;
 		}
 
-		device_set_wakeup_capable(&client->dev, 1);
+		device_init_wakeup(&client->dev, 1);
 		set_bit(HAS_ALARM, &ds1307->flags);
 		dev_dbg(&client->dev, "got IRQ %d\n", client->irq);
 	}
@@ -944,10 +944,36 @@ static int __devexit ds1307_remove(struct i2c_client *client)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int ds1307_suspend(struct device *dev)
+{
+	struct ds1307 *ds1307 = dev_get_drvdata(dev);
+
+	if (device_may_wakeup(dev)) {
+		dev_info(dev, "%s: Enabling wakeup for IRQ %d\n", __func__, ds1307->client->irq);
+		enable_irq_wake(ds1307->client->irq);
+	}
+	return 0;
+}
+
+static int ds1307_resume(struct device *dev)
+{
+	struct ds1307 *ds1307 = dev_get_drvdata(dev);
+
+	if (device_may_wakeup(dev)) {
+		dev_info(dev, "%s: Disabling wakeup for IRQ %d\n", __func__, ds1307->client->irq);
+		disable_irq_wake(ds1307->client->irq);
+	}
+	return 0;
+}
+#endif
+static SIMPLE_DEV_PM_OPS(ds1307_pm_ops, ds1307_suspend, ds1307_resume);
+
 static struct i2c_driver ds1307_driver = {
 	.driver = {
 		.name	= "rtc-ds1307",
 		.owner	= THIS_MODULE,
+		.pm	= &ds1307_pm_ops,
 	},
 	.probe		= ds1307_probe,
 	.remove		= __devexit_p(ds1307_remove),

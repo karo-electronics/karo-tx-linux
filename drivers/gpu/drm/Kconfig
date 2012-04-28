@@ -25,7 +25,7 @@ config DRM_USB
 	select USB
 
 config DRM_KMS_HELPER
-	tristate
+	bool
 	depends on DRM
 	select FB
 	select FRAMEBUFFER_CONSOLE if !EXPERT
@@ -44,6 +44,13 @@ config DRM_LOAD_EDID_FIRMWARE
 	  feature is provided as a workaround for broken hardware, the
 	  default case is N. Details and instructions how to build your own
 	  EDID data are given in Documentation/EDID/HOWTO.txt.
+
+config DRM_KMS_ENCON
+	bool
+	depends on DRM
+	help
+	  helper for KMS drivers which use connectors and encoders with
+	  a 1:1 relationship
 
 config DRM_TTM
 	tristate
@@ -186,3 +193,18 @@ source "drivers/gpu/drm/vmwgfx/Kconfig"
 source "drivers/gpu/drm/gma500/Kconfig"
 
 source "drivers/gpu/drm/udl/Kconfig"
+
+config DRM_IMX_IPUV3
+	bool "i.MX IPUv3"
+	depends on DRM && ARCH_MXC
+	help
+	  Choose this if you have a i.MX51/53 processor.
+
+config DRM_IMX
+	tristate "i.MX IPUv3 drm support"
+	depends on DRM_IMX_IPUV3
+	select DRM_KMS_ENCON
+	select DRM_KMS_HELPER
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT

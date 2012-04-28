@@ -41,6 +41,19 @@ static const struct of_dev_auxdata imx51_auxdata_lookup[] __initconst = {
 	OF_DEV_AUXDATA("fsl,imx51-i2c", MX51_I2C2_BASE_ADDR, "imx-i2c.1", NULL),
 	OF_DEV_AUXDATA("fsl,imx51-sdma", MX51_SDMA_BASE_ADDR, "imx35-sdma", NULL),
 	OF_DEV_AUXDATA("fsl,imx51-wdt", MX51_WDOG1_BASE_ADDR, "imx2-wdt.0", NULL),
+	OF_DEV_AUXDATA("fsl,imx-ipuv3", MX51_IPU_CTRL_BASE_ADDR, "imx-ipuv3", NULL),
+	OF_DEV_AUXDATA("fsl,imx51-pwm", MX51_PWM1_BASE_ADDR, "imx27-pwm.0", NULL),
+	OF_DEV_AUXDATA("fsl,imx51-pwm", MX51_PWM2_BASE_ADDR, "imx27-pwm.1", NULL),
+	OF_DEV_AUXDATA("fsl,imx51-nand", MX51_NFC_AXI_BASE_ADDR, "mxc_nand", NULL),
+	/* make sure the labels exported to sysfs have a reasonable name */
+	OF_DEV_AUXDATA("fsl,imx51-gpio", MX51_GPIO1_BASE_ADDR, "imx31-gpio.0", NULL),
+	OF_DEV_AUXDATA("fsl,imx51-gpio", MX51_GPIO2_BASE_ADDR, "imx31-gpio.1", NULL),
+	OF_DEV_AUXDATA("fsl,imx51-gpio", MX51_GPIO3_BASE_ADDR, "imx31-gpio.2", NULL),
+	OF_DEV_AUXDATA("fsl,imx51-gpio", MX51_GPIO4_BASE_ADDR, "imx31-gpio.3", NULL),
+	OF_DEV_AUXDATA("fsl,imx51-usbphy", 0x73f80800, "73f80800.usbphy", NULL),
+	OF_DEV_AUXDATA("fsl,imx-ssi", MX51_SSI1_BASE_ADDR, "imx-ssi.0", NULL),
+	OF_DEV_AUXDATA("fsl,imx-ssi", MX51_SSI2_BASE_ADDR, "imx-ssi.1", NULL),
+	OF_DEV_AUXDATA("fsl,imx-ssi", MX51_SSI3_BASE_ADDR, "imx-ssi.2", NULL),
 	{ /* sentinel */ }
 };
 
@@ -70,6 +83,7 @@ static const struct of_device_id imx51_irq_match[] __initconst = {
 
 static const struct of_device_id imx51_iomuxc_of_match[] __initconst = {
 	{ .compatible = "fsl,imx51-iomuxc-babbage", .data = imx51_babbage_common_init, },
+	{ .compatible = "fsl,imx51-iomuxc-tx51", .data = tx51_of_init, },
 	{ /* sentinel */ }
 };
 
@@ -104,6 +118,7 @@ static struct sys_timer imx51_timer = {
 
 static const char *imx51_dt_board_compat[] __initdata = {
 	"fsl,imx51-babbage",
+	"karo,tx51",
 	"fsl,imx51",
 	NULL
 };

@@ -9,13 +9,16 @@
  * (at your option) any later version.
  */
 
-#include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/export.h>
 #include <linux/device.h>
-
+#include <linux/string.h>
 #include <linux/usb/otg.h>
 
 static struct usb_phy *phy;
+
+static LIST_HEAD(transceiver_list);
+static DEFINE_MUTEX(xcvr_list_lock);
 
 /**
  * usb_get_transceiver - find the (single) USB transceiver
@@ -28,11 +31,60 @@ static struct usb_phy *phy;
  */
 struct usb_phy *usb_get_transceiver(void)
 {
-	if (phy)
+	if (phy) {
 		get_device(phy->dev);
+		if (!try_module_get(phy->owner))
+			return NULL;
+	}
 	return phy;
 }
 EXPORT_SYMBOL(usb_get_transceiver);
+
+/**
+ * usb_find_transceiver - find an OTG transceiver for a specific device
+ *
+ * Returns the transceiver driver, after getting a refcount to it; or
+ * null if there is no such transceiver.  The caller is responsible for
+ * calling otg_put_transceiver() to release that count.
+ *
+ * For use by USB host and peripheral drivers.
+ */
+struct usb_phy *usb_find_transceiver(struct device *dev)
+{
+	const char *devname = dev_name(dev);
+	static struct usb_phy *x;
+
+	if (phy) {
+		get_device(phy->dev);
+		if (!try_module_get(phy->owner))
+			return NULL;
+		return phy;
+	}
+
+	mutex_lock(&xcvr_list_lock);
+	list_for_each_entry(x, &transceiver_list, list) {
+		if (x->dev_id_host &&
+			strcmp(x->dev_id_host, devname) == 0)
+			goto found;
+		if (x->dev_id_peripheral &&
+			strcmp(x->dev_id_peripheral, devname) == 0)
+			goto found;
+	}
+err:
+	dev_err(dev, "No transceiver found for %s\n", devname);
+	mutex_unlock(&xcvr_list_lock);
+	return NULL;
+
+found:
+	if (!try_module_get(x->owner))
+		goto err;
+
+	get_device(x->dev);
+	mutex_unlock(&xcvr_list_lock);
+	return x;
+
+}
+EXPORT_SYMBOL(usb_find_transceiver);
 
 /**
  * usb_put_transceiver - release the (single) USB transceiver
@@ -44,8 +96,10 @@ EXPORT_SYMBOL(usb_get_transceiver);
  */
 void usb_put_transceiver(struct usb_phy *x)
 {
-	if (x)
+	if (x) {
+		module_put(x->owner);
 		put_device(x->dev);
+	}
 }
 EXPORT_SYMBOL(usb_put_transceiver);
 
@@ -61,10 +115,32 @@ int usb_set_transceiver(struct usb_phy *x)
 {
 	if (phy && x)
 		return -EBUSY;
+	if (x) {
+		if (!try_module_get(x->owner))
+			return -EAGAIN;
+	} else {
+		module_put(phy->owner);
+	}
 	phy = x;
 	return 0;
 }
 EXPORT_SYMBOL(usb_set_transceiver);
+
+void usb_add_transceiver(struct usb_phy *x)
+{
+	mutex_lock(&xcvr_list_lock);
+	list_add_tail(&x->list, &transceiver_list);
+	mutex_unlock(&xcvr_list_lock);
+}
+EXPORT_SYMBOL(usb_add_transceiver);
+
+void usb_remove_transceiver(struct usb_phy *x)
+{
+	mutex_lock(&xcvr_list_lock);
+	list_del(&x->list);
+	mutex_unlock(&xcvr_list_lock);
+}
+EXPORT_SYMBOL(usb_remove_transceiver);
 
 const char *otg_state_string(enum usb_otg_state state)
 {

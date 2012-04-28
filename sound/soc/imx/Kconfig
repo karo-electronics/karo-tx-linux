@@ -76,4 +76,14 @@ config SND_SOC_EUKREA_TLV320
 	  Enable I2S based access to the TLV320AIC23B codec attached
 	  to the SSI interface
 
+config SND_SOC_IMX_SGTL5000
+	tristate "Audio on i.MX based board with SGTL5000 codec"
+	select SND_SOC_SGTL5000
+	select SND_MXC_SOC_MX2
+	select SND_SOC_IMX_AUDMUX
+	select SND_SOC_IMX_SSI
+	help
+	  Enable support for audio on the i.MX31ADS with the WM1133-EV1
+	  PMIC board with WM8835x fitted.
+
 endif	# SND_IMX_SOC

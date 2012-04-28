@@ -30,7 +30,6 @@
 #include <asm/mach/time.h>
 
 #include "devices-imx51.h"
-#include "cpu_op-mx5.h"
 
 #define BABBAGE_USB_HUB_RESET	IMX_GPIO_NR(1, 7)
 #define BABBAGE_USBH1_STP	IMX_GPIO_NR(1, 27)
@@ -368,9 +367,6 @@ static void __init mx51_babbage_init(void)
 
 	imx51_soc_init();
 
-#if defined(CONFIG_CPU_FREQ_IMX)
-	get_cpu_op = mx51_get_cpu_op;
-#endif
 	imx51_babbage_common_init();
 
 	imx51_add_imx_uart(0, &uart_pdata);
