@@ -113,6 +113,7 @@ config FSL_USB2_OTG
 	depends on USB_EHCI_FSL && USB_GADGET_FSL_USB2 && USB_SUSPEND
 	select USB_OTG
 	select USB_OTG_UTILS
+	select USB_IMX_COMPOSITE
 	help
 	  Enable this to support Freescale USB OTG transceiver.
 

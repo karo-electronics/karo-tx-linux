@@ -145,6 +145,7 @@ config USB_EHCI_MXC
 	bool "Support for Freescale i.MX on-chip EHCI USB controller"
 	depends on USB_EHCI_HCD && ARCH_MXC
 	select USB_EHCI_ROOT_HUB_TT
+	select USB_IMX_COMPOSITE
 	---help---
 	  Variation of ARC USB block used in some Freescale chips.
 
