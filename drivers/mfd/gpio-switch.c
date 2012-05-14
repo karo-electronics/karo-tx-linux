@@ -152,14 +152,13 @@ struct gpio_sw *request_gpio_switch(struct device *dev, u32 id)
 	struct device_node *np = dev->of_node;
 
 	mutex_lock(&gpio_switch_list_lock);
-	if (np) {
+	if (np)
 		sw = gpio_switch_find_by_phandle(dev, id);
-	} else {
+	else
 		sw = gpio_switch_find_by_id(dev, id);
-	}
-	if (sw) {
+
+	if (sw)
 		sw->use_count++;
-	}
 	mutex_unlock(&gpio_switch_list_lock);
 
 	return sw;
@@ -344,9 +343,19 @@ struct platform_driver gpio_switch_driver = {
 	.remove = __devexit_p(gpio_switch_remove),
 };
 
-module_platform_driver(gpio_switch_driver);
+static int __init gpio_switch_init(void)
+{
+	return platform_driver_register(&gpio_switch_driver);
+}
+arch_initcall(gpio_switch_init);
+
+static void __exit gpio_switch_exit(void)
+{
+	platform_driver_unregister(&gpio_switch_driver);
+}
+module_exit(gpio_switch_exit);
 
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("Lother Waﬂmann <LW@KARO-electronics.de>");
+MODULE_AUTHOR("Lother Wa√ümann <LW@KARO-electronics.de>");
 MODULE_DESCRIPTION("Generic GPIO switch driver");
 MODULE_ALIAS("platform:gpio_switch");
