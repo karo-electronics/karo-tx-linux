@@ -409,7 +409,7 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 
 	mutex_lock(&di_mutex);
 	ipu_get(di->ipu);
-sig->ext_clk = 1;
+
 	/* Init clocking */
 	if (sig->ext_clk) {
 		di->external_clk = true;
@@ -537,7 +537,7 @@ int ipu_di_enable(struct ipu_di *di)
 {
 	ipu_get(di->ipu);
 
-	if (di->external_clk)
+	if (!di->external_clk)
 		clk_enable(di->clk);
 
 	ipu_module_enable(di->ipu, di->module);
@@ -551,7 +551,7 @@ int ipu_di_disable(struct ipu_di *di)
 	ipu_module_disable(di->ipu, di->module);
 	ipu_put(di->ipu);
 
-	if (di->external_clk)
+	if (!di->external_clk)
 		clk_disable(di->clk);
 
 	return 0;
