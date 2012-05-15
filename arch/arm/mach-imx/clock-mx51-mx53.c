@@ -1829,7 +1829,7 @@ static void clk_tree_init(void)
 {
 	u32 reg;
 
-	ipg_perclk.set_parent(&ipg_perclk, &lp_apm_clk);
+	clk_set_parent(&ipg_perclk, &lp_apm_clk);
 
 	/*
 	 * Initialise the IPG PER CLK dividers to 3. IPG_PER_CLK should be at
