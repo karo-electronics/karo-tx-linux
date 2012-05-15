@@ -603,20 +603,15 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 		unsigned long base,
 		u32 module, struct clk *ipu_clk)
 {
-	char *clk_id, *con_id;
+	const char *con_id;
 	struct ipu_di *di = &dis[id];
 
 	if (id > 1)
 		return -EINVAL;
 
-	if (id)
-		clk_id = "di1";
-	else
-		clk_id = "di0";
-
 	ipu_dev = dev;
 
-	di->clk = clk_get(dev, clk_id);
+	di->clk = clk_get(dev, NULL);
 	if (IS_ERR(di->clk))
 		return PTR_ERR(di->clk);
 
