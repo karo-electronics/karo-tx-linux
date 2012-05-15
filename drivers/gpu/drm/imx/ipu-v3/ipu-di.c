@@ -168,7 +168,7 @@ static int ipu_di_clk_calc_div(unsigned long inrate, unsigned long outrate)
 
 	div = DIV_ROUND_UP((inrate * 16), outrate);
 
-	return div;
+	return (div > 0 && div < (1 << 12)) ? div : EINVAL;
 }
 
 static unsigned long ipu_di_clk_round_rate(struct clk *clk, unsigned long rate)
@@ -178,6 +178,8 @@ static unsigned long ipu_di_clk_round_rate(struct clk *clk, unsigned long rate)
 	int div;
 
 	div = ipu_di_clk_calc_div(inrate, rate);
+	if (div < 0)
+		return 0;
 
 	outrate = (inrate * 16) / div;
 
