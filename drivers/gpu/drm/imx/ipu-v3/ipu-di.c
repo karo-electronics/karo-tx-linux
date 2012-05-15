@@ -642,6 +642,7 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 	di->ipu_di_clk.get_rate = ipu_di_clk_get_rate;
 	di->ipu_di_clk.set_rate = ipu_di_clk_set_rate;
 	di->ipu_di_clk.round_rate = ipu_di_clk_round_rate;
+	di->ipu_di_clk.parent = di->clk;
 
 	di->clk_lookup = clkdev_alloc(&di->ipu_di_clk, con_id, "imx-drm.0");
 	clkdev_add(di->clk_lookup);
