@@ -231,8 +231,13 @@ static int ipu_fb_set_par(struct drm_crtc *crtc,
 	sig_cfg.v_to_h_sync = 0;
 
 	ipu_get(ipu);
-	clk_set_rate(ipu_crtc->pixclk, mode->clock * 1000);
+	ret = clk_set_rate(ipu_crtc->pixclk, mode->clock * 1000);
 	ipu_put(ipu);
+	if (ret) {
+		dev_err(drm->dev, "Failed to set pixel clock to %u.%03uMHz: %d\n",
+			mode->clock / 1000, mode->clock % 1000, ret);
+		return ret;
+	}
 
 	if (ipu_crtc->dp) {
 		ret = ipu_dp_setup_channel(ipu_crtc->dp, IPU_COLORSPACE_RGB,
