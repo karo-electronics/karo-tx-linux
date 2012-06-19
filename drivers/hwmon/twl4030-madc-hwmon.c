@@ -50,6 +50,8 @@ static ssize_t madc_read(struct device *dev,
 	req.channels = (1 << attr->index);
 	req.method = TWL4030_MADC_SW2;
 	req.func_cb = NULL;
+	req.do_avg = 0;
+	req.type = TWL4030_MADC_WAIT;
 	val = twl4030_madc_conversion(&req);
 	if (val < 0)
 		return val;
