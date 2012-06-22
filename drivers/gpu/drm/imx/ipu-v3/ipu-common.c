@@ -135,8 +135,8 @@ void ipu_cpmem_set_format_rgb(struct ipu_ch_param *p, struct ipu_rgb *rgb)
 		ipu_ch_param_set_field(p, IPU_FIELD_WID3, rgb->transp.length - 1);
 		ipu_ch_param_set_field(p, IPU_FIELD_OFS3, to);
 	} else {
-		ipu_ch_param_set_field(p, IPU_FIELD_WID3, 7);
-		ipu_ch_param_set_field(p, IPU_FIELD_OFS3, rgb->bits_per_pixel);
+		ipu_ch_param_set_field(p, IPU_FIELD_WID3, 0);
+		ipu_ch_param_set_field(p, IPU_FIELD_OFS3, 0);
 	}
 
 	switch (rgb->bits_per_pixel) {
@@ -144,18 +144,17 @@ void ipu_cpmem_set_format_rgb(struct ipu_ch_param *p, struct ipu_rgb *rgb)
 		bpp = 0;
 		npb = 15;
 		break;
-	case 24:
-		bpp = 1;
-		npb = 19;
-		break;
 	case 16:
 		bpp = 3;
-		npb = 31;
+		npb = 15;
 		break;
 	case 8:
 		bpp = 5;
 		npb = 63;
 		break;
+
+	default:
+		WARN_ON(1);
 	}
 	ipu_ch_param_set_field(p, IPU_FIELD_BPP, bpp);
 	ipu_ch_param_set_field(p, IPU_FIELD_NPB, npb);

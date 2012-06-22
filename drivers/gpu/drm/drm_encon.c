@@ -179,6 +179,25 @@ static struct drm_encoder_helper_funcs encoder_helper_funcs = {
 	.disable = encoder_disable,
 };
 
+static void drm_encon_type_setup(struct drm_encoder_connector *encon,
+				const char *name, int id)
+{
+	char *option;
+	char disp_name[17];
+
+	encon->connector.connector_type = DRM_MODE_CONNECTOR_VGA;
+	encon->encoder.encoder_type = DRM_MODE_ENCODER_TMDS;
+
+	snprintf(disp_name, sizeof(disp_name), "LVDS-%u", id + 1);
+	if (fb_get_options(disp_name, &option) || !option)
+		return;
+
+	if (option) {
+		encon->connector.connector_type = DRM_MODE_CONNECTOR_LVDS;
+		encon->encoder.encoder_type = DRM_MODE_ENCODER_LVDS;
+	}
+}
+
 int drm_encoder_connector_init(struct drm_device *drm,
 		struct drm_encoder_connector *c)
 {
@@ -187,9 +206,10 @@ int drm_encoder_connector_init(struct drm_device *drm,
 
 	drm_connector_helper_add(connector, &connector_helper_funcs);
 	drm_connector_init(drm, &c->connector,
-			   &connector_funcs, DRM_MODE_CONNECTOR_VGA);
+			   &connector_funcs, c->connector.connector_type);
 
-	drm_encoder_init(drm, encoder, &encoder_funcs, DRM_MODE_ENCODER_TMDS);
+	drm_encoder_init(drm, encoder, &encoder_funcs,
+			 c->encoder.encoder_type);
 	drm_encoder_helper_add(encoder, &encoder_helper_funcs);
 
 	drm_mode_connector_attach_encoder(connector, encoder);
@@ -280,6 +300,8 @@ struct drm_encoder_connector *drm_encon_add_dummy(const char *drm_name, int id)
 		return NULL;
 
 	encon->funcs = &dummy_funcs;
+	drm_encon_type_setup(encon, drm_name, id);
+
 	ret = drm_encon_register(drm_name, id, encon);
 	if (ret) {
 		kfree(encon);

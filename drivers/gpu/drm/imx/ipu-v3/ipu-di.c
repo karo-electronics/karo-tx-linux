@@ -19,15 +19,12 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <drm/imx-ipu-v3.h>
-//#include <linux/clk.h>
 #include <linux/clkdev.h>
 #include <mach/clock.h>
 
 #include "ipu-prv.h"
 
 #define SYNC_WAVE 0
-
-#define DC_DISP_ID_SYNC(di)	(di)
 
 struct ipu_di {
 	void __iomem *base;
@@ -118,6 +115,8 @@ enum di_sync_wave {
 #define DI_DW_GEN_ACCESS_SIZE_OFFSET		24
 #define DI_DW_GEN_COMPONENT_SIZE_OFFSET		16
 
+#define DI_GEN_DI_CLK_STOP_MODE_MASK		(0xf << 24)
+#define DI_GEN_DI_CLK_STOP_MODE(n)		(((n) << 24) & DI_GEN_DI_CLK_STOP_MODE_MASK)
 #define DI_GEN_DI_CLK_EXT			(1 << 20)
 #define DI_GEN_DI_VSYNC_EXT			(1 << 21)
 #define DI_GEN_POLARITY_1			(1 << 0)
@@ -196,6 +195,8 @@ static int ipu_di_clk_set_rate(struct clk *clk, unsigned long rate)
 	int div;
 
 	div = ipu_di_clk_calc_div(inrate, rate);
+	if (div < 0)
+		return div;
 
 	ipu_get(di->ipu);
 	ipu_di_write(di, div, DI_BS_CLKGEN0);
@@ -418,18 +419,26 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 	}
 
 	div = ipu_di_read(di, DI_BS_CLKGEN0);
+	div = div / 16;		/* Now divider is integer portion */
+	di_gen = 0;
 
 	/* Setup pixel clock timing */
 	/* Down time is half of period */
-	ipu_di_write(di, (div / 16) << 16, DI_BS_CLKGEN1);
+	ipu_di_write(di, div << 16, DI_BS_CLKGEN1);
 
-	ipu_di_data_wave_config(di, SYNC_WAVE, div / 16 - 1, div / 16 - 1);
-	ipu_di_data_pin_config(di, SYNC_WAVE, DI_PIN15, 3, 0, div / 16 * 2);
+	if (!sig->serial_di) {
+		ipu_di_data_wave_config(di, SYNC_WAVE, div - 1, div - 1);
+		ipu_di_data_pin_config(di, SYNC_WAVE, DI_PIN15, 3, 0, div * 2);
+	} else {
+		ipu_di_write(di, 0x10, DI_BS_CLKGEN0);
+		ipu_di_write(di, 0x300, DI_DW_GEN(SYNC_WAVE));
+		ipu_di_write(di, (div * 2 << 16) | 0, DI_DW_SET(SYNC_WAVE, 3));
 
-	div = div / 16;		/* Now divider is integer portion */
+		di_gen = (di_gen & ~DI_GEN_DI_CLK_STOP_MODE_MASK) |
+			DI_GEN_DI_CLK_STOP_MODE(6);
+	}
 
-	di_gen = 0;
-	if (sig->ext_clk)
+	if (sig->ext_clk || sig->serial_di)
 		di_gen |= DI_GEN_DI_CLK_EXT | DI_GEN_DI_VSYNC_EXT;
 
 	if (sig->interlaced) {
@@ -603,7 +612,7 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 		unsigned long base,
 		u32 module, struct clk *ipu_clk)
 {
-	const char *con_id;
+	const char *con_id = id ? "di1" : "di0";
 	struct ipu_di *di = &dis[id];
 
 	if (id > 1)
@@ -611,7 +620,7 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 
 	ipu_dev = dev;
 
-	di->clk = clk_get(dev, NULL);
+	di->clk = clk_get(dev, con_id);
 	if (IS_ERR(di->clk))
 		return PTR_ERR(di->clk);
 
@@ -637,7 +646,7 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 	di->ipu_di_clk.get_rate = ipu_di_clk_get_rate;
 	di->ipu_di_clk.set_rate = ipu_di_clk_set_rate;
 	di->ipu_di_clk.round_rate = ipu_di_clk_round_rate;
-	di->ipu_di_clk.parent = di->clk;
+	di->ipu_di_clk.parent = di->ipu_clk;
 
 	di->clk_lookup = clkdev_alloc(&di->ipu_di_clk, con_id, "imx-drm.0");
 	clkdev_add(di->clk_lookup);

@@ -465,7 +465,7 @@
 			};
 
 			nand@63fdb000 {
-				compatible = "fsl,imx53-nand", "mcd_nand";
+				compatible = "fsl,imx53-nand", "mxc_nand";
 				reg = <0xf7ff0000 0x10000>, <0x63fdb000 0x4000>;
 				interrupts = <8>;
 				status = "disabled";

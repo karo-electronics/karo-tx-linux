@@ -143,6 +143,14 @@ static struct ipu_rgb def_rgb_32 = {
 	.bits_per_pixel = 32,
 };
 
+static struct ipu_rgb def_rgb_16 = {
+	.red	= { .offset = 11, .length = 5, },
+	.green	= { .offset =  5, .length = 6, },
+	.blue	= { .offset =  0, .length = 5, },
+	.transp = { .offset =  0, .length = 0, },
+	.bits_per_pixel = 16,
+};
+
 static int calc_vref(struct drm_display_mode *mode)
 {
 	unsigned long htotal, vtotal;
@@ -203,13 +211,31 @@ static int ipu_fb_set_par(struct drm_crtc *crtc,
 	struct ipu_di_signal_cfg sig_cfg;
 	u32 out_pixel_fmt;
 	struct ipu_ch_param *cpmem = ipu_get_cpmem(ipu_crtc->ipu_ch);
+	struct drm_mode_config *mode_config = &drm->mode_config;
+	struct drm_connector *tmp, *connector = NULL;
+
+	list_for_each_entry(tmp, &mode_config->connector_list, head) {
+		if (tmp->encoder && tmp->encoder->crtc == crtc) {
+			connector = tmp;
+			break;
+		}
+	}
+	if (!connector) {
+		DRM_ERROR("Couldn't find connector when setting mode");
+		return -EINVAL;
+	}
 
 	ipu_fb_disable(ipu_crtc);
 
 	memset(cpmem, 0, sizeof(*cpmem));
-
 	memset(&sig_cfg, 0, sizeof(sig_cfg));
-	out_pixel_fmt = ipu_crtc->ipu_res->interface_pix_fmt;
+
+	if (connector->connector_type == DRM_MODE_CONNECTOR_LVDS) {
+		sig_cfg.serial_di = 1;
+		out_pixel_fmt = IPU_PIX_FMT_LVDS666;
+	} else {
+		out_pixel_fmt = ipu_crtc->ipu_res->interface_pix_fmt;
+	}
 
 	if (mode->flags & DRM_MODE_FLAG_INTERLACE)
 		sig_cfg.interlaced = 1;
@@ -267,7 +293,20 @@ static int ipu_fb_set_par(struct drm_crtc *crtc,
 	ipu_cpmem_set_resolution(cpmem, mode->hdisplay, mode->vdisplay);
 	ipu_cpmem_set_stride(cpmem, fb->pitches[0]);
 	ipu_cpmem_set_buffer(cpmem, 0, phys);
-	ipu_cpmem_set_format_rgb(cpmem, &def_rgb_32);
+
+	switch (fb->bits_per_pixel) {
+	case 16:
+		ipu_cpmem_set_format_rgb(cpmem, &def_rgb_16);
+		break;
+	case 24:
+	case 32:
+		ipu_cpmem_set_format_rgb(cpmem, &def_rgb_32);
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
 	ipu_cpmem_set_high_priority(cpmem);
 
 	ret = ipu_dmfc_init_channel(ipu_crtc->dmfc, mode->hdisplay);
@@ -402,8 +441,8 @@ static int ipu_ipufb_create(struct drm_fb_helper *helper,
 	ipu_fb->virt = info->screen_base;
 	ipu_fb->phys = info->fix.smem_start;
 	ipu_fb->len = size;
-	dev_info(drm->dev, "%s: %p allocated fb %p [%08x]\n", __func__,
-		ipu_fb, ipu_fb->virt, ipu_fb->phys);
+	dev_info(drm->dev, "%s: %p allocated fb %p [%08x] pix_fmt: %08x bpp: %u depth: %u\n", __func__,
+		ipu_fb, ipu_fb->virt, ipu_fb->phys, mode_cmd.pixel_format, bpp, depth);
 
 	info->fix.smem_len = size;
 
@@ -519,8 +558,8 @@ ipu_user_framebuffer_create(struct drm_device *drm,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	dev_info(drm->dev, "%s: %p allocated fb %p [%08x]\n", __func__,
-		ipu_fb, ipu_fb->virt, ipu_fb->phys);
+	dev_info(drm->dev, "%s: %p allocated fb %p [%08x] pix_fmt: %08x bpp: %u depth: %u\n", __func__,
+		ipu_fb, ipu_fb->virt, ipu_fb->phys, mode_cmd->pixel_format, bpp, depth);
 	return &ipu_fb->base;
 }
 
@@ -553,7 +592,7 @@ static int ipu_crtc_mode_set(struct drm_crtc *crtc,
 	ipu_fb = to_ipu_framebuffer(fb);
 
 	phys = ipu_fb->phys;
-	phys += x * 4; /* FIXME */
+	phys += x * fb->bits_per_pixel / 8;
 	phys += y * fb->pitches[0];
 
 	ipu_fb_set_par(crtc, mode, phys);
@@ -572,7 +611,7 @@ static int ipu_crtc_mode_set_base(struct drm_crtc *crtc, int x, int y,
 	ipu_fb = to_ipu_framebuffer(fb);
 
 	phys = ipu_fb->phys;
-	phys += x * 4; /* FIXME */
+	phys += x * fb->bits_per_pixel / 8;
 	phys += y * fb->pitches[0];
 
 	ipu_cpmem_set_stride(ipu_get_cpmem(ipu_crtc->ipu_ch), fb->pitches[0]);
@@ -631,7 +670,6 @@ static int ipu_page_flip(struct drm_crtc *crtc,
 			struct drm_framebuffer *fb,
 			struct drm_pending_vblank_event *event)
 {
-	printk("%s\n", __func__);
 	dump_stack();
 	return 0;
 }
@@ -972,11 +1010,9 @@ static struct drm_driver driver = {
 
 static int __devinit ipu_drm_probe(struct platform_device *pdev)
 {
-	int ret;
-
 	pdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
-	ret = drm_platform_init(&driver, pdev);
-	return ret;
+
+	return drm_platform_init(&driver, pdev);
 }
 
 static int __devexit ipu_drm_remove(struct platform_device *pdev)
@@ -994,20 +1030,7 @@ static struct platform_driver ipu_drm_driver = {
 	.remove = __devexit_p(ipu_drm_remove),
 };
 
-int __init ipu_drm_init(void)
-{
-	int ret;
-	ret = platform_driver_register(&ipu_drm_driver);
-	return ret;
-}
-
-void __exit ipu_drm_exit(void)
-{
-	platform_driver_unregister(&ipu_drm_driver);
-}
-
-late_initcall(ipu_drm_init);
-module_exit(ipu_drm_exit);
+module_platform_driver(ipu_drm_driver);
 
 MODULE_AUTHOR("Sascha Hauer <s.hauer@pengutronix.de>");
 MODULE_DESCRIPTION(DRIVER_DESC);

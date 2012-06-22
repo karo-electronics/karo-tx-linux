@@ -147,7 +147,8 @@ int ipu_dc_init_sync(struct ipu_dc *dc, int di, bool interlaced,
 		u32 pixel_fmt, u32 width)
 {
 	struct ipu_dc_priv *priv = dc->priv;
-	u32 reg = 0, map;
+	u32 reg = 0;
+	int map;
 
 	dc->di = di;
 
@@ -436,8 +437,8 @@ int ipu_dc_init(struct ipu_soc *ipu, struct device *dev,
 	/* IPU_PIX_FMT_LVDS666 */
 	ipu_dc_map_clear(priv, 4);
 	ipu_dc_map_config(priv, 4, 0, 5, 0xfc);
-	ipu_dc_map_config(priv, 4, 1, 13, 0xfc);
-	ipu_dc_map_config(priv, 4, 2, 21, 0xfc);
+	ipu_dc_map_config(priv, 4, 1, 11, 0xfc);
+	ipu_dc_map_config(priv, 4, 2, 17, 0xfc);
 
 	/* IPU_PIX_FMT_GBR24 */
 	ipu_dc_map_clear(priv, 13);

@@ -47,9 +47,14 @@ static inline void gpio_switch_set(struct gpio_sw *sw, int on)
 	if (!sw)
 		return;
 
-	if ((on && (sw->enable_count++ == 0)) ||
-		(!on && (--sw->enable_count == 0)))
+	if (!(sw->flags & GPIO_SW_SHARED))
 		__gpio_switch_set(sw, on);
+	else
+		if ((on && (sw->enable_count++ == 0)) ||
+			(!on && (--sw->enable_count == 0))) {
+			WARN_ON(sw->enable_count < 0);
+			__gpio_switch_set(sw, on);
+		}
 }
 
 extern void gpio_switch_set_suspend_state(struct gpio_sw *sw, int suspend_state);

@@ -160,6 +160,18 @@ static iomux_v3_cfg_t tx53_pads[] __initdata = {
 	MX53_PAD_DISP0_DAT22__IPU_DISP0_DAT_22,
 	MX53_PAD_DISP0_DAT23__IPU_DISP0_DAT_23,
 
+	/* LVDS option */
+	MX53_PAD_LVDS1_TX3_P__LDB_LVDS1_TX3,
+	MX53_PAD_LVDS1_TX2_P__LDB_LVDS1_TX2,
+	MX53_PAD_LVDS1_CLK_P__LDB_LVDS1_CLK,
+	MX53_PAD_LVDS1_TX1_P__LDB_LVDS1_TX1,
+	MX53_PAD_LVDS1_TX0_P__LDB_LVDS1_TX0,
+	MX53_PAD_LVDS0_TX3_P__LDB_LVDS0_TX3,
+	MX53_PAD_LVDS0_CLK_P__LDB_LVDS0_CLK,
+	MX53_PAD_LVDS0_TX2_P__LDB_LVDS0_TX2,
+	MX53_PAD_LVDS0_TX1_P__LDB_LVDS0_TX1,
+	MX53_PAD_LVDS0_TX0_P__LDB_LVDS0_TX0,
+
 	/* USB Host */
 	NEW_PAD_CTRL(MX53_PAD_EIM_D31__GPIO3_31, MX53_GPIO_PAD_CTRL), /* VBUSEN */
 	NEW_PAD_CTRL(MX53_PAD_EIM_D30__GPIO3_30, MX53_GPIO_PAD_CTRL), /* OC */
@@ -340,7 +352,6 @@ static void __init tx53_stk5v5_board_init(void)
 	mxc_iomux_v3_setup_pad(MX53_PAD_DISP0_DAT0__GPIO4_21);
 	mxc_iomux_v3_setup_multiple_pads(tx53_flexcan1_pads,
 					ARRAY_SIZE(tx53_flexcan1_pads));
-
 }
 
 static void (*board_initfunc)(void) __initdata;
@@ -383,6 +394,9 @@ late_initcall(tx53_lcd_of_init);
 
 static int __init tx53_consistent_dma_init(void)
 {
+	if (!of_machine_is_compatible("karo,tx53"))
+		return 0;
+
 	init_consistent_dma_size(SZ_8M);
 	return 0;
 }
@@ -397,6 +411,8 @@ void __init tx53_common_init(void)
 #ifdef CONFIG_DRM_KMS_ENCON
 	drm_encon_add_dummy("imx-drm.0", 0);
 	drm_encon_add_dummy("imx-drm.0", 1);
+	/* configure LVDS bridge for DI0 enabled with spwg pixel mapping */
+	writel(0x01, MX53_IO_ADDRESS(MX53_IOMUXC_BASE_ADDR + 8));
 #endif
 }
 

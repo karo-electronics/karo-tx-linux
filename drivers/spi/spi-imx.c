@@ -225,11 +225,12 @@ static unsigned int mx51_ecspi_clkdiv(unsigned int fin, unsigned int fspi)
 	if (unlikely(post > 0xf)) {
 		pr_err("%s: cannot set clock freq: %u (base freq: %u)\n",
 				__func__, fspi, fin);
-		return 0xff;
+		pre = 15;
+		post = 15;
+		fspi = fin / (pre + 1) >> post;
+	} else {
+		pre = DIV_ROUND_UP(fin, fspi << post) - 1;
 	}
-
-	pre = DIV_ROUND_UP(fin, fspi << post) - 1;
-
 	pr_debug("%s: fin: %u, fspi: %u, post: %u, pre: %u\n",
 			__func__, fin, fspi, post, pre);
 	return (pre << MX51_ECSPI_CTRL_PREDIV_OFFSET) |
@@ -733,7 +734,7 @@ static int spi_imx_setup(struct spi_device *spi)
 	struct spi_imx_data *spi_imx = spi_master_get_devdata(spi->master);
 	int gpio = spi_imx->chipselect[spi->chip_select];
 
-	dev_dbg(&spi->dev, "%s: mode %d, %u bpw, %d hz\n", __func__,
+	dev_dbg(&spi->dev, "%s: mode %d, %u bpw, %d Hz\n", __func__,
 		 spi->mode, spi->bits_per_word, spi->max_speed_hz);
 
 	if (gpio >= 0)

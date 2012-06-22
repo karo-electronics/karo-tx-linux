@@ -5,7 +5,7 @@
 # Direct Rendering Infrastructure (DRI) in XFree86 4.1.0 and higher.
 #
 menuconfig DRM
-	tristate "Direct Rendering Manager (XFree86 4.1.0 and higher DRI support)"
+	bool "Direct Rendering Manager (XFree86 4.1.0 and higher DRI support)"
 	depends on (AGP || AGP=n) && !EMULATED_CMPXCHG && MMU
 	select I2C
 	select I2C_ALGOBIT

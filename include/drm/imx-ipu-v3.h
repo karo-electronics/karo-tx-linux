@@ -78,6 +78,7 @@ struct ipu_di_signal_cfg {
 	unsigned enable_pol:1;
 	unsigned Hsync_pol:1;	/* true = active high */
 	unsigned Vsync_pol:1;
+	unsigned serial_di:1;
 
 	u16 width;
 	u16 height;
