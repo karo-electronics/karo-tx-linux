@@ -1747,11 +1747,55 @@ static struct clk ipu_di1_ext_clk = {
 	.set_rate = ipu_di1_ext_set_rate,
 };
 
+#define CSCMR2_LDB_DI0_IPU_DIV	(1 << 10)
+#define CSCMR2_LDB_DI1_IPU_DIV	(1 << 11)
+
+static unsigned long clk_ldb_di0_get_rate(struct clk *clk)
+{
+	unsigned long parent_rate = clk_get_rate(clk->parent);
+	u32 cscmr2 = __raw_readl(MXC_CCM_CSCMR2);
+
+	if (cscmr2 & CSCMR2_LDB_DI0_IPU_DIV)
+		return parent_rate / 7;
+	else
+		return parent_rate * 2 / 7;
+}
+
+static unsigned long clk_ldb_di1_get_rate(struct clk *clk)
+{
+	unsigned long parent_rate = clk_get_rate(clk->parent);
+	u32 cscmr2 = __raw_readl(MXC_CCM_CSCMR2);
+
+	if (cscmr2 & CSCMR2_LDB_DI1_IPU_DIV)
+		return parent_rate / 7;
+	else
+		return parent_rate * 2 / 7;
+}
+
+static int clk_ldb_di0_set_rate(struct clk *clk, unsigned long rate)
+{
+	u32 cscmr2 = __raw_readl(MXC_CCM_CSCMR2);
+
+	if (cscmr2 & CSCMR2_LDB_DI0_IPU_DIV)
+		return clk->parent->set_rate(clk->parent, rate * 7);
+	else
+		return clk->parent->set_rate(clk->parent, rate * 7 / 2);
+}
+
+static int clk_ldb_di1_set_rate(struct clk *clk, unsigned long rate)
+{
+	u32 cscmr2 = __raw_readl(MXC_CCM_CSCMR2);
+
+	if (cscmr2 & CSCMR2_LDB_DI1_IPU_DIV)
+		return clk->parent->set_rate(clk->parent, rate * 7);
+	else
+		return clk->parent->set_rate(clk->parent, rate * 7 / 2);
+}
 
 DEFINE_CLOCK(ldb_di0_clk, 0, MXC_CCM_CCGR6, MXC_CCM_CCGRx_CG14_OFFSET,
-	NULL, NULL, &mx53_pll4_sw_clk, NULL);
+	clk_ldb_di0_get_rate, clk_ldb_di0_set_rate, &mx53_pll4_sw_clk, NULL);
 DEFINE_CLOCK(ldb_di1_clk, 1, MXC_CCM_CCGR6, MXC_CCM_CCGRx_CG15_OFFSET,
-	NULL, NULL, &mx53_pll4_sw_clk, NULL);
+	clk_ldb_di1_get_rate, clk_ldb_di1_set_rate, &mx53_pll4_sw_clk, NULL);
 
 static int clk_ipu_di0_set_parent(struct clk *clk, struct clk *parent)
 {
@@ -1814,12 +1858,54 @@ static int clk_ipu_di1_set_parent(struct clk *clk, struct clk *parent)
 
 static unsigned long clk_ipu_di0_get_rate(struct clk *clk)
 {
-	return clk->parent->get_rate(clk->parent);
+	unsigned long parent_rate = clk_get_rate(clk->parent);
+	int mux = (__raw_readl(MXC_CCM_CSCMR2) &
+		MXC_CCM_CSCMR2_DI0_CLK_SEL_MASK) >>
+		MXC_CCM_CSCMR2_DI0_CLK_SEL_OFFSET;
+	int div = 1;
+
+	switch (mux) {
+	case 0: /* pll3_sw */
+		div = ((__raw_readl(MXC_CCM_CDCDR) &
+				MXC_CCM_CDCDR_DI_CLK_PRED_MASK) >>
+			MXC_CCM_CDCDR_DI_CLK_PRED_OFFSET) + 1;
+		break;
+	case 3: /* pll4 */
+		div = ((__raw_readl(MXC_CCM_CDCDR) &
+				MXC_CCM_CDCDR_DI_PLL4_PODF_MASK) >>
+			MXC_CCM_CDCDR_DI_PLL4_PODF_OFFSET) + 1;
+		break;
+	}
+	unsigned long rate = parent_rate / div;
+	printk("%s: parent: %d parent_rate: %lu.%03luMHz div: %d rate: %lu.%03luMHz\n", __func__,
+		mux, parent_rate / 1000000, parent_rate / 1000 % 1000,
+		div, rate / 1000000, rate / 1000 % 1000);
+	return parent_rate / div;
 }
 
 static unsigned long clk_ipu_di1_get_rate(struct clk *clk)
 {
-	return clk->parent->get_rate(clk->parent);
+	unsigned long parent_rate = clk_get_rate(clk->parent);
+	int mux = (__raw_readl(MXC_CCM_CSCMR2) &
+		MXC_CCM_CSCMR2_DI1_CLK_SEL_MASK) >>
+		MXC_CCM_CSCMR2_DI1_CLK_SEL_OFFSET;
+	int div = 1;
+
+	switch (mux) {
+	case 0: /* pll3_sw */
+		div = ((__raw_readl(MXC_CCM_CDCDR) &
+				MXC_CCM_CDCDR_DI_CLK_PRED_MASK) >>
+			MXC_CCM_CDCDR_DI_CLK_PRED_OFFSET) + 1;
+		break;
+	case 3: /* tve */
+		div = 8;
+		break;
+	}
+	unsigned long rate = parent_rate / div;
+	printk("%s: parent: %d parent_rate: %lu.%03luMHz div: %d rate: %lu.%03luMHz\n", __func__,
+		mux, parent_rate / 1000000, parent_rate / 1000 % 1000,
+		div, rate / 1000000, rate / 1000 % 1000);
+	return parent_rate / div;
 }
 
 static unsigned long clk_ipu_di0_round_rate(struct clk *clk,
@@ -2147,10 +2233,11 @@ int __init mx53_clocks_init(unsigned long ckil, unsigned long osc,
 	clk_enable(&main_bus_clk);
 	clk_enable(&sdma_clk);
 
+	clk_set_parent(&ldb_di0_clk, &mx53_pll4_sw_clk);
+	clk_set_parent(&ldb_di1_clk, &mx53_pll4_sw_clk);
 	clk_set_parent(&ipu_di0_clk, &ldb_di0_clk);
-#if 1
-//	clk_enable(&ipu_clk);
-#endif
+	clk_set_parent(&ipu_di1_clk, &ldb_di1_clk);
+
 	clk_enable(&iim_clk);
 	imx_print_silicon_rev("i.MX53", mx53_revision());
 	clk_disable(&iim_clk);

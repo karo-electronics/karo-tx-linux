@@ -165,7 +165,7 @@ static int ipu_di_clk_calc_div(unsigned long inrate, unsigned long outrate)
 	if (inrate <= outrate)
 		return 1 * 16;
 
-	div = DIV_ROUND_UP((inrate * 16), outrate);
+	div = DIV_ROUND_UP(inrate, outrate / 16);
 
 	return (div > 0 && div < (1 << 12)) ? div : EINVAL;
 }
@@ -180,7 +180,7 @@ static unsigned long ipu_di_clk_round_rate(struct clk *clk, unsigned long rate)
 	if (div < 0)
 		return 0;
 
-	outrate = (inrate * 16) / div;
+	outrate = inrate / div * 16;
 
 	dev_dbg(ipu_dev, "%s: inrate: %ld div: 0x%08x outrate: %ld wanted: %ld\n",
 			__func__, inrate, div, outrate, rate);
@@ -194,15 +194,27 @@ static int ipu_di_clk_set_rate(struct clk *clk, unsigned long rate)
 	unsigned long inrate = clk_get_rate(clk->parent);
 	int div;
 
-	div = ipu_di_clk_calc_div(inrate, rate);
-	if (div < 0)
-		return div;
+	if (clk->parent == di->clk) {
+		printk(KERN_DEBUG "Trying to set clk %p rate to %lu.%03luMHz\n",
+			clk->parent, rate / 1000000, rate / 1000 % 1000);
+		div = clk->parent->set_rate(clk->parent, rate);
+		if (div < 0)
+			return div;
+		div = 1 << 4;
+	} else if (clk->parent == di->ipu_clk) {
+		div = ipu_di_clk_calc_div(inrate, rate);
+		if (div < 0)
+			return div;
+	} else {
+		BUG();
+	}
 
 	ipu_get(di->ipu);
 	ipu_di_write(di, div, DI_BS_CLKGEN0);
 	ipu_put(di->ipu);
 
-	dev_info(ipu_dev, "%s: inrate: %ld desired: %ld div: 0x%08x\n", __func__, inrate, rate, div);
+	dev_info(ipu_dev, "%s: inrate: %ld desired: %ld actual: %ld div: 0x%08x\n",
+		__func__, inrate, rate, clk_get_rate(clk), div);
 
 	return 0;
 }
@@ -422,21 +434,20 @@ int ipu_di_init_sync_panel(struct ipu_di *di, struct ipu_di_signal_cfg *sig)
 	div = div / 16;		/* Now divider is integer portion */
 	di_gen = 0;
 
-	/* Setup pixel clock timing */
-	/* Down time is half of period */
-	ipu_di_write(di, div << 16, DI_BS_CLKGEN1);
-
 	if (!sig->serial_di) {
 		ipu_di_data_wave_config(di, SYNC_WAVE, div - 1, div - 1);
 		ipu_di_data_pin_config(di, SYNC_WAVE, DI_PIN15, 3, 0, div * 2);
 	} else {
-		ipu_di_write(di, 0x10, DI_BS_CLKGEN0);
 		ipu_di_write(di, 0x300, DI_DW_GEN(SYNC_WAVE));
 		ipu_di_write(di, (div * 2 << 16) | 0, DI_DW_SET(SYNC_WAVE, 3));
 
 		di_gen = (di_gen & ~DI_GEN_DI_CLK_STOP_MODE_MASK) |
 			DI_GEN_DI_CLK_STOP_MODE(6);
 	}
+
+	/* Setup pixel clock timing */
+	/* Down time is half of period */
+	ipu_di_write(di, div << 16, DI_BS_CLKGEN1);
 
 	if (sig->ext_clk || sig->serial_di)
 		di_gen |= DI_GEN_DI_CLK_EXT | DI_GEN_DI_VSYNC_EXT;
@@ -646,7 +657,13 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 	di->ipu_di_clk.get_rate = ipu_di_clk_get_rate;
 	di->ipu_di_clk.set_rate = ipu_di_clk_set_rate;
 	di->ipu_di_clk.round_rate = ipu_di_clk_round_rate;
-	di->ipu_di_clk.parent = di->ipu_clk;
+	if (fb_get_options(id ? "LVDS-2" : "LVDS-1", NULL) == 0) {
+		/* di0/di1 clk needs to be display clock parent for LVDS */
+		di->ipu_di_clk.parent = di->clk;
+	} else {
+		/* IPU_HSP is display clock parent for parallel interface */
+		di->ipu_di_clk.parent = di->ipu_clk;
+	}
 
 	di->clk_lookup = clkdev_alloc(&di->ipu_di_clk, con_id, "imx-drm.0");
 	clkdev_add(di->clk_lookup);
