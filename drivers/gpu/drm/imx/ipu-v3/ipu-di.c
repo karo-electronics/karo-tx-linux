@@ -625,6 +625,7 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 {
 	const char *con_id = id ? "di1" : "di0";
 	struct ipu_di *di = &dis[id];
+	char *fb_options;
 
 	if (id > 1)
 		return -EINVAL;
@@ -657,12 +658,12 @@ int ipu_di_init(struct ipu_soc *ipu, struct device *dev, int id,
 	di->ipu_di_clk.get_rate = ipu_di_clk_get_rate;
 	di->ipu_di_clk.set_rate = ipu_di_clk_set_rate;
 	di->ipu_di_clk.round_rate = ipu_di_clk_round_rate;
-	if (fb_get_options(id ? "LVDS-2" : "LVDS-1", NULL) == 0) {
-		/* di0/di1 clk needs to be display clock parent for LVDS */
-		di->ipu_di_clk.parent = di->clk;
-	} else {
+	if (fb_get_options(id ? "LVDS-2" : "LVDS-1", &fb_options) || !fb_options) {
 		/* IPU_HSP is display clock parent for parallel interface */
 		di->ipu_di_clk.parent = di->ipu_clk;
+	} else {
+		/* di0/di1 clk needs to be display clock parent for LVDS */
+		di->ipu_di_clk.parent = di->clk;
 	}
 
 	di->clk_lookup = clkdev_alloc(&di->ipu_di_clk, con_id, "imx-drm.0");
