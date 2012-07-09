@@ -63,54 +63,7 @@
 
 /* BBB PHY IDs */
 #define BBB_PHY_ID		0x7c0f1
-#define BBB_PHY_MASK		0xfffffffe
-
-/* TLK110 PHY register offsets */
-#define TLK110_COARSEGAIN_REG	0x00A3
-#define TLK110_LPFHPF_REG	0x00AC
-#define TLK110_SPAREANALOG_REG	0x00B9
-#define TLK110_VRCR_REG		0x00D0
-#define TLK110_SETFFE_REG	0x0107
-#define TLK110_FTSP_REG		0x0154
-#define TLK110_ALFATPIDL_REG	0x002A
-#define TLK110_PSCOEF21_REG	0x0096
-#define TLK110_PSCOEF3_REG	0x0097
-#define TLK110_ALFAFACTOR1_REG	0x002C
-#define TLK110_ALFAFACTOR2_REG	0x0023
-#define TLK110_CFGPS_REG	0x0095
-#define TLK110_FTSPTXGAIN_REG	0x0150
-#define TLK110_SWSCR3_REG	0x000B
-#define TLK110_SCFALLBACK_REG	0x0040
-#define TLK110_PHYRCR_REG	0x001F
-
-/* TLK110 register writes values */
-#define TLK110_COARSEGAIN_VAL	0x0000
-#define TLK110_LPFHPF_VAL	0x8000
-#define TLK110_SPANALOG_VAL	0x0000
-#define TLK110_VRCR_VAL		0x0008
-#define TLK110_SETFFE_VAL	0x0605
-#define TLK110_FTSP_VAL		0x0255
-#define TLK110_ALFATPIDL_VAL	0x7998
-#define TLK110_PSCOEF21_VAL	0x3A20
-#define TLK110_PSCOEF3_VAL	0x003F
-#define TLK110_ALFACTOR1_VAL	0xFF80
-#define TLK110_ALFACTOR2_VAL	0x021C
-#define TLK110_CFGPS_VAL	0x0000
-#define TLK110_FTSPTXGAIN_VAL	0x6A88
-#define TLK110_SWSCR3_VAL	0x0000
-#define TLK110_SCFALLBACK_VAL	0xC11D
-#define TLK110_PHYRCR_VAL	0x4000
-
-#ifdef CONFIG_TLK110_WORKAROUND
-#define am335x_tlk110_phy_init()\
-	do {	\
-		phy_register_fixup_for_uid(TLK110_PHY_ID,\
-					TLK110_PHY_MASK,\
-					am335x_tlk110_phy_fixup);\
-	} while (0);
-#else
-#define am335x_tlk110_phy_init() do { } while (0);
-#endif
+#define BBB_PHY_MASK		0xfffffffd
 
 /* Convert GPIO signal to GPIO pin number */
 #define GPIO_TO_PIN(bank, gpio) (32 * (bank) + (gpio))
@@ -201,7 +154,7 @@ static struct omap2_hsmmc_info am335x_mmc[] __initdata = {
 	{
 		.mmc            = 1,
 		.caps           = MMC_CAP_4_BIT_DATA,
-		.gpio_cd        = GPIO_TO_PIN(0, 6),
+		.gpio_cd        = GPIO_TO_PIN(3, 24),
 		.gpio_wp        = GPIO_TO_PIN(3, 18),
 		.ocr_mask       = MMC_VDD_32_33 | MMC_VDD_33_34, /* 3V3 */
 	},
@@ -304,7 +257,7 @@ static bool daughter_brd_detected;
 #define GP_EVM_REV_IS_1_1A		0x2
 #define GP_EVM_REV_IS_UNKNOWN		0xFF
 static unsigned int gp_evm_revision = GP_EVM_REV_IS_UNKNOWN;
-unsigned int gigabit_enable = 1;
+unsigned int gigabit_enable = 0;
 
 #define EEPROM_MAC_ADDRESS_OFFSET	60 /* 4+8+4+12+32 */
 #define EEPROM_NO_OF_MAC_ADDR		3
@@ -501,7 +454,7 @@ static struct pinmux_config rmii1_pin_mux[] = {
 	{"mii1_txd0.mii1_txd0", OMAP_MUX_MODE1 | AM33XX_PIN_OUTPUT},
 	{"mii1_rxd1.mii1_rxd1", OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLDOWN},
 	{"mii1_rxd0.mii1_rxd0", OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLDOWN},
-	{"rmii1_refclk.rmii1_refclk", OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLDOWN},
+	{"rmii1_refclk.rmii1_refclk", OMAP_MUX_MODE0 | AM33XX_PIN_INPUT},
 	{"mdio_data.mdio_data", OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
 	{"mdio_clk.mdio_clk", OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT_PULLUP},
 	{NULL, 0},
@@ -520,7 +473,7 @@ static struct pinmux_config mcasp1_pin_mux[] = {
 	{"mii1_crs.mcasp1_aclkx", OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLDOWN},
 	{"mii1_rxerr.mcasp1_fsx", OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLDOWN},
 	{"mii1_col.mcasp1_axr2", OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLDOWN},
-	{"rmii1_refclk.mcasp1_axr3", OMAP_MUX_MODE4 |
+	{"rmii1_refclk.mcasp1_axr3", OMAP_MUX_MODE4 | 
 						AM33XX_PIN_INPUT_PULLDOWN},
 	{NULL, 0},
 };
@@ -528,14 +481,13 @@ static struct pinmux_config mcasp1_pin_mux[] = {
 
 /* Module pin mux for mmc0 */
 static struct pinmux_config mmc0_pin_mux[] = {
-	{"mmc0_dat3.mmc0_dat3",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mmc0_dat2.mmc0_dat2",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mmc0_dat1.mmc0_dat1",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mmc0_dat0.mmc0_dat0",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mmc0_clk.mmc0_clk",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mmc0_cmd.mmc0_cmd",	OMAP_MUX_MODE0 | AM33XX_PIN_INPUT_PULLUP},
-	{"mcasp0_aclkr.mmc0_sdwp", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
-	{"spi0_cs1.mmc0_sdcd",  OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
+	{"mii1_rxd2.mmc1_dat3",	OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLUP},
+	{"mii1_rxd3.mmc1_dat2",	OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLUP},
+	{"mii1_rxclk.mmc1_dat1",	OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLUP},
+	{"mii1_txclk.mmc1_dat0",	OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLUP},
+	{"gpmc_csn1.mmc1_clk",	OMAP_MUX_MODE2 | AM33XX_PIN_INPUT_PULLUP},
+	{"gpmc_csn2.mmc1_cmd",	OMAP_MUX_MODE2 | AM33XX_PIN_INPUT_PULLUP},
+	{"mcasp0_fsx.mmc1_sdcd", OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLUP},
 	{NULL, 0},
 };
 
@@ -552,18 +504,13 @@ static struct pinmux_config mmc0_no_cd_pin_mux[] = {
 
 /* Module pin mux for mmc1 */
 static struct pinmux_config mmc1_pin_mux[] = {
-	{"gpmc_ad7.mmc1_dat7",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_ad6.mmc1_dat6",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_ad5.mmc1_dat5",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_ad4.mmc1_dat4",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_ad3.mmc1_dat3",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_ad2.mmc1_dat2",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_ad1.mmc1_dat1",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_ad0.mmc1_dat0",	OMAP_MUX_MODE1 | AM33XX_PIN_INPUT_PULLUP},
+	{"mii1_rxd2.mmc1_dat3",	OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLUP},
+	{"mii1_rxd3.mmc1_dat2",	OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLUP},
+	{"mii1_rxclk.mmc1_dat1",	OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLUP},
+	{"mii1_txclk.mmc1_dat0",	OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLUP},
 	{"gpmc_csn1.mmc1_clk",	OMAP_MUX_MODE2 | AM33XX_PIN_INPUT_PULLUP},
 	{"gpmc_csn2.mmc1_cmd",	OMAP_MUX_MODE2 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_csn0.mmc1_sdwp",	OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
-	{"gpmc_advn_ale.mmc1_sdcd", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT_PULLUP},
+	{"mcasp0_fsx.mmc1_sdcd", OMAP_MUX_MODE4 | AM33XX_PIN_INPUT_PULLUP},
 	{NULL, 0},
 };
 
@@ -597,122 +544,6 @@ static void setup_pin_mux(struct pinmux_config *pin_mux)
 	for (i = 0; pin_mux->string_name != NULL; pin_mux++)
 		omap_mux_init_signal(pin_mux->string_name, pin_mux->val);
 
-}
-
-/* Matrix GPIO Keypad Support for profile-0 only: TODO */
-
-/* pinmux for keypad device */
-static struct pinmux_config matrix_keypad_pin_mux[] = {
-	{"gpmc_a5.gpio1_21",  OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
-	{"gpmc_a8.gpio1_22",  OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
-	{"gpmc_a9.gpio1_25",  OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
-	{"gpmc_a10.gpio1_26", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
-	{"gpmc_a11.gpio1_27", OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
-	{NULL, 0},
-};
-
-/* Keys mapping */
-static const uint32_t am335x_evm_matrix_keys[] = {
-	KEY(0, 0, KEY_MENU),
-	KEY(1, 0, KEY_BACK),
-	KEY(2, 0, KEY_LEFT),
-
-	KEY(0, 1, KEY_RIGHT),
-	KEY(1, 1, KEY_ENTER),
-	KEY(2, 1, KEY_DOWN),
-};
-
-const struct matrix_keymap_data am335x_evm_keymap_data = {
-	.keymap      = am335x_evm_matrix_keys,
-	.keymap_size = ARRAY_SIZE(am335x_evm_matrix_keys),
-};
-
-static const unsigned int am335x_evm_keypad_row_gpios[] = {
-	GPIO_TO_PIN(1, 25), GPIO_TO_PIN(1, 26), GPIO_TO_PIN(1, 27)
-};
-
-static const unsigned int am335x_evm_keypad_col_gpios[] = {
-	GPIO_TO_PIN(1, 21), GPIO_TO_PIN(1, 22)
-};
-
-static struct matrix_keypad_platform_data am335x_evm_keypad_platform_data = {
-	.keymap_data       = &am335x_evm_keymap_data,
-	.row_gpios         = am335x_evm_keypad_row_gpios,
-	.num_row_gpios     = ARRAY_SIZE(am335x_evm_keypad_row_gpios),
-	.col_gpios         = am335x_evm_keypad_col_gpios,
-	.num_col_gpios     = ARRAY_SIZE(am335x_evm_keypad_col_gpios),
-	.active_low        = false,
-	.debounce_ms       = 5,
-	.col_scan_delay_us = 2,
-};
-
-static struct platform_device am335x_evm_keyboard = {
-	.name  = "matrix-keypad",
-	.id    = -1,
-	.dev   = {
-		.platform_data = &am335x_evm_keypad_platform_data,
-	},
-};
-
-static void matrix_keypad_init(int evm_id, int profile)
-{
-	int err;
-
-	setup_pin_mux(matrix_keypad_pin_mux);
-	err = platform_device_register(&am335x_evm_keyboard);
-	if (err) {
-		pr_err("failed to register matrix keypad (2x3) device\n");
-	}
-}
-
-/* pinmux for keypad device */
-static struct pinmux_config volume_keys_pin_mux[] = {
-	{"spi0_sclk.gpio0_2",  OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
-	{"spi0_d0.gpio0_3",    OMAP_MUX_MODE7 | AM33XX_PIN_INPUT},
-	{NULL, 0},
-};
-
-/* Configure GPIOs for Volume Keys */
-static struct gpio_keys_button am335x_evm_volume_gpio_buttons[] = {
-	{
-		.code                   = KEY_VOLUMEUP,
-		.gpio                   = GPIO_TO_PIN(0, 2),
-		.active_low             = true,
-		.desc                   = "volume-up",
-		.type                   = EV_KEY,
-		.wakeup                 = 1,
-	},
-	{
-		.code                   = KEY_VOLUMEDOWN,
-		.gpio                   = GPIO_TO_PIN(0, 3),
-		.active_low             = true,
-		.desc                   = "volume-down",
-		.type                   = EV_KEY,
-		.wakeup                 = 1,
-	},
-};
-
-static struct gpio_keys_platform_data am335x_evm_volume_gpio_key_info = {
-	.buttons        = am335x_evm_volume_gpio_buttons,
-	.nbuttons       = ARRAY_SIZE(am335x_evm_volume_gpio_buttons),
-};
-
-static struct platform_device am335x_evm_volume_keys = {
-	.name   = "gpio-keys",
-	.id     = -1,
-	.dev    = {
-		.platform_data  = &am335x_evm_volume_gpio_key_info,
-	},
-};
-
-static void volume_keys_init(int evm_id, int profile)
-{
-	int err;
-
-	setup_pin_mux(volume_keys_pin_mux);
-	err = platform_device_register(&am335x_evm_volume_keys);
-	if (err)
-		pr_err("failed to register matrix keypad (2x3) device\n");
 }
 
 /*
@@ -756,11 +587,10 @@ static void _configure_device(int evm_id, struct evm_dev_cfg *dev_cfg,
 	}
 }
 
-#define AM335X_LCD_BL_PIN	GPIO_TO_PIN(0, 7)
+#define AM335X_LCD_BL_PIN	GPIO_TO_PIN(3, 14)
 
 /* pinmux for usb0 drvvbus */
 static struct pinmux_config usb0_pin_mux[] = {
-	{"usb0_drvvbus.usb0_drvvbus",    OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT},
 	{NULL, 0},
 };
 
@@ -780,7 +610,7 @@ static struct pinmux_config profibus_pin_mux[] = {
 
 /* Module pin mux for eCAP0 */
 static struct pinmux_config ecap0_pin_mux[] = {
-	{"ecap0_in_pwm0_out.gpio0_7", AM33XX_PIN_OUTPUT},
+	{"mcasp0_aclkx.gpio3_14", OMAP_MUX_MODE7 | AM33XX_PIN_OUTPUT},
 	{NULL, 0},
 };
 
@@ -843,6 +673,7 @@ static int __init ecap0_init(void)
 			pr_warn("Failed to request gpio for LCD backlight\n");
 
 		gpio_direction_output(AM335X_LCD_BL_PIN, 1);
+		gpio_set_value(AM335X_LCD_BL_PIN, 0);
 	}
 	return status;
 }
@@ -1117,12 +948,14 @@ static void mmc1_init(int evm_id, int profile)
 {
 	setup_pin_mux(mmc1_pin_mux);
 
+        pr_info("mmc1_init\n");
+
 	am335x_mmc[1].mmc = 2;
 	am335x_mmc[1].caps = MMC_CAP_4_BIT_DATA;
-	am335x_mmc[1].gpio_cd = GPIO_TO_PIN(2, 2);
-	am335x_mmc[1].gpio_wp = GPIO_TO_PIN(1, 29);
-	am335x_mmc[1].ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34; /* 3V3 */
-
+	am335x_mmc[1].gpio_cd = GPIO_TO_PIN(3, 15);
+	am335x_mmc[1].gpio_wp = -EINVAL;
+	am335x_mmc[1].ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34; /* 3V3 */ 
+	
 	/* mmc will be initialized when mmc0_init is called */
 	return;
 }
@@ -1288,165 +1121,22 @@ static int beaglebone_phy_fixup(struct phy_device *phydev)
 	return 0;
 }
 
-#ifdef CONFIG_TLK110_WORKAROUND
-static int am335x_tlk110_phy_fixup(struct phy_device *phydev)
-{
-	unsigned int val;
-
-	/* This is done as a workaround to support TLK110 rev1.0 phy */
-	val = phy_read(phydev, TLK110_COARSEGAIN_REG);
-	phy_write(phydev, TLK110_COARSEGAIN_REG, (val | TLK110_COARSEGAIN_VAL));
-
-	val = phy_read(phydev, TLK110_LPFHPF_REG);
-	phy_write(phydev, TLK110_LPFHPF_REG, (val | TLK110_LPFHPF_VAL));
-
-	val = phy_read(phydev, TLK110_SPAREANALOG_REG);
-	phy_write(phydev, TLK110_SPAREANALOG_REG, (val | TLK110_SPANALOG_VAL));
-
-	val = phy_read(phydev, TLK110_VRCR_REG);
-	phy_write(phydev, TLK110_VRCR_REG, (val | TLK110_VRCR_VAL));
-
-	val = phy_read(phydev, TLK110_SETFFE_REG);
-	phy_write(phydev, TLK110_SETFFE_REG, (val | TLK110_SETFFE_VAL));
-
-	val = phy_read(phydev, TLK110_FTSP_REG);
-	phy_write(phydev, TLK110_FTSP_REG, (val | TLK110_FTSP_VAL));
-
-	val = phy_read(phydev, TLK110_ALFATPIDL_REG);
-	phy_write(phydev, TLK110_ALFATPIDL_REG, (val | TLK110_ALFATPIDL_VAL));
-
-	val = phy_read(phydev, TLK110_PSCOEF21_REG);
-	phy_write(phydev, TLK110_PSCOEF21_REG, (val | TLK110_PSCOEF21_VAL));
-
-	val = phy_read(phydev, TLK110_PSCOEF3_REG);
-	phy_write(phydev, TLK110_PSCOEF3_REG, (val | TLK110_PSCOEF3_VAL));
-
-	val = phy_read(phydev, TLK110_ALFAFACTOR1_REG);
-	phy_write(phydev, TLK110_ALFAFACTOR1_REG, (val | TLK110_ALFACTOR1_VAL));
-
-	val = phy_read(phydev, TLK110_ALFAFACTOR2_REG);
-	phy_write(phydev, TLK110_ALFAFACTOR2_REG, (val | TLK110_ALFACTOR2_VAL));
-
-	val = phy_read(phydev, TLK110_CFGPS_REG);
-	phy_write(phydev, TLK110_CFGPS_REG, (val | TLK110_CFGPS_VAL));
-
-	val = phy_read(phydev, TLK110_FTSPTXGAIN_REG);
-	phy_write(phydev, TLK110_FTSPTXGAIN_REG, (val | TLK110_FTSPTXGAIN_VAL));
-
-	val = phy_read(phydev, TLK110_SWSCR3_REG);
-	phy_write(phydev, TLK110_SWSCR3_REG, (val | TLK110_SWSCR3_VAL));
-
-	val = phy_read(phydev, TLK110_SCFALLBACK_REG);
-	phy_write(phydev, TLK110_SCFALLBACK_REG, (val | TLK110_SCFALLBACK_VAL));
-
-	val = phy_read(phydev, TLK110_PHYRCR_REG);
-	phy_write(phydev, TLK110_PHYRCR_REG, (val | TLK110_PHYRCR_VAL));
-
-	return 0;
-}
-#endif
-
-static void profibus_init(int evm_id, int profile)
-{
-	setup_pin_mux(profibus_pin_mux);
-	return;
-}
-
-/* Low-Cost EVM */
-static struct evm_dev_cfg low_cost_evm_dev_cfg[] = {
-	{rgmii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{evm_nand_init, DEV_ON_BASEBOARD, PROFILE_NONE},
-	{NULL, 0, 0},
-};
 
 /* General Purpose EVM */
 static struct evm_dev_cfg gen_purp_evm_dev_cfg[] = {
-	{enable_ecap0,	DEV_ON_DGHTR_BRD, (PROFILE_0 | PROFILE_1 |
-						PROFILE_2 | PROFILE_7) },
-	{lcdc_init,	DEV_ON_DGHTR_BRD, (PROFILE_0 | PROFILE_1 |
-						PROFILE_2 | PROFILE_7) },
-	{tsc_init,	DEV_ON_DGHTR_BRD, (PROFILE_0 | PROFILE_1 |
-						PROFILE_2 | PROFILE_7) },
-	{rgmii1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
-	{rgmii2_init,	DEV_ON_DGHTR_BRD, (PROFILE_1 | PROFILE_2 |
-						PROFILE_4 | PROFILE_6) },
+	{enable_ecap0,	DEV_ON_BASEBOARD, PROFILE_ALL}, 
+	{lcdc_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
+	{tsc_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
+	{rmii1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
-	{evm_nand_init, DEV_ON_DGHTR_BRD,
-		(PROFILE_ALL & ~PROFILE_2 & ~PROFILE_3)},
-	{i2c1_init,	DEV_ON_DGHTR_BRD, (PROFILE_ALL & ~PROFILE_2)},
-	{mcasp1_init,	DEV_ON_DGHTR_BRD, (PROFILE_0 | PROFILE_3 | PROFILE_7) },
-	{mmc1_init,	DEV_ON_DGHTR_BRD, PROFILE_2},
-	{mmc2_wl12xx_init,	DEV_ON_BASEBOARD, (PROFILE_0 | PROFILE_3 |
-								PROFILE_5)},
-	{mmc0_init,	DEV_ON_BASEBOARD, (PROFILE_ALL & ~PROFILE_5)},
-	{mmc0_no_cd_init,	DEV_ON_BASEBOARD, PROFILE_5},
-	{spi0_init,	DEV_ON_DGHTR_BRD, PROFILE_2},
-	{uart1_wl12xx_init,	DEV_ON_BASEBOARD, (PROFILE_0 | PROFILE_3 |
-								PROFILE_5)},
-	{wl12xx_init,	DEV_ON_BASEBOARD, (PROFILE_0 | PROFILE_3 | PROFILE_5)},
-	{d_can_init,	DEV_ON_DGHTR_BRD, PROFILE_1},
-	{matrix_keypad_init, DEV_ON_DGHTR_BRD, PROFILE_0},
-	{volume_keys_init,  DEV_ON_DGHTR_BRD, PROFILE_0},
+	{evm_nand_init, DEV_ON_BASEBOARD, PROFILE_ALL},
+	{mmc1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
+	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
+	{spi0_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
+	{d_can_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{NULL, 0, 0},
 };
-
-/* Industrial Auto Motor Control EVM */
-static struct evm_dev_cfg ind_auto_mtrl_evm_dev_cfg[] = {
-	{mii1_init,	DEV_ON_DGHTR_BRD, PROFILE_ALL},
-	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
-	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
-	{profibus_init, DEV_ON_DGHTR_BRD, PROFILE_ALL},
-	{evm_nand_init, DEV_ON_DGHTR_BRD, PROFILE_ALL},
-	{spi1_init,	DEV_ON_DGHTR_BRD, PROFILE_ALL},
-	{uart3_init,	DEV_ON_DGHTR_BRD, PROFILE_ALL},
-	{i2c1_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
-	{mmc0_no_cd_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
-	{NULL, 0, 0},
-};
-
-/* IP-Phone EVM */
-static struct evm_dev_cfg ip_phn_evm_dev_cfg[] = {
-	{enable_ecap0,	DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{lcdc_init,	DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{tsc_init,	DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{rgmii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{rgmii2_init,	DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{evm_nand_init, DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{i2c1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{mcasp1_init,	DEV_ON_DGHTR_BRD, PROFILE_NONE},
-	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{NULL, 0, 0},
-};
-
-/* Beaglebone < Rev A3 */
-static struct evm_dev_cfg beaglebone_old_dev_cfg[] = {
-	{rmii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{NULL, 0, 0},
-};
-
-/* Beaglebone Rev A3 and after */
-static struct evm_dev_cfg beaglebone_dev_cfg[] = {
-	{mii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{usb0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{usb1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
-	{NULL, 0, 0},
-};
-
-static void setup_low_cost_evm(void)
-{
-	pr_info("The board is a AM335x Low Cost EVM.\n");
-
-	_configure_device(LOW_COST_EVM, low_cost_evm_dev_cfg, PROFILE_NONE);
-}
 
 static void setup_general_purpose_evm(void)
 {
@@ -1462,70 +1152,7 @@ static void setup_general_purpose_evm(void)
 		gp_evm_revision = GP_EVM_REV_IS_1_1A;
 	}
 
-	if (gp_evm_revision == GP_EVM_REV_IS_1_0)
-		gigabit_enable = 0;
-	else if (gp_evm_revision == GP_EVM_REV_IS_1_1A)
-		gigabit_enable = 1;
-
 	_configure_device(GEN_PURP_EVM, gen_purp_evm_dev_cfg, (1L << prof_sel));
-}
-
-static void setup_ind_auto_motor_ctrl_evm(void)
-{
-	u32 prof_sel = am335x_get_profile_selection();
-
-	pr_info("The board is an industrial automation EVM in profile %d\n",
-		prof_sel);
-
-	/* Only Profile 0 is supported */
-	if ((1L << prof_sel) != PROFILE_0) {
-		pr_err("AM335X: Only Profile 0 is supported\n");
-		pr_err("Assuming profile 0 & continuing\n");
-		prof_sel = PROFILE_0;
-	}
-
-	_configure_device(IND_AUT_MTR_EVM, ind_auto_mtrl_evm_dev_cfg,
-		PROFILE_0);
-
-	/* Fillup global evmid */
-	am33xx_evmid_fillup(IND_AUT_MTR_EVM);
-
-	/* Initialize TLK110 PHY registers for phy version 1.0 */
-	am335x_tlk110_phy_init();
-
-
-}
-
-static void setup_ip_phone_evm(void)
-{
-	pr_info("The board is an IP phone EVM\n");
-
-	_configure_device(IP_PHN_EVM, ip_phn_evm_dev_cfg, PROFILE_NONE);
-}
-
-/* BeagleBone < Rev A3 */
-static void setup_beaglebone_old(void)
-{
-	pr_info("The board is a AM335x Beaglebone < Rev A3.\n");
-
-	/* Beagle Bone has Micro-SD slot which doesn't have Write Protect pin */
-	am335x_mmc[0].gpio_wp = -EINVAL;
-
-	_configure_device(LOW_COST_EVM, beaglebone_old_dev_cfg, PROFILE_NONE);
-
-	phy_register_fixup_for_uid(BBB_PHY_ID, BBB_PHY_MASK,
-					beaglebone_phy_fixup);
-}
-
-/* BeagleBone after Rev A3 */
-static void setup_beaglebone(void)
-{
-	pr_info("The board is a AM335x Beaglebone.\n");
-
-	/* Beagle Bone has Micro-SD slot which doesn't have Write Protect pin */
-	am335x_mmc[0].gpio_wp = -EINVAL;
-
-	_configure_device(LOW_COST_EVM, beaglebone_dev_cfg, PROFILE_NONE);
 }
 
 
@@ -1560,8 +1187,7 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 		EEPROM_MAC_ADDRESS_OFFSET, sizeof(am335x_mac_addr));
 
 	if (ret != sizeof(am335x_mac_addr)) {
-		pr_warning("AM335X: EVM Config read fail: %d\n", ret);
-		return;
+		pr_warning("AM335X: MV Config read fail: %d\n", ret);
 	}
 
 	/* Fillup global mac id */
@@ -1569,52 +1195,8 @@ static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 				&am335x_mac_addr[1][0]);
 
 	/* get board specific data */
-	ret = mem_acc->read(mem_acc, (char *)&config, 0, sizeof(config));
-	if (ret != sizeof(config)) {
-		pr_warning("AM335X EVM config read fail, read %d bytes\n", ret);
-		return;
-	}
 
-	if (config.header != AM335X_EEPROM_HEADER) {
-		pr_warning("AM335X: wrong header 0x%x, expected 0x%x\n",
-			config.header, AM335X_EEPROM_HEADER);
-		goto out;
-	}
-
-	if (strncmp("A335", config.name, 4)) {
-		pr_err("Board %s doesn't look like an AM335x board\n",
-			config.name);
-		goto out;
-	}
-
-	snprintf(tmp, sizeof(config.name) + 1, "%s", config.name);
-	pr_info("Board name: %s\n", tmp);
-	snprintf(tmp, sizeof(config.version) + 1, "%s", config.version);
-	pr_info("Board version: %s\n", tmp);
-
-	if (!strncmp("A335BONE", config.name, 8)) {
-		daughter_brd_detected = false;
-		if(!strncmp("00A1", config.version, 4) ||
-		   !strncmp("00A2", config.version, 4))
-			setup_beaglebone_old();
-		else
-			setup_beaglebone();
-	} else {
-		/* only 6 characters of options string used for now */
-		snprintf(tmp, 7, "%s", config.opt);
-		pr_info("SKU: %s\n", tmp);
-
-		if (!strncmp("SKU#00", config.opt, 6))
-			setup_low_cost_evm();
-		else if (!strncmp("SKU#01", config.opt, 6))
-			setup_general_purpose_evm();
-		else if (!strncmp("SKU#02", config.opt, 6))
-			setup_ind_auto_motor_ctrl_evm();
-		else if (!strncmp("SKU#03", config.opt, 6))
-			setup_ip_phone_evm();
-		else
-			goto out;
-	}
+	setup_general_purpose_evm();
 	/* Initialize cpsw after board detection is completed as board
 	 * information is required for configuring phy address and hence
 	 * should be call only after board detection
@@ -1631,7 +1213,6 @@ out:
 	pr_err("Could not detect any board, falling back to: "
 		"Beaglebone (< Rev A3) with no daughter card connected\n");
 	daughter_brd_detected = false;
-	setup_beaglebone_old();
 
 	/* Initialize cpsw after board detection is completed as board
 	 * information is required for configuring phy address and hence
