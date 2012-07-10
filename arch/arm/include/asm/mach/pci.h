@@ -11,6 +11,7 @@
 #ifndef __ASM_MACH_PCI_H
 #define __ASM_MACH_PCI_H
 
+#include <linux/ioport.h>
 #include <asm/mach/map.h>
 
 struct pci_sys_data;
@@ -44,6 +45,8 @@ struct pci_sys_data {
 	unsigned long	io_offset;	/* bus->cpu IO mapping offset		*/
 	struct pci_bus	*bus;		/* PCI bus				*/
 	struct list_head resources;	/* root bus resources (apertures)       */
+	struct resource io_res;
+	char		io_res_name[12];
 					/* Bridge swizzling			*/
 	u8		(*swizzle)(struct pci_dev *, u8 *);
 					/* IRQ mapping				*/
