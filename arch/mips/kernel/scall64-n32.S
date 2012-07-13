@@ -17,9 +17,6 @@
 #include <asm/thread_info.h>
 #include <asm/unistd.h>
 
-/* This duplicates the definition from <linux/sched.h> */
-#define PT_TRACESYS	0x00000002	/* tracing system calls */
-
 /* This duplicates the definition from <asm/signal.h> */
 #define SIGILL		4		/* Illegal instruction (ANSI).  */
 
