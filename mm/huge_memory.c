@@ -725,6 +725,38 @@ out:
 	return handle_pte_fault(mm, vma, address, pte, pmd, flags);
 }
 
+bool pmd_numa(struct vm_area_struct *vma, pmd_t pmd)
+{
+	/*
+	 * See pte_numa().
+	 */
+	if (pmd_same(pmd, pmd_modify(pmd, vma->vm_page_prot)))
+		return false;
+
+	return pmd_same(pmd, pmd_modify(pmd, vma_prot_none(vma)));
+}
+
+void do_huge_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
+			   unsigned long address, pmd_t *pmd,
+			   unsigned int flags, pmd_t entry)
+{
+	unsigned long haddr = address & HPAGE_PMD_MASK;
+
+	spin_lock(&mm->page_table_lock);
+	if (unlikely(!pmd_same(*pmd, entry)))
+		goto out_unlock;
+
+	/* do fancy stuff */
+
+	/* change back to regular protection */
+	entry = pmd_modify(entry, vma->vm_page_prot);
+	if (pmdp_set_access_flags(vma, haddr, pmd, entry, 1))
+		update_mmu_cache_pmd(vma, address, entry);
+
+out_unlock:
+	spin_unlock(&mm->page_table_lock);
+}
+
 int copy_huge_pmd(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		  pmd_t *dst_pmd, pmd_t *src_pmd, unsigned long addr,
 		  struct vm_area_struct *vma)
