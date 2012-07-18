@@ -2216,6 +2216,7 @@ static void sp_free(struct sp_node *n)
  * @page   - page to be checked
  * @vma    - vm area where page mapped
  * @addr   - virtual address where page mapped
+ * @multi  - use multi-stage node binding
  *
  * Lookup current policy node id for vma,addr and "compare to" page's
  * node id.
@@ -2278,6 +2279,37 @@ int mpol_misplaced(struct page *page, struct vm_area_struct *vma, unsigned long 
 	default:
 		BUG();
 	}
+
+	/*
+	 * Multi-stage node selection is used in conjunction with a periodic
+	 * migration fault to build a temporal task<->page relation. By
+	 * using a two-stage filter we remove short/unlikely relations.
+	 *
+	 * Using P(p) ~ n_p / n_t as per frequentist probability, we can
+	 * equate a task's usage of a particular page (n_p) per total usage
+	 * of this page (n_t) (in a given time-span) to a probability.
+	 *
+	 * Our periodic faults will then sample this probability and getting
+	 * the same result twice in a row, given these samples are fully
+	 * independent, is then given by P(n)^2, provided our sample period
+	 * is sufficiently short compared to the usage pattern.
+	 *
+	 * This quadric squishes small probabilities, making it less likely
+	 * we act on an unlikely task<->page relation.
+	 */
+	if (pol->flags & MPOL_F_HOME) {
+		int last_nid;
+
+		/*
+		 * Migrate towards the current node, depends on
+		 * task_numa_placement() details.
+		 */
+		polnid = numa_node_id();
+		last_nid = page_xchg_last_nid(page, polnid);
+		if (last_nid != polnid)
+			goto out;
+	}
+
 	if (curnid != polnid)
 		ret = polnid;
 out:
@@ -2470,7 +2502,7 @@ void __init numa_policy_init(void)
 		preferred_node_policy[nid] = (struct mempolicy) {
 			.refcnt = ATOMIC_INIT(1),
 			.mode = MPOL_PREFERRED,
-			.flags = MPOL_F_MOF,
+			.flags = MPOL_F_MOF | MPOL_F_HOME,
 			.v = { .preferred_node = nid, },
 		};
 	}
