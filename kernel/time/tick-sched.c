@@ -274,11 +274,10 @@ EXPORT_SYMBOL_GPL(get_cpu_iowait_time_us);
 static ktime_t tick_nohz_stop_sched_tick(struct tick_sched *ts, ktime_t now, int cpu)
 {
 	unsigned long seq, last_jiffies, next_jiffies, delta_jiffies;
-	unsigned long rcu_delta_jiffies;
 	ktime_t last_update, expires, ret = { .tv64 = 0 };
+	unsigned long rcu_delta_jiffies;
 	struct clock_event_device *dev = __get_cpu_var(tick_cpu_device).evtdev;
 	u64 time_delta;
-
 
 	/* Read jiffies and the time when jiffies were updated last */
 	do {
