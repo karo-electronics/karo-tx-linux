@@ -95,7 +95,6 @@ extern unsigned long get_iop_tick_rate(void);
 /* PCI-E ranges */
 #define IOP13XX_PCIE_LOWER_IO_PA      	 0xfffd0000UL
 #define IOP13XX_PCIE_LOWER_IO_BA      	 0x0UL  /* OIOTVR */
-#define IOP13XX_PCIE_LOWER_IO_BA      	 0x10000UL
 
 #define IOP13XX_PCIE_MEM_PHYS_OFFSET  	 0x200000000ULL
 #define IOP13XX_PCIE_MEM_WINDOW_SIZE  	 0x3a000000UL

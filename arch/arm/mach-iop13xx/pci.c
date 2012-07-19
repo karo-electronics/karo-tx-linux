@@ -1058,7 +1058,7 @@ int iop13xx_pci_setup(int nr, struct pci_sys_data *sys)
 
 		__raw_writel(pcsr, IOP13XX_ATUE_PCSR);
 
-		pci_ioremap_io(IOP13XX_PCIE_LOWER_IO_BA, IOP13XX_PCIE_LOWER_IO_PA);
+		pci_ioremap_io(SZ_64K, IOP13XX_PCIE_LOWER_IO_PA);
 
 		res->start = IOP13XX_PCIE_LOWER_MEM_RA;
 		res->end   = IOP13XX_PCIE_UPPER_MEM_RA;
