@@ -242,19 +242,18 @@ static int __init find_unisys_acpi_oem_table(unsigned long *oem_addr)
 {
 	struct acpi_table_header *header = NULL;
 	struct es7000_oem_table *table;
-	acpi_size tbl_size;
 	acpi_status ret;
 	int i = 0;
 
 	for (;;) {
-		ret = acpi_get_table_with_size("OEM1", i++, &header, &tbl_size);
+		ret = acpi_get_table("OEM1", i++, &header);
 		if (!ACPI_SUCCESS(ret))
 			return -1;
 
 		if (!memcmp((char *) &header->oem_id, "UNISYS", 6))
 			break;
 
-		early_acpi_os_unmap_memory(header, tbl_size);
+		early_acpi_os_unmap_memory(header, header->length);
 	}
 
 	table = (void *)header;
@@ -262,7 +261,7 @@ static int __init find_unisys_acpi_oem_table(unsigned long *oem_addr)
 	oem_addrX	= table->OEMTableAddr;
 	oem_size	= table->OEMTableSize;
 
-	early_acpi_os_unmap_memory(header, tbl_size);
+	early_acpi_os_unmap_memory(header, header->length);
 
 	*oem_addr	= (unsigned long)__acpi_map_table(oem_addrX, oem_size);
 
