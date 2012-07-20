@@ -444,9 +444,6 @@ delta_core(struct core_data *new, struct core_data *old)
 	old->c7 = new->c7 - old->c7;
 }
 
-/*
- * old = new - old
- */
 void
 delta_thread(struct thread_data *new, struct thread_data *old,
 	struct core_data *core_delta)
@@ -485,20 +482,19 @@ delta_thread(struct thread_data *new, struct thread_data *old,
 
 
 	/*
-	 * As counter collection is not atomic,
-	 * it is possible for mperf's non-halted cycles + idle states
+	 * As mperf and tsc collection are not atomic,
+	 * it is possible for mperf's non-halted cycles
 	 * to exceed TSC's all cycles: show c1 = 0% in that case.
 	 */
-	if ((old->mperf + core_delta->c3 + core_delta->c6 + core_delta->c7) > old->tsc)
+	if (old->mperf > old->tsc)
 		old->c1 = 0;
 	else {
 		/* normal case, derive c1 */
 		old->c1 = old->tsc - old->mperf - core_delta->c3
 				- core_delta->c6 - core_delta->c7;
 	}
-
 	if (old->mperf == 0) {
-		if (verbose > 1) fprintf(stderr, "cpu%d MPERF 0!\n", old->cpu_id);
+		if (verbose) fprintf(stderr, "cpu%d MPERF 0!\n", old->cpu_id);
 		old->mperf = 1;	/* divide by 0 protection */
 	}
 
