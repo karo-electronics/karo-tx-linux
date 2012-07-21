@@ -1571,7 +1571,7 @@ migrate_misplaced_page(struct page *page, struct mm_struct *mm, int node)
 	mem_cgroup_end_migration(memcg, oldpage, newpage, !rc);
 out:
 	if (oldpage != page)
-               put_page(oldpage);
+		put_page(oldpage);
 
 	if (rc) {
 		unlock_page(newpage);
