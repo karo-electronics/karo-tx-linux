@@ -218,6 +218,11 @@ EXPORT_SYMBOL(nr_online_nodes);
 
 int page_group_by_mobility_disabled __read_mostly;
 
+/*
+ * NOTE:
+ * Don't use set_pageblock_migratetype(page, MIGRATE_ISOLATE) directly.
+ * Instead, use {un}set_pageblock_isolate.
+ */
 void set_pageblock_migratetype(struct page *page, int migratetype)
 {
 
@@ -1618,6 +1623,23 @@ static bool __zone_watermark_ok(struct zone *z, int order, unsigned long mark,
 	return true;
 }
 
+#ifdef CONFIG_MEMORY_ISOLATION
+static inline unsigned long nr_zone_isolate_freepages(struct zone *zone)
+{
+	unsigned long nr_pages = 0;
+
+	if (unlikely(zone->nr_pageblock_isolate)) {
+		nr_pages = zone->nr_pageblock_isolate * pageblock_nr_pages;
+	}
+	return nr_pages;
+}
+#else
+static inline unsigned long nr_zone_isolate_freepages(struct zone *zone)
+{
+	return 0;
+}
+#endif
+
 bool zone_watermark_ok(struct zone *z, int order, unsigned long mark,
 		      int classzone_idx, int alloc_flags)
 {
@@ -1633,6 +1655,14 @@ bool zone_watermark_ok_safe(struct zone *z, int order, unsigned long mark,
 	if (z->percpu_drift_mark && free_pages < z->percpu_drift_mark)
 		free_pages = zone_page_state_snapshot(z, NR_FREE_PAGES);
 
+	/*
+	 * If the zone has MIGRATE_ISOLATE type free page,
+	 * we should consider it. nr_zone_isolate_freepages is never
+	 * accurate so kswapd might not sleep although she can.
+	 * But it's more desirable for memory hotplug rather than
+	 * forever sleep which cause livelock in direct reclaim path.
+	 */
+	free_pages -= nr_zone_isolate_freepages(z);
 	return __zone_watermark_ok(z, order, mark, classzone_idx, alloc_flags,
 								free_pages);
 }
@@ -4397,6 +4427,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		lruvec_init(&zone->lruvec, zone);
 		zap_zone_vm_stats(zone);
 		zone->flags = 0;
+		zone->nr_pageblock_isolate = 0;
 		if (!size)
 			continue;
 
