@@ -3266,7 +3266,7 @@ sub process {
 		}
 
 # check for sizeof without parenthesis
-		if ($line =~ /\bsizeof\s+($Lval)/) {
+		if ($line =~ /\bsizeof\s+((?:\*\s*|)$Lval|$Type(?:\s+$Lval|))/) {
 			WARN("SIZEOF_PARENTHESIS",
 			     "sizeof $1 should be sizeof($1)\n" . $herecurr);
 		}
