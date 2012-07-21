@@ -571,11 +571,10 @@ static isolate_migrate_t isolate_migratepages(struct zone *zone,
 }
 
 /*
- * Returns the start pfn of the laste page block in a zone.
- * This is the starting point for full compaction of a zone.
- * Compaction searches for free pages from the end of each zone,
- * while isolate_freepages_block scans forward inside each page
- * block.
+ * Returns the start pfn of the last page block in a zone.  This is the starting
+ * point for full compaction of a zone.  Compaction searches for free pages from
+ * the end of each zone, while isolate_freepages_block scans forward inside each
+ * page block.
  */
 static unsigned long start_free_pfn(struct zone *zone)
 {
