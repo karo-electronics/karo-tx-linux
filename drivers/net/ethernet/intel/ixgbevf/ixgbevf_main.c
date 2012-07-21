@@ -352,8 +352,6 @@ static void ixgbevf_alloc_rx_buffers(struct ixgbevf_adapter *adapter,
 				adapter->alloc_rx_buff_failed++;
 				goto no_buffers;
 			}
-
-			skb_propagate_pfmemalloc(bi->page, skb);
 			bi->skb = skb;
 		}
 		if (!bi->dma) {
