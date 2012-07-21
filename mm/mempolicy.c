@@ -1669,6 +1669,10 @@ static inline unsigned interleave_nid(struct mempolicy *pol,
 {
 	if (vma) {
 		unsigned long off;
+		if (vma->vm_ops && vma->vm_ops->interleave) {
+			off = vma->vm_ops->interleave(vma, addr);
+			return offset_il_node(pol, vma, off);
+		}
 
 		/*
 		 * for small pages, there is no difference between
