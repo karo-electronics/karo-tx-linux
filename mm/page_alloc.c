@@ -1626,12 +1626,9 @@ static bool __zone_watermark_ok(struct zone *z, int order, unsigned long mark,
 #ifdef CONFIG_MEMORY_ISOLATION
 static inline unsigned long nr_zone_isolate_freepages(struct zone *zone)
 {
-	unsigned long nr_pages = 0;
-
-	if (unlikely(zone->nr_pageblock_isolate)) {
-		nr_pages = zone->nr_pageblock_isolate * pageblock_nr_pages;
-	}
-	return nr_pages;
+	if (unlikely(zone->nr_pageblock_isolate))
+		return zone->nr_pageblock_isolate * pageblock_nr_pages;
+	return 0;
 }
 #else
 static inline unsigned long nr_zone_isolate_freepages(struct zone *zone)
@@ -1656,11 +1653,11 @@ bool zone_watermark_ok_safe(struct zone *z, int order, unsigned long mark,
 		free_pages = zone_page_state_snapshot(z, NR_FREE_PAGES);
 
 	/*
-	 * If the zone has MIGRATE_ISOLATE type free page,
-	 * we should consider it. nr_zone_isolate_freepages is never
-	 * accurate so kswapd might not sleep although she can.
-	 * But it's more desirable for memory hotplug rather than
-	 * forever sleep which cause livelock in direct reclaim path.
+	 * If the zone has MIGRATE_ISOLATE type free pages, we should consider
+	 * it.  nr_zone_isolate_freepages is never accurate so kswapd might not
+	 * sleep although it could do so.  But this is more desirable for memory
+	 * hotplug than sleeping which can cause a livelock in the direct
+	 * reclaim path.
 	 */
 	free_pages -= nr_zone_isolate_freepages(z);
 	return __zone_watermark_ok(z, order, mark, classzone_idx, alloc_flags,

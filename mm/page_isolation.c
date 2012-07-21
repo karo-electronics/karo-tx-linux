@@ -8,23 +8,20 @@
 #include <linux/memory.h>
 #include "internal.h"
 
-/* called by holding zone->lock */
-static void set_pageblock_isolate(struct zone *zone, struct page *page)
+/* called while holding zone->lock */
+static void set_pageblock_isolate(struct page *page)
 {
-	BUG_ON(page_zone(page) != zone);
-
 	if (get_pageblock_migratetype(page) == MIGRATE_ISOLATE)
 		return;
 
 	set_pageblock_migratetype(page, MIGRATE_ISOLATE);
-	zone->nr_pageblock_isolate++;
+	page_zone(page)->nr_pageblock_isolate++;
 }
 
-/* called by holding zone->lock */
-static void restore_pageblock_isolate(struct zone *zone, struct page *page,
-		int migratetype)
+/* called while holding zone->lock */
+static void restore_pageblock_isolate(struct page *page, int migratetype)
 {
-	BUG_ON(page_zone(page) != zone);
+	struct zone *zone = page_zone(page);
 	if (WARN_ON(get_pageblock_migratetype(page) != MIGRATE_ISOLATE))
 		return;
 
@@ -79,7 +76,7 @@ int set_migratetype_isolate(struct page *page)
 
 out:
 	if (!ret) {
-		set_pageblock_isolate(zone, page);
+		set_pageblock_isolate(page);
 		move_freepages_block(zone, page, MIGRATE_ISOLATE);
 	}
 
@@ -98,7 +95,7 @@ void unset_migratetype_isolate(struct page *page, unsigned migratetype)
 	if (get_pageblock_migratetype(page) != MIGRATE_ISOLATE)
 		goto out;
 	move_freepages_block(zone, page, migratetype);
-	restore_pageblock_isolate(zone, page, migratetype);
+	restore_pageblock_isolate(page, migratetype);
 out:
 	spin_unlock_irqrestore(&zone->lock, flags);
 }
