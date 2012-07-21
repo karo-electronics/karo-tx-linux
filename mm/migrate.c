@@ -687,7 +687,6 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 {
 	int rc = -EAGAIN;
 	int remap_swapcache = 1;
-	int charge = 0;
 	struct mem_cgroup *mem;
 	struct anon_vma *anon_vma = NULL;
 
@@ -729,12 +728,7 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	}
 
 	/* charge against new page */
-	charge = mem_cgroup_prepare_migration(page, newpage, &mem, GFP_KERNEL);
-	if (charge == -ENOMEM) {
-		rc = -ENOMEM;
-		goto unlock;
-	}
-	BUG_ON(charge);
+	mem_cgroup_prepare_migration(page, newpage, &mem);
 
 	if (PageWriteback(page)) {
 		/*
@@ -824,8 +818,7 @@ skip_unmap:
 		put_anon_vma(anon_vma);
 
 uncharge:
-	if (!charge)
-		mem_cgroup_end_migration(mem, page, newpage, rc == 0);
+	mem_cgroup_end_migration(mem, page, newpage, rc == 0);
 unlock:
 	unlock_page(page);
 out:
@@ -1519,10 +1512,9 @@ migrate_misplaced_page(struct page *page, struct mm_struct *mm, int node)
 {
 	struct page *oldpage = page, *newpage;
 	struct address_space *mapping = page_mapping(page);
-	struct mem_cgroup *mcg;
+	struct mem_cgroup *memcg;
 	unsigned int gfp;
 	int rc = 0;
-	int charge = -ENOMEM;
 
 	VM_BUG_ON(!PageLocked(page));
 	VM_BUG_ON(page_mapcount(page));
@@ -1556,12 +1548,7 @@ migrate_misplaced_page(struct page *page, struct mm_struct *mm, int node)
 	if (!trylock_page(newpage))
 		BUG();		/* new page should be unlocked!!! */
 
-	// XXX hnaz, is this right?
-	charge = mem_cgroup_prepare_migration(page, newpage, &mcg, gfp);
-	if (charge == -ENOMEM) {
-		rc = charge;
-		goto out;
-	}
+	mem_cgroup_prepare_migration(page, newpage, &memcg);
 
 	newpage->index = page->index;
 	newpage->mapping = page->mapping;
@@ -1581,11 +1568,9 @@ migrate_misplaced_page(struct page *page, struct mm_struct *mm, int node)
 		page = newpage;
 	}
 
+	mem_cgroup_end_migration(memcg, oldpage, newpage, !rc);
 out:
-	if (!charge)
-		mem_cgroup_end_migration(mcg, oldpage, newpage, !rc);
-
-       if (oldpage != page)
+	if (oldpage != page)
                put_page(oldpage);
 
 	if (rc) {
