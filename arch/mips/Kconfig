@@ -35,6 +35,7 @@ config MIPS
 	select BUILDTIME_EXTABLE_SORT
 	select GENERIC_CLOCKEVENTS
 	select GENERIC_CMOS_UPDATE
+	select ARCH_WANT_IPC_PARSE_VERSION
 
 menu "Machine selection"
 
