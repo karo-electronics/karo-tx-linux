@@ -7,8 +7,10 @@ The next/* branches are kept in the order in which they get applied.
 
 dependencies:
 depends/regulators	git://git.kernel.org/pub/scm/linux/kernel/git/broonie/regulator.git tags/topic/fixed
-
+---
 next/fixes-non-critical:
+arm-soc: non-critical bug fixes
+
 omap/fixes-non-critical	git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-fixes-non-critical-for-v3.6
 mxs/fixes		git://git.linaro.org/people/shawnguo/linux-2.6.git mxs/fixes-for-3.6
 -			patch from Tony Prisk
@@ -115,9 +117,6 @@ omap/am33xx-clk		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap
 imx/clk			git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-clk
 
 ---
-staging/io-cleanup-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci
-				waiting for more test results
-
 late/soc
 renesas/soc		git://git.kernel.org/pub/scm/linux/kernel/git/rafael/renesas.git soc
 samsung/devel-2		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/devel-samsung-2
@@ -125,6 +124,10 @@ samsung/devel-2		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsu
 
 late/board
 renesas/board		git://git.kernel.org/pub/scm/linux/kernel/git/rafael/renesas.git board
+
+staging/io-cleanup-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci
+				waiting for more test results
+
 
 ---
 next/drivers: (dropped for now)
