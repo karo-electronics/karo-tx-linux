@@ -969,8 +969,7 @@ static int nmk_i2c_probe(struct amba_device *adev, const struct amba_id *id)
 	adap->owner	= THIS_MODULE;
 	adap->class	= I2C_CLASS_HWMON | I2C_CLASS_SPD;
 	adap->algo	= &nmk_i2c_algo;
-	adap->timeout	= pdata->timeout ? msecs_to_jiffies(pdata->timeout) :
-		msecs_to_jiffies(20000);
+	adap->timeout	= msecs_to_jiffies(pdata->timeout);
 	adap->nr = atomic_read(&adapter_id);
 	snprintf(adap->name, sizeof(adap->name),
 		 "Nomadik I2C%d at %pR", adap->nr, &adev->res);

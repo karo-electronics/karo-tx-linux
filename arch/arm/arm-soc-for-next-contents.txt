@@ -1,0 +1,246 @@
+This file lists all branches that are pulled into the for-next branch
+of git://git.kernel.org/pub/scm/linux/kernel/git/arm/arm-soc.git
+and their external dependencies.
+
+It also includes a couple of directly applied patches for build breaks with subject
+The next/* branches are kept in the order in which they get applied.
+
+dependencies:
+depends/regulators	git://git.kernel.org/pub/scm/linux/kernel/git/broonie/regulator.git tags/topic/fixed
+---
+next/fixes-non-critical:
+arm-soc: non-critical bug fixes
+
+These were submitted as bug fixes before v3.5 but not considered important
+enough to be included in it.
+
+omap/fixes-non-critical	git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-fixes-non-critical-for-v3.6
+mxs/fixes		git://git.linaro.org/people/shawnguo/linux-2.6.git mxs/fixes-for-3.6
+-			patch from Tony Prisk
+ep93xx/fixes-non-critical  git://github.com/RyanMallon/linux-ep93xx.git tags/ep93xx-fixes-for-3.6
+
+
+next/cleanup:
+arm-soc: general cleanups
+
+These are all boring changes, moving stuff around or renaming things
+mostly, and also getting rid of stuff that is duplicate or should
+not be there to start with. Platform-wise this is all over the place,
+mainly omap, samsung, at91, imx and tegra.
+
+at91/cleanup		git://github.com/at91linux/linux-at91.git tags/at91-for-next-cleanup
+omap/cleanup		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-cleanup-for-v3.6
+imx6/cleanup		git://git.linaro.org/people/shawnguo/linux-2.6.git imx/cleanup-for-3.6
+imx/cleanup		git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-cleanup
+tegra/cleanup		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git for-3.6/cleanup
+tegra/fixes		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git for-3.6/fixes
+samsung/cleanup		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/cleanup-samsung
+clps711x/cleanup	patches from Alexander Shiyan
+samsung/cleanup2	git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/cleanup-samsung2
+
+next/soc:
+arm-soc: soc-specific updates
+
+This is stuff that does not fit well into another category and in
+particular is not related to a particular board. The largest part
+in here is extending the am33xx support in the omap platform.
+
+nomadik/drivercfg	git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik.git nomadik-for-arm-soc
+lpc32xx/devel		git://git.antcom.de/linux-2.6.git lpc32xx-next
+lpc32xx/core		git://git.antcom.de/linux-2.6.git lpc32xx/core
+				depends on lpc32xx/devel
+omap/am33xx		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-am33xx-for-v3.6
+tegra/soc		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git for-3.6/soc
+				depends on tegra/cleanup
+imx/soc			git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-soc
+vexpress/soc		git://git.linaro.org/people/pawelmoll/linux.git vexpress-v3.5-rc6
+samsung/soc		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/devel-samsung
+ep93xx/devel		git://github.com/RyanMallon/linux-ep93xx.git tags/ep93xx-devel-for-3.6
+
+next/dma:
+arm-soc: samsung dma changes
+
+Some platforms are not yet converted to use the dmaengine framework,
+including some of the samsung SoCs. In the meantime, we treat this
+as platform code and merge the patches through the arm-soc tree.
+
+samsung/dma		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/devel-dma-ops
+
+next/dt:
+arm-soc: device tree description updates
+
+This branch contains two kinds of updates: Some platforms in the process
+of getting converted to device tree based booting, and the platform
+specific patches necessary for that are included here. Other platforms
+are already converted, so we just need to update the actual device
+tree source files and the binding documents to add support for new board
+and new drivers.
+In the future we will probably separate those into two branches, and
+in the long run, the plan is to move the device tree source files out
+of the kernel repository, but that has to wait until we have completed
+a much larger portion of the binding documents.
+
+lpc32xx/dt		git://git.antcom.de/linux-2.6.git lpc32xx/dts
+				depends on lpc32xx/devel
+imx6/dt			git://git.linaro.org/people/shawnguo/linux-2.6.git imx/dt-for-3.6
+mxs/dt			git://git.linaro.org/people/shawnguo/linux-2.6.git mxs/dt-for-3.6
+tegra/dt		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git for-3.6/dt
+				depends on tegra/cleanup
+at91/dt			git://github.com/at91linux/linux-at91 at91-for-next-dt
+omap/dt			git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-dt-for-v3.6
+imx/dt			git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-dt
+imx/dt2			git://git.linaro.org/people/shawnguo/linux-2.6.git imx/dt-for-3.6
+mxs/dt2			git://git.linaro.org/people/shawnguo/linux-2.6.git mxs/dt-for-3.6
+davinci/dt		git://gitorious.org/linux-davinci/linux-davinci.git tags/davinci-v3.6-dt
+samsung/dt		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/dt-samsung
+				depends on samsung/dma
+ux500/dt		git://git.linaro.org/people/ljones/linux-3.0-ux500.git for-arm-soc-next
+lpc32xx/dt		git://git.antcom.de/linux-2.6.git lpc32xx/dts2
+
+next/spi:
+arm-soc: spi updates
+
+These changes conceptually belong into the spi tree, but we decided to
+put them into arm-soc to better deal with interdependencies with other
+platform specific patches that are already there. All changes in here
+are for the samsung platforms.
+
+samsung/spi		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/devel-samsung-spi
+				depends on samsung/dt
+
+next/timer:
+arm-soc: timer updates
+
+This contains two branches dealing with timers, one for the picoxcell
+platform that is now using DT with the platform-independent
+dw_apb_timer driver. The other change is for the omap-specific
+dmtimer driver.
+
+omap/dmtimer		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-dmtimer-for-v3.6
+picoxcell/timer		patch "clocksource: dw_apb_timer: Add common DTS glue for dw_apb_timer"
+
+
+next/cleanup2:
+arm-soc: cleanups, part 2
+
+These omap cleanups have dependencies on earlier omap branches that in
+turn depend on other cleanups, so they could not go into the same
+branch.
+
+omap/cleanup2		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-cleanup-part2-for-v3.6
+				depends on omap/am33xx, omap/cleanup and omap/dmtimer
+
+next/newsoc:
+arm-soc: new SoC support
+
+This adds support for three new SoC types:
+* The mvebu platform includes Marvell's Armada XP and Armada 370 chips,
+  made by the mvebu business unit inside of Marvell. Since the same
+  group also made the older but similar platforms we call "orion5x",
+  "kirkwood", "mv78xx0" and "dove", we plan to move all of them into
+  the mach-mvebu directory in the future.
+* socfpga is Altera's platform based on Cortex-A9 cores and a lot of
+  FPGA space. This is similar to the Xilinx zynq platform we already
+  support. The code is particularly clean, which is helped by the fact
+  that the hardware doesn't do much besides the parts that are
+  expected to get added in the FPGA.
+* The OMAP subarchitecture gains support for the latest generation,
+  the OMAP5 based on the new Cortex-A15 core. Support is rather
+  rudimentary for now, but will be extended in the future.
+
+mvebu/newsoc		git://github.com/Marvell-Semi/EBU_mainline_public.git mvebu_for-next-V9
+				rebased to v3.5-rc5
+omap/minimal-omap5	git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap devel-omap5
+				depends on omap/cleanup2
+socfpga			patch from Dinh Nguyen <dinguyen@altera.com>
+
+next/defconfig:
+arm-soc: defconfig updates
+
+These are changes to the default configuration files, to account for
+kernel changes and new hardware.
+
+lpc32xx/defconfig	git://git.antcom.de/linux-2.6.git lpc32xx/defconfig
+				depends on lpc32xx/devel
+mxs/defconfig		git://git.linaro.org/people/shawnguo/linux-2.6.git mxs/defconfig-for-3.6
+tegra/defconfig		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git for-3.6/defconfig
+imx/defconfig		git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-defconfig
+samsung/defconfig	git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/devel-samsung-2
+				only one patch cherry-picked from above
+
+next/boards:
+arm-soc: board specific updates
+
+These changes are all for individual board files. In the long run, those
+files will largely go away, and the amount of changes appears to be
+continuously decreasing, which is a good sign. This time around, changes
+are focused on tegra, omap and samsung.
+
+tegra/boards		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git for-3.6/boards
+				depends on tegra/cleanup
+samsung/board-samsung	git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung next/board-samsung
+omap/boards		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-board-for-v3.6
+samsung/board-samsung2	git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung next/board-samsung-2
+samsung/board-3		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/board-samsung-3
+
+next/irq:
+arm-soc: sparse IRQ conversion
+
+The I.MX platform is getting converted to use sparse IRQs. We are doing
+this for all platforms over time, because this is one of the
+requirements for building a multiplatform kernel, and generally a good
+idea.
+
+imx/sparse-irq		git://git.linaro.org/people/shawnguo/linux-2.6.git imx/sparse-irq
+				pulled twice
+
+next/pinctrl:
+arm-soc: pincontrol drivers
+
+We are converting platforms to use the pinctrl framework over time,
+rather than using platform specific code for the same effect. This
+adds the respective driver for the prima2 platform.
+
+prima2/pinctrl		git://gitorious.org/sirfprima2-kernel/sirfprima2-kernel.git prima2/drivers
+
+next/pm:
+arm-soc: power management changes
+
+These are various power management related changes, mainly concerning
+cpuidle on i.MX and OMAP, as well as a the move of the omap smartreflex
+driver to live in the power subsystem.
+
+imx/cpuidle		git://git.pengutronix.de/git/imx/linux-2.6.git imx/cpuidle
+omap/driver		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-driver-for-v3.6
+omap/pm			git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-pm-for-v3.6
+
+next/clk:
+arm-soc: clk changes
+
+Clock support is moving to the clk subsystem. These tegra, omap and imx
+changes are for code that is still platform specific and not (yet)
+part of that subsystem.
+
+tegra/common-clk	git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git for-3.6/common-clk
+omap/am33xx-clk		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-am33xx-data-for-v3.6
+				depends on omap/cleanup2
+imx/clk			git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-clk
+
+---
+late/soc
+renesas/soc		git://git.kernel.org/pub/scm/linux/kernel/git/rafael/renesas.git soc
+samsung/devel-2		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/devel-samsung-2
+				rebased without the defconfig change
+
+late/board
+renesas/board		git://git.kernel.org/pub/scm/linux/kernel/git/rafael/renesas.git board
+
+staging/io-cleanup-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci
+				waiting for more test results
+
+
+---
+next/drivers: (dropped for now)
+devel/led-driver	git://git.kernel.org/pub/scm/linux/kernel/git/cooloney/linux-leds.git for-arm-soc
+
+

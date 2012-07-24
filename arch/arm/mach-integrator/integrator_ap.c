@@ -72,7 +72,7 @@
  * e8000000	40000000	PCI memory		PHYS_PCI_MEM_BASE	(max 512M)
  * ec000000	61000000	PCI config space	PHYS_PCI_CONFIG_BASE	(max 16M)
  * ed000000	62000000	PCI V3 regs		PHYS_PCI_V3_BASE	(max 64k)
- * ee000000	60000000	PCI IO			PHYS_PCI_IO_BASE	(max 16M)
+ * fee00000	60000000	PCI IO			PHYS_PCI_IO_BASE	(max 16M)
  * ef000000			Cache flush
  * f1000000	10000000	Core module registers
  * f1100000	11000000	System controller registers
@@ -144,11 +144,6 @@ static struct map_desc ap_io_desc[] __initdata = {
 	}, {
 		.virtual	= PCI_V3_VADDR,
 		.pfn		= __phys_to_pfn(PHYS_PCI_V3_BASE),
-		.length		= SZ_64K,
-		.type		= MT_DEVICE
-	}, {
-		.virtual	= PCI_IO_VADDR,
-		.pfn		= __phys_to_pfn(PHYS_PCI_IO_BASE),
 		.length		= SZ_64K,
 		.type		= MT_DEVICE
 	}
