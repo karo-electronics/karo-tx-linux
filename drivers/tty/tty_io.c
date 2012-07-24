@@ -1249,21 +1249,19 @@ int tty_init_termios(struct tty_struct *tty)
 	struct ktermios *tp;
 	int idx = tty->index;
 
-	tp = tty->driver->termios[idx];
-	if (tp == NULL) {
-		tp = kzalloc(sizeof(struct ktermios[2]), GFP_KERNEL);
-		if (tp == NULL)
-			return -ENOMEM;
-		memcpy(tp, &tty->driver->init_termios,
-						sizeof(struct ktermios));
-		tty->driver->termios[idx] = tp;
+	if (tty->driver->flags & TTY_DRIVER_RESET_TERMIOS)
+		tty->termios = tty->driver->init_termios;
+	else {
+		/* Check for lazy saved data */
+		tp = tty->driver->termios[idx];
+		if (tp != NULL)
+			tty->termios = *tp;
+		else
+			tty->termios = tty->driver->init_termios;
 	}
-	tty->termios = tp;
-	tty->termios_locked = tp + 1;
-
 	/* Compatibility until drivers always set this */
-	tty->termios->c_ispeed = tty_termios_input_baud_rate(tty->termios);
-	tty->termios->c_ospeed = tty_termios_baud_rate(tty->termios);
+	tty->termios.c_ispeed = tty_termios_input_baud_rate(&tty->termios);
+	tty->termios.c_ospeed = tty_termios_baud_rate(&tty->termios);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(tty_init_termios);
@@ -1407,6 +1405,9 @@ struct tty_struct *tty_init_dev(struct tty_driver *driver, int idx)
 	if (retval < 0)
 		goto err_deinit_tty;
 
+	if (!tty->port)
+		tty->port = driver->ports[idx];
+
 	/*
 	 * Structures all installed ... call the ldisc open routines.
 	 * If we fail here just call release_tty to clean up.  No need
@@ -1436,22 +1437,24 @@ void tty_free_termios(struct tty_struct *tty)
 {
 	struct ktermios *tp;
 	int idx = tty->index;
-	/* Kill this flag and push into drivers for locking etc */
-	if (tty->driver->flags & TTY_DRIVER_RESET_TERMIOS) {
-		/* FIXME: Locking on ->termios array */
-		tp = tty->termios;
-		tty->driver->termios[idx] = NULL;
-		kfree(tp);
+
+	/* If the port is going to reset then it has no termios to save */
+	if (tty->driver->flags & TTY_DRIVER_RESET_TERMIOS)
+		return;
+
+	/* Stash the termios data */
+	tp = tty->driver->termios[idx];
+	if (tp == NULL) {
+		tp = kmalloc(sizeof(struct ktermios), GFP_KERNEL);
+		if (tp == NULL) {
+			pr_warn("tty: no memory to save termios state.\n");
+			return;
+		}
 	}
+	*tp = tty->termios;
 }
 EXPORT_SYMBOL(tty_free_termios);
 
-void tty_shutdown(struct tty_struct *tty)
-{
-	tty_driver_remove_tty(tty->driver, tty);
-	tty_free_termios(tty);
-}
-EXPORT_SYMBOL(tty_shutdown);
 
 /**
  *	release_one_tty		-	release tty structure memory
@@ -1495,11 +1498,6 @@ static void queue_release_one_tty(struct kref *kref)
 {
 	struct tty_struct *tty = container_of(kref, struct tty_struct, kref);
 
-	if (tty->ops->shutdown)
-		tty->ops->shutdown(tty);
-	else
-		tty_shutdown(tty);
-
 	/* The hangup queue is now free so we can reuse it rather than
 	   waste a chunk of memory for each port */
 	INIT_WORK(&tty->hangup_work, release_one_tty);
@@ -1539,6 +1537,11 @@ static void release_tty(struct tty_struct *tty, int idx)
 	/* This should always be true but check for the moment */
 	WARN_ON(tty->index != idx);
 
+	if (tty->ops->shutdown)
+		tty->ops->shutdown(tty);
+	tty_free_termios(tty);
+	tty_driver_remove_tty(tty->driver, tty);
+
 	if (tty->link)
 		tty_kref_put(tty->link);
 	tty_kref_put(tty);
@@ -1572,19 +1575,9 @@ static int tty_release_checks(struct tty_struct *tty, struct tty_struct *o_tty,
 				__func__, idx, tty->name);
 		return -1;
 	}
-	if (tty->termios != tty->driver->termios[idx]) {
-		printk(KERN_DEBUG "%s: driver.termios[%d] not termios for (%s)\n",
-				__func__, idx, tty->name);
-		return -1;
-	}
 	if (tty->driver->other) {
 		if (o_tty != tty->driver->other->ttys[idx]) {
 			printk(KERN_DEBUG "%s: other->table[%d] not o_tty for (%s)\n",
-					__func__, idx, tty->name);
-			return -1;
-		}
-		if (o_tty->termios != tty->driver->other->termios[idx]) {
-			printk(KERN_DEBUG "%s: other->termios[%d] not o_termios for (%s)\n",
 					__func__, idx, tty->name);
 			return -1;
 		}
@@ -3094,6 +3087,7 @@ static void destruct_tty_driver(struct kref *kref)
 		kfree(p);
 		cdev_del(&driver->cdev);
 	}
+	kfree(driver->ports);
 	kfree(driver);
 }
 
@@ -3132,6 +3126,18 @@ int tty_register_driver(struct tty_driver *driver)
 		if (!p)
 			return -ENOMEM;
 	}
+	/*
+	 * There is too many lines in PTY and we won't need the array there
+	 * since it has an ->install hook where it assigns ports properly.
+	 */
+	if (driver->type != TTY_DRIVER_TYPE_PTY) {
+		driver->ports = kcalloc(driver->num, sizeof(struct tty_port *),
+				GFP_KERNEL);
+		if (!driver->ports) {
+			error = -ENOMEM;
+			goto err_free_p;
+		}
+	}
 
 	if (!driver->major) {
 		error = alloc_chrdev_region(&dev, driver->minor_start,
@@ -3144,10 +3150,8 @@ int tty_register_driver(struct tty_driver *driver)
 		dev = MKDEV(driver->major, driver->minor_start);
 		error = register_chrdev_region(dev, driver->num, driver->name);
 	}
-	if (error < 0) {
-		kfree(p);
-		return error;
-	}
+	if (error < 0)
+		goto err_free_p;
 
 	if (p) {
 		driver->ttys = (struct tty_struct **)p;
@@ -3160,13 +3164,8 @@ int tty_register_driver(struct tty_driver *driver)
 	cdev_init(&driver->cdev, &tty_fops);
 	driver->cdev.owner = driver->owner;
 	error = cdev_add(&driver->cdev, dev, driver->num);
-	if (error) {
-		unregister_chrdev_region(dev, driver->num);
-		driver->ttys = NULL;
-		driver->termios = NULL;
-		kfree(p);
-		return error;
-	}
+	if (error)
+		goto err_unreg_char;
 
 	mutex_lock(&tty_mutex);
 	list_add(&driver->tty_drivers, &tty_drivers);
@@ -3193,13 +3192,14 @@ err:
 	list_del(&driver->tty_drivers);
 	mutex_unlock(&tty_mutex);
 
+err_unreg_char:
 	unregister_chrdev_region(dev, driver->num);
 	driver->ttys = NULL;
 	driver->termios = NULL;
+err_free_p: /* destruct_tty_driver will free driver->ports */
 	kfree(p);
 	return error;
 }
-
 EXPORT_SYMBOL(tty_register_driver);
 
 /*

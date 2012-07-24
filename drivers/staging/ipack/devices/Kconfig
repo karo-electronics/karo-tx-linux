@@ -1,6 +1,7 @@
 config SERIAL_IPOCTAL
 	tristate "IndustryPack IP-OCTAL uart support"
 	depends on IPACK_BUS
+	depends on BROKEN
 	help
 	  This driver supports the IPOCTAL serial port device for the IndustryPack bus.
 	default n
