@@ -115,12 +115,6 @@ struct oob_data {
 	u8 randomizer[16];
 };
 
-struct adv_entry {
-	struct list_head list;
-	bdaddr_t bdaddr;
-	u8 bdaddr_type;
-};
-
 struct le_scan_params {
 	u8 type;
 	u16 interval;
@@ -587,8 +581,7 @@ void hci_conn_put_device(struct hci_conn *conn);
 
 static inline void hci_conn_hold(struct hci_conn *conn)
 {
-	BT_DBG("hcon %p refcnt %d -> %d", conn, atomic_read(&conn->refcnt),
-	       atomic_read(&conn->refcnt) + 1);
+	BT_DBG("hcon %p orig refcnt %d", conn, atomic_read(&conn->refcnt));
 
 	atomic_inc(&conn->refcnt);
 	cancel_delayed_work(&conn->disc_work);
@@ -596,8 +589,7 @@ static inline void hci_conn_hold(struct hci_conn *conn)
 
 static inline void hci_conn_put(struct hci_conn *conn)
 {
-	BT_DBG("hcon %p refcnt %d -> %d", conn, atomic_read(&conn->refcnt),
-	       atomic_read(&conn->refcnt) - 1);
+	BT_DBG("hcon %p orig refcnt %d", conn, atomic_read(&conn->refcnt));
 
 	if (atomic_dec_and_test(&conn->refcnt)) {
 		unsigned long timeo;
@@ -1056,7 +1048,7 @@ int mgmt_discovering(struct hci_dev *hdev, u8 discovering);
 int mgmt_interleaved_discovery(struct hci_dev *hdev);
 int mgmt_device_blocked(struct hci_dev *hdev, bdaddr_t *bdaddr, u8 type);
 int mgmt_device_unblocked(struct hci_dev *hdev, bdaddr_t *bdaddr, u8 type);
-
+bool mgmt_valid_hdev(struct hci_dev *hdev);
 int mgmt_new_ltk(struct hci_dev *hdev, struct smp_ltk *key, u8 persistent);
 
 /* HCI info for socket */
