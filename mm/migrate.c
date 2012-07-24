@@ -33,6 +33,7 @@
 #include <linux/memcontrol.h>
 #include <linux/syscalls.h>
 #include <linux/hugetlb.h>
+#include <linux/hugetlb_cgroup.h>
 #include <linux/gfp.h>
 
 #include <asm/tlbflush.h>
@@ -686,7 +687,6 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 {
 	int rc = -EAGAIN;
 	int remap_swapcache = 1;
-	int charge = 0;
 	struct mem_cgroup *mem;
 	struct anon_vma *anon_vma = NULL;
 
@@ -728,12 +728,7 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	}
 
 	/* charge against new page */
-	charge = mem_cgroup_prepare_migration(page, newpage, &mem, GFP_KERNEL);
-	if (charge == -ENOMEM) {
-		rc = -ENOMEM;
-		goto unlock;
-	}
-	BUG_ON(charge);
+	mem_cgroup_prepare_migration(page, newpage, &mem);
 
 	if (PageWriteback(page)) {
 		/*
@@ -823,8 +818,7 @@ skip_unmap:
 		put_anon_vma(anon_vma);
 
 uncharge:
-	if (!charge)
-		mem_cgroup_end_migration(mem, page, newpage, rc == 0);
+	mem_cgroup_end_migration(mem, page, newpage, rc == 0);
 unlock:
 	unlock_page(page);
 out:
@@ -935,16 +929,13 @@ static int unmap_and_move_huge_page(new_page_t get_new_page,
 
 	if (anon_vma)
 		put_anon_vma(anon_vma);
+
+	if (!rc)
+		hugetlb_cgroup_migrate(hpage, new_hpage);
+
 	unlock_page(hpage);
-
 out:
-	if (rc != -EAGAIN) {
-		list_del(&hpage->lru);
-		put_page(hpage);
-	}
-
 	put_page(new_hpage);
-
 	if (result) {
 		if (rc)
 			*result = rc;
@@ -1112,48 +1103,32 @@ out:
 	return nr_failed + retry;
 }
 
-int migrate_huge_pages(struct list_head *from,
-		new_page_t get_new_page, unsigned long private, bool offlining,
-		enum migrate_mode mode)
+int migrate_huge_page(struct page *hpage, new_page_t get_new_page,
+		      unsigned long private, bool offlining,
+		      enum migrate_mode mode)
 {
-	int retry = 1;
-	int nr_failed = 0;
-	int pass = 0;
-	struct page *page;
-	struct page *page2;
-	int rc;
+	int pass, rc;
 
-	for (pass = 0; pass < 10 && retry; pass++) {
-		retry = 0;
-
-		list_for_each_entry_safe(page, page2, from, lru) {
+	for (pass = 0; pass < 10; pass++) {
+		rc = unmap_and_move_huge_page(get_new_page,
+					      private, hpage, pass > 2, offlining,
+					      mode);
+		switch (rc) {
+		case -ENOMEM:
+			goto out;
+		case -EAGAIN:
+			/* try again */
 			cond_resched();
-
-			rc = unmap_and_move_huge_page(get_new_page,
-					private, page, pass > 2, offlining,
-					mode);
-
-			switch(rc) {
-			case -ENOMEM:
-				goto out;
-			case -EAGAIN:
-				retry++;
-				break;
-			case 0:
-				break;
-			default:
-				/* Permanent failure */
-				nr_failed++;
-				break;
-			}
+			break;
+		case 0:
+			goto out;
+		default:
+			rc = -EIO;
+			goto out;
 		}
 	}
-	rc = 0;
 out:
-	if (rc)
-		return rc;
-
-	return nr_failed + retry;
+	return rc;
 }
 
 #ifdef CONFIG_NUMA
@@ -1537,10 +1512,9 @@ migrate_misplaced_page(struct page *page, struct mm_struct *mm, int node)
 {
 	struct page *oldpage = page, *newpage;
 	struct address_space *mapping = page_mapping(page);
-	struct mem_cgroup *mcg;
+	struct mem_cgroup *memcg;
 	unsigned int gfp;
 	int rc = 0;
-	int charge = -ENOMEM;
 
 	VM_BUG_ON(!PageLocked(page));
 	VM_BUG_ON(page_mapcount(page));
@@ -1574,12 +1548,7 @@ migrate_misplaced_page(struct page *page, struct mm_struct *mm, int node)
 	if (!trylock_page(newpage))
 		BUG();		/* new page should be unlocked!!! */
 
-	// XXX hnaz, is this right?
-	charge = mem_cgroup_prepare_migration(page, newpage, &mcg, gfp);
-	if (charge == -ENOMEM) {
-		rc = charge;
-		goto out;
-	}
+	mem_cgroup_prepare_migration(page, newpage, &memcg);
 
 	newpage->index = page->index;
 	newpage->mapping = page->mapping;
@@ -1599,12 +1568,10 @@ migrate_misplaced_page(struct page *page, struct mm_struct *mm, int node)
 		page = newpage;
 	}
 
+	mem_cgroup_end_migration(memcg, oldpage, newpage, !rc);
 out:
-	if (!charge)
-		mem_cgroup_end_migration(mcg, oldpage, newpage, !rc);
-
-       if (oldpage != page)
-               put_page(oldpage);
+	if (oldpage != page)
+		put_page(oldpage);
 
 	if (rc) {
 		unlock_page(newpage);
