@@ -16,10 +16,10 @@ config CLKSRC_MMIO
 config DW_APB_TIMER
 	bool
 
-config ARMADA_370_XP_TIMER
+config DW_APB_TIMER_OF
 	bool
 
-config DW_APB_TIMER_OF
+config ARMADA_370_XP_TIMER
 	bool
 
 config CLKSRC_DBX500_PRCMU
