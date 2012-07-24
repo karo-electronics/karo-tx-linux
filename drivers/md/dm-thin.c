@@ -510,10 +510,9 @@ struct pool {
 	struct block_device *md_dev;
 	struct dm_pool_metadata *pmd;
 
-	uint32_t sectors_per_block;
-	unsigned block_shift;
-	dm_block_t offset_mask;
 	dm_block_t low_water_blocks;
+	uint32_t sectors_per_block;
+	int sectors_per_block_shift;
 
 	struct pool_features pf;
 	unsigned low_water_triggered:1;	/* A dm event has been sent */
@@ -526,8 +525,8 @@ struct pool {
 	struct work_struct worker;
 	struct delayed_work waker;
 
-	unsigned ref_count;
 	unsigned long last_commit_jiffies;
+	unsigned ref_count;
 
 	spinlock_t lock;
 	struct bio_list deferred_bios;
@@ -679,21 +678,39 @@ static void requeue_io(struct thin_c *tc)
 
 static dm_block_t get_bio_block(struct thin_c *tc, struct bio *bio)
 {
-	return bio->bi_sector >> tc->pool->block_shift;
+	sector_t block_nr = bio->bi_sector;
+
+	if (tc->pool->sectors_per_block_shift < 0)
+		(void) sector_div(block_nr, tc->pool->sectors_per_block);
+	else
+		block_nr >>= tc->pool->sectors_per_block_shift;
+
+	return block_nr;
 }
 
 static void remap(struct thin_c *tc, struct bio *bio, dm_block_t block)
 {
 	struct pool *pool = tc->pool;
+	sector_t bi_sector = bio->bi_sector;
 
 	bio->bi_bdev = tc->pool_dev->bdev;
-	bio->bi_sector = (block << pool->block_shift) +
-		(bio->bi_sector & pool->offset_mask);
+	if (tc->pool->sectors_per_block_shift < 0)
+		bio->bi_sector = (block * pool->sectors_per_block) +
+				 sector_div(bi_sector, pool->sectors_per_block);
+	else
+		bio->bi_sector = (block << pool->sectors_per_block_shift) |
+				(bi_sector & (pool->sectors_per_block - 1));
 }
 
 static void remap_to_origin(struct thin_c *tc, struct bio *bio)
 {
 	bio->bi_bdev = tc->origin_dev->bdev;
+}
+
+static int bio_triggers_commit(struct thin_c *tc, struct bio *bio)
+{
+	return (bio->bi_rw & (REQ_FLUSH | REQ_FUA)) &&
+		dm_thin_changed_this_transaction(tc->td);
 }
 
 static void issue(struct thin_c *tc, struct bio *bio)
@@ -705,7 +722,7 @@ static void issue(struct thin_c *tc, struct bio *bio)
 	 * Batch together any FUA/FLUSH bios we find and then issue
 	 * a single commit for them in process_deferred_bios().
 	 */
-	if (bio->bi_rw & (REQ_FLUSH | REQ_FUA)) {
+	if (bio_triggers_commit(tc, bio)) {
 		spin_lock_irqsave(&pool->lock, flags);
 		bio_list_add(&pool->deferred_flush_bios, bio);
 		spin_unlock_irqrestore(&pool->lock, flags);
@@ -859,7 +876,7 @@ static void process_prepared_mapping(struct dm_thin_new_mapping *m)
 
 	if (m->err) {
 		cell_error(m->cell);
-		return;
+		goto out;
 	}
 
 	/*
@@ -871,7 +888,7 @@ static void process_prepared_mapping(struct dm_thin_new_mapping *m)
 	if (r) {
 		DMERR("dm_thin_insert_block() failed");
 		cell_error(m->cell);
-		return;
+		goto out;
 	}
 
 	/*
@@ -886,6 +903,7 @@ static void process_prepared_mapping(struct dm_thin_new_mapping *m)
 	} else
 		cell_defer(tc, m->cell, m->data_block);
 
+out:
 	list_del(&m->list);
 	mempool_free(m, tc->pool->mapping_pool);
 }
@@ -933,9 +951,7 @@ static void process_prepared(struct pool *pool, struct list_head *head,
  */
 static int io_overlaps_block(struct pool *pool, struct bio *bio)
 {
-	return !(bio->bi_sector & pool->offset_mask) &&
-		(bio->bi_size == (pool->sectors_per_block << SECTOR_SHIFT));
-
+	return bio->bi_size == (pool->sectors_per_block << SECTOR_SHIFT);
 }
 
 static int io_overwrites_block(struct pool *pool, struct bio *bio)
@@ -1218,7 +1234,7 @@ static void process_discard(struct thin_c *tc, struct bio *bio)
 			 */
 			m = get_next_mapping(pool);
 			m->tc = tc;
-			m->pass_discard = (!lookup_result.shared) & pool->pf.discard_passdown;
+			m->pass_discard = (!lookup_result.shared) && pool->pf.discard_passdown;
 			m->virt_block = block;
 			m->data_block = lookup_result.block;
 			m->cell = cell;
@@ -1234,15 +1250,10 @@ static void process_discard(struct thin_c *tc, struct bio *bio)
 			}
 		} else {
 			/*
-			 * This path is hit if people are ignoring
-			 * limits->discard_granularity.  It ignores any
-			 * part of the discard that is in a subsequent
-			 * block.
+			 * The DM core makes sure that the discard doesn't span
+			 * a block boundary.  So we submit the discard of a
+			 * partial block appropriately.
 			 */
-			sector_t offset = bio->bi_sector - (block << pool->block_shift);
-			unsigned remaining = (pool->sectors_per_block - offset) << 9;
-			bio->bi_size = min(bio->bi_size, remaining);
-
 			cell_release_singleton(cell, bio);
 			cell_release_singleton(cell2, bio);
 			if ((!lookup_result.shared) && pool->pf.discard_passdown)
@@ -1310,7 +1321,7 @@ static void process_shared_bio(struct thin_c *tc, struct bio *bio,
 	if (bio_detain(pool->prison, &key, bio, &cell))
 		return;
 
-	if (bio_data_dir(bio) == WRITE)
+	if (bio_data_dir(bio) == WRITE && bio->bi_size)
 		break_sharing(tc, bio, block, &key, lookup_result, cell);
 	else {
 		struct dm_thin_endio_hook *h = dm_get_mapinfo(bio)->ptr;
@@ -1707,7 +1718,7 @@ static struct pool *pool_create(struct mapped_device *pool_md,
 	struct pool *pool;
 	struct dm_pool_metadata *pmd;
 
-	pmd = dm_pool_metadata_open(metadata_dev, block_size);
+	pmd = dm_pool_metadata_open(metadata_dev, block_size, true);
 	if (IS_ERR(pmd)) {
 		*error = "Error creating metadata object";
 		return (struct pool *)pmd;
@@ -1722,8 +1733,10 @@ static struct pool *pool_create(struct mapped_device *pool_md,
 
 	pool->pmd = pmd;
 	pool->sectors_per_block = block_size;
-	pool->block_shift = ffs(block_size) - 1;
-	pool->offset_mask = block_size - 1;
+	if (block_size & (block_size - 1))
+		pool->sectors_per_block_shift = -1;
+	else
+		pool->sectors_per_block_shift = __ffs(block_size);
 	pool->low_water_blocks = 0;
 	pool_features_init(&pool->pf);
 	pool->prison = prison_create(PRISON_CELLS);
@@ -1828,15 +1841,19 @@ static struct pool *__pool_find(struct mapped_device *pool_md,
 	struct pool *pool = __pool_table_lookup_metadata_dev(metadata_dev);
 
 	if (pool) {
-		if (pool->pool_md != pool_md)
+		if (pool->pool_md != pool_md) {
+			*error = "metadata device already in use by a pool";
 			return ERR_PTR(-EBUSY);
+		}
 		__pool_inc(pool);
 
 	} else {
 		pool = __pool_table_lookup(pool_md);
 		if (pool) {
-			if (pool->md_dev != metadata_dev)
+			if (pool->md_dev != metadata_dev) {
+				*error = "different pool cannot replace a pool";
 				return ERR_PTR(-EINVAL);
+			}
 			__pool_inc(pool);
 
 		} else {
@@ -1967,7 +1984,7 @@ static int pool_ctr(struct dm_target *ti, unsigned argc, char **argv)
 	if (kstrtoul(argv[2], 10, &block_size) || !block_size ||
 	    block_size < DATA_DEV_BLOCK_SIZE_MIN_SECTORS ||
 	    block_size > DATA_DEV_BLOCK_SIZE_MAX_SECTORS ||
-	    !is_power_of_2(block_size)) {
+	    block_size & (DATA_DEV_BLOCK_SIZE_MIN_SECTORS - 1)) {
 		ti->error = "Invalid block size";
 		r = -EINVAL;
 		goto out;
@@ -2014,6 +2031,15 @@ static int pool_ctr(struct dm_target *ti, unsigned argc, char **argv)
 		goto out_flags_changed;
 	}
 
+	/*
+	 * The block layer requires discard_granularity to be a power of 2.
+	 */
+	if (pf.discard_enabled && !is_power_of_2(block_size)) {
+		ti->error = "Discard support must be disabled when the block size is not a power of 2";
+		r = -EINVAL;
+		goto out_flags_changed;
+	}
+
 	pt->pool = pool;
 	pt->ti = ti;
 	pt->metadata_dev = metadata_dev;
@@ -2033,7 +2059,7 @@ static int pool_ctr(struct dm_target *ti, unsigned argc, char **argv)
 		 * stacking of discard limits (this keeps the pool and
 		 * thin devices' discard limits consistent).
 		 */
-		ti->discards_supported = 1;
+		ti->discards_supported = true;
 	}
 	ti->private = pt;
 
@@ -2093,7 +2119,8 @@ static int pool_preresume(struct dm_target *ti)
 	int r;
 	struct pool_c *pt = ti->private;
 	struct pool *pool = pt->pool;
-	dm_block_t data_size, sb_data_size;
+	sector_t data_size = ti->len;
+	dm_block_t sb_data_size;
 
 	/*
 	 * Take control of the pool object.
@@ -2102,7 +2129,8 @@ static int pool_preresume(struct dm_target *ti)
 	if (r)
 		return r;
 
-	data_size = ti->len >> pool->block_shift;
+	(void) sector_div(data_size, pool->sectors_per_block);
+
 	r = dm_pool_get_data_dev_size(pool->pmd, &sb_data_size);
 	if (r) {
 		DMERR("failed to retrieve data device size");
@@ -2111,7 +2139,7 @@ static int pool_preresume(struct dm_target *ti)
 
 	if (data_size < sb_data_size) {
 		DMERR("pool target too small, is %llu blocks (expected %llu)",
-		      data_size, sb_data_size);
+		      (unsigned long long)data_size, sb_data_size);
 		return -EINVAL;
 
 	} else if (data_size > sb_data_size) {
@@ -2492,7 +2520,8 @@ static void set_discard_limits(struct pool *pool, struct queue_limits *limits)
 
 	/*
 	 * This is just a hint, and not enforced.  We have to cope with
-	 * bios that overlap 2 blocks.
+	 * bios that cover a block partially.  A discard that spans a block
+	 * boundary is not sent to this target.
 	 */
 	limits->discard_granularity = pool->sectors_per_block << SECTOR_SHIFT;
 	limits->discard_zeroes_data = pool->pf.zero_new_blocks;
@@ -2624,14 +2653,20 @@ static int thin_ctr(struct dm_target *ti, unsigned argc, char **argv)
 		goto bad_thin_open;
 	}
 
-	ti->split_io = tc->pool->sectors_per_block;
+	r = dm_set_target_max_io_len(ti, tc->pool->sectors_per_block);
+	if (r)
+		goto bad_thin_open;
+
 	ti->num_flush_requests = 1;
+	ti->flush_supported = true;
 
 	/* In case the pool supports discards, pass them on. */
 	if (tc->pool->pf.discard_enabled) {
-		ti->discards_supported = 1;
+		ti->discards_supported = true;
 		ti->num_discard_requests = 1;
-		ti->discard_zeroes_data_unsupported = 1;
+		ti->discard_zeroes_data_unsupported = true;
+		/* Discard requests must be split on a block boundary */
+		ti->split_discard_requests = true;
 	}
 
 	dm_put(pool_md);
@@ -2757,19 +2792,21 @@ static int thin_status(struct dm_target *ti, status_type_t type,
 static int thin_iterate_devices(struct dm_target *ti,
 				iterate_devices_callout_fn fn, void *data)
 {
-	dm_block_t blocks;
+	sector_t blocks;
 	struct thin_c *tc = ti->private;
+	struct pool *pool = tc->pool;
 
 	/*
 	 * We can't call dm_pool_get_data_dev_size() since that blocks.  So
 	 * we follow a more convoluted path through to the pool's target.
 	 */
-	if (!tc->pool->ti)
+	if (!pool->ti)
 		return 0;	/* nothing is bound */
 
-	blocks = tc->pool->ti->len >> tc->pool->block_shift;
+	blocks = pool->ti->len;
+	(void) sector_div(blocks, pool->sectors_per_block);
 	if (blocks)
-		return fn(ti, tc->pool_dev, 0, tc->pool->sectors_per_block * blocks, data);
+		return fn(ti, tc->pool_dev, 0, pool->sectors_per_block * blocks, data);
 
 	return 0;
 }
@@ -2786,7 +2823,7 @@ static void thin_io_hints(struct dm_target *ti, struct queue_limits *limits)
 
 static struct target_type thin_target = {
 	.name = "thin",
-	.version = {1, 1, 0},
+	.version = {1, 2, 0},
 	.module	= THIS_MODULE,
 	.ctr = thin_ctr,
 	.dtr = thin_dtr,
