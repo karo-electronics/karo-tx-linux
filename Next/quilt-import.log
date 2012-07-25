@@ -1,0 +1,175 @@
+Importing i2c based on 3.5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 28a33cbc24e4256c143dce96c7d93bf423229f92
+HEAD is now at 28a33cb Linux 3.5
+$ git am ../quilt/i2c/i2c-update-Guenter-Roeck-address.patch
+Applying: i2c: Update Guenter Roeck's e-mail address
+$ git am ../quilt/i2c/i2c-use-module_pci_driver.patch
+Applying: i2c/busses: Use module_pci_driver
+$ git am ../quilt/i2c/i2c-piix4-01-eliminate-piix4_smba-global-variable.patch
+Applying: i2c-piix4: Eliminate piix4_smba global variable
+$ git am ../quilt/i2c/i2c-piix4-02-separate-registration-and-probing-code.patch
+Applying: i2c-piix4: Separate registration and probing code
+$ git am ../quilt/i2c/i2c-piix4-03-support-amd-auxiliary-smbus-controller.patch
+Applying: i2c-piix4: Support AMD auxiliary SMBus controller
+$ git am ../quilt/i2c/i2c-writing-clients-mention-module_i2c_driver.patch
+Applying: i2c/writing-clients: Mention module_i2c_driver()
+$ git am ../quilt/i2c/i2c-smbus-use-module_i2c_driver.patch
+Applying: i2c-smbus: Use module_i2c_driver()
+$ git am ../quilt/i2c/i2c-i801-01-refactor-use-of-last_byte-in-i801_block_transaction_byte_by_byte.patch
+Applying: i2c-i801: Refactor use of LAST_BYTE in i801_block_transaction_byte_by_byte
+$ git am ../quilt/i2c/i2c-i801-02-clear-only-status-bits-in-hst_sts.patch
+Applying: i2c-i801: Clear only status bits in HST_STS
+$ git am ../quilt/i2c/i2c-i801-03-check-and-return-errors-during-byte-by-byte-transfers.patch
+Applying: i2c-i801: Check and return errors during byte-by-byte transfers
+$ git am ../quilt/i2c/i2c-i801-04-rename-some-smbhstcnt-bit-constants.patch
+Applying: i2c-i801: Rename some SMBHSTCNT bit constants
+$ git am ../quilt/i2c/i2c-i801-05-drop-enable_int9.patch
+Applying: i2c-i801: Drop ENABLE_INT9
+$ git am ../quilt/i2c/i2c-i801-06-consolidate-polling.patch
+Applying: i2c-i801: Consolidate polling
+$ git am ../quilt/i2c/i2c-i801-07-enable-irq-for-smbus-transactions.patch
+Applying: i2c-i801: Enable IRQ for SMBus transactions
+$ git am ../quilt/i2c/i2c-i801-08-enable-irq-on-ICH5-to-ICH10.patch
+Applying: i2c-i801: Enable interrupts on ICH5/7/8/9/10
+$ git am ../quilt/i2c/i2c-i801-09-enable-irq-for-byte_by_byte-transactions.patch
+Applying: i2c-i801: Enable IRQ for byte_by_byte transactions
+$ git am ../quilt/i2c/i2c-tiny-usb-add-support-for-Robofuzz-OSIF.patch
+Applying: i2c-tiny-usb: Add support for the Robofuzz OSIF USB/I2C converter
+$ git am ../quilt/i2c/i2c-add-sccb-support.patch
+Applying: i2c: Add SCCB support
+$ git am ../quilt/i2c/i2c-fall-back-to-emulated-smbus.patch
+Applying: i2c: Fall back to emulated SMBus if the operation isn't supported natively
+$ git am ../quilt/i2c/i2c-omap-add-support-for-I2C_M_STOP-message-flag.patch
+Applying: i2c-omap: Add support for I2C_M_STOP message flag
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + d41b9d8...d4dd03a master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2437fccfbfc83bcb868ccc7fdfe2b5310bf07835
+Unchanged quilt series jdelvare-hwmon
+Importing rr based on v3.5-rc7
+Unchanged quilt series rr
+Importing device-mapper based on v3.5
+$ cd ../quilt-tmp
+$ git reset --hard 28a33cbc24e4256c143dce96c7d93bf423229f92
+HEAD is now at 28a33cb Linux 3.5
+$ git am ../quilt/device-mapper/dm-thin-clean-up-compiler-warning.patch
+Applying: Clean up "warning: dubious: !x & y".  Also make it clear that
+$ git am ../quilt/device-mapper/dm-remove-unused-flush-target-method.patch
+Applying: Remove unused dm_flush_fn .flush target method from header.
+$ git am ../quilt/device-mapper/dm-persistent-data-remove-debug-space-map-checker.patch
+Applying: dm persistent data: remove debug space map checker
+$ git am ../quilt/device-mapper/dm-thin-metadata-remove-pointless-label-from-__commit_transaction.patch
+Applying: Remove the pointless label 'out' from __commit_transaction in
+$ git am ../quilt/device-mapper/dm-thin-metadata-introduce-THIN_MAX_CONCURRENT_LOCKS.patch
+Applying: Introduce THIN_MAX_CONCURRENT_LOCKS into dm-thin-metadata to
+$ git am ../quilt/device-mapper/dm-snapshot-remove-redundant-assignment-in-merge-fn.patch
+Applying: Remove redundant bvm->bi_sector self-assignment in origin_merge().
+$ git am ../quilt/device-mapper/dm-replace-simple_strtoul.patch
+Applying: Replace obsolete simple_strtoul() with kstrtou8/kstrtouint.
+$ git am ../quilt/device-mapper/dm-thin-provide-specific-errors-for-two-table-load-failure-cases.patch
+Applying: Provide specific error message strings for two pool_ctr() failure cases
+$ git am ../quilt/device-mapper/dm-stripe-fix-size-test.patch
+Applying: dm-stripe is supposed to ensure that all the space allocated to the
+$ git am ../quilt/device-mapper/dm-stripe-remove-stripes_mask.patch
+Applying: The structure stripe_c contains a stripes_mask field. This field is
+$ git am ../quilt/device-mapper/dm-support-non-power-of-two-target-max_io_len.patch
+Applying: Remove the restriction that limits a target's specified maximum incoming
+$ git am ../quilt/device-mapper/dm-stripe-support-for-non-power-of-2-chunksize.patch
+Applying: Non power of 2 chunksize support is needed to properly align stripe IO
+$ git am ../quilt/device-mapper/dm-stripe-remove-minimum-stripe-size.patch
+Applying: There is no technical limitation in device mapper that would prevent the
+$ git am ../quilt/device-mapper/dm-stripe-optimize-chunk_size-calculations.patch
+Applying: dm-stripe is usually used with a chunk size that is a power of two.
+$ git am ../quilt/device-mapper/dm-thin-support-for-non-power-of-2-pool-blocksize.patch
+Applying: Non power of 2 blocksize support is needed to properly align thinp IO
+$ git am ../quilt/device-mapper/dm-introduce-split_discard_requests.patch
+Applying: This patch introduces a new variable split_discard_requests. It can be
+$ git am ../quilt/device-mapper/dm-thin-split-discards-on-block-boundary.patch
+Applying: This patch sets the variable "ti->split_discard_requests", so that
+$ git am ../quilt/device-mapper/dm-thin-optimize-power-of-two-block-size.patch
+Applying: dm-thin will be most likely used with a block size that is a power of
+$ git am ../quilt/device-mapper/dm-mpath-add-retain_attached_hw_handler-feature.patch
+Applying: A SCSI device handler might get attached to a device during the
+$ git am ../quilt/device-mapper/dm-raid-restructure-parse_raid_params.patch
+Applying: In preparation for RAID10 addition to dm-raid, we change an 'if' conditional
+$ git am ../quilt/device-mapper/dm-raid-move-sectors_per_dev-calculation.patch
+Applying: In preparation for RAID10 inclusion in dm-raid, we move the sectors_per_dev
+$ git am ../quilt/device-mapper/dm-thin-fix-memory-leak-in-process_prepared_mapping-error-paths.patch
+Applying: Fix memory leak in process_prepared_mapping by always freeing
+$ git am ../quilt/device-mapper/dm-thin-avoid-unnecessarily-breaking-sharing-for-flushes.patch
+Applying: There's no need to break sharing, triggering a copy, for a write that has no
+$ git am ../quilt/device-mapper/dm-persistent-data-always-unlock-superblock-in-dm_bm_flush_and_unlock.patch
+Applying: Unlock the superblock even if initial dm_bufio_write_dirty_buffers fails.
+$ git am ../quilt/device-mapper/dm-persistent-data-only-commit-space-map-if-index-changed.patch
+Applying: Introduce bitmap_index_changed to track whether or not the index changed
+$ git am ../quilt/device-mapper/dm-allow-targets-to-request-flushes-regardless-of-underlying-device-support.patch
+Applying: Allow targets to override the 'supports flush' calculation.
+$ git am ../quilt/device-mapper/dm-thin-set-flush_supported.patch
+Applying: The thin provisioning target commits internal metadata on flush.  So it
+$ git am ../quilt/device-mapper/dm-use-bool-bitfields-in-struct-dm_target.patch
+Applying: Use boolean bit fields for flags in struct dm_target.
+$ git am ../quilt/device-mapper/dm-thin-metadata-factor-__setup_btree_details-out-of-init_pmd.patch
+Applying: Factor __setup_btree_details out of init_pmd in dm-thin-metadata.
+$ git am ../quilt/device-mapper/dm-persistent-data-create-new-dm_block_manager-struct.patch
+Applying: This patch introduces a separate struct for the block_manager.
+$ git am ../quilt/device-mapper/dm-thin-metadata-stop-tracking-need-for-commit.patch
+Applying: Remove an optimisation that tracks whether or not a thin metadata commit
+$ git am ../quilt/device-mapper/dm-persistent-data-tidy-transaction-manager-creation-fns.patch
+Applying: Tidy the transaction manager creation functions.
+$ git am ../quilt/device-mapper/dm-persistent-data-stop-using-dm_bm_unlock_move-when-shadowing-blocks-in-tm.patch
+Applying: Stop using dm_bm_unlock_move when shadowing blocks in the transaction
+$ git am ../quilt/device-mapper/dm-thin-metadata-wrap-superblock-locking.patch
+Applying: Introduce wrappers to handle write locking the superblock
+$ git am ../quilt/device-mapper/dm-thin-metadata-rename-init_pmd-to-__create_persistent_data_objects.patch
+Applying: Rename init_pmd to __create_persistent_data_objects in dm-thin-metadata.
+$ git am ../quilt/device-mapper/dm-thin-metadata-move-bm-creation-code-into-create_persistent_data_objects.patch
+Applying: Move block manager creation and the check for unformatted metadata into
+$ git am ../quilt/device-mapper/dm-thin-metadata-factor-__destroy_persistent_data-out-of-dm_pool_metadata_close.patch
+Applying: Factor __destroy_persistent_data_objects out of dm_pool_metadata_close.
+$ git am ../quilt/device-mapper/dm-thin-metadata-lift-some-initialisation-out-of-__open_or_format_metadata.patch
+Applying: Lift some initialisation out of __open_or_format_metadata in dm-thin-metadata.
+$ git am ../quilt/device-mapper/dm-thin-metadata-factor-out-__write_initial_superblock.patch
+Applying: Factor out __write_initial_superblock and also pull some other initial
+$ git am ../quilt/device-mapper/dm-thin-metadata-move-dm_commit_pool_metadata-into-__write_initial_superblock.patch
+Applying: Move dm_commit_pool_metadata inline into __write_initial_superblock in dm-thin-metadata.
+$ git am ../quilt/device-mapper/dm-thin-metadata-lift-__begin_transaction-out-of-__write_initial_superblock.patch
+Applying: Lift the call to __begin_transaction out of __write_initial_superblock in dm-thin-metadata.
+$ git am ../quilt/device-mapper/dm-thin-metadata-zero-unused-superblock-uuid.patch
+Applying: Zero the unused uuid when initialising the metadata superblock.
+$ git am ../quilt/device-mapper/dm-thin-metadata-use-struct-dm_pool_metadata-members-in-__open_or_format_metadata.patch
+Applying: Clean up __open_or_format_metadata in dm-thin-metadata by using struct
+$ git am ../quilt/device-mapper/dm-thin-metadata-split-__open-or-format-metadata.patch
+Applying: Split __open_or_format_metadata into __format_metadata and __open_metadata in
+$ git am ../quilt/device-mapper/dm-thin-metadata-remove-nr_blocks-arg-from-__create_persistent_data_objects.patch
+Applying: Remove nr_blocks arg from __create_persistent_data_objects in dm-thin-metadata.
+$ git am ../quilt/device-mapper/dm-thin-metadata-move-__superblock_all_zeroes-to-__open_or_format_metadata.patch
+Applying: Move the check for __superblock_all_zeroes from
+$ git am ../quilt/device-mapper/dm-thin-metadata-remove-create-parameter-from-__create_persistent_data_objects.patch
+Applying: Remove 'create' parameter from __create_persistent_data_objects() in dm-thin-metadata.
+$ git am ../quilt/device-mapper/dm-thin-metadata-remove-duplicate-pmd-initialisation.patch
+Applying: Remove some duplicate initialisation of struct dm_pool_metadata.
+$ git am ../quilt/device-mapper/dm-thin-metadata-only-check-incompat-features-on-open.patch
+Applying: Factor out __check_incompat_features and only call it once when we open
+$ git am ../quilt/device-mapper/dm-thin-metadata-tidy-up-open-and-format-error-paths.patch
+Applying: Tidy up error path in __open_metadata and __format_metadata in dm-thin-metadata.
+$ git am ../quilt/device-mapper/dm-thin-metadata-add-format-option-to-dm_pool_metadata_open.patch
+Applying: Add a parameter to dm_pool_metadata_open to indicate whether or not an unformatted
+$ git am ../quilt/device-mapper/dm-thin-metadata-add-dm_thin_changed_this_transaction.patch
+Applying: Introduce dm_thin_changed_this_transaction to dm-thin-metadata to publish a
+$ git am ../quilt/device-mapper/dm-thin-reduce-number-of-metadata-commits.patch
+Applying: Reduce the number of metadata commits by using
+$ git am ../quilt/device-mapper/dm-persistent-data-introduce-dm_bm_set_read_only.patch
+Applying: Introduce dm_bm_set_read_only to switch the block manager into a
+$ git am ../quilt/device-mapper/dm-thin-metadata-introduce-dm_pool_metadata_set_read_only.patch
+Applying: Introduce dm_pool_metadata_set_read_only to put the underlying block
+$ git am ../quilt/device-mapper/dm-thin-metadata-introduce-dm_pool_abort_metadata.patch
+Applying: Introduce dm_pool_abort_metadata to abort the current metadata
+$ git am ../quilt/device-mapper/dm-thin-add-read-only-and-fail-io-modes.patch
+Applying: Add read-only and fail-io modes to thin provisioning.
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 1a3c859...51a1b23 master     -> quilt/device-mapper  (forced update)
