@@ -31,6 +31,7 @@
 
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
+#include <asm/mach/pci.h>
 
 #include "mm.h"
 
@@ -785,6 +786,19 @@ void __init iotable_init(struct map_desc *io_desc, int nr)
 	}
 }
 
+void __init vm_reserve_area_early(unsigned long addr, unsigned long size,
+				  void *caller)
+{
+	struct vm_struct *vm;
+
+	vm = early_alloc_aligned(sizeof(*vm), __alignof__(*vm));
+	vm->addr = (void *)addr;
+	vm->size = size;
+	vm->flags = VM_IOREMAP | VM_ARM_STATIC_MAPPING;
+	vm->caller = caller;
+	vm_area_add_early(vm);
+}
+
 #ifndef CONFIG_ARM_LPAE
 
 /*
@@ -802,14 +816,7 @@ void __init iotable_init(struct map_desc *io_desc, int nr)
 
 static void __init pmd_empty_section_gap(unsigned long addr)
 {
-	struct vm_struct *vm;
-
-	vm = early_alloc_aligned(sizeof(*vm), __alignof__(*vm));
-	vm->addr = (void *)addr;
-	vm->size = SECTION_SIZE;
-	vm->flags = VM_IOREMAP | VM_ARM_STATIC_MAPPING;
-	vm->caller = pmd_empty_section_gap;
-	vm_area_add_early(vm);
+	vm_reserve_area_early(addr, SECTION_SIZE, pmd_empty_section_gap);
 }
 
 static void __init fill_pmd_gaps(void)
@@ -1133,6 +1140,9 @@ static void __init devicemaps_init(struct machine_desc *mdesc)
 		map.type = MT_LOW_VECTORS;
 		create_mapping(&map);
 	}
+
+	/* Reserve fixed i/o space in VMALLOC region */
+	pci_reserve_io();
 
 	/*
 	 * Ask the machine support to map in the statically mapped devices.

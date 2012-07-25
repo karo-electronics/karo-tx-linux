@@ -15,7 +15,7 @@
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/spinlock.h>
- 
+
 #include <asm/pgtable.h>
 #include <asm/page.h>
 #include <asm/irq.h>
@@ -26,6 +26,7 @@
 
 #include <asm/mach/irq.h>
 #include <asm/mach/map.h>
+#include <asm/mach/pci.h>
 
 #include "common.h"
 
@@ -174,11 +175,6 @@ static struct map_desc ebsa285_host_io_desc[] __initdata = {
 		.virtual	= PCIIACK_BASE,
 		.pfn		= __phys_to_pfn(DC21285_PCI_IACK),
 		.length		= PCIIACK_SIZE,
-		.type		= MT_DEVICE,
-	}, {
-		.virtual	= PCIO_BASE,
-		.pfn		= __phys_to_pfn(DC21285_PCI_IO),
-		.length		= PCIO_SIZE,
 		.type		= MT_DEVICE,
 	},
 #endif
