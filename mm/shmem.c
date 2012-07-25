@@ -930,8 +930,12 @@ static struct page *shmem_swapin(swp_entry_t swap, gfp_t gfp,
 	/* Create a pseudo vma that just contains the policy */
 	pvma.vm_start = 0;
 	pvma.vm_pgoff = index;
-	pvma.vm_ops = NULL;
 	pvma.vm_policy = spol;
+	pvma.vm_private_data = (void *) info->node_offset;
+	if (pvma.vm_policy)
+		pvma.vm_ops = &shmem_vm_ops;
+	else
+		pvma.vm_ops = NULL;
 	return swapin_readahead(swap, gfp, &pvma, 0);
 }
 
@@ -943,8 +947,12 @@ static struct page *shmem_alloc_page(gfp_t gfp,
 	/* Create a pseudo vma that just contains the policy */
 	pvma.vm_start = 0;
 	pvma.vm_pgoff = index;
-	pvma.vm_ops = NULL;
 	pvma.vm_policy = mpol_shared_policy_lookup(&info->policy, index);
+	pvma.vm_private_data = (void *) info->node_offset;
+	if (pvma.vm_policy)
+		pvma.vm_ops = &shmem_vm_ops;
+	else
+		pvma.vm_ops = NULL;
 
 	/*
 	 * alloc_page_vma() will drop the shared policy reference
@@ -1311,11 +1319,30 @@ static int shmem_set_policy(struct vm_area_struct *vma, struct mempolicy *mpol)
 static struct mempolicy *shmem_get_policy(struct vm_area_struct *vma,
 					  unsigned long addr)
 {
-	struct inode *inode = vma->vm_file->f_path.dentry->d_inode;
 	pgoff_t index;
+	struct inode *inode;
+
+	/* If the vma knows what policy it wants use that one. */
+	if (vma->vm_policy)
+		return vma->vm_policy;
+
+	inode = vma->vm_file->f_path.dentry->d_inode;
 
 	index = ((addr - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
 	return mpol_shared_policy_lookup(&SHMEM_I(inode)->policy, index);
+}
+
+static unsigned long shmem_interleave(struct vm_area_struct *vma,
+					unsigned long addr)
+{
+	unsigned long offset;
+
+	/* Use the vm_files prefered node as the initial offset. */
+	offset = (unsigned long *) vma->vm_private_data;
+
+	offset += ((addr - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
+
+	return offset;
 }
 #endif
 
@@ -1389,6 +1416,7 @@ static struct inode *shmem_get_inode(struct super_block *sb, const struct inode 
 			inode->i_fop = &shmem_file_operations;
 			mpol_shared_policy_init(&info->policy,
 						 shmem_get_sbmpol(sbinfo));
+			info->node_offset = ++(sbinfo->next_pref_node);
 			break;
 		case S_IFDIR:
 			inc_nlink(inode);
@@ -2783,6 +2811,7 @@ static const struct super_operations shmem_ops = {
 static const struct vm_operations_struct shmem_vm_ops = {
 	.fault		= shmem_fault,
 #ifdef CONFIG_NUMA
+	.interleave	= shmem_interleave,
 	.set_policy     = shmem_set_policy,
 	.get_policy     = shmem_get_policy,
 #endif
