@@ -87,7 +87,7 @@
 
 #define SYSCONFIG2		5	/* System Configuration 2 */
 #define SYSCONFIG2_SEEKTH	0xff00	/* bits 15..08: RSSI Seek Threshold */
-#define SYSCONFIG2_BAND		0x0080	/* bits 07..06: Band Select */
+#define SYSCONFIG2_BAND		0x00c0	/* bits 07..06: Band Select */
 #define SYSCONFIG2_SPACE	0x0030	/* bits 05..04: Channel Spacing */
 #define SYSCONFIG2_VOLUME	0x000f	/* bits 03..00: Volume */
 
@@ -147,6 +147,7 @@ struct si470x_device {
 	struct v4l2_device v4l2_dev;
 	struct video_device videodev;
 	struct v4l2_ctrl_handler hdl;
+	int band;
 
 	/* Silabs internal registers (0..15) */
 	unsigned short registers[RADIO_REGISTER_NUM];
@@ -189,7 +190,7 @@ struct si470x_device {
  * Firmware Versions
  **************************************************************************/
 
-#define RADIO_FW_VERSION	14
+#define RADIO_FW_VERSION	12
 
 
 
