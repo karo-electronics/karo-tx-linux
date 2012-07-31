@@ -498,61 +498,13 @@ void md_flush_request(struct mddev *mddev, struct bio *bio)
 }
 EXPORT_SYMBOL(md_flush_request);
 
-/* Support for plugging.
- * This mirrors the plugging support in request_queue, but does not
- * require having a whole queue or request structures.
- * We allocate an md_plug_cb for each md device and each thread it gets
- * plugged on.  This links tot the private plug_handle structure in the
- * personality data where we keep a count of the number of outstanding
- * plugs so other code can see if a plug is active.
- */
-struct md_plug_cb {
-	struct blk_plug_cb cb;
-	struct mddev *mddev;
-};
-
-static void plugger_unplug(struct blk_plug_cb *cb)
+void md_unplug(struct blk_plug_cb *cb, bool from_schedule)
 {
-	struct md_plug_cb *mdcb = container_of(cb, struct md_plug_cb, cb);
-	if (atomic_dec_and_test(&mdcb->mddev->plug_cnt))
-		md_wakeup_thread(mdcb->mddev->thread);
-	kfree(mdcb);
+	struct mddev *mddev = cb->data;
+	md_wakeup_thread(mddev->thread);
+	kfree(cb);
 }
-
-/* Check that an unplug wakeup will come shortly.
- * If not, wakeup the md thread immediately
- */
-int mddev_check_plugged(struct mddev *mddev)
-{
-	struct blk_plug *plug = current->plug;
-	struct md_plug_cb *mdcb;
-
-	if (!plug)
-		return 0;
-
-	list_for_each_entry(mdcb, &plug->cb_list, cb.list) {
-		if (mdcb->cb.callback == plugger_unplug &&
-		    mdcb->mddev == mddev) {
-			/* Already on the list, move to top */
-			if (mdcb != list_first_entry(&plug->cb_list,
-						    struct md_plug_cb,
-						    cb.list))
-				list_move(&mdcb->cb.list, &plug->cb_list);
-			return 1;
-		}
-	}
-	/* Not currently on the callback list */
-	mdcb = kmalloc(sizeof(*mdcb), GFP_ATOMIC);
-	if (!mdcb)
-		return 0;
-
-	mdcb->mddev = mddev;
-	mdcb->cb.callback = plugger_unplug;
-	atomic_inc(&mddev->plug_cnt);
-	list_add(&mdcb->cb.list, &plug->cb_list);
-	return 1;
-}
-EXPORT_SYMBOL_GPL(mddev_check_plugged);
+EXPORT_SYMBOL(md_unplug);
 
 static inline struct mddev *mddev_get(struct mddev *mddev)
 {
@@ -602,7 +554,6 @@ void mddev_init(struct mddev *mddev)
 	atomic_set(&mddev->active, 1);
 	atomic_set(&mddev->openers, 0);
 	atomic_set(&mddev->active_io, 0);
-	atomic_set(&mddev->plug_cnt, 0);
 	spin_lock_init(&mddev->write_lock);
 	atomic_set(&mddev->flush_pending, 0);
 	init_waitqueue_head(&mddev->sb_wait);
@@ -760,11 +711,33 @@ static struct md_rdev * find_rdev_nr(struct mddev *mddev, int nr)
 	return NULL;
 }
 
+static struct md_rdev * find_rdev_nr_rcu(struct mddev *mddev, int nr)
+{
+	struct md_rdev *rdev;
+
+	rdev_for_each_rcu(rdev, mddev)
+		if (rdev->desc_nr == nr)
+			return rdev;
+
+	return NULL;
+}
+
 static struct md_rdev * find_rdev(struct mddev * mddev, dev_t dev)
 {
 	struct md_rdev *rdev;
 
 	rdev_for_each(rdev, mddev)
+		if (rdev->bdev->bd_dev == dev)
+			return rdev;
+
+	return NULL;
+}
+
+static struct md_rdev * find_rdev_rcu(struct mddev * mddev, dev_t dev)
+{
+	struct md_rdev *rdev;
+
+	rdev_for_each_rcu(rdev, mddev)
 		if (rdev->bdev->bd_dev == dev)
 			return rdev;
 
@@ -3942,17 +3915,13 @@ array_state_store(struct mddev *mddev, const char *buf, size_t len)
 		break;
 	case clear:
 		/* stopping an active array */
-		if (atomic_read(&mddev->openers) > 0)
-			return -EBUSY;
 		err = do_md_stop(mddev, 0, NULL);
 		break;
 	case inactive:
 		/* stopping an active array */
-		if (mddev->pers) {
-			if (atomic_read(&mddev->openers) > 0)
-				return -EBUSY;
+		if (mddev->pers)
 			err = do_md_stop(mddev, 2, NULL);
-		} else
+		else
 			err = 0; /* already inactive */
 		break;
 	case suspended:
@@ -5597,8 +5566,9 @@ static int get_array_info(struct mddev * mddev, void __user * arg)
 	int nr,working,insync,failed,spare;
 	struct md_rdev *rdev;
 
-	nr=working=insync=failed=spare=0;
-	rdev_for_each(rdev, mddev) {
+	nr = working = insync = failed = spare = 0;
+	rcu_read_lock();
+	rdev_for_each_rcu(rdev, mddev) {
 		nr++;
 		if (test_bit(Faulty, &rdev->flags))
 			failed++;
@@ -5610,6 +5580,7 @@ static int get_array_info(struct mddev * mddev, void __user * arg)
 				spare++;
 		}
 	}
+	rcu_read_unlock();
 
 	info.major_version = mddev->major_version;
 	info.minor_version = mddev->minor_version;
@@ -5693,7 +5664,8 @@ static int get_disk_info(struct mddev * mddev, void __user * arg)
 	if (copy_from_user(&info, arg, sizeof(info)))
 		return -EFAULT;
 
-	rdev = find_rdev_nr(mddev, info.number);
+	rcu_read_lock();
+	rdev = find_rdev_nr_rcu(mddev, info.number);
 	if (rdev) {
 		info.major = MAJOR(rdev->bdev->bd_dev);
 		info.minor = MINOR(rdev->bdev->bd_dev);
@@ -5712,6 +5684,7 @@ static int get_disk_info(struct mddev * mddev, void __user * arg)
 		info.raid_disk = -1;
 		info.state = (1<<MD_DISK_REMOVED);
 	}
+	rcu_read_unlock();
 
 	if (copy_to_user(arg, &info, sizeof(info)))
 		return -EFAULT;
@@ -6320,18 +6293,22 @@ static int update_array_info(struct mddev *mddev, mdu_array_info_t *info)
 static int set_disk_faulty(struct mddev *mddev, dev_t dev)
 {
 	struct md_rdev *rdev;
+	int err = 0;
 
 	if (mddev->pers == NULL)
 		return -ENODEV;
 
-	rdev = find_rdev(mddev, dev);
+	rcu_read_lock();
+	rdev = find_rdev_rcu(mddev, dev);
 	if (!rdev)
-		return -ENODEV;
-
-	md_error(mddev, rdev);
-	if (!test_bit(Faulty, &rdev->flags))
-		return -EBUSY;
-	return 0;
+		err =  -ENODEV;
+	else {
+		md_error(mddev, rdev);
+		if (!test_bit(Faulty, &rdev->flags))
+			err = -EBUSY;
+	}
+	rcu_read_unlock();
+	return err;
 }
 
 /*
@@ -6401,6 +6378,21 @@ static int md_ioctl(struct block_device *bdev, fmode_t mode,
 	if (!mddev) {
 		BUG();
 		goto abort;
+	}
+
+	/* Some actions do not requires the mutex */
+	switch (cmd) {
+		case GET_ARRAY_INFO:
+			err = get_array_info(mddev, argp);
+			goto abort;
+
+		case GET_DISK_INFO:
+			err = get_disk_info(mddev, argp);
+			goto abort;
+
+		case SET_DISK_FAULTY:
+			err = set_disk_faulty(mddev, new_decode_dev(arg));
+			goto abort;
 	}
 
 	err = mddev_lock(mddev);
@@ -6475,16 +6467,8 @@ static int md_ioctl(struct block_device *bdev, fmode_t mode,
 	 */
 	switch (cmd)
 	{
-		case GET_ARRAY_INFO:
-			err = get_array_info(mddev, argp);
-			goto done_unlock;
-
 		case GET_BITMAP_FILE:
 			err = get_bitmap_file(mddev, argp);
-			goto done_unlock;
-
-		case GET_DISK_INFO:
-			err = get_disk_info(mddev, argp);
 			goto done_unlock;
 
 		case RESTART_ARRAY_RW:
@@ -6566,10 +6550,6 @@ static int md_ioctl(struct block_device *bdev, fmode_t mode,
 
 		case HOT_ADD_DISK:
 			err = hot_add_disk(mddev, new_decode_dev(arg));
-			goto done_unlock;
-
-		case SET_DISK_FAULTY:
-			err = set_disk_faulty(mddev, new_decode_dev(arg));
 			goto done_unlock;
 
 		case RUN_ARRAY:
