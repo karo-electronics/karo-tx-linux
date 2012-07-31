@@ -1647,6 +1647,11 @@ ENTRY(compat_sys_process_vm_writev_wrapper)
 	stg	%r0,160(%r15)
 	jg	compat_sys_process_vm_writev
 
+ENTRY(sys_s390_runtime_instr_wrapper)
+	lgfr	%r2,%r2			# int
+	lgfr	%r3,%r3			# int
+	jg	sys_s390_runtime_instr
+
 ENTRY(sys_kcmp_wrapper)
 	lgfr	%r2,%r2			# pid_t
 	lgfr	%r3,%r3			# pid_t

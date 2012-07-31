@@ -277,7 +277,7 @@
 #define __NR_setns		339
 #define __NR_process_vm_readv	340
 #define __NR_process_vm_writev	341
-/* Number 342 is reserved for sys_s390_runtime_instr */
+#define __NR_s390_runtime_instr 342
 #define __NR_kcmp		343
 #define NR_syscalls 344
 
