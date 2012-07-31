@@ -1,0 +1,47 @@
+Importing i2c based on bdc0077af574800d24318b6945cf2344e8dbb050
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on f7da9cdf45cbbad5029d4858dcbc0134e06084ed
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard f7da9cdf45cbbad5029d4858dcbc0134e06084ed
+HEAD is now at f7da9cd Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net
+$ git am ../quilt/jdelvare-hwmon/hwmon-struct-x86_cpu_id-arrays-can-be-__initconst.patch
+Applying: hwmon: struct x86_cpu_id arrays can be __initconst
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 73e15f6...b2c6146 master     -> quilt/jdelvare-hwmon  (forced update)
+Importing rr based on v3.5-7078-gf7da9cd
+$ cd ../quilt-tmp
+$ git reset --hard f7da9cdf45cbbad5029d4858dcbc0134e06084ed
+HEAD is now at f7da9cd Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net
+$ git am ../quilt/rr/virtio:ids_fix_comment_for_rng.patch
+Applying: virtio ids: fix comment for virtio-rng
+$ git am ../quilt/rr/virtio:rng_allow_tasks_to_be_killed_that_are_waiting_for_rng_input.patch
+Applying: virtio: rng: allow tasks to be killed that are waiting for rng input
+$ git am ../quilt/rr/virtio:rng_don_t_wait_on_host_when_module_is_going_away.patch
+Applying: virtio: rng: don't wait on host when module is going away
+$ git am ../quilt/rr/virtio:rng_split_out_common_code_in_probe_remove_for_s3_s4_ops.patch
+Applying: virtio: rng: split out common code in probe / remove for s3/s4 ops
+$ git am ../quilt/rr/virtio:rng_s3_s4_support.patch
+Applying: virtio: rng: s3/s4 support
+$ git am ../quilt/rr/virtio:blk_call_del_gendisk_before_disable_guest_kick.patch
+Applying: virtio-blk: Call del_gendisk() before disable guest kick
+$ git am ../quilt/rr/virtio:blk_reset_device_after_blk_cleanup_queue.patch
+Applying: virtio-blk: Reset device after blk_cleanup_queue()
+$ git am ../quilt/rr/virtio:blk_use_block_layer_provided_spinlock.patch
+Applying: virtio-blk: Use block layer provided spinlock
+$ git am ../quilt/rr/virtio:blk_allow_toggling_host_cache_between_writeback_and_writethrough.patch
+Applying: virtio-blk: allow toggling host cache between writeback and writethrough
+$ git am ../quilt/rr/virtio_blk-expose-old-VIRTIO_BLK_F_FLUSH.patch
+Applying: virtio-blk: return VIRTIO_BLK_F_FLUSH to header.
+$ git am ../quilt/rr/module:taint_kernel_when_lve_is_loaded.patch
+Applying: Taint kernel when lve module is loaded
+$ git am ../quilt/rr/module:make_most_arch_asm_h_files_use_asm_generic_h.patch
+Applying: Make most arch asm/module.h files use asm-generic/module.h
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 3804700...a5839a8 master     -> quilt/rr  (forced update)
+Importing device-mapper based on v3.5-4773-gbdc0077
+Unchanged quilt series device-mapper
