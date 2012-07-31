@@ -1,7 +1,7 @@
 /*
- * P3041DS Device Tree Source
+ * P5040DS Device Tree Source
  *
- * Copyright 2010-2011 Freescale Semiconductor Inc.
+ * Copyright 2012 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -20,23 +20,23 @@
  * Foundation, either version 2 of that License or (at your option) any
  * later version.
  *
- * THIS SOFTWARE IS PROVIDED BY Freescale Semiconductor ``AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL Freescale Semiconductor BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * This software is provided by Freescale Semiconductor "as is" and any
+ * express or implied warranties, including, but not limited to, the implied
+ * warranties of merchantability and fitness for a particular purpose are
+ * disclaimed. In no event shall Freescale Semiconductor be liable for any
+ * direct, indirect, incidental, special, exemplary, or consequential damages
+ * (including, but not limited to, procurement of substitute goods or services;
+ * loss of use, data, or profits; or business interruption) however caused and
+ * on any theory of liability, whether in contract, strict liability, or tort
+ * (including negligence or otherwise) arising in any way out of the use of this
+ * software, even if advised of the possibility of such damage.
  */
 
-/include/ "fsl/p3041si-pre.dtsi"
+/include/ "fsl/p5040si-pre.dtsi"
 
 / {
-	model = "fsl,P3041DS";
-	compatible = "fsl,P3041DS";
+	model = "fsl,P5040DS";
+	compatible = "fsl,P5040DS";
 	#address-cells = <2>;
 	#size-cells = <2>;
 	interrupt-parent = <&mpic>;
@@ -58,21 +58,18 @@
 				#size-cells = <1>;
 				compatible = "spansion,s25sl12801";
 				reg = <0>;
-				spi-max-frequency = <35000000>; /* input clock */
+				spi-max-frequency = <40000000>; /* input clock */
 				partition@u-boot {
 					label = "u-boot";
 					reg = <0x00000000 0x00100000>;
-					read-only;
 				};
 				partition@kernel {
 					label = "kernel";
 					reg = <0x00100000 0x00500000>;
-					read-only;
 				};
 				partition@dtb {
 					label = "dtb";
 					reg = <0x00600000 0x00100000>;
-					read-only;
 				};
 				partition@fs {
 					label = "file system";
@@ -101,17 +98,6 @@
 		};
 	};
 
-	rio: rapidio@ffe0c0000 {
-		reg = <0xf 0xfe0c0000 0 0x11000>;
-
-		port1 {
-			ranges = <0 0 0xc 0x20000000 0 0x10000000>;
-		};
-		port2 {
-			ranges = <0 0 0xc 0x30000000 0 0x10000000>;
-		};
-	};
-
 	lbc: localbus@ffe124000 {
 		reg = <0xf 0xfe124000 0 0x1000>;
 		ranges = <0 0 0xf 0xe8000000 0x08000000
@@ -134,7 +120,6 @@
 			partition@0 {
 				label = "NAND U-Boot Image";
 				reg = <0x0 0x02000000>;
-				read-only;
 			};
 
 			partition@2000000 {
@@ -159,13 +144,13 @@
 
 			partition@1f000000 {
 				label = "NAND Writable User area";
-				reg = <0x1f000000 0x21000000>;
+				reg = <0x1f000000 0x01000000>;
 			};
 		};
 
 		board-control@3,0 {
-			compatible = "fsl,p3041ds-fpga", "fsl,fpga-ngpixis";
-			reg = <3 0 0x30>;
+			compatible = "fsl,p5040ds-fpga", "fsl,fpga-ngpixis";
+			reg = <3 0 0x40>;
 		};
 	};
 
@@ -213,21 +198,6 @@
 				  0 0x00010000>;
 		};
 	};
-
-	pci3: pcie@ffe203000 {
-		reg = <0xf 0xfe203000 0 0x1000>;
-		ranges = <0x02000000 0 0xe0000000 0xc 0x60000000 0 0x20000000
-			  0x01000000 0 0x00000000 0xf 0xf8030000 0 0x00010000>;
-		pcie@0 {
-			ranges = <0x02000000 0 0xe0000000
-				  0x02000000 0 0xe0000000
-				  0 0x20000000
-
-				  0x01000000 0 0x00000000
-				  0x01000000 0 0x00000000
-				  0 0x00010000>;
-		};
-	};
 };
 
-/include/ "fsl/p3041si-post.dtsi"
+/include/ "fsl/p5040si-post.dtsi"
