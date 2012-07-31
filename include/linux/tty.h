@@ -103,28 +103,28 @@ struct tty_bufhead {
 #define TTY_PARITY	3
 #define TTY_OVERRUN	4
 
-#define INTR_CHAR(tty) ((tty)->termios->c_cc[VINTR])
-#define QUIT_CHAR(tty) ((tty)->termios->c_cc[VQUIT])
-#define ERASE_CHAR(tty) ((tty)->termios->c_cc[VERASE])
-#define KILL_CHAR(tty) ((tty)->termios->c_cc[VKILL])
-#define EOF_CHAR(tty) ((tty)->termios->c_cc[VEOF])
-#define TIME_CHAR(tty) ((tty)->termios->c_cc[VTIME])
-#define MIN_CHAR(tty) ((tty)->termios->c_cc[VMIN])
-#define SWTC_CHAR(tty) ((tty)->termios->c_cc[VSWTC])
-#define START_CHAR(tty) ((tty)->termios->c_cc[VSTART])
-#define STOP_CHAR(tty) ((tty)->termios->c_cc[VSTOP])
-#define SUSP_CHAR(tty) ((tty)->termios->c_cc[VSUSP])
-#define EOL_CHAR(tty) ((tty)->termios->c_cc[VEOL])
-#define REPRINT_CHAR(tty) ((tty)->termios->c_cc[VREPRINT])
-#define DISCARD_CHAR(tty) ((tty)->termios->c_cc[VDISCARD])
-#define WERASE_CHAR(tty) ((tty)->termios->c_cc[VWERASE])
-#define LNEXT_CHAR(tty)	((tty)->termios->c_cc[VLNEXT])
-#define EOL2_CHAR(tty) ((tty)->termios->c_cc[VEOL2])
+#define INTR_CHAR(tty) ((tty)->termios.c_cc[VINTR])
+#define QUIT_CHAR(tty) ((tty)->termios.c_cc[VQUIT])
+#define ERASE_CHAR(tty) ((tty)->termios.c_cc[VERASE])
+#define KILL_CHAR(tty) ((tty)->termios.c_cc[VKILL])
+#define EOF_CHAR(tty) ((tty)->termios.c_cc[VEOF])
+#define TIME_CHAR(tty) ((tty)->termios.c_cc[VTIME])
+#define MIN_CHAR(tty) ((tty)->termios.c_cc[VMIN])
+#define SWTC_CHAR(tty) ((tty)->termios.c_cc[VSWTC])
+#define START_CHAR(tty) ((tty)->termios.c_cc[VSTART])
+#define STOP_CHAR(tty) ((tty)->termios.c_cc[VSTOP])
+#define SUSP_CHAR(tty) ((tty)->termios.c_cc[VSUSP])
+#define EOL_CHAR(tty) ((tty)->termios.c_cc[VEOL])
+#define REPRINT_CHAR(tty) ((tty)->termios.c_cc[VREPRINT])
+#define DISCARD_CHAR(tty) ((tty)->termios.c_cc[VDISCARD])
+#define WERASE_CHAR(tty) ((tty)->termios.c_cc[VWERASE])
+#define LNEXT_CHAR(tty)	((tty)->termios.c_cc[VLNEXT])
+#define EOL2_CHAR(tty) ((tty)->termios.c_cc[VEOL2])
 
-#define _I_FLAG(tty, f)	((tty)->termios->c_iflag & (f))
-#define _O_FLAG(tty, f)	((tty)->termios->c_oflag & (f))
-#define _C_FLAG(tty, f)	((tty)->termios->c_cflag & (f))
-#define _L_FLAG(tty, f)	((tty)->termios->c_lflag & (f))
+#define _I_FLAG(tty, f)	((tty)->termios.c_iflag & (f))
+#define _O_FLAG(tty, f)	((tty)->termios.c_oflag & (f))
+#define _C_FLAG(tty, f)	((tty)->termios.c_cflag & (f))
+#define _L_FLAG(tty, f)	((tty)->termios.c_lflag & (f))
 
 #define I_IGNBRK(tty)	_I_FLAG((tty), IGNBRK)
 #define I_BRKINT(tty)	_I_FLAG((tty), BRKINT)
@@ -271,7 +271,7 @@ struct tty_struct {
 	struct mutex termios_mutex;
 	spinlock_t ctrl_lock;
 	/* Termios values are protected by the termios mutex */
-	struct ktermios *termios, *termios_locked;
+	struct ktermios termios, termios_locked;
 	struct termiox *termiox;	/* May be NULL for unsupported */
 	char name[64];
 	struct pid *pgrp;		/* Protected by ctrl lock */
@@ -423,7 +423,6 @@ extern void tty_unthrottle(struct tty_struct *tty);
 extern int tty_do_resize(struct tty_struct *tty, struct winsize *ws);
 extern void tty_driver_remove_tty(struct tty_driver *driver,
 				  struct tty_struct *tty);
-extern void tty_shutdown(struct tty_struct *tty);
 extern void tty_free_termios(struct tty_struct *tty);
 extern int is_current_pgrp_orphaned(void);
 extern struct pid *tty_get_pgrp(struct tty_struct *tty);
@@ -497,6 +496,9 @@ extern int tty_write_lock(struct tty_struct *tty, int ndelay);
 #define tty_is_writelocked(tty)  (mutex_is_locked(&tty->atomic_write_lock))
 
 extern void tty_port_init(struct tty_port *port);
+extern struct device *tty_port_register_device(struct tty_port *port,
+		struct tty_driver *driver, unsigned index,
+		struct device *device);
 extern int tty_port_alloc_xmit_buf(struct tty_port *port);
 extern void tty_port_free_xmit_buf(struct tty_port *port);
 extern void tty_port_put(struct tty_port *port);
@@ -521,6 +523,8 @@ extern int tty_port_close_start(struct tty_port *port,
 extern void tty_port_close_end(struct tty_port *port, struct tty_struct *tty);
 extern void tty_port_close(struct tty_port *port,
 				struct tty_struct *tty, struct file *filp);
+extern int tty_port_install(struct tty_port *port, struct tty_driver *driver,
+				struct tty_struct *tty);
 extern int tty_port_open(struct tty_port *port,
 				struct tty_struct *tty, struct file *filp);
 static inline int tty_port_users(struct tty_port *port)
