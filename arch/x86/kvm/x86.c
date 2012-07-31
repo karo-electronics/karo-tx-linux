@@ -1093,7 +1093,7 @@ void kvm_write_tsc(struct kvm_vcpu *vcpu, u64 data)
 		 * For each generation, we track the original measured
 		 * nanosecond time, offset, and write, so if TSCs are in
 		 * sync, we can match exact offset, and if not, we can match
-		 * exact software computaion in compute_guest_tsc()
+		 * exact software computation in compute_guest_tsc()
 		 *
 		 * These values are tracked in kvm->arch.cur_xxx variables.
 		 */
@@ -1500,7 +1500,7 @@ static int kvm_pv_enable_async_pf(struct kvm_vcpu *vcpu, u64 data)
 {
 	gpa_t gpa = data & ~0x3f;
 
-	/* Bits 2:5 are resrved, Should be zero */
+	/* Bits 2:5 are reserved, Should be zero */
 	if (data & 0x3c)
 		return 1;
 
@@ -1723,7 +1723,7 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, u32 msr, u64 data)
 		 * Ignore all writes to this no longer documented MSR.
 		 * Writes are only relevant for old K7 processors,
 		 * all pre-dating SVM, but a recommended workaround from
-		 * AMD for these chips. It is possible to speicify the
+		 * AMD for these chips. It is possible to specify the
 		 * affected processor models on the command line, hence
 		 * the need to ignore the workaround.
 		 */
@@ -2632,7 +2632,6 @@ static int kvm_set_guest_paused(struct kvm_vcpu *vcpu)
 	if (!vcpu->arch.time_page)
 		return -EINVAL;
 	src->flags |= PVCLOCK_GUEST_STOPPED;
-	mark_page_dirty(vcpu->kvm, vcpu->arch.time >> PAGE_SHIFT);
 	kvm_make_request(KVM_REQ_CLOCK_UPDATE, vcpu);
 	return 0;
 }
@@ -3166,6 +3165,16 @@ out:
 	return r;
 }
 
+int kvm_vm_ioctl_irq_line(struct kvm *kvm, struct kvm_irq_level *irq_event)
+{
+	if (!irqchip_in_kernel(kvm))
+		return -ENXIO;
+
+	irq_event->status = kvm_set_irq(kvm, KVM_USERSPACE_IRQ_SOURCE_ID,
+					irq_event->irq, irq_event->level);
+	return 0;
+}
+
 long kvm_arch_vm_ioctl(struct file *filp,
 		       unsigned int ioctl, unsigned long arg)
 {
@@ -3272,29 +3281,6 @@ long kvm_arch_vm_ioctl(struct file *filp,
 	create_pit_unlock:
 		mutex_unlock(&kvm->slots_lock);
 		break;
-	case KVM_IRQ_LINE_STATUS:
-	case KVM_IRQ_LINE: {
-		struct kvm_irq_level irq_event;
-
-		r = -EFAULT;
-		if (copy_from_user(&irq_event, argp, sizeof irq_event))
-			goto out;
-		r = -ENXIO;
-		if (irqchip_in_kernel(kvm)) {
-			__s32 status;
-			status = kvm_set_irq(kvm, KVM_USERSPACE_IRQ_SOURCE_ID,
-					irq_event.irq, irq_event.level);
-			if (ioctl == KVM_IRQ_LINE_STATUS) {
-				r = -EFAULT;
-				irq_event.status = status;
-				if (copy_to_user(argp, &irq_event,
-							sizeof irq_event))
-					goto out;
-			}
-			r = 0;
-		}
-		break;
-	}
 	case KVM_GET_IRQCHIP: {
 		/* 0: PIC master, 1: PIC slave, 2: IOAPIC */
 		struct kvm_irqchip *chip;
@@ -4492,7 +4478,7 @@ static bool reexecute_instruction(struct kvm_vcpu *vcpu, gva_t gva)
 
 	/*
 	 * if emulation was due to access to shadowed page table
-	 * and it failed try to unshadow page and re-entetr the
+	 * and it failed try to unshadow page and re-enter the
 	 * guest to let CPU execute the instruction.
 	 */
 	if (kvm_mmu_unprotect_page_virt(vcpu, gva))
@@ -5588,7 +5574,7 @@ int kvm_arch_vcpu_ioctl_get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 		/*
 		 * We are here if userspace calls get_regs() in the middle of
 		 * instruction emulation. Registers state needs to be copied
-		 * back from emulation context to vcpu. Usrapace shouldn't do
+		 * back from emulation context to vcpu. Userspace shouldn't do
 		 * that usually, but some bad designed PV devices (vmware
 		 * backdoor interface) need this to work
 		 */
@@ -6117,7 +6103,7 @@ int kvm_arch_hardware_enable(void *garbage)
 	 * as we reset last_host_tsc on all VCPUs to stop this from being
 	 * called multiple times (one for each physical CPU bringup).
 	 *
-	 * Platforms with unnreliable TSCs don't have to deal with this, they
+	 * Platforms with unreliable TSCs don't have to deal with this, they
 	 * will be compensated by the logic in vcpu_load, which sets the TSC to
 	 * catchup mode.  This will catchup all VCPUs to real time, but cannot
 	 * guarantee that they stay in perfect synchronization.
@@ -6314,6 +6300,10 @@ void kvm_arch_free_memslot(struct kvm_memory_slot *free,
 	int i;
 
 	for (i = 0; i < KVM_NR_PAGE_SIZES - 1; ++i) {
+		if (!dont || free->arch.rmap_pde[i] != dont->arch.rmap_pde[i]) {
+			kvm_kvfree(free->arch.rmap_pde[i]);
+			free->arch.rmap_pde[i] = NULL;
+		}
 		if (!dont || free->arch.lpage_info[i] != dont->arch.lpage_info[i]) {
 			kvm_kvfree(free->arch.lpage_info[i]);
 			free->arch.lpage_info[i] = NULL;
@@ -6332,6 +6322,11 @@ int kvm_arch_create_memslot(struct kvm_memory_slot *slot, unsigned long npages)
 
 		lpages = gfn_to_index(slot->base_gfn + npages - 1,
 				      slot->base_gfn, level) + 1;
+
+		slot->arch.rmap_pde[i] =
+			kvm_kvzalloc(lpages * sizeof(*slot->arch.rmap_pde[i]));
+		if (!slot->arch.rmap_pde[i])
+			goto out_free;
 
 		slot->arch.lpage_info[i] =
 			kvm_kvzalloc(lpages * sizeof(*slot->arch.lpage_info[i]));
@@ -6361,7 +6356,9 @@ int kvm_arch_create_memslot(struct kvm_memory_slot *slot, unsigned long npages)
 
 out_free:
 	for (i = 0; i < KVM_NR_PAGE_SIZES - 1; ++i) {
+		kvm_kvfree(slot->arch.rmap_pde[i]);
 		kvm_kvfree(slot->arch.lpage_info[i]);
+		slot->arch.rmap_pde[i] = NULL;
 		slot->arch.lpage_info[i] = NULL;
 	}
 	return -ENOMEM;
@@ -6381,7 +6378,7 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 		map_flags = MAP_SHARED | MAP_ANONYMOUS;
 
 	/*To keep backward compatibility with older userspace,
-	 *x86 needs to hanlde !user_alloc case.
+	 *x86 needs to handle !user_alloc case.
 	 */
 	if (!user_alloc) {
 		if (npages && !old.rmap) {
