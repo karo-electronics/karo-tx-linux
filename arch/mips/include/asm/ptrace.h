@@ -164,6 +164,6 @@ static inline void die_if_kernel(const char *str, struct pt_regs *regs)
 		die(str, regs);
 }
 
-#endif
+#endif /* __KERNEL__ */
 
 #endif /* _ASM_PTRACE_H */
