@@ -38,8 +38,7 @@
 
 int kvm_arch_vcpu_runnable(struct kvm_vcpu *v)
 {
-	return !(v->arch.shared->msr & MSR_WE) ||
-	       !!(v->arch.pending_exceptions) ||
+	return !!(v->arch.pending_exceptions) ||
 	       v->requests;
 }
 
@@ -67,18 +66,18 @@ int kvmppc_kvm_pv(struct kvm_vcpu *vcpu)
 	}
 
 	switch (nr) {
-	case HC_VENDOR_KVM | KVM_HC_PPC_MAP_MAGIC_PAGE:
+	case KVM_HCALL_TOKEN(KVM_HC_PPC_MAP_MAGIC_PAGE):
 	{
 		vcpu->arch.magic_page_pa = param1;
 		vcpu->arch.magic_page_ea = param2;
 
 		r2 = KVM_MAGIC_FEAT_SR | KVM_MAGIC_FEAT_MAS0_TO_SPRG7;
 
-		r = HC_EV_SUCCESS;
+		r = EV_SUCCESS;
 		break;
 	}
-	case HC_VENDOR_KVM | KVM_HC_FEATURES:
-		r = HC_EV_SUCCESS;
+	case KVM_HCALL_TOKEN(KVM_HC_FEATURES):
+		r = EV_SUCCESS;
 #if defined(CONFIG_PPC_BOOK3S) || defined(CONFIG_KVM_E500V2)
 		/* XXX Missing magic page on 44x */
 		r2 |= (1 << KVM_FEATURE_MAGIC_PAGE);
@@ -86,8 +85,13 @@ int kvmppc_kvm_pv(struct kvm_vcpu *vcpu)
 
 		/* Second return value is in r4 */
 		break;
+	case EV_HCALL_TOKEN(EV_IDLE):
+		r = EV_SUCCESS;
+		kvm_vcpu_block(vcpu);
+		clear_bit(KVM_REQ_UNHALT, &vcpu->requests);
+		break;
 	default:
-		r = HC_EV_UNIMPLEMENTED;
+		r = EV_UNIMPLEMENTED;
 		break;
 	}
 
@@ -739,9 +743,16 @@ int kvm_arch_vcpu_fault(struct kvm_vcpu *vcpu, struct vm_fault *vmf)
 
 static int kvm_vm_ioctl_get_pvinfo(struct kvm_ppc_pvinfo *pvinfo)
 {
+	u32 inst_nop = 0x60000000;
+#ifdef CONFIG_KVM_BOOKE_HV
+	u32 inst_sc1 = 0x44000022;
+	pvinfo->hcall[0] = inst_sc1;
+	pvinfo->hcall[1] = inst_nop;
+	pvinfo->hcall[2] = inst_nop;
+	pvinfo->hcall[3] = inst_nop;
+#else
 	u32 inst_lis = 0x3c000000;
 	u32 inst_ori = 0x60000000;
-	u32 inst_nop = 0x60000000;
 	u32 inst_sc = 0x44000002;
 	u32 inst_imm_mask = 0xffff;
 
@@ -758,6 +769,9 @@ static int kvm_vm_ioctl_get_pvinfo(struct kvm_ppc_pvinfo *pvinfo)
 	pvinfo->hcall[1] = inst_ori | (KVM_SC_MAGIC_R0 & inst_imm_mask);
 	pvinfo->hcall[2] = inst_sc;
 	pvinfo->hcall[3] = inst_nop;
+#endif
+
+	pvinfo->flags = KVM_PPC_PVINFO_FLAGS_EV_IDLE;
 
 	return 0;
 }
