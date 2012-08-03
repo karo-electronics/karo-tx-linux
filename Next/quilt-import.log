@@ -1,0 +1,19 @@
+Importing i2c based on 1a9b4993b70fb1884716902774dc9025b457760d
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 1a9b4993b70fb1884716902774dc9025b457760d
+HEAD is now at 1a9b499 Merge branch 'upstream' of git://git.linux-mips.org/pub/scm/ralf/upstream-linus
+$ git am ../quilt/i2c/i2c-mux-support-class.patch
+Applying: i2c-mux: Add support for device auto-detection
+$ git am ../quilt/i2c/i2c-i801-asus-multiplexing-2.patch
+Applying: i2c-i801: Support SMBus multiplexing on Asus Z8 series
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + d517a8e...7fc8c6c master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2e3ee613480563a6d5c01b57d342e65cc58c06df
+Unchanged quilt series jdelvare-hwmon
+Importing rr based on v3.5-8192-g1fad1e9
+Unchanged quilt series rr
+Importing device-mapper based on v3.5-7815-g37cd960
+Unchanged quilt series device-mapper
