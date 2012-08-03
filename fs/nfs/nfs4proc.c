@@ -6308,7 +6308,7 @@ static void nfs4_layoutreturn_done(struct rpc_task *task, void *calldata)
 		if (lrp->res.lrs_present) {
 			pnfs_set_layout_stateid(lo, &lrp->res.stateid, true);
 		} else
-			BUG_ON(!list_empty(&lo->plh_segs));
+			WARN_ON(!list_empty(&lo->plh_segs));
 	}
 	lo->plh_block_lgets--;
 	spin_unlock(&lo->plh_inode->i_lock);
