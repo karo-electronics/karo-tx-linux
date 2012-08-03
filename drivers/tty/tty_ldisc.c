@@ -413,7 +413,7 @@ EXPORT_SYMBOL_GPL(tty_ldisc_flush);
 static void tty_set_termios_ldisc(struct tty_struct *tty, int num)
 {
 	mutex_lock(&tty->termios_mutex);
-	tty->termios->c_line = num;
+	tty->termios.c_line = num;
 	mutex_unlock(&tty->termios_mutex);
 }
 
@@ -722,9 +722,9 @@ enable:
 static void tty_reset_termios(struct tty_struct *tty)
 {
 	mutex_lock(&tty->termios_mutex);
-	*tty->termios = tty->driver->init_termios;
-	tty->termios->c_ispeed = tty_termios_input_baud_rate(tty->termios);
-	tty->termios->c_ospeed = tty_termios_baud_rate(tty->termios);
+	tty->termios = tty->driver->init_termios;
+	tty->termios.c_ispeed = tty_termios_input_baud_rate(&tty->termios);
+	tty->termios.c_ospeed = tty_termios_baud_rate(&tty->termios);
 	mutex_unlock(&tty->termios_mutex);
 }
 
@@ -846,7 +846,7 @@ retry:
 
 		if (reset == 0) {
 
-			if (!tty_ldisc_reinit(tty, tty->termios->c_line))
+			if (!tty_ldisc_reinit(tty, tty->termios.c_line))
 				err = tty_ldisc_open(tty, tty->ldisc);
 			else
 				err = 1;
@@ -912,7 +912,6 @@ void tty_ldisc_release(struct tty_struct *tty, struct tty_struct *o_tty)
 	 * race with the set_ldisc code path.
 	 */
 
-	tty_unlock();
 	tty_ldisc_halt(tty);
 	tty_ldisc_flush_works(tty);
 	tty_lock();
@@ -929,6 +928,8 @@ void tty_ldisc_release(struct tty_struct *tty, struct tty_struct *o_tty)
 	/* Ensure the next open requests the N_TTY ldisc */
 	tty_set_termios_ldisc(tty, N_TTY);
 	mutex_unlock(&tty->ldisc_mutex);
+
+	tty_unlock();
 
 	/* This will need doing differently if we need to lock */
 	if (o_tty)
