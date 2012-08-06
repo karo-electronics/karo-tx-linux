@@ -174,7 +174,7 @@ static int input_handle_abs_event(struct input_dev *dev,
 		 * "Stage" the event; we'll flush it later, when we
 		 * get actual touch data.
 		 */
-		if (*pval >= 0 && *pval < dev->mtsize)
+		if (dev->mt && *pval >= 0 && *pval < dev->mt->num_slots)
 			dev->slot = *pval;
 
 		return INPUT_IGNORE_EVENT;
@@ -185,8 +185,7 @@ static int input_handle_abs_event(struct input_dev *dev,
 	if (!is_mt_event) {
 		pold = &dev->absinfo[code].value;
 	} else if (dev->mt) {
-		struct input_mt_slot *mtslot = &dev->mt[dev->slot];
-		pold = &mtslot->abs[code - ABS_MT_FIRST];
+		pold = &dev->mt->slots[dev->slot].abs[code - ABS_MT_FIRST];
 	} else {
 		/*
 		 * Bypass filtering for multi-touch events when
@@ -1751,8 +1750,8 @@ static unsigned int input_estimate_events_per_packet(struct input_dev *dev)
 	int i;
 	unsigned int events;
 
-	if (dev->mtsize) {
-		mt_slots = dev->mtsize;
+	if (dev->mt) {
+		mt_slots = dev->mt->num_slots;
 	} else if (test_bit(ABS_MT_TRACKING_ID, dev->absbit)) {
 		mt_slots = dev->absinfo[ABS_MT_TRACKING_ID].maximum -
 			   dev->absinfo[ABS_MT_TRACKING_ID].minimum + 1,
