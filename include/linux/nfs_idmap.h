@@ -59,6 +59,7 @@ struct idmap_msg {
 	char  im_name[IDMAP_NAMESZ];
 	__u32 im_id;
 	__u8  im_status;
+	void *im_private;
 };
 
 #ifdef __KERNEL__
