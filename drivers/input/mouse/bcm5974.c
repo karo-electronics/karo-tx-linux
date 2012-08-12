@@ -417,10 +417,6 @@ static void setup_events_to_report(struct input_dev *input_dev,
 {
 	__set_bit(EV_ABS, input_dev->evbit);
 
-	input_set_abs_params(input_dev, ABS_PRESSURE,
-				0, cfg->p.dim, cfg->p.fuzz, 0);
-	input_set_abs_params(input_dev, ABS_TOOL_WIDTH,
-				0, cfg->w.dim, cfg->w.fuzz, 0);
 	input_set_abs_params(input_dev, ABS_X,
 				0, cfg->x.dim, cfg->x.fuzz, 0);
 	input_set_abs_params(input_dev, ABS_Y,
@@ -504,9 +500,9 @@ static int report_tp_state(struct bcm5974 *dev, int size)
 	const struct bcm5974_config *c = &dev->cfg;
 	const struct tp_finger *f;
 	struct input_dev *input = dev->input;
-	int raw_p, raw_w, raw_x, raw_y, raw_n, i;
+	int raw_p, raw_x, raw_y, raw_n, i;
 	int ptest, origin, ibt = 0, nmin = 0, nmax = 0;
-	int abs_p = 0, abs_w = 0, abs_x = 0, abs_y = 0;
+	int abs_x = 0, abs_y = 0;
 
 	if (size < c->tp_offset || (size - c->tp_offset) % SIZEOF_FINGER != 0)
 		return -EIO;
@@ -523,22 +519,19 @@ static int report_tp_state(struct bcm5974 *dev, int size)
 			report_finger_data(input, c, &f[i]);
 
 		raw_p = raw2int(f->touch_major);
-		raw_w = raw2int(f->tool_major);
 		raw_x = raw2int(f->abs_x);
 		raw_y = raw2int(f->abs_y);
 
 		dprintk(9,
 			"bcm5974: "
-			"raw: p: %+05d w: %+05d x: %+05d y: %+05d n: %d\n",
-			raw_p, raw_w, raw_x, raw_y, raw_n);
+			"raw: p: %+05d x: %+05d y: %+05d n: %d\n",
+			raw_p, raw_x, raw_y, raw_n);
 
 		ptest = int2bound(&c->p, raw_p);
 		origin = raw2int(f->origin);
 
 		/* while tracking finger still valid, count all fingers */
 		if (ptest > PRESSURE_LOW && origin) {
-			abs_p = ptest;
-			abs_w = int2bound(&c->w, raw_w);
 			abs_x = int2bound(&c->x, raw_x - c->x.devmin);
 			abs_y = int2bound(&c->y, c->y.devmax - raw_y);
 			while (raw_n--) {
@@ -568,18 +561,9 @@ static int report_tp_state(struct bcm5974 *dev, int size)
 	input_report_key(input, BTN_TOOL_TRIPLETAP, dev->fingers == 3);
 	input_report_key(input, BTN_TOOL_QUADTAP, dev->fingers > 3);
 
-	input_report_abs(input, ABS_PRESSURE, abs_p);
-	input_report_abs(input, ABS_TOOL_WIDTH, abs_w);
-
-	if (abs_p) {
+	if (dev->fingers > 0) {
 		input_report_abs(input, ABS_X, abs_x);
 		input_report_abs(input, ABS_Y, abs_y);
-
-		dprintk(8,
-			"bcm5974: abs: p: %+05d w: %+05d x: %+05d y: %+05d "
-			"nmin: %d nmax: %d n: %d ibt: %d\n", abs_p, abs_w,
-			abs_x, abs_y, nmin, nmax, dev->fingers, ibt);
-
 	}
 
 	/* type 2 reports button events via ibt only */
