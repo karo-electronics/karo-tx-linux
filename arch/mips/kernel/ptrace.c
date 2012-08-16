@@ -29,6 +29,9 @@
 #include <linux/audit.h>
 #include <linux/seccomp.h>
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/syscalls.h>
+
 #include <asm/byteorder.h>
 #include <asm/cpu.h>
 #include <asm/dsp.h>
@@ -39,6 +42,7 @@
 #include <asm/page.h>
 #include <asm/uaccess.h>
 #include <asm/bootinfo.h>
+#include <asm/syscall.h>
 #include <asm/reg.h>
 
 /*
@@ -665,6 +669,9 @@ asmlinkage long syscall_trace_enter(struct pt_regs *regs)
 	    tracehook_report_syscall_entry(regs))
 		ret = -1;
 
+	if (unlikely(test_thread_flag(TIF_SYSCALL_TRACEPOINT)))
+		trace_sys_enter(regs, regs->regs[2]);
+
 	audit_syscall_entry(__syscall_get_arch(),
 			    regs->regs[2],
 			    regs->regs[4], regs->regs[5],
@@ -681,6 +688,9 @@ out:
 asmlinkage void syscall_trace_leave(struct pt_regs *regs)
 {
 	audit_syscall_exit(regs);
+
+	if (unlikely(test_thread_flag(TIF_SYSCALL_TRACEPOINT)))
+		trace_sys_exit(regs, regs->regs[2]);
 
 	if (test_thread_flag(TIF_SYSCALL_TRACE))
 		tracehook_report_syscall_exit(regs, 0);
