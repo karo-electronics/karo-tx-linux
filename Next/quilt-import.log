@@ -1,0 +1,9 @@
+Importing i2c based on e7882d6c40874a5b5033ca85f7508a602a60b662
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on e7882d6c40874a5b5033ca85f7508a602a60b662
+Unchanged quilt series jdelvare-hwmon
+Importing rr based on v3.5-8192-g1fad1e9
+Unchanged quilt series rr
+Importing device-mapper based on v3.6-rc1
+	quilt series is empty
+$ git branch -f quilt/device-mapper 0d7614f09c1ebdbaa1599a5aba7593f147bf96ee
