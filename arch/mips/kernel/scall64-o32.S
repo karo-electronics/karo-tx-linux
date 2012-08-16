@@ -32,30 +32,23 @@ NESTED(handle_sys, PT_SIZE, sp)
 	STI
 	.set	at
 	ld	t1, PT_EPC(sp)		# skip syscall on return
-
-	dsubu	t0, v0, __NR_O32_Linux	# check syscall number
-	sltiu	t0, t0, __NR_O32_Linux_syscalls + 1
 	daddiu	t1, 4			# skip to next instruction
 	sd	t1, PT_EPC(sp)
-	beqz	t0, not_o32_scall
-#if 0
- SAVE_ALL
- move a1, v0
- PRINT("Scall %ld\n")
- RESTORE_ALL
-#endif
 
-	/* We don't want to stumble over broken sign extensions from
-	   userland. O32 does never use the upper half. */
+	LONG_L	t0, TI_FLAGS($28)	# syscall tracing enabled?
+	li	t1, _TIF_WORK_SYSCALL_ENTRY
+	and	t0, t1
+	bnez	t0, syscall_trace_entry
+
+syscall_call:
+	/*
+	 * We don't want to stumble over broken sign extensions from
+	 * userland. O32 does never use the upper half.
+	 */
 	sll	a0, a0, 0
 	sll	a1, a1, 0
 	sll	a2, a2, 0
 	sll	a3, a3, 0
-
-	dsll	t0, v0, 3		# offset into table
-	ld	t2, (sys32_call_table - (__NR_O32_Linux * 8))(t0)
-
-	sd	a3, PT_R26(sp)		# save a3 for syscall restarting
 
 	/*
 	 * More than four arguments.  Try to deal with it by copying the
@@ -81,10 +74,20 @@ NESTED(handle_sys, PT_SIZE, sp)
 	PTR	4b, bad_stack
 	.previous
 
-	li	t1, _TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT
-	LONG_L	t0, TI_FLAGS($28)	# syscall tracing enabled?
-	and	t0, t1, t0
-	bnez	t0, trace_a_syscall
+#if 0
+ SAVE_ALL
+ move a1, v0
+ PRINT("Scall %ld\n")
+ RESTORE_ALL
+#endif
+
+	dsubu	v0, v0, __NR_O32_Linux	# check syscall number
+	sltiu	t0, v0, __NR_O32_Linux_syscalls + 1
+	beqz	t0, not_o32_scall
+
+	dsll	t0, v0, 3		# offset into table
+	ld	t2, sys32_call_table(t0) # syscall routine
+	sd	a3, PT_R26(sp)		# save a3 for syscall restarting
 
 	jalr	t2			# Do The Real Thing (TM)
 
@@ -114,18 +117,12 @@ o32_syscall_exit_work:
 
 /* ------------------------------------------------------------------------ */
 
-trace_a_syscall:
+syscall_trace_entry:
 	SAVE_STATIC
-	sd	a4, PT_R8(sp)		# Save argument registers
-	sd	a5, PT_R9(sp)
-	sd	a6, PT_R10(sp)
-	sd	a7, PT_R11(sp)		# For indirect syscalls
-
-	move	s0, t2			# Save syscall pointer
 	move	a0, sp
 	jal	syscall_trace_enter
 
-	move	t0, s0
+	sw	a6, PT_R10(sp)
 	RESTORE_STATIC
 	ld	a0, PT_R4(sp)		# Restore argument registers
 	ld	a1, PT_R5(sp)
@@ -133,26 +130,15 @@ trace_a_syscall:
 	ld	a3, PT_R7(sp)
 	ld	a4, PT_R8(sp)
 	ld	a5, PT_R9(sp)
-	ld	a6, PT_R10(sp)
-	ld	a7, PT_R11(sp)		# For indirect syscalls
-	jalr	t0
+	ld	a6, PT_R10(sp)		# For indirect syscalls
 
-	li	t0, -EMAXERRNO - 1	# error?
-	sltu	t0, t0, v0
-	sd	t0, PT_R7(sp)		# set error flag
-	beqz	t0, 1f
-
-	ld	t1, PT_R2(sp)		# syscall number
-	dnegu	v0			# error
-	sd	t1, PT_R0(sp)		# save it for syscall restarting
-1:	sd	v0, PT_R2(sp)		# result
-
+	bgez	v0, syscall_call
 	j	syscall_exit
 
 /* ------------------------------------------------------------------------ */
 
 	/*
-	 * The stackpointer for a call with more than 4 arguments is bad.
+	 * The stackpointer for arguments 5..8 is bad.
 	 */
 bad_stack:
 	li	v0, EFAULT
@@ -163,7 +149,7 @@ bad_stack:
 
 not_o32_scall:
 	/*
-	 * This is not an o32 compatibility syscall, pass it on
+	 * This is not an O32 compatibility syscall, pass it on
 	 * to the 64-bit syscall handlers.
 	 */
 #ifdef CONFIG_MIPS32_N32
@@ -179,7 +165,7 @@ LEAF(sys32_syscall)
 	beqz	t0, einval		# do not recurse
 	dsll	t1, t0, 3
 	beqz	v0, einval
-	ld	t2, sys32_call_table(t1)		# syscall routine
+	ld	t2, sys32_call_table(t1)# syscall routine
 
 	move	a0, a1			# shift argument registers
 	move	a1, a2
