@@ -32,37 +32,17 @@ NESTED(handle_sys, PT_SIZE, sp)
 	STI
 	.set	at
 
-	lw	t1, PT_EPC(sp)		# skip syscall on return
-
-	subu	v0, v0, __NR_O32_Linux	# check syscall number
-	sltiu	t0, v0, __NR_O32_Linux_syscalls + 1
-	addiu	t1, 4			# skip to next instruction
-	sw	t1, PT_EPC(sp)
-	beqz	t0, illegal_syscall
-
-	sll	t0, v0, 2
-	la	t1, sys_call_table
-	addu	t1, t0
-	lw	t2, (t1)		# syscall routine
-	beqz	t2, illegal_syscall
-
-	sw	a3, PT_R26(sp)		# save a3 for syscall restarting
-
-	/*
-	 * More than four arguments.  Try to deal with it by copying the
-	 * stack arguments from the user stack to the kernel stack.
-	 * This Sucks (TM).
-	 */
-	lw	t0, PT_R29(sp)		# get old user stack pointer
-
 	/*
 	 * We intentionally keep the kernel stack a little below the top of
 	 * userspace so we don't have to do a slower byte accurate check here.
 	 */
-	lw	t5, TI_ADDR_LIMIT($28)
-	addu	t4, t0, 32
-	and	t5, t4
-	bltz	t5, bad_stack		# -> sp is bad
+	lw	t0, PT_R29(sp)		# get user stack pointer
+	lw	t1, TI_ADDR_LIMIT($28)
+	addu	t2, t0, 16
+	addu	t3, t0, 32
+	or	t2, t3
+	and	t2, t1
+	bltz	t2, bad_stack		# -> sp is bad
 
 	/*
 	 * Ok, copy the args from the luser stack to the kernel stack.
@@ -83,19 +63,33 @@ NESTED(handle_sys, PT_SIZE, sp)
 	sw	t6, 20(sp)		# argument #6 to ksp
 	sw	t7, 24(sp)		# argument #7 to ksp
 	sw	t8, 28(sp)		# argument #8 to ksp
+
 	.set	pop
 
 	.section __ex_table,"a"
-	PTR	1b,bad_stack
-	PTR	2b,bad_stack
-	PTR	3b,bad_stack
-	PTR	4b,bad_stack
+	PTR	1b, bad_stack
+	PTR	2b, bad_stack
+	PTR	3b, bad_stack
+	PTR	4b, bad_stack
 	.previous
 
+	lw	t0, PT_EPC(sp)		# skip syscall on return
+	addiu	t0, 4			# skip to next instruction
+	sw	t0, PT_EPC(sp)
+
 	lw	t0, TI_FLAGS($28)	# syscall tracing enabled?
-	li	t1, _TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT
+	li	t1, _TIF_WORK_SYSCALL_ENTRY
 	and	t0, t1
-	bnez	t0, syscall_trace_entry	# -> yes
+	bnez	t0, syscall_trace_entry
+
+syscall_call:
+	subu	v0, v0, __NR_O32_Linux	# check syscall number
+	sltiu	t0, v0, __NR_O32_Linux_syscalls + 1
+	beqz	t0, illegal_syscall
+
+	sll	t0, v0, 2
+	lw	t2, sys_call_table(t0)
+	sw	a3, PT_R26(sp)		# save a3 for syscall restarting
 
 	jalr	t2			# Do The Real Thing (TM)
 
@@ -127,29 +121,16 @@ o32_syscall_exit_work:
 
 syscall_trace_entry:
 	SAVE_STATIC
-	move	s0, t2
 	move	a0, sp
 	jal	syscall_trace_enter
 
-	move	t0, s0
-	RESTORE_STATIC
-	lw	a0, PT_R4(sp)		# Restore argument registers
+	lw	a0, PT_R4(sp)			# Restore argument registers
 	lw	a1, PT_R5(sp)
 	lw	a2, PT_R6(sp)
 	lw	a3, PT_R7(sp)
-	jalr	t0
 
-	li	t0, -EMAXERRNO - 1	# error?
-	sltu	t0, t0, v0
-	sw	t0, PT_R7(sp)		# set error flag
-	beqz	t0, 1f
-
-	lw	t1, PT_R2(sp)		# syscall number
-	negu	v0			# error
-	sw	t1, PT_R0(sp)		# save it for syscall restarting
-1:	sw	v0, PT_R2(sp)		# result
-
-	j	syscall_exit
+	bgez	v0, syscall_call
+	j	o32_syscall_exit
 
 /* ------------------------------------------------------------------------ */
 
@@ -175,18 +156,20 @@ illegal_syscall:
 	j	o32_syscall_exit
 	END(handle_sys)
 
-	LEAF(sys_syscall)
-	subu	t0, a0, __NR_O32_Linux	# check syscall number
+LEAF(sys_syscall)
+	subu	t0, a0, __NR_O32_Linux		# check syscall number
 	sltiu	v0, t0, __NR_O32_Linux_syscalls + 1
-	beqz	t0, einval		# do not recurse
+	beqz	t0, einval			# do not recurse
 	sll	t1, t0, 2
 	beqz	v0, einval
 	lw	t2, sys_call_table(t1)		# syscall routine
 
-	/* Some syscalls like execve get their arguments from struct pt_regs
-	   and claim zero arguments in the syscall table. Thus we have to
-	   assume the worst case and shuffle around all potential arguments.
-	   If you want performance, don't use indirect syscalls. */
+	/*
+	 * Some syscalls like execve get their arguments from struct pt_regs
+	 * and claim zero arguments in the syscall table. Thus we have to
+	 * assume the worst case and shuffle around all potential arguments.
+	 * If you want performance, don't use indirect syscalls.
+	 */
 
 	move	a0, a1				# shift argument registers
 	move	a1, a2

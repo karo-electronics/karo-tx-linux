@@ -13,6 +13,7 @@
 #ifndef __ASM_MIPS_SYSCALL_H
 #define __ASM_MIPS_SYSCALL_H
 
+#include <linux/audit.h>
 #include <linux/elf-em.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
@@ -23,6 +24,26 @@ static inline long syscall_get_nr(struct task_struct *task,
 				  struct pt_regs *regs)
 {
 	return regs->regs[2];
+}
+
+static inline void syscall_rollback(struct task_struct *task,
+				    struct pt_regs *regs)
+{
+	regs->regs[7] = regs->regs[26];
+	regs->regs[2] = regs->regs[0];
+}
+
+static inline void syscall_set_return_value(struct task_struct *task,
+					    struct pt_regs *regs,
+					    int error, long val)
+{
+	if (error) {
+		regs->regs[2] = -error;
+		regs->regs[7] = 1;
+	} else {
+		regs->regs[2] = val;
+		regs->regs[7] = 0;
+	}
 }
 
 static inline unsigned long mips_get_syscall_arg(unsigned long *arg,
@@ -91,6 +112,12 @@ static inline int __syscall_get_arch(void)
 	arch |=  __AUDIT_ARCH_LE;
 #endif
 	return arch;
+}
+
+static inline int syscall_get_arch(struct task_struct *task,
+				   struct pt_regs *regs)
+{
+	return __syscall_get_arch();
 }
 
 #endif	/* __ASM_MIPS_SYSCALL_H */
