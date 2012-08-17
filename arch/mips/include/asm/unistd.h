@@ -1086,5 +1086,16 @@
  */
 #define cond_syscall(x) asm(".weak\t" #x "\n" #x "\t=\tsys_ni_syscall")
 
+#ifdef CONFIG_32BIT
+# define NR_syscalls	(__NR_O32_Linux + __NR_O32_Linux_syscalls)
+#endif /* CONFIG_32BIT */
+#ifdef CONFIG_64BIT
+# ifdef CONFIG_MIPS32_N32
+#  define NR_syscalls	(__NR_N32_Linux + __NR_N32_Linux_syscalls)
+#else
+#  define NR_syscalls	(__NR_64_Linux + __NR_64_Linux_syscalls)
+# endif
+#endif /* CONFIG_64BIT */
+
 #endif /* __KERNEL__ */
 #endif /* _ASM_UNISTD_H */
