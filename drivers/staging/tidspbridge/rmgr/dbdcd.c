@@ -395,7 +395,7 @@ int dcd_get_object_def(struct dcd_manager *hdcd_mgr,
 		}
 
 		/* Create UUID value to set in registry. */
-		uuid_uuid_to_string(obj_uuid, sz_uuid, MAXUUIDLEN);
+		snprintf(sz_uuid, MAXUUIDLEN, "%pU", obj_uuid);
 
 		if ((strlen(sz_reg_key) + MAXUUIDLEN) < DCD_MAXPATHLENGTH)
 			strncat(sz_reg_key, sz_uuid, MAXUUIDLEN);
@@ -463,7 +463,7 @@ int dcd_get_object_def(struct dcd_manager *hdcd_mgr,
 	status = cod_read_section(lib, sz_sect_name, psz_coff_buf, ul_len);
 #endif
 	if (!status) {
-		/* Compres DSP buffer to conform to PC format. */
+		/* Compress DSP buffer to conform to PC format. */
 		if (strstr(dcd_key->path, "iva") == NULL) {
 			compress_buf(psz_coff_buf, ul_len, DSPWORDSIZE);
 		} else {
