@@ -33,6 +33,12 @@ static inline void syscall_rollback(struct task_struct *task,
 	regs->regs[2] = regs->regs[0];
 }
 
+static inline long syscall_get_error(struct task_struct *task,
+				     struct pt_regs *regs)
+{
+	return regs->regs[7] ? regs->regs[2] : 0;
+}
+
 static inline long syscall_get_return_value(struct task_struct *task,
 					    struct pt_regs *regs)
 {
@@ -85,6 +91,36 @@ static inline unsigned long mips_get_syscall_arg(unsigned long *arg,
 	}
 }
 
+static inline int mips_set_syscall_arg(struct task_struct *task,
+	struct pt_regs *regs, unsigned int n, unsigned long val)
+{
+	unsigned long usp = regs->regs[29];
+
+	switch (n) {
+	case 0: case 1: case 2: case 3:
+
+#ifdef CONFIG_32BIT
+	case 4: case 5: case 6: case 7:
+		return put_user(val, (long *)usp + (4 * n));
+#endif
+
+#ifdef CONFIG_64BIT
+	case 4: case 5: case 6: case 7:
+#ifdef CONFIG_MIPS32_O32
+		if (test_thread_flag(TIF_32BIT_REGS))
+			return put_user(val, (long *)usp + (4 * n));
+		else
+#endif
+			regs->regs[4 + n] = val;
+
+		return 0;
+#endif
+
+	default:
+		BUG();
+	}
+}
+
 static inline void syscall_get_arguments(struct task_struct *task,
 					 struct pt_regs *regs,
 					 unsigned int i, unsigned int n,
@@ -95,6 +131,24 @@ static inline void syscall_get_arguments(struct task_struct *task,
 
 	while (n--)
 		ret |= mips_get_syscall_arg(&arg, task, regs, i++);
+
+	/*
+	 * No way to communicate an error because this is a void function.
+	 */
+#if 0
+	return ret;
+#endif
+}
+
+static inline void syscall_set_arguments(struct task_struct *task,
+					 struct pt_regs *regs,
+					 unsigned int i, unsigned int n,
+					 const unsigned long *args)
+{
+	int ret;
+
+	while (n--)
+		ret |= mips_set_syscall_arg(task, regs, i++, *args++);
 
 	/*
 	 * No way to communicate an error because this is a void function.
