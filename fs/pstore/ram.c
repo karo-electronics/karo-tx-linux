@@ -537,6 +537,7 @@ postcore_initcall(ramoops_init);
 
 static void __exit ramoops_exit(void)
 {
+	platform_device_unregister(dummy);
 	platform_driver_unregister(&ramoops_driver);
 	kfree(dummy_data);
 }
