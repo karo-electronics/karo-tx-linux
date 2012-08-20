@@ -1228,19 +1228,16 @@ static int __devinit omap2_mcspi_probe(struct platform_device *pdev)
 
 	status = spi_register_master(master);
 	if (status < 0)
-		goto err_spi_register;
+		goto disable_pm;
 
 	return status;
 
-err_spi_register:
-	spi_master_put(master);
 disable_pm:
 	pm_runtime_disable(&pdev->dev);
 dma_chnl_free:
 	kfree(mcspi->dma_channels);
 free_master:
-	kfree(master);
-	platform_set_drvdata(pdev, NULL);
+	spi_master_put(master);
 	return status;
 }
 
@@ -1259,7 +1256,6 @@ static int __devexit omap2_mcspi_remove(struct platform_device *pdev)
 
 	spi_unregister_master(master);
 	kfree(dma_channels);
-	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }
