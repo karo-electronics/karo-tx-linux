@@ -38,6 +38,7 @@
 #include <linux/spinlock.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
+#include <linux/string.h>
 
 #include <crypto/algapi.h>
 #include <crypto/aes.h>
@@ -1902,21 +1903,18 @@ struct talitos_alg_template {
 };
 
 static struct talitos_alg_template driver_algs[] = {
-	/* AEAD algorithms.  These use a single-pass ipsec_esp descriptor */
+	/*
+	 * AEAD algorithms. These use a single-pass ipsec_esp descriptor.
+	 * authencesn(*,*) is also registered, although not present
+	 * explicitly here.
+	 */
 	{	.type = CRYPTO_ALG_TYPE_AEAD,
 		.alg.crypto = {
 			.cra_name = "authenc(hmac(sha1),cbc(aes))",
 			.cra_driver_name = "authenc-hmac-sha1-cbc-aes-talitos",
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = AES_BLOCK_SIZE,
 				.maxauthsize = SHA1_DIGEST_SIZE,
 			}
@@ -1935,14 +1933,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-sha1-cbc-3des-talitos",
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = DES3_EDE_BLOCK_SIZE,
 				.maxauthsize = SHA1_DIGEST_SIZE,
 			}
@@ -1962,14 +1953,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-sha224-cbc-aes-talitos",
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = AES_BLOCK_SIZE,
 				.maxauthsize = SHA224_DIGEST_SIZE,
 			}
@@ -1988,14 +1972,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-sha224-cbc-3des-talitos",
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = DES3_EDE_BLOCK_SIZE,
 				.maxauthsize = SHA224_DIGEST_SIZE,
 			}
@@ -2015,14 +1992,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-sha256-cbc-aes-talitos",
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = AES_BLOCK_SIZE,
 				.maxauthsize = SHA256_DIGEST_SIZE,
 			}
@@ -2041,14 +2011,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-sha256-cbc-3des-talitos",
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = DES3_EDE_BLOCK_SIZE,
 				.maxauthsize = SHA256_DIGEST_SIZE,
 			}
@@ -2068,14 +2031,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-sha384-cbc-aes-talitos",
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = AES_BLOCK_SIZE,
 				.maxauthsize = SHA384_DIGEST_SIZE,
 			}
@@ -2094,14 +2050,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-sha384-cbc-3des-talitos",
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = DES3_EDE_BLOCK_SIZE,
 				.maxauthsize = SHA384_DIGEST_SIZE,
 			}
@@ -2121,14 +2070,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-sha512-cbc-aes-talitos",
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = AES_BLOCK_SIZE,
 				.maxauthsize = SHA512_DIGEST_SIZE,
 			}
@@ -2147,14 +2089,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-sha512-cbc-3des-talitos",
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = DES3_EDE_BLOCK_SIZE,
 				.maxauthsize = SHA512_DIGEST_SIZE,
 			}
@@ -2174,14 +2109,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-md5-cbc-aes-talitos",
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = AES_BLOCK_SIZE,
 				.maxauthsize = MD5_DIGEST_SIZE,
 			}
@@ -2200,14 +2128,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_driver_name = "authenc-hmac-md5-cbc-3des-talitos",
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_AEAD | CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_aead_type,
 			.cra_aead = {
-				.setkey = aead_setkey,
-				.setauthsize = aead_setauthsize,
-				.encrypt = aead_encrypt,
-				.decrypt = aead_decrypt,
-				.givencrypt = aead_givencrypt,
-				.geniv = "<built-in>",
 				.ivsize = DES3_EDE_BLOCK_SIZE,
 				.maxauthsize = MD5_DIGEST_SIZE,
 			}
@@ -2229,12 +2150,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_ABLKCIPHER |
                                      CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_ablkcipher_type,
 			.cra_ablkcipher = {
-				.setkey = ablkcipher_setkey,
-				.encrypt = ablkcipher_encrypt,
-				.decrypt = ablkcipher_decrypt,
-				.geniv = "eseqiv",
 				.min_keysize = AES_MIN_KEY_SIZE,
 				.max_keysize = AES_MAX_KEY_SIZE,
 				.ivsize = AES_BLOCK_SIZE,
@@ -2251,12 +2167,7 @@ static struct talitos_alg_template driver_algs[] = {
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_flags = CRYPTO_ALG_TYPE_ABLKCIPHER |
                                      CRYPTO_ALG_ASYNC,
-			.cra_type = &crypto_ablkcipher_type,
 			.cra_ablkcipher = {
-				.setkey = ablkcipher_setkey,
-				.encrypt = ablkcipher_encrypt,
-				.decrypt = ablkcipher_decrypt,
-				.geniv = "eseqiv",
 				.min_keysize = DES3_EDE_KEY_SIZE,
 				.max_keysize = DES3_EDE_KEY_SIZE,
 				.ivsize = DES3_EDE_BLOCK_SIZE,
@@ -2270,11 +2181,6 @@ static struct talitos_alg_template driver_algs[] = {
 	/* AHASH algorithms. */
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
 			.halg.digestsize = MD5_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "md5",
@@ -2282,7 +2188,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = MD5_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2291,11 +2196,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
 			.halg.digestsize = SHA1_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "sha1",
@@ -2303,7 +2203,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = SHA1_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2312,11 +2211,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
 			.halg.digestsize = SHA224_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "sha224",
@@ -2324,7 +2218,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = SHA224_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2333,11 +2226,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
 			.halg.digestsize = SHA256_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "sha256",
@@ -2345,7 +2233,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = SHA256_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2354,11 +2241,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
 			.halg.digestsize = SHA384_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "sha384",
@@ -2366,7 +2248,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = SHA384_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2375,11 +2256,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
 			.halg.digestsize = SHA512_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "sha512",
@@ -2387,7 +2263,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = SHA512_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2396,12 +2271,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
-			.setkey = ahash_setkey,
 			.halg.digestsize = MD5_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "hmac(md5)",
@@ -2409,7 +2278,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = MD5_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2418,12 +2286,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
-			.setkey = ahash_setkey,
 			.halg.digestsize = SHA1_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "hmac(sha1)",
@@ -2431,7 +2293,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = SHA1_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2440,12 +2301,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
-			.setkey = ahash_setkey,
 			.halg.digestsize = SHA224_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "hmac(sha224)",
@@ -2453,7 +2308,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = SHA224_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2462,12 +2316,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
-			.setkey = ahash_setkey,
 			.halg.digestsize = SHA256_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "hmac(sha256)",
@@ -2475,7 +2323,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = SHA256_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2484,12 +2331,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
-			.setkey = ahash_setkey,
 			.halg.digestsize = SHA384_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "hmac(sha384)",
@@ -2497,7 +2338,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = SHA384_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2506,12 +2346,6 @@ static struct talitos_alg_template driver_algs[] = {
 	},
 	{	.type = CRYPTO_ALG_TYPE_AHASH,
 		.alg.hash = {
-			.init = ahash_init,
-			.update = ahash_update,
-			.final = ahash_final,
-			.finup = ahash_finup,
-			.digest = ahash_digest,
-			.setkey = ahash_setkey,
 			.halg.digestsize = SHA512_DIGEST_SIZE,
 			.halg.base = {
 				.cra_name = "hmac(sha512)",
@@ -2519,7 +2353,6 @@ static struct talitos_alg_template driver_algs[] = {
 				.cra_blocksize = SHA512_BLOCK_SIZE,
 				.cra_flags = CRYPTO_ALG_TYPE_AHASH |
 					     CRYPTO_ALG_ASYNC,
-				.cra_type = &crypto_ahash_type
 			}
 		},
 		.desc_hdr_template = DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU |
@@ -2677,14 +2510,34 @@ static struct talitos_crypto_alg *talitos_alg_alloc(struct device *dev,
 	case CRYPTO_ALG_TYPE_ABLKCIPHER:
 		alg = &t_alg->algt.alg.crypto;
 		alg->cra_init = talitos_cra_init;
+		alg->cra_type = &crypto_ablkcipher_type;
+		alg->cra_ablkcipher.setkey = ablkcipher_setkey;
+		alg->cra_ablkcipher.encrypt = ablkcipher_encrypt;
+		alg->cra_ablkcipher.decrypt = ablkcipher_decrypt;
+		alg->cra_ablkcipher.geniv = "eseqiv";
 		break;
 	case CRYPTO_ALG_TYPE_AEAD:
 		alg = &t_alg->algt.alg.crypto;
 		alg->cra_init = talitos_cra_init_aead;
+		alg->cra_type = &crypto_aead_type;
+		alg->cra_aead.setkey = aead_setkey;
+		alg->cra_aead.setauthsize = aead_setauthsize;
+		alg->cra_aead.encrypt = aead_encrypt;
+		alg->cra_aead.decrypt = aead_decrypt;
+		alg->cra_aead.givencrypt = aead_givencrypt;
+		alg->cra_aead.geniv = "<built-in>";
 		break;
 	case CRYPTO_ALG_TYPE_AHASH:
 		alg = &t_alg->algt.alg.hash.halg.base;
 		alg->cra_init = talitos_cra_init_ahash;
+		alg->cra_type = &crypto_ahash_type;
+		t_alg->algt.alg.hash.init = ahash_init;
+		t_alg->algt.alg.hash.update = ahash_update;
+		t_alg->algt.alg.hash.final = ahash_final;
+		t_alg->algt.alg.hash.finup = ahash_finup;
+		t_alg->algt.alg.hash.digest = ahash_digest;
+		t_alg->algt.alg.hash.setkey = ahash_setkey;
+
 		if (!(priv->features & TALITOS_FTR_HMAC_OK) &&
 		    !strncmp(alg->cra_name, "hmac", 4)) {
 			kfree(t_alg);
@@ -2896,7 +2749,9 @@ static int talitos_probe(struct platform_device *ofdev)
 		if (hw_supports(dev, driver_algs[i].desc_hdr_template)) {
 			struct talitos_crypto_alg *t_alg;
 			char *name = NULL;
+			bool authenc = false;
 
+authencesn:
 			t_alg = talitos_alg_alloc(dev, &driver_algs[i]);
 			if (IS_ERR(t_alg)) {
 				err = PTR_ERR(t_alg);
@@ -2911,6 +2766,8 @@ static int talitos_probe(struct platform_device *ofdev)
 				err = crypto_register_alg(
 						&t_alg->algt.alg.crypto);
 				name = t_alg->algt.alg.crypto.cra_driver_name;
+				authenc = authenc ? !authenc :
+					  !(bool)memcmp(name, "authenc", 7);
 				break;
 			case CRYPTO_ALG_TYPE_AHASH:
 				err = crypto_register_ahash(
@@ -2923,8 +2780,25 @@ static int talitos_probe(struct platform_device *ofdev)
 				dev_err(dev, "%s alg registration failed\n",
 					name);
 				kfree(t_alg);
-			} else
+			} else {
 				list_add_tail(&t_alg->entry, &priv->alg_list);
+				if (authenc) {
+					struct crypto_alg *alg =
+						&driver_algs[i].alg.crypto;
+
+					name = alg->cra_name;
+					memmove(name + 10, name + 7,
+						strlen(name) - 7);
+					memcpy(name + 7, "esn", 3);
+
+					name = alg->cra_driver_name;
+					memmove(name + 10, name + 7,
+						strlen(name) - 7);
+					memcpy(name + 7, "esn", 3);
+
+					goto authencesn;
+				}
+			}
 		}
 	}
 	if (!list_empty(&priv->alg_list))
