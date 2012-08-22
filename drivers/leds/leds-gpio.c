@@ -228,7 +228,6 @@ static struct gpio_leds_priv * __devinit gpio_leds_create_of(struct platform_dev
 {
 	return NULL;
 }
-#define of_gpio_leds_match NULL
 #endif /* CONFIG_OF_GPIO */
 
 
@@ -270,13 +269,13 @@ static int __devinit gpio_led_probe(struct platform_device *pdev)
 
 static int __devexit gpio_led_remove(struct platform_device *pdev)
 {
-	struct gpio_leds_priv *priv = dev_get_drvdata(&pdev->dev);
+	struct gpio_leds_priv *priv = platform_get_drvdata(pdev);
 	int i;
 
 	for (i = 0; i < priv->num_leds; i++)
 		delete_gpio_led(&priv->leds[i]);
 
-	dev_set_drvdata(&pdev->dev, NULL);
+	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }
@@ -287,7 +286,7 @@ static struct platform_driver gpio_led_driver = {
 	.driver		= {
 		.name	= "leds-gpio",
 		.owner	= THIS_MODULE,
-		.of_match_table = of_gpio_leds_match,
+		.of_match_table = of_match_ptr(of_gpio_leds_match),
 	},
 };
 
