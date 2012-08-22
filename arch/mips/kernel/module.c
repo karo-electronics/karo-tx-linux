@@ -219,6 +219,7 @@ int apply_relocate(Elf_Shdr *sechdrs, const char *strtab,
 
 	return 0;
 }
+#endif
 
 /* Given an address, look for it in the module exception tables. */
 const struct exception_table_entry *search_module_dbetables(unsigned long addr)
