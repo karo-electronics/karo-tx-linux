@@ -245,8 +245,7 @@ struct pci_dev *pci_get_subsys(unsigned int vendor, unsigned int device,
 			       unsigned int ss_vendor, unsigned int ss_device,
 			       struct pci_dev *from)
 {
-	struct pci_dev *pdev;
-	struct pci_device_id *id;
+	struct pci_device_id id;
 
 	/*
 	 * pci_find_subsys() can be called on the ide_setup() path,
@@ -257,18 +256,12 @@ struct pci_dev *pci_get_subsys(unsigned int vendor, unsigned int device,
 	if (unlikely(no_pci_devices()))
 		return NULL;
 
-	id = kzalloc(sizeof(*id), GFP_KERNEL);
-	if (!id)
-		return NULL;
-	id->vendor = vendor;
-	id->device = device;
-	id->subvendor = ss_vendor;
-	id->subdevice = ss_device;
+	id.vendor = vendor;
+	id.device = device;
+	id.subvendor = ss_vendor;
+	id.subdevice = ss_device;
 
-	pdev = pci_get_dev_by_id(id, from);
-	kfree(id);
-
-	return pdev;
+	return pci_get_dev_by_id(&id, from);
 }
 
 /**
@@ -307,19 +300,13 @@ pci_get_device(unsigned int vendor, unsigned int device, struct pci_dev *from)
  */
 struct pci_dev *pci_get_class(unsigned int class, struct pci_dev *from)
 {
-	struct pci_dev *dev;
-	struct pci_device_id *id;
+	struct pci_device_id id;
 
-	id = kzalloc(sizeof(*id), GFP_KERNEL);
-	if (!id)
-		return NULL;
-	id->vendor = id->device = id->subvendor = id->subdevice = PCI_ANY_ID;
-	id->class_mask = PCI_ANY_ID;
-	id->class = class;
+	id.vendor = id.device = id.subvendor = id.subdevice = PCI_ANY_ID;
+	id.class_mask = PCI_ANY_ID;
+	id.class = class;
 
-	dev = pci_get_dev_by_id(id, from);
-	kfree(id);
-	return dev;
+	return pci_get_dev_by_id(&id, from);
 }
 
 /**
