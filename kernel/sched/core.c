@@ -1925,6 +1925,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 #endif
 
 	/* Here we just switch the register state and the stack. */
+	rcu_switch(prev, next);
 	switch_to(prev, next, prev);
 
 	barrier();
@@ -2948,6 +2949,13 @@ asmlinkage void __sched schedule(void)
 }
 EXPORT_SYMBOL(schedule);
 
+asmlinkage void __sched schedule_user(void)
+{
+	rcu_user_exit();
+	schedule();
+	rcu_user_enter();
+}
+
 /**
  * schedule_preempt_disabled - called with preemption disabled
  *
@@ -3049,6 +3057,7 @@ asmlinkage void __sched preempt_schedule_irq(void)
 	/* Catch callers which need to be fixed */
 	BUG_ON(ti->preempt_count || !irqs_disabled());
 
+	rcu_user_exit();
 	do {
 		add_preempt_count(PREEMPT_ACTIVE);
 		local_irq_enable();
@@ -4790,10 +4799,8 @@ void idle_task_exit(void)
  * their home CPUs. So we just add the counter to another CPU's counter,
  * to keep the global sum constant after CPU-down:
  */
-static void migrate_nr_uninterruptible(struct rq *rq_src)
+static void migrate_nr_uninterruptible(struct rq *rq_src, struct rq *rq_dest)
 {
-	struct rq *rq_dest = cpu_rq(cpumask_any(cpu_active_mask));
-
 	rq_dest->nr_uninterruptible += rq_src->nr_uninterruptible;
 	rq_src->nr_uninterruptible = 0;
 }
@@ -4815,7 +4822,7 @@ static void calc_global_load_remove(struct rq *rq)
  * there's no concurrency possible, we hold the required locks anyway
  * because of lock validation efforts.
  */
-static void migrate_tasks(unsigned int dead_cpu)
+static void migrate_tasks(unsigned int dead_cpu, struct rq *rq_dest)
 {
 	struct rq *rq = cpu_rq(dead_cpu);
 	struct task_struct *next, *stop = rq->stop;
@@ -4849,11 +4856,11 @@ static void migrate_tasks(unsigned int dead_cpu)
 
 		/* Find suitable destination for @next, with force if needed. */
 		dest_cpu = select_fallback_rq(dead_cpu, next);
-		raw_spin_unlock(&rq->lock);
+		double_rq_unlock(rq, rq_dest);
 
 		__migrate_task(next, dead_cpu, dest_cpu);
 
-		raw_spin_lock(&rq->lock);
+		double_rq_lock(rq, rq_dest);
 	}
 
 	rq->stop = stop;
@@ -5067,6 +5074,7 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
 	int cpu = (long)hcpu;
 	unsigned long flags;
 	struct rq *rq = cpu_rq(cpu);
+	struct rq __maybe_unused *rq_dest = cpu_rq(cpumask_any(cpu_active_mask));
 
 	switch (action & ~CPU_TASKS_FROZEN) {
 
@@ -5089,17 +5097,19 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
 	case CPU_DYING:
 		sched_ttwu_pending();
 		/* Update our root-domain */
-		raw_spin_lock_irqsave(&rq->lock, flags);
+		local_irq_save(flags);
+		double_rq_lock(rq, rq_dest);
 		if (rq->rd) {
 			BUG_ON(!cpumask_test_cpu(cpu, rq->rd->span));
 			set_rq_offline(rq);
 		}
-		migrate_tasks(cpu);
+		migrate_tasks(cpu, rq_dest);
 		BUG_ON(rq->nr_running != 1); /* the migration thread */
-		raw_spin_unlock_irqrestore(&rq->lock, flags);
 
-		migrate_nr_uninterruptible(rq);
+		migrate_nr_uninterruptible(rq, rq_dest);
 		calc_global_load_remove(rq);
+		double_rq_unlock(rq, rq_dest);
+		local_irq_restore(flags);
 		break;
 #endif
 	}
