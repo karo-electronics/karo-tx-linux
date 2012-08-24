@@ -1209,6 +1209,9 @@ static void snd_hda_codec_free(struct hda_codec *codec)
 	kfree(codec);
 }
 
+static bool snd_hda_codec_get_supported_ps(struct hda_codec *codec,
+				hda_nid_t fg, unsigned int power_state);
+
 static void hda_set_power_state(struct hda_codec *codec, hda_nid_t fg,
 				unsigned int power_state);
 
@@ -1316,6 +1319,12 @@ int /*__devinit*/ snd_hda_codec_new(struct hda_bus *bus,
 			snd_hda_codec_read(codec, nid, 0,
 					   AC_VERB_GET_SUBSYSTEM_ID, 0);
 	}
+
+	codec->d3_stop_clk = snd_hda_codec_get_supported_ps(codec,
+					codec->afg ? codec->afg : codec->mfg,
+					AC_PWRST_CLKSTOP);
+	if (!codec->d3_stop_clk)
+		bus->power_keep_link_on = 1;
 
 	/* power-up all before initialization */
 	hda_set_power_state(codec,
@@ -3535,6 +3544,8 @@ static void hda_set_power_state(struct hda_codec *codec, hda_nid_t fg,
 	int count;
 	unsigned int state;
 
+	codec->d3_stop_clk_ok = 0;
+
 	if (codec->patch_ops.set_power_state) {
 		codec->patch_ops.set_power_state(codec, fg, power_state);
 		return;
@@ -3557,6 +3568,10 @@ static void hda_set_power_state(struct hda_codec *codec, hda_nid_t fg,
 		if (!(state & AC_PWRST_ERROR))
 			break;
 	}
+
+	if ((power_state == AC_PWRST_D3)
+		&& codec->d3_stop_clk && (state & AC_PWRST_CLK_STOP_OK))
+		codec->d3_stop_clk_ok = 1;
 }
 
 #ifdef CONFIG_SND_HDA_HWDEP
@@ -3618,6 +3633,7 @@ static void hda_call_codec_resume(struct hda_codec *codec)
 		snd_hda_codec_resume_amp(codec);
 		snd_hda_codec_resume_cache(codec);
 	}
+	snd_hda_jack_report_sync(codec);
 	snd_hda_power_down(codec); /* flag down before returning */
 }
 #endif /* CONFIG_PM */
@@ -3663,6 +3679,7 @@ int snd_hda_codec_build_controls(struct hda_codec *codec)
 		err = codec->patch_ops.build_controls(codec);
 	if (err < 0)
 		return err;
+	snd_hda_jack_report_sync(codec); /* call at the last init point */
 	return 0;
 }
 
@@ -4205,7 +4222,7 @@ int snd_hda_codec_build_pcms(struct hda_codec *codec)
  *
  * This function returns 0 if successful, or a negative error code.
  */
-int __devinit snd_hda_build_pcms(struct hda_bus *bus)
+int snd_hda_build_pcms(struct hda_bus *bus)
 {
 	struct hda_codec *codec;
 
@@ -4406,7 +4423,7 @@ static void hda_power_work(struct work_struct *work)
 
 	hda_call_codec_suspend(codec);
 	if (bus->ops.pm_notify)
-		bus->ops.pm_notify(bus);
+		bus->ops.pm_notify(bus, codec);
 }
 
 static void hda_keep_power_on(struct hda_codec *codec)
@@ -4432,19 +4449,16 @@ void snd_hda_update_power_acct(struct hda_codec *codec)
 /* Transition to powered up, if wait_power_down then wait for a pending
  * transition to D3 to complete. A pending D3 transition is indicated
  * with power_transition == -1. */
+/* call this with codec->power_lock held! */
 static void __snd_hda_power_up(struct hda_codec *codec, bool wait_power_down)
 {
 	struct hda_bus *bus = codec->bus;
 
-	spin_lock(&codec->power_lock);
-	codec->power_count++;
 	/* Return if power_on or transitioning to power_on, unless currently
 	 * powering down. */
 	if ((codec->power_on || codec->power_transition > 0) &&
-	    !(wait_power_down && codec->power_transition < 0)) {
-		spin_unlock(&codec->power_lock);
+	    !(wait_power_down && codec->power_transition < 0))
 		return;
-	}
 	spin_unlock(&codec->power_lock);
 
 	cancel_delayed_work_sync(&codec->power_work);
@@ -4456,9 +4470,9 @@ static void __snd_hda_power_up(struct hda_codec *codec, bool wait_power_down)
 	if (codec->power_on) {
 		if (codec->power_transition < 0)
 			codec->power_transition = 0;
-		spin_unlock(&codec->power_lock);
 		return;
 	}
+
 	trace_hda_power_up(codec);
 	snd_hda_update_power_acct(codec);
 	codec->power_on = 1;
@@ -4467,70 +4481,50 @@ static void __snd_hda_power_up(struct hda_codec *codec, bool wait_power_down)
 	spin_unlock(&codec->power_lock);
 
 	if (bus->ops.pm_notify)
-		bus->ops.pm_notify(bus);
+		bus->ops.pm_notify(bus, codec);
 	hda_call_codec_resume(codec);
 
 	spin_lock(&codec->power_lock);
 	codec->power_transition = 0;
-	spin_unlock(&codec->power_lock);
 }
-
-/**
- * snd_hda_power_up - Power-up the codec
- * @codec: HD-audio codec
- *
- * Increment the power-up counter and power up the hardware really when
- * not turned on yet.
- */
-void snd_hda_power_up(struct hda_codec *codec)
-{
-	__snd_hda_power_up(codec, false);
-}
-EXPORT_SYMBOL_HDA(snd_hda_power_up);
-
-/**
- * snd_hda_power_up_d3wait - Power-up the codec after waiting for any pending
- *   D3 transition to complete.  This differs from snd_hda_power_up() when
- *   power_transition == -1.  snd_hda_power_up sees this case as a nop,
- *   snd_hda_power_up_d3wait waits for the D3 transition to complete then powers
- *   back up.
- * @codec: HD-audio codec
- *
- * Cancel any power down operation hapenning on the work queue, then power up.
- */
-void snd_hda_power_up_d3wait(struct hda_codec *codec)
-{
-	/* This will cancel and wait for pending power_work to complete. */
-	__snd_hda_power_up(codec, true);
-}
-EXPORT_SYMBOL_HDA(snd_hda_power_up_d3wait);
 
 #define power_save(codec)	\
 	((codec)->bus->power_save ? *(codec)->bus->power_save : 0)
 
-/**
- * snd_hda_power_down - Power-down the codec
- * @codec: HD-audio codec
- *
- * Decrement the power-up counter and schedules the power-off work if
- * the counter rearches to zero.
- */
-void snd_hda_power_down(struct hda_codec *codec)
+/* Transition to powered down */
+static void __snd_hda_power_down(struct hda_codec *codec)
 {
-	spin_lock(&codec->power_lock);
-	--codec->power_count;
-	if (!codec->power_on || codec->power_count || codec->power_transition) {
-		spin_unlock(&codec->power_lock);
+	if (!codec->power_on || codec->power_count || codec->power_transition)
 		return;
-	}
+
 	if (power_save(codec)) {
 		codec->power_transition = -1; /* avoid reentrance */
 		queue_delayed_work(codec->bus->workq, &codec->power_work,
 				msecs_to_jiffies(power_save(codec) * 1000));
 	}
+}
+
+/**
+ * snd_hda_power_save - Power-up/down/sync the codec
+ * @codec: HD-audio codec
+ * @delta: the counter delta to change
+ *
+ * Change the power-up counter via @delta, and power up or down the hardware
+ * appropriately.  For the power-down, queue to the delayed action.
+ * Passing zero to @delta means to synchronize the power state.
+ */
+void snd_hda_power_save(struct hda_codec *codec, int delta, bool d3wait)
+{
+	spin_lock(&codec->power_lock);
+	codec->power_count += delta;
+	trace_hda_power_count(codec);
+	if (delta > 0)
+		__snd_hda_power_up(codec, d3wait);
+	else
+		__snd_hda_power_down(codec);
 	spin_unlock(&codec->power_lock);
 }
-EXPORT_SYMBOL_HDA(snd_hda_power_down);
+EXPORT_SYMBOL_HDA(snd_hda_power_save);
 
 /**
  * snd_hda_check_amp_list_power - Check the amp list and update the power
