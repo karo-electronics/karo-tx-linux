@@ -446,6 +446,11 @@ ret_from_kernel_thread:
 	li	r3,0
 	b	do_exit		# no return
 
+	.globl	__ret_from_kernel_execve
+__ret_from_kernel_execve:
+	mr	r1,r3
+	b	ret_from_syscall
+
 /* Traced system call support */
 syscall_dotrace:
 	SAVE_NVGPRS(r1)

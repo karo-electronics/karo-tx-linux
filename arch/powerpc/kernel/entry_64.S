@@ -380,6 +380,10 @@ _GLOBAL(ret_from_kernel_thread)
 	li	r3,0
 	b	.do_exit	# no return
 
+_GLOBAL(__ret_from_kernel_execve)
+	mr	r1,r3
+	b	syscall_exit
+
 	.section	".toc","aw"
 DSCR_DEFAULT:
 	.tc dscr_default[TC],dscr_default
