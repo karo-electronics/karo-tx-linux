@@ -401,7 +401,7 @@ struct user_arg_ptr {
 	union {
 		const char __user *const __user *native;
 #ifdef CONFIG_COMPAT
-		compat_uptr_t __user *compat;
+		const compat_uptr_t __user *compat;
 #endif
 	} ptr;
 };
@@ -1600,9 +1600,9 @@ int do_execve(const char *filename,
 }
 
 #ifdef CONFIG_COMPAT
-int compat_do_execve(char *filename,
-	compat_uptr_t __user *__argv,
-	compat_uptr_t __user *__envp,
+int compat_do_execve(const char *filename,
+	const compat_uptr_t __user *__argv,
+	const compat_uptr_t __user *__envp,
 	struct pt_regs *regs)
 {
 	struct user_arg_ptr argv = {
@@ -2333,6 +2333,20 @@ SYSCALL_DEFINE3(execve,
 	}
 	return error;
 }
+#ifdef CONFIG_COMPAT
+asmlinkage long compat_sys_execve(const char __user * filename,
+	const compat_uptr_t __user * argv,
+	const compat_uptr_t __user * envp)
+{
+	const char *path = getname(filename);
+	int error = PTR_ERR(path);
+	if (!IS_ERR(path)) {
+		error = compat_do_execve(path, argv, envp, current_pt_regs());
+		putname(path);
+	}
+	return error;
+}
+#endif
 #endif
 
 #ifdef __ARCH_WANT_KERNEL_EXECVE
