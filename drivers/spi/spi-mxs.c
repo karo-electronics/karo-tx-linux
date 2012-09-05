@@ -53,9 +53,9 @@
 
 #define DRIVER_NAME		"mxs-spi"
 
-#define SSP_TIMEOUT		1000	/* 1000 ms */
+/* Use 10S timeout for very long transfers, it should suffice. */
+#define SSP_TIMEOUT		10000
 
-#define SG_NUM			4
 #define SG_MAXLEN		0xff00
 
 struct mxs_spi {
@@ -177,25 +177,23 @@ static inline void mxs_spi_disable(struct mxs_spi *spi)
 
 static int mxs_ssp_wait(struct mxs_spi *spi, int offset, int mask, bool set)
 {
-	unsigned long timeout = jiffies + msecs_to_jiffies(SSP_TIMEOUT);
+	const unsigned long timeout = jiffies + msecs_to_jiffies(SSP_TIMEOUT);
 	struct mxs_ssp *ssp = &spi->ssp;
 	uint32_t reg;
 
-	while (1) {
+	do {
 		reg = readl_relaxed(ssp->base + offset);
 
-		if (set && ((reg & mask) == mask))
-			break;
+		if (!set)
+			reg = ~reg;
 
-		if (!set && ((~reg & mask) == mask))
-			break;
+		reg &= mask;
 
-		udelay(1);
+		if (reg == mask)
+			return 0;
+	} while (time_before(jiffies, timeout));
 
-		if (time_after(jiffies, timeout))
-			return -ETIMEDOUT;
-	}
-	return 0;
+	return -ETIMEDOUT;
 }
 
 static void mxs_ssp_dma_irq_callback(void *param)
@@ -219,61 +217,94 @@ static int mxs_spi_txrx_dma(struct mxs_spi *spi, int cs,
 			    int *first, int *last, int write)
 {
 	struct mxs_ssp *ssp = &spi->ssp;
-	struct dma_async_tx_descriptor *desc;
-	struct scatterlist sg[SG_NUM];
+	struct dma_async_tx_descriptor *desc = NULL;
+	const bool vmalloced_buf = is_vmalloc_addr(buf);
+	const int desc_len = vmalloced_buf ? PAGE_SIZE : SG_MAXLEN;
+	const int sgs = DIV_ROUND_UP(len, desc_len);
 	int sg_count;
-	uint32_t pio = BM_SSP_CTRL0_DATA_XFER | mxs_spi_cs_to_reg(cs);
-	int ret;
+	int min, ret;
+	uint32_t ctrl0;
+	struct page *vm_page;
+	void *sg_buf;
+	struct {
+		uint32_t		pio[4];
+		struct scatterlist	sg;
+	} *dma_xfer;
 
-	if (len > SG_NUM * SG_MAXLEN) {
-		dev_err(ssp->dev, "Data chunk too big for DMA\n");
+	if (!len)
 		return -EINVAL;
-	}
+
+	dma_xfer = kzalloc(sizeof(*dma_xfer) * sgs, GFP_KERNEL);
+	if (!dma_xfer)
+		return -ENOMEM;
 
 	INIT_COMPLETION(spi->c);
 
+	ctrl0 = readl(ssp->base + HW_SSP_CTRL0);
+	ctrl0 |= BM_SSP_CTRL0_DATA_XFER | mxs_spi_cs_to_reg(cs);
+
 	if (*first)
-		pio |= BM_SSP_CTRL0_LOCK_CS;
-	if (*last)
-		pio |= BM_SSP_CTRL0_IGNORE_CRC;
+		ctrl0 |= BM_SSP_CTRL0_LOCK_CS;
 	if (!write)
-		pio |= BM_SSP_CTRL0_READ;
-
-	if (ssp->devid == IMX23_SSP)
-		pio |= len;
-	else
-		writel(len, ssp->base + HW_SSP_XFER_SIZE);
-
-	/* Queue the PIO register write transfer. */
-	desc = dmaengine_prep_slave_sg(ssp->dmach,
-			(struct scatterlist *)&pio,
-			1, DMA_TRANS_NONE, 0);
-	if (!desc) {
-		dev_err(ssp->dev,
-			"Failed to get PIO reg. write descriptor.\n");
-		return -EINVAL;
-	}
+		ctrl0 |= BM_SSP_CTRL0_READ;
 
 	/* Queue the DMA data transfer. */
-	sg_init_table(sg, (len / SG_MAXLEN) + 1);
-	sg_count = 0;
-	while (len) {
-		sg_set_buf(&sg[sg_count++], buf, min(len, SG_MAXLEN));
-		len -= min(len, SG_MAXLEN);
-		buf += min(len, SG_MAXLEN);
-	}
-	dma_map_sg(ssp->dev, sg, sg_count,
-		write ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
+	for (sg_count = 0; sg_count < sgs; sg_count++) {
+		min = min(len, desc_len);
 
-	desc = dmaengine_prep_slave_sg(ssp->dmach, sg, sg_count,
-			write ? DMA_MEM_TO_DEV : DMA_DEV_TO_MEM,
-			DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+		/* Prepare the transfer descriptor. */
+		if ((sg_count + 1 == sgs) && *last)
+			ctrl0 |= BM_SSP_CTRL0_IGNORE_CRC;
 
-	if (!desc) {
-		dev_err(ssp->dev,
-			"Failed to get DMA data write descriptor.\n");
-		ret = -EINVAL;
-		goto err;
+		if (ssp->devid == IMX23_SSP)
+			ctrl0 |= min;
+
+		dma_xfer[sg_count].pio[0] = ctrl0;
+		dma_xfer[sg_count].pio[3] = min;
+
+		if (vmalloced_buf) {
+			vm_page = vmalloc_to_page(buf);
+			if (!vm_page) {
+				ret = -ENOMEM;
+				goto err_vmalloc;
+			}
+			sg_buf = page_address(vm_page) +
+				((size_t)buf & ~PAGE_MASK);
+		} else {
+			sg_buf = buf;
+		}
+
+		sg_init_one(&dma_xfer[sg_count].sg, sg_buf, min);
+		ret = dma_map_sg(ssp->dev, &dma_xfer[sg_count].sg, 1,
+			write ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
+
+		len -= min;
+		buf += min;
+
+		/* Queue the PIO register write transfer. */
+		desc = dmaengine_prep_slave_sg(ssp->dmach,
+				(struct scatterlist *)dma_xfer[sg_count].pio,
+				(ssp->devid == IMX23_SSP) ? 1 : 4,
+				DMA_TRANS_NONE,
+				sg_count ? DMA_PREP_INTERRUPT : 0);
+		if (!desc) {
+			dev_err(ssp->dev,
+				"Failed to get PIO reg. write descriptor.\n");
+			ret = -EINVAL;
+			goto err_mapped;
+		}
+
+		desc = dmaengine_prep_slave_sg(ssp->dmach,
+				&dma_xfer[sg_count].sg, 1,
+				write ? DMA_MEM_TO_DEV : DMA_DEV_TO_MEM,
+				DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+
+		if (!desc) {
+			dev_err(ssp->dev,
+				"Failed to get DMA data write descriptor.\n");
+			ret = -EINVAL;
+			goto err_mapped;
+		}
 	}
 
 	/*
@@ -289,20 +320,22 @@ static int mxs_spi_txrx_dma(struct mxs_spi *spi, int cs,
 
 	ret = wait_for_completion_timeout(&spi->c,
 				msecs_to_jiffies(SSP_TIMEOUT));
-
 	if (!ret) {
 		dev_err(ssp->dev, "DMA transfer timeout\n");
 		ret = -ETIMEDOUT;
-		goto err;
+		goto err_vmalloc;
 	}
 
 	ret = 0;
 
-err:
-	for (--sg_count; sg_count >= 0; sg_count--) {
-		dma_unmap_sg(ssp->dev, &sg[sg_count], 1,
+err_vmalloc:
+	while (--sg_count >= 0) {
+err_mapped:
+		dma_unmap_sg(ssp->dev, &dma_xfer[sg_count].sg, 1,
 			write ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
 	}
+
+	kfree(dma_xfer);
 
 	return ret;
 }
@@ -410,7 +443,7 @@ static int mxs_spi_transfer_one(struct spi_master *master,
 		 * DMA only: 2.164808 seconds, 473.0KB/s
 		 * Combined: 1.676276 seconds, 610.9KB/s
 		 */
-		if (t->len <= 256) {
+		if (t->len < 32) {
 			writel(BM_SSP_CTRL1_DMA_ENABLE,
 				ssp->base + HW_SSP_CTRL1(ssp) +
 				STMP_OFFSET_REG_CLR);
@@ -438,12 +471,12 @@ static int mxs_spi_transfer_one(struct spi_master *master,
 						&first, &last, 0);
 		}
 
-		m->actual_length += t->len;
 		if (status) {
 			stmp_reset_block(ssp->base);
 			break;
 		}
 
+		m->actual_length += t->len;
 		first = last = 0;
 	}
 
@@ -487,9 +520,16 @@ static int __devinit mxs_spi_probe(struct platform_device *pdev)
 	struct pinctrl *pinctrl;
 	struct clk *clk;
 	void __iomem *base;
-	int devid, dma_channel;
+	int devid, dma_channel, clk_freq;
 	int ret = 0, irq_err, irq_dma;
 	dma_cap_mask_t mask;
+
+	/*
+	 * Default clock speed for the SPI core. 160MHz seems to
+	 * work reasonably well with most SPI flashes, so use this
+	 * as a default. Override with "clock-frequency" DT prop.
+	 */
+	const int clk_freq_default = 160000000;
 
 	iores = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	irq_err = platform_get_irq(pdev, 0);
@@ -522,12 +562,18 @@ static int __devinit mxs_spi_probe(struct platform_device *pdev)
 				"Failed to get DMA channel\n");
 			return -EINVAL;
 		}
+
+		ret = of_property_read_u32(np, "clock-frequency",
+					   &clk_freq);
+		if (ret)
+			clk_freq = clk_freq_default;
 	} else {
 		dmares = platform_get_resource(pdev, IORESOURCE_DMA, 0);
 		if (!dmares)
 			return -EINVAL;
 		devid = pdev->id_entry->driver_data;
 		dma_channel = dmares->start;
+		clk_freq = clk_freq_default;
 	}
 
 	master = spi_alloc_master(&pdev->dev, sizeof(*spi));
@@ -565,12 +611,8 @@ static int __devinit mxs_spi_probe(struct platform_device *pdev)
 		goto out_master_free;
 	}
 
-	/*
-	 * Crank up the clock to 120MHz, this will be further divided onto a
-	 * proper speed.
-	 */
 	clk_prepare_enable(ssp->clk);
-	clk_set_rate(ssp->clk, 120 * 1000 * 1000);
+	clk_set_rate(ssp->clk, clk_freq);
 	ssp->clk_rate = clk_get_rate(ssp->clk) / 1000;
 
 	stmp_reset_block(ssp->base);
