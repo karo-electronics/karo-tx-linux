@@ -32,7 +32,6 @@
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
 
-#include <mach/clk.h>
 #include "dmaengine.h"
 
 #define TEGRA_APBDMA_GENERAL			0x0
