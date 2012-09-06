@@ -1454,10 +1454,19 @@ retry:
 	}
 
 	/*
-	 * All idle workers are rebound and waiting for %WORKER_REBIND to
-	 * be cleared inside idle_worker_rebind().  Clear and release.
-	 * Clearing %WORKER_REBIND from this foreign context is safe
-	 * because these workers are still guaranteed to be idle.
+	 * At this point, each pool is guaranteed to have at least one idle
+	 * worker and all idle workers are waiting for WORKER_REBIND to
+	 * clear.  Release management before releasing idle workers;
+	 * otherwise, they can all go become busy as we're holding the
+	 * manager_mutexes, which can lead to deadlock as we don't actually
+	 * create new workers.
+	 */
+	gcwq_release_management(gcwq);
+
+	/*
+	 * Clear %WORKER_REBIND and release.  Clearing it from this foreign
+	 * context is safe because these workers are still guaranteed to be
+	 * idle.
 	 *
 	 * We need to make sure all idle workers passed WORKER_REBIND wait
 	 * in idle_worker_rebind() before returning; otherwise, workers can
@@ -1467,6 +1476,7 @@ retry:
 	INIT_COMPLETION(idle_rebind.done);
 
 	for_each_worker_pool(pool, gcwq) {
+		WARN_ON_ONCE(list_empty(&pool->idle_list));
 		list_for_each_entry(worker, &pool->idle_list, entry) {
 			worker->flags &= ~WORKER_REBIND;
 			idle_rebind.cnt++;
@@ -1481,8 +1491,6 @@ retry:
 	} else {
 		spin_unlock_irq(&gcwq->lock);
 	}
-
-	gcwq_release_management(gcwq);
 }
 
 static struct worker *alloc_worker(void)
