@@ -480,6 +480,8 @@ static atomic_t unbound_pool_nr_running[NR_WORKER_POOLS] = {
 };
 
 static int worker_thread(void *__worker);
+static void gcwq_claim_management(struct global_cwq *gcwq);
+static void gcwq_release_management(struct global_cwq *gcwq);
 
 static int worker_pool_pri(struct worker_pool *pool)
 {
@@ -1355,11 +1357,11 @@ static void busy_worker_rebind_fn(struct work_struct *work)
 }
 
 /**
- * rebind_workers - rebind all workers of a gcwq to the associated CPU
+ * gcwq_associate - (re)associate a gcwq to its CPU and rebind its workers
  * @gcwq: gcwq of interest
  *
- * @gcwq->cpu is coming online.  Rebind all workers to the CPU.  Rebinding
- * is different for idle and busy ones.
+ * @gcwq->cpu is coming online.  Clear %GCWQ_DISASSOCIATED and rebind all
+ * workers to the CPU.  Rebinding is different for idle and busy ones.
  *
  * The idle ones should be rebound synchronously and idle rebinding should
  * be complete before any worker starts executing work items with
@@ -1378,8 +1380,7 @@ static void busy_worker_rebind_fn(struct work_struct *work)
  * On return, all workers are guaranteed to either be bound or have rebind
  * work item scheduled.
  */
-static void rebind_workers(struct global_cwq *gcwq)
-	__releases(&gcwq->lock) __acquires(&gcwq->lock)
+static void gcwq_associate(struct global_cwq *gcwq)
 {
 	struct idle_rebind idle_rebind;
 	struct worker_pool *pool;
@@ -1387,10 +1388,10 @@ static void rebind_workers(struct global_cwq *gcwq)
 	struct hlist_node *pos;
 	int i;
 
-	lockdep_assert_held(&gcwq->lock);
+	gcwq_claim_management(gcwq);
+	spin_lock_irq(&gcwq->lock);
 
-	for_each_worker_pool(pool, gcwq)
-		lockdep_assert_held(&pool->manager_mutex);
+	gcwq->flags &= ~GCWQ_DISASSOCIATED;
 
 	/*
 	 * Rebind idle workers.  Interlocked both ways.  We wait for
@@ -1477,8 +1478,11 @@ retry:
 	if (--idle_rebind.cnt) {
 		spin_unlock_irq(&gcwq->lock);
 		wait_for_completion(&idle_rebind.done);
-		spin_lock_irq(&gcwq->lock);
+	} else {
+		spin_unlock_irq(&gcwq->lock);
 	}
+
+	gcwq_release_management(gcwq);
 }
 
 static struct worker *alloc_worker(void)
@@ -3496,12 +3500,7 @@ static int __devinit workqueue_cpu_up_callback(struct notifier_block *nfb,
 
 	case CPU_DOWN_FAILED:
 	case CPU_ONLINE:
-		gcwq_claim_management(gcwq);
-		spin_lock_irq(&gcwq->lock);
-		gcwq->flags &= ~GCWQ_DISASSOCIATED;
-		rebind_workers(gcwq);
-		spin_unlock_irq(&gcwq->lock);
-		gcwq_release_management(gcwq);
+		gcwq_associate(gcwq);
 		break;
 	}
 	return NOTIFY_OK;
