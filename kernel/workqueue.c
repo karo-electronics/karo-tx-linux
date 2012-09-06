@@ -3394,21 +3394,19 @@ EXPORT_SYMBOL_GPL(work_busy);
  */
 
 /* claim manager positions of all pools */
-static void gcwq_claim_management_and_lock(struct global_cwq *gcwq)
+static void gcwq_claim_management(struct global_cwq *gcwq)
 {
 	struct worker_pool *pool;
 
 	for_each_worker_pool(pool, gcwq)
 		mutex_lock_nested(&pool->manager_mutex, pool - gcwq->pools);
-	spin_lock_irq(&gcwq->lock);
 }
 
 /* release manager positions */
-static void gcwq_release_management_and_unlock(struct global_cwq *gcwq)
+static void gcwq_release_management(struct global_cwq *gcwq)
 {
 	struct worker_pool *pool;
 
-	spin_unlock_irq(&gcwq->lock);
 	for_each_worker_pool(pool, gcwq)
 		mutex_unlock(&pool->manager_mutex);
 }
@@ -3423,7 +3421,8 @@ static void gcwq_unbind_fn(struct work_struct *work)
 
 	BUG_ON(gcwq->cpu != smp_processor_id());
 
-	gcwq_claim_management_and_lock(gcwq);
+	gcwq_claim_management(gcwq);
+	spin_lock_irq(&gcwq->lock);
 
 	/*
 	 * We've claimed all manager positions.  Make all workers unbound
@@ -3440,7 +3439,8 @@ static void gcwq_unbind_fn(struct work_struct *work)
 
 	gcwq->flags |= GCWQ_DISASSOCIATED;
 
-	gcwq_release_management_and_unlock(gcwq);
+	spin_unlock_irq(&gcwq->lock);
+	gcwq_release_management(gcwq);
 
 	/*
 	 * Call schedule() so that we cross rq->lock and thus can guarantee
@@ -3496,10 +3496,12 @@ static int __devinit workqueue_cpu_up_callback(struct notifier_block *nfb,
 
 	case CPU_DOWN_FAILED:
 	case CPU_ONLINE:
-		gcwq_claim_management_and_lock(gcwq);
+		gcwq_claim_management(gcwq);
+		spin_lock_irq(&gcwq->lock);
 		gcwq->flags &= ~GCWQ_DISASSOCIATED;
 		rebind_workers(gcwq);
-		gcwq_release_management_and_unlock(gcwq);
+		spin_unlock_irq(&gcwq->lock);
+		gcwq_release_management(gcwq);
 		break;
 	}
 	return NOTIFY_OK;
