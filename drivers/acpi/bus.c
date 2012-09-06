@@ -207,7 +207,8 @@ static int __acpi_bus_get_power(struct acpi_device *device, int *state)
 	if (!device || !state)
 		return -EINVAL;
 
-	if (!device->flags.power_manageable) {
+	if (!device->power.flags.explicit_get &&
+			!device->power.flags.power_resources) {
 		/* TBD: Non-recursive algorithm for walking up hierarchy. */
 		*state = device->parent ?
 			device->parent->power.state : ACPI_STATE_D0;
