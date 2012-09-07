@@ -22,6 +22,7 @@ renesas/ag5evm    git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.gi
 nxp4008/removal   git://git.antcom.de/linux-2.6.git pnx4008-removal
 
 next/maintainers:
+[email]		  Entry for ks8695 from Arnd
 
 next/soc:
 ux500/asic-id:	git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git ux500-core
