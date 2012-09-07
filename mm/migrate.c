@@ -681,8 +681,8 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 static int discard_page(struct page *page)
 {
 	int ret = -EAGAIN;
-
 	struct address_space *mapping = page_mapping(page);
+
 	if (page_has_private(page))
 		if (!try_to_release_page(page, GFP_KERNEL))
 			return ret;
