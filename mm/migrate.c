@@ -678,6 +678,19 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 	return rc;
 }
 
+static int discard_page(struct page *page)
+{
+	int ret = -EAGAIN;
+
+	struct address_space *mapping = page_mapping(page);
+	if (page_has_private(page))
+		if (!try_to_release_page(page, GFP_KERNEL))
+			return ret;
+	if (remove_mapping(mapping, page))
+		ret = 0;
+	return ret;
+}
+
 static int __unmap_and_move(struct page *page, struct page *newpage,
 			int force, bool offlining, migrate_mode_t mode)
 {
@@ -685,6 +698,9 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	int remap_swapcache = 1;
 	struct mem_cgroup *mem;
 	struct anon_vma *anon_vma = NULL;
+	enum ttu_flags ttu_flags;
+	bool discard_mode = false;
+	bool file = false;
 
 	if (!trylock_page(page)) {
 		if (!force || (mode & MIGRATE_ASYNC))
@@ -799,12 +815,31 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 		goto skip_unmap;
 	}
 
+	file = page_is_file_cache(page);
+	ttu_flags = TTU_IGNORE_ACCESS;
+retry:
+	if (!(mode & MIGRATE_DISCARD) || !file || PageDirty(page))
+		ttu_flags |= (TTU_MIGRATION | TTU_IGNORE_MLOCK);
+	else
+		discard_mode = true;
+
 	/* Establish migration ptes or remove ptes */
-	try_to_unmap(page, TTU_MIGRATION|TTU_IGNORE_MLOCK|TTU_IGNORE_ACCESS);
+	rc = try_to_unmap(page, ttu_flags);
 
 skip_unmap:
-	if (!page_mapped(page))
-		rc = move_to_new_page(newpage, page, remap_swapcache, mode);
+	if (rc == SWAP_SUCCESS) {
+		if (!discard_mode) {
+			rc = move_to_new_page(newpage, page,
+					remap_swapcache, mode);
+		} else {
+			rc = discard_page(page);
+			goto uncharge;
+		}
+	} else if (rc == SWAP_MLOCK && discard_mode) {
+		mode &= ~MIGRATE_DISCARD;
+		discard_mode = false;
+		goto retry;
+	}
 
 	if (rc && remap_swapcache)
 		remove_migration_ptes(page, page);
