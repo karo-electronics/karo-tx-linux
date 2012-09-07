@@ -37,7 +37,7 @@ enum lm3630_leds {
 	BLED_2
 };
 
-const char *bled_name[] = {
+static const char *bled_name[] = {
 	[BLED_ALL] = "lm3630_bled",	/*Bank1 controls all string */
 	[BLED_1] = "lm3630_bled1",	/*Bank1 controls bled1 */
 	[BLED_2] = "lm3630_bled2",	/*Bank1 or 2 controls bled2 */
@@ -62,15 +62,14 @@ static int __devinit lm3630_chip_init(struct lm3630_chip_data *pchip)
 	struct lm3630_platform_data *pdata = pchip->pdata;
 
 	/*pwm control */
-	reg_val = ((pdata->pwm_active & 0x01) << 2)
-	    | (pdata->pwm_ctrl & 0x03);
+	reg_val = ((pdata->pwm_active & 0x01) << 2) | (pdata->pwm_ctrl & 0x03);
 	ret = regmap_update_bits(pchip->regmap, REG_CONFIG, 0x07, reg_val);
 	if (ret < 0)
 		goto out;
 
 	/* bank control */
-	reg_val = ((pdata->bank_b_ctrl & 0x01) << 1)
-	    | (pdata->bank_a_ctrl & 0x07);
+	reg_val = ((pdata->bank_b_ctrl & 0x01) << 1) |
+			(pdata->bank_a_ctrl & 0x07);
 	ret = regmap_update_bits(pchip->regmap, REG_CTRL, 0x07, reg_val);
 	if (ret < 0)
 		goto out;
@@ -105,8 +104,9 @@ static void lm3630_delayed_func(struct work_struct *work)
 {
 	int ret;
 	unsigned int reg_val;
-	struct lm3630_chip_data *pchip =
-	    container_of(work, struct lm3630_chip_data, work.work);
+	struct lm3630_chip_data *pchip;
+
+	pchip = container_of(work, struct lm3630_chip_data, work.work);
 
 	ret = regmap_read(pchip->regmap, REG_INT_STATUS, &reg_val);
 	if (ret < 0) {
@@ -153,6 +153,16 @@ static int lm3630_intr_config(struct lm3630_chip_data *pchip)
 	return 0;
 }
 
+static bool
+set_intensity(struct backlight_device *bl, struct lm3630_chip_data *pchip)
+{
+	if (!pchip->pdata->pwm_set_intensity)
+		return false;
+	pchip->pdata->pwm_set_intensity(bl->props.brightness - 1,
+					pchip->pdata->pwm_period);
+	return true;
+}
+
 /* update and get brightness */
 static int lm3630_bank_a_update_status(struct backlight_device *bl)
 {
@@ -170,14 +180,8 @@ static int lm3630_bank_a_update_status(struct backlight_device *bl)
 
 	/* pwm control */
 	if (pwm_ctrl == PWM_CTRL_BANK_A || pwm_ctrl == PWM_CTRL_BANK_ALL) {
-		if (pchip->pdata->pwm_set_intensity)
-			pchip->pdata->pwm_set_intensity(bl->props.brightness -
-							1,
-							pchip->pdata->
-							pwm_period);
-		else
-			dev_err(pchip->dev,
-				"No pwm control func. in plat-data\n");
+		if (!set_intensity(bl, pchip))
+			dev_err(pchip->dev, "No pwm control func. in plat-data\n");
 	} else {
 
 		/* i2c control */
@@ -242,12 +246,7 @@ static int lm3630_bank_b_update_status(struct backlight_device *bl)
 	enum lm3630_pwm_ctrl pwm_ctrl = pchip->pdata->pwm_ctrl;
 
 	if (pwm_ctrl == PWM_CTRL_BANK_B || pwm_ctrl == PWM_CTRL_BANK_ALL) {
-		if (pchip->pdata->pwm_set_intensity)
-			pchip->pdata->pwm_set_intensity(bl->props.brightness -
-							1,
-							pchip->pdata->
-							pwm_period);
-		else
+		if (!set_intensity(bl, pchip))
 			dev_err(pchip->dev,
 				"no pwm control func. in plat-data\n");
 	} else {
