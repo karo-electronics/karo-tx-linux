@@ -452,7 +452,7 @@ void nfs_init_cinfo(struct nfs_commit_info *cinfo,
 
 #ifdef CONFIG_MIGRATION
 extern int nfs_migrate_page(struct address_space *,
-		struct page *, struct page *, enum migrate_mode);
+		struct page *, struct page *, migrate_mode_t);
 #else
 #define nfs_migrate_page NULL
 #endif

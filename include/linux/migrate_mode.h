@@ -1,16 +1,19 @@
 #ifndef MIGRATE_MODE_H_INCLUDED
 #define MIGRATE_MODE_H_INCLUDED
+
+/* MIGRATE_ASYNC means never block */
+#define MIGRATE_ASYNC		((__force migrate_mode_t)0x1)
 /*
- * MIGRATE_ASYNC means never block
  * MIGRATE_SYNC_LIGHT in the current implementation means to allow blocking
  *	on most operations but not ->writepage as the potential stall time
  *	is too significant
+ */
+#define MIGRATE_SYNC_LIGHT	((__force migrate_mode_t)0x2)
+/*
  * MIGRATE_SYNC will block when migrating pages
  */
-enum migrate_mode {
-	MIGRATE_ASYNC,
-	MIGRATE_SYNC_LIGHT,
-	MIGRATE_SYNC,
-};
+#define MIGRATE_SYNC		((__force migrate_mode_t)0x4)
+
+typedef unsigned __bitwise__ migrate_mode_t;
 
 #endif		/* MIGRATE_MODE_H_INCLUDED */
