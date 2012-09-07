@@ -14,6 +14,13 @@
  */
 #define MIGRATE_SYNC		((__force migrate_mode_t)0x4)
 
+/*
+ * MIGRTATE_DISCARD will discard clean cache page instead of migration.
+ * MIGRATE_ASYNC, MIGRATE_SYNC_LIGHT, MIGRATE_SYNC shouldn't be used
+ * together with OR flag in current implementation.
+ */
+#define MIGRATE_DISCARD		((__force migrate_mode_t)0x8)
+
 typedef unsigned __bitwise__ migrate_mode_t;
 
 #endif		/* MIGRATE_MODE_H_INCLUDED */
