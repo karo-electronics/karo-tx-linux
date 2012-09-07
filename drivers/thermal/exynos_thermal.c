@@ -33,7 +33,6 @@
 #include <linux/kobject.h>
 #include <linux/io.h>
 #include <linux/mutex.h>
-#include <linux/err.h>
 #include <linux/platform_data/exynos_thermal.h>
 #include <linux/thermal.h>
 #include <linux/cpufreq.h>
