@@ -1283,7 +1283,7 @@ static void xen_flush_tlb_others(const struct cpumask *cpus,
 	cpumask_clear_cpu(smp_processor_id(), to_cpumask(args->mask));
 
 	args->op.cmd = MMUEXT_TLB_FLUSH_MULTI;
-	if (start != TLB_FLUSH_ALL && (end - start) <= PAGE_SIZE) {
+	if (end != TLB_FLUSH_ALL && (end - start) <= PAGE_SIZE) {
 		args->op.cmd = MMUEXT_INVLPG_MULTI;
 		args->op.arg1.linear_addr = start;
 	}
@@ -2337,6 +2337,9 @@ int xen_remap_domain_mfn_range(struct vm_area_struct *vma,
 	unsigned long range;
 	int err = 0;
 
+	if (xen_feature(XENFEAT_auto_translated_physmap))
+		return -EINVAL;
+
 	prot = __pgprot(pgprot_val(prot) | _PAGE_IOMAP);
 
 	BUG_ON(!((vma->vm_flags & (VM_PFNMAP | VM_RESERVED | VM_IO)) ==
@@ -2355,8 +2358,8 @@ int xen_remap_domain_mfn_range(struct vm_area_struct *vma,
 		if (err)
 			goto out;
 
-		err = -EFAULT;
-		if (HYPERVISOR_mmu_update(mmu_update, batch, NULL, domid) < 0)
+		err = HYPERVISOR_mmu_update(mmu_update, batch, NULL, domid);
+		if (err < 0)
 			goto out;
 
 		nr -= batch;
