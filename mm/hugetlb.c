@@ -2616,7 +2616,7 @@ retry_avoidcopy:
 	__SetPageUptodate(new_page);
 
 	mmun_start = address & huge_page_mask(h);
-	mmun_end   = (address & huge_page_mask(h)) + huge_page_size(h);
+	mmun_end = mmun_start + huge_page_size(h);
 	mmu_notifier_invalidate_range_start(mm, mmun_start, mmun_end);
 	/*
 	 * Retake the page_table_lock to check for racing updates
