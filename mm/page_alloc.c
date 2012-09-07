@@ -5701,7 +5701,7 @@ static int __alloc_contig_migrate_range(unsigned long start, unsigned long end)
 
 		ret = migrate_pages(&cc.migratepages,
 				    __alloc_contig_migrate_alloc,
-				    0, false, MIGRATE_SYNC);
+				    0, false, MIGRATE_SYNC|MIGRATE_DISCARD);
 	}
 
 	putback_lru_pages(&cc.migratepages);
