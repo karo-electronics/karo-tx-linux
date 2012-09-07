@@ -206,7 +206,7 @@ int dss_mgr_set_device(struct omap_overlay_manager *mgr,
 		struct omap_dss_device *dssdev);
 int dss_mgr_unset_device(struct omap_overlay_manager *mgr);
 void dss_mgr_set_timings(struct omap_overlay_manager *mgr,
-		struct omap_video_timings *timings);
+		const struct omap_video_timings *timings);
 void dss_mgr_set_lcd_config(struct omap_overlay_manager *mgr,
 		const struct dss_lcd_mgr_config *config);
 const struct omap_video_timings *dss_mgr_get_timings(struct omap_overlay_manager *mgr);
@@ -279,7 +279,7 @@ void dss_dump_clocks(struct seq_file *s);
 void dss_debug_dump_clocks(struct seq_file *s);
 #endif
 
-void dss_sdi_init(u8 datapairs);
+void dss_sdi_init(int datapairs);
 int dss_sdi_enable(void);
 void dss_sdi_disable(void);
 
@@ -296,9 +296,7 @@ void dss_set_venc_output(enum omap_dss_venc_type type);
 void dss_set_dac_pwrdn_bgz(bool enable);
 
 unsigned long dss_get_dpll4_rate(void);
-int dss_calc_clock_rates(struct dss_clock_info *cinfo);
 int dss_set_clock_div(struct dss_clock_info *cinfo);
-int dss_get_clock_div(struct dss_clock_info *cinfo);
 int dss_calc_clock_div(unsigned long req_pck, struct dss_clock_info *dss_cinfo,
 		struct dispc_clock_info *dispc_cinfo);
 
@@ -469,6 +467,20 @@ static inline unsigned long venc_get_pixel_clock(void)
 	return 0;
 }
 #endif
+int omapdss_venc_display_enable(struct omap_dss_device *dssdev);
+void omapdss_venc_display_disable(struct omap_dss_device *dssdev);
+void omapdss_venc_set_timings(struct omap_dss_device *dssdev,
+		struct omap_video_timings *timings);
+int omapdss_venc_check_timings(struct omap_dss_device *dssdev,
+		struct omap_video_timings *timings);
+u32 omapdss_venc_get_wss(struct omap_dss_device *dssdev);
+int omapdss_venc_set_wss(struct omap_dss_device *dssdev, u32 wss);
+void omapdss_venc_set_type(struct omap_dss_device *dssdev,
+		enum omap_dss_venc_type type);
+void omapdss_venc_invert_vid_out_polarity(struct omap_dss_device *dssdev,
+		bool invert_polarity);
+int venc_panel_init(void);
+void venc_panel_exit(void);
 
 /* HDMI */
 #ifdef CONFIG_OMAP4_DSS_HDMI
@@ -484,7 +496,8 @@ static inline unsigned long hdmi_get_pixel_clock(void)
 #endif
 int omapdss_hdmi_display_enable(struct omap_dss_device *dssdev);
 void omapdss_hdmi_display_disable(struct omap_dss_device *dssdev);
-void omapdss_hdmi_display_set_timing(struct omap_dss_device *dssdev);
+void omapdss_hdmi_display_set_timing(struct omap_dss_device *dssdev,
+		struct omap_video_timings *timings);
 int omapdss_hdmi_display_check_timing(struct omap_dss_device *dssdev,
 					struct omap_video_timings *timings);
 int omapdss_hdmi_read_edid(u8 *buf, int len);
