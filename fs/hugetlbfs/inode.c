@@ -603,7 +603,7 @@ static int hugetlbfs_set_page_dirty(struct page *page)
 
 static int hugetlbfs_migrate_page(struct address_space *mapping,
 				struct page *newpage, struct page *page,
-				enum migrate_mode mode)
+				migrate_mode_t mode)
 {
 	int rc;
 
