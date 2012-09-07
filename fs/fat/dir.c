@@ -224,7 +224,6 @@ fat_short2lower_uni(struct nls_table *t, unsigned char *c,
 			nc = *c;
 
 		charlen = t->char2uni(&nc, 1, uni);
-
 		if (charlen < 0) {
 			*uni = 0x003f;	/* a question mark */
 			charlen = 1;
