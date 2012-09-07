@@ -32,7 +32,7 @@ next/dt:
 pxa/dt:		git://github.com/hzhuang1/linux.git dt
 renesas/soc-core git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git soc-core
 csr/pinmux-dt   git://gitorious.org/sirfprima2-kernel/sirfprima2-kernel.git pinmux-dt
-
+lpc32xx/dts	git://git.antcom.de/linux-2.6.git lpc32xx/dts
 
 next/defconfig:
 
