@@ -732,7 +732,6 @@ static struct map_info *
 build_map_info(struct address_space *mapping, loff_t offset, bool is_register)
 {
 	unsigned long pgoff = offset >> PAGE_SHIFT;
-	struct prio_tree_iter iter;
 	struct vm_area_struct *vma;
 	struct map_info *curr = NULL;
 	struct map_info *prev = NULL;
@@ -741,7 +740,7 @@ build_map_info(struct address_space *mapping, loff_t offset, bool is_register)
 
  again:
 	mutex_lock(&mapping->i_mmap_mutex);
-	vma_prio_tree_foreach(vma, &iter, &mapping->i_mmap, pgoff, pgoff) {
+	vma_interval_tree_foreach(vma, &mapping->i_mmap, pgoff, pgoff) {
 		if (!valid_vma(vma, is_register))
 			continue;
 
