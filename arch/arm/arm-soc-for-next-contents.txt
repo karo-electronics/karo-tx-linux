@@ -36,6 +36,8 @@ csr/pinmux-dt   git://gitorious.org/sirfprima2-kernel/sirfprima2-kernel.git pinm
 lpc32xx/dts	git://git.antcom.de/linux-2.6.git lpc32xx/dts
 
 next/defconfig:
+renesas/defconfig git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git defconfig
+lpc32xx/defconfig git://git.antcom.de/linux-2.6.git lpc32xx/defconfig
 
 next/drivers:
 devel/led-driver	git://git.kernel.org/pub/scm/linux/kernel/git/cooloney/linux-leds.git for-arm-soc
