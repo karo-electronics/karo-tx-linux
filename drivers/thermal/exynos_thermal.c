@@ -389,7 +389,7 @@ static int exynos_register_thermal(struct thermal_sensor_conf *sensor_conf)
 	th_zone->cool_dev_size = count;
 
 	th_zone->therm_dev = thermal_zone_device_register(sensor_conf->name,
-			EXYNOS_ZONE_COUNT, NULL, &exynos_dev_ops, 0, 0, 0,
+			EXYNOS_ZONE_COUNT, 0, NULL, &exynos_dev_ops, 0, 0, 0,
 			IDLE_INTERVAL);
 
 	if (IS_ERR(th_zone->therm_dev)) {
