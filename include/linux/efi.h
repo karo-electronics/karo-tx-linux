@@ -497,9 +497,11 @@ extern void efi_memmap_walk (efi_freemem_callback_t callback, void *arg);
 extern void efi_gettimeofday (struct timespec *ts);
 #ifdef CONFIG_X86
 extern void efi_enter_virtual_mode (void);	/* switch EFI to virtual mode, if possible */
+extern void efi_late_init(void);
 extern void efi_free_boot_services(void);
 #else
 static void efi_enter_virtual_mode(void) {}
+static void efi_late_init(void) {}
 static void efi_free_boot_services(void) {}
 #endif
 extern void __iomem *efi_lookup_mapped_addr(u64 phys_addr);
