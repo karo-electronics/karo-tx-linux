@@ -198,6 +198,12 @@ static struct sdhci_pxa_platdata *pxav3_get_mmc_pdata(struct device *dev)
 	if (clk_delay_cycles > 0)
 		pdata->clk_delay_cycles = clk_delay_cycles;
 
+	if (of_find_property(np, "broken-cd", NULL))
+		pdata->quirks |= SDHCI_QUIRK_BROKEN_CARD_DETECTION;
+
+	if (of_find_property(np, "wp-inverted", NULL))
+		pdata->quirks |= SDHCI_QUIRK_INVERTED_WRITE_PROTECT;
+
 	return pdata;
 }
 #else
