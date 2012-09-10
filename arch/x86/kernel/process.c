@@ -299,13 +299,6 @@ sys_clone(unsigned long clone_flags, unsigned long newsp,
 }
 
 /*
- * This gets run with %si containing the
- * function to call, and %di containing
- * the "args".
- */
-extern void kernel_thread_helper(void);
-
-/*
  * Create a kernel thread
  */
 int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
@@ -313,9 +306,6 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 	struct pt_regs regs;
 
 	memset(&regs, 0, sizeof(regs));
-
-	regs.si = (unsigned long) fn;
-	regs.di = (unsigned long) arg;
 
 #ifdef CONFIG_X86_32
 	regs.ds = __USER_DS;
@@ -325,9 +315,10 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 #else
 	regs.ss = __KERNEL_DS;
 #endif
+	regs.bx = (unsigned long) fn;
+	regs.bp = (unsigned long) arg;
 
 	regs.orig_ax = -1;
-	regs.ip = (unsigned long) kernel_thread_helper;
 	regs.cs = __KERNEL_CS | get_kernel_rpl();
 	regs.flags = X86_EFLAGS_IF | X86_EFLAGS_BIT1;
 

@@ -57,6 +57,7 @@
 #include <asm/switch_to.h>
 
 asmlinkage void ret_from_fork(void) __asm__("ret_from_fork");
+asmlinkage void ret_from_kernel_thread(void) __asm__("ret_from_kernel_thread");
 
 /*
  * Return saved PC of a blocked thread.
@@ -142,7 +143,10 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	p->thread.sp = (unsigned long) childregs;
 	p->thread.sp0 = (unsigned long) (childregs+1);
 
-	p->thread.ip = (unsigned long) ret_from_fork;
+	if (likely(user_mode(regs)))
+		p->thread.ip = (unsigned long) ret_from_fork;
+	else
+		p->thread.ip = (unsigned long) ret_from_kernel_thread;
 
 	task_user_gs(p) = get_user_gs(regs);
 

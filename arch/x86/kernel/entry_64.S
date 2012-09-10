@@ -450,13 +450,18 @@ ENTRY(ret_from_fork)
 	RESTORE_REST
 
 	testl $3, CS-ARGOFFSET(%rsp)		# from kernel_thread?
-	jz   retint_restore_args
+	jz   1f
 
 	testl $_TIF_IA32, TI_flags(%rcx)	# 32-bit compat task needs IRET
 	jnz  int_ret_from_sys_call
 
 	RESTORE_TOP_OF_STACK %rdi, -ARGOFFSET
 	jmp ret_from_sys_call			# go to the SYSRET fastpath
+
+1:
+	subq $REST_SKIP, %rsp	# move the stack pointer back
+	CFI_ADJUST_CFA_OFFSET	REST_SKIP
+	jmp   kernel_thread_helper
 
 	CFI_ENDPROC
 END(ret_from_fork)
@@ -1207,13 +1212,10 @@ bad_gs:
 	.previous
 
 ENTRY(kernel_thread_helper)
-	pushq $0		# fake return address
+kernel_thread_helper:
 	CFI_STARTPROC
-	/*
-	 * Here we are in the child and the registers are set as they were
-	 * at kernel_thread() invocation in the parent.
-	 */
-	call *%rsi
+	movq %rbp, %rdi
+	call *%rbx
 	# exit
 	mov %eax, %edi
 	call do_exit
