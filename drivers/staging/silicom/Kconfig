@@ -6,6 +6,7 @@ config NET_VENDOR_SILICOM
 	bool "Silicom devices"
 	default y
 	depends on (SSB_POSSIBLE && HAS_DMA) || PCI 
+	depends on BROKEN
 	---help---
 	  If you have a network card (Ethernet) belonging to this class,
 	  say Y.
