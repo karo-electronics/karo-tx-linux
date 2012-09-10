@@ -426,7 +426,7 @@ static int do_bufconfig_ioctl(struct comedi_device *dev,
 	if (bc.subdevice >= dev->n_subdevices || bc.subdevice < 0)
 		return -EINVAL;
 
-	s = dev->subdevices + bc.subdevice;
+	s = &dev->subdevices[bc.subdevice];
 	async = s->async;
 
 	if (!async) {
@@ -539,7 +539,7 @@ static int do_subdinfo_ioctl(struct comedi_device *dev,
 
 	/* fill subdinfo structs */
 	for (i = 0; i < dev->n_subdevices; i++) {
-		s = dev->subdevices + i;
+		s = &dev->subdevices[i];
 		us = tmp + i;
 
 		us->type = s->type;
@@ -617,7 +617,7 @@ static int do_chaninfo_ioctl(struct comedi_device *dev,
 
 	if (it.subdev >= dev->n_subdevices)
 		return -EINVAL;
-	s = dev->subdevices + it.subdev;
+	s = &dev->subdevices[it.subdev];
 
 	if (it.maxdata_list) {
 		if (s->maxdata || !s->maxdata_list)
@@ -685,7 +685,7 @@ static int do_bufinfo_ioctl(struct comedi_device *dev,
 	if (bi.subdevice >= dev->n_subdevices || bi.subdevice < 0)
 		return -EINVAL;
 
-	s = dev->subdevices + bi.subdevice;
+	s = &dev->subdevices[bi.subdevice];
 
 	if (s->lock && s->lock != file)
 		return -EACCES;
@@ -882,14 +882,12 @@ static int check_insn_config_length(struct comedi_insn *insn,
 		/* by default we allow the insn since we don't have checks for
 		 * all possible cases yet */
 	default:
-		printk(KERN_WARNING
-		       "comedi: no check for data length of config insn id "
-		       "%i is implemented.\n"
-		       " Add a check to %s in %s.\n"
-		       " Assuming n=%i is correct.\n", data[0], __func__,
-		       __FILE__, insn->n);
+		pr_warn("comedi: No check for data length of config insn id %i is implemented.\n",
+			data[0]);
+		pr_warn("comedi: Add a check to %s in %s.\n",
+			__func__, __FILE__);
+		pr_warn("comedi: Assuming n=%i is correct.\n", insn->n);
 		return 0;
-		break;
 	}
 	return -EINVAL;
 }
@@ -940,7 +938,7 @@ static int parse_insn(struct comedi_device *dev, struct comedi_insn *insn,
 				ret = -EINVAL;
 				break;
 			}
-			s = dev->subdevices + insn->subdev;
+			s = &dev->subdevices[insn->subdev];
 			if (!s->async) {
 				DPRINTK("no async\n");
 				ret = -EINVAL;
@@ -969,7 +967,7 @@ static int parse_insn(struct comedi_device *dev, struct comedi_insn *insn,
 			ret = -EINVAL;
 			goto out;
 		}
-		s = dev->subdevices + insn->subdev;
+		s = &dev->subdevices[insn->subdev];
 
 		if (s->type == COMEDI_SUBD_UNUSED) {
 			DPRINTK("%d not usable subdevice\n", insn->subdev);
@@ -1153,7 +1151,7 @@ static int do_cmd_ioctl(struct comedi_device *dev,
 		return -ENODEV;
 	}
 
-	s = dev->subdevices + user_cmd.subdev;
+	s = &dev->subdevices[user_cmd.subdev];
 	async = s->async;
 
 	if (s->type == COMEDI_SUBD_UNUSED) {
@@ -1303,7 +1301,7 @@ static int do_cmdtest_ioctl(struct comedi_device *dev,
 		return -ENODEV;
 	}
 
-	s = dev->subdevices + user_cmd.subdev;
+	s = &dev->subdevices[user_cmd.subdev];
 	if (s->type == COMEDI_SUBD_UNUSED) {
 		DPRINTK("%d not valid subdevice\n", user_cmd.subdev);
 		return -EIO;
@@ -1390,7 +1388,7 @@ static int do_lock_ioctl(struct comedi_device *dev, unsigned int arg,
 
 	if (arg >= dev->n_subdevices)
 		return -EINVAL;
-	s = dev->subdevices + arg;
+	s = &dev->subdevices[arg];
 
 	spin_lock_irqsave(&s->spin_lock, flags);
 	if (s->busy || s->lock)
@@ -1433,7 +1431,7 @@ static int do_unlock_ioctl(struct comedi_device *dev, unsigned int arg,
 
 	if (arg >= dev->n_subdevices)
 		return -EINVAL;
-	s = dev->subdevices + arg;
+	s = &dev->subdevices[arg];
 
 	if (s->busy)
 		return -EBUSY;
@@ -1474,7 +1472,7 @@ static int do_cancel_ioctl(struct comedi_device *dev, unsigned int arg,
 
 	if (arg >= dev->n_subdevices)
 		return -EINVAL;
-	s = dev->subdevices + arg;
+	s = &dev->subdevices[arg];
 	if (s->async == NULL)
 		return -EINVAL;
 
@@ -1511,7 +1509,7 @@ static int do_poll_ioctl(struct comedi_device *dev, unsigned int arg,
 
 	if (arg >= dev->n_subdevices)
 		return -EINVAL;
-	s = dev->subdevices + arg;
+	s = &dev->subdevices[arg];
 
 	if (s->lock && s->lock != file)
 		return -EACCES;
@@ -2034,8 +2032,8 @@ void do_become_nonbusy(struct comedi_device *dev, struct comedi_subdevice *s)
 		comedi_reset_async_buf(async);
 		async->inttrig = NULL;
 	} else {
-		printk(KERN_ERR
-		       "BUG: (?) do_become_nonbusy called with async=0\n");
+		dev_err(dev->class_dev,
+			"BUG: (?) do_become_nonbusy called with async=NULL\n");
 	}
 
 	s->busy = NULL;
@@ -2140,7 +2138,7 @@ static int comedi_close(struct inode *inode, struct file *file)
 
 	if (dev->subdevices) {
 		for (i = 0; i < dev->n_subdevices; i++) {
-			s = dev->subdevices + i;
+			s = &dev->subdevices[i];
 
 			if (s->busy == file)
 				do_cancel(dev, s);
@@ -2211,14 +2209,12 @@ static int __init comedi_init(void)
 	int i;
 	int retval;
 
-	printk(KERN_INFO "comedi: version " COMEDI_RELEASE
-	       " - http://www.comedi.org\n");
+	pr_info("comedi: version " COMEDI_RELEASE " - http://www.comedi.org\n");
 
 	if (comedi_num_legacy_minors < 0 ||
 	    comedi_num_legacy_minors > COMEDI_NUM_BOARD_MINORS) {
-		printk(KERN_ERR "comedi: error: invalid value for module "
-		       "parameter \"comedi_num_legacy_minors\".  Valid values "
-		       "are 0 through %i.\n", COMEDI_NUM_BOARD_MINORS);
+		pr_err("comedi: error: invalid value for module parameter \"comedi_num_legacy_minors\".  Valid values are 0 through %i.\n",
+		       COMEDI_NUM_BOARD_MINORS);
 		return -EINVAL;
 	}
 
@@ -2247,7 +2243,7 @@ static int __init comedi_init(void)
 	}
 	comedi_class = class_create(THIS_MODULE, "comedi");
 	if (IS_ERR(comedi_class)) {
-		printk(KERN_ERR "comedi: failed to create class");
+		pr_err("comedi: failed to create class\n");
 		cdev_del(&comedi_cdev);
 		unregister_chrdev_region(MKDEV(COMEDI_MAJOR, 0),
 					 COMEDI_NUM_MINORS);
@@ -2295,8 +2291,7 @@ module_exit(comedi_cleanup);
 
 void comedi_error(const struct comedi_device *dev, const char *s)
 {
-	printk(KERN_ERR "comedi%d: %s: %s\n", dev->minor,
-	       dev->driver->driver_name, s);
+	dev_err(dev->class_dev, "%s: %s\n", dev->driver->driver_name, s);
 }
 EXPORT_SYMBOL(comedi_error);
 
@@ -2364,7 +2359,7 @@ static int is_device_busy(struct comedi_device *dev)
 		return 0;
 
 	for (i = 0; i < dev->n_subdevices; i++) {
-		s = dev->subdevices + i;
+		s = &dev->subdevices[i];
 		if (s->busy)
 			return 1;
 		if (s->async && s->async->mmap_count)
@@ -2420,9 +2415,7 @@ int comedi_alloc_board_minor(struct device *hardware_device)
 		comedi_device_cleanup(info->device);
 		kfree(info->device);
 		kfree(info);
-		printk(KERN_ERR
-		       "comedi: error: "
-		       "ran out of minor numbers for board device files.\n");
+		pr_err("comedi: error: ran out of minor numbers for board device files.\n");
 		return -EBUSY;
 	}
 	info->device->minor = i;
@@ -2499,9 +2492,7 @@ int comedi_alloc_subdevice_minor(struct comedi_device *dev,
 	spin_unlock(&comedi_file_info_table_lock);
 	if (i == COMEDI_NUM_MINORS) {
 		kfree(info);
-		printk(KERN_ERR
-		       "comedi: error: "
-		       "ran out of minor numbers for board device files.\n");
+		pr_err("comedi: error: ran out of minor numbers for board device files.\n");
 		return -EBUSY;
 	}
 	s->minor = i;

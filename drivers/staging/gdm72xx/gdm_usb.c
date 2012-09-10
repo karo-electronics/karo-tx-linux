@@ -75,11 +75,9 @@ static struct usb_tx *alloc_tx_struct(struct tx_cxt *tx)
 {
 	struct usb_tx *t = NULL;
 
-	t = kmalloc(sizeof(*t), GFP_ATOMIC);
+	t = kzalloc(sizeof(*t), GFP_ATOMIC);
 	if (t == NULL)
 		goto out;
-
-	memset(t, 0, sizeof(*t));
 
 	t->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	t->buf = kmalloc(TX_BUF_SIZE, GFP_ATOMIC);
@@ -180,8 +178,7 @@ static struct usb_rx *get_rx_struct(struct rx_cxt *rx)
 	}
 
 	r = list_entry(rx->free_list.next, struct usb_rx, list);
-	list_del(&r->list);
-	list_add_tail(&r->list, &rx->used_list);
+	list_move_tail(&r->list, &rx->used_list);
 
 	return r;
 }
@@ -189,8 +186,7 @@ static struct usb_rx *get_rx_struct(struct rx_cxt *rx)
 /* Before this function is called, spin lock should be locked. */
 static void put_rx_struct(struct rx_cxt *rx, struct usb_rx *r)
 {
-	list_del(&r->list);
-	list_add(&r->list, &rx->free_list);
+	list_move(&r->list, &rx->free_list);
 }
 
 static int init_usb(struct usbwm_dev *udev)
