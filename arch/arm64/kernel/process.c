@@ -232,7 +232,6 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
 }
 
 asmlinkage void ret_from_fork(void) asm("ret_from_fork");
-asmlinkage void ret_from_kernel_thread(void) asm("ret_from_kernel_thread");
 
 int copy_thread(unsigned long clone_flags, unsigned long stack_start,
 		unsigned long stk_sz, struct task_struct *p,
@@ -262,13 +261,13 @@ int copy_thread(unsigned long clone_flags, unsigned long stack_start,
 		 */
 		if (clone_flags & CLONE_SETTLS)
 			tls = regs->regs[3];
-		p->thread.cpu_context.pc = (unsigned long)ret_from_fork;
 	} else {
+		memset(childregs, 0, sizeof(struct pt_regs));
 		childregs->pstate = PSR_MODE_EL1h;
 		p->thread.cpu_context.x19 = stack_start;
 		p->thread.cpu_context.x20 = stk_sz;
-		p->thread.cpu_context.pc = (unsigned long)ret_from_kernel_thread;
 	}
+	p->thread.cpu_context.pc = (unsigned long)ret_from_fork;
 	p->thread.cpu_context.sp = (unsigned long)childregs;
 	p->thread.tp_value = tls;
 

@@ -594,7 +594,7 @@ work_resched:
 /*
  * "slow" syscall return path.
  */
-ENTRY(ret_to_user)
+ret_to_user:
 	disable_irq				// disable interrupts
 	ldr	x1, [tsk, #TI_FLAGS]
 	and	x2, x1, #_TIF_WORK_MASK
@@ -611,16 +611,12 @@ ENDPROC(ret_to_user)
  */
 ENTRY(ret_from_fork)
 	bl	schedule_tail
+	cmp	x19, #0
+	movne	x0, x20
+	blne	x19
 	get_thread_info tsk
 	b	ret_to_user
 ENDPROC(ret_from_fork)
-
-ENTRY(ret_from_kernel_thread)
-	bl	schedule_tail
-	mov	x0, x20
-	adr	lr, do_exit			// kernel threads should not exit
-	br	x19
-ENDPROC(ret_from_kernel_thread)
 
 /*
  * SVC handler.
