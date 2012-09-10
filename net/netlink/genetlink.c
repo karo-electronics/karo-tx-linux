@@ -918,11 +918,11 @@ static int __net_init genl_pernet_init(struct net *net)
 	struct netlink_kernel_cfg cfg = {
 		.input		= genl_rcv,
 		.cb_mutex	= &genl_mutex,
+		.flags		= NL_CFG_F_NONROOT_RECV,
 	};
 
 	/* we'll bump the group number right afterwards */
-	net->genl_sock = netlink_kernel_create(net, NETLINK_GENERIC,
-					       THIS_MODULE, &cfg);
+	net->genl_sock = netlink_kernel_create(net, NETLINK_GENERIC, &cfg);
 
 	if (!net->genl_sock && net_eq(net, &init_net))
 		panic("GENL: Cannot initialize generic netlink\n");
@@ -954,8 +954,6 @@ static int __init genl_init(void)
 	err = genl_register_family_with_ops(&genl_ctrl, &genl_ctrl_ops, 1);
 	if (err < 0)
 		goto problem;
-
-	netlink_set_nonroot(NETLINK_GENERIC, NL_NONROOT_RECV);
 
 	err = register_pernet_subsys(&genl_pernet_ops);
 	if (err)
