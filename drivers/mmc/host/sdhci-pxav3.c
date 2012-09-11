@@ -204,6 +204,10 @@ static struct sdhci_pxa_platdata *pxav3_get_mmc_pdata(struct device *dev)
 	if (of_find_property(np, "wp-inverted", NULL))
 		pdata->quirks |= SDHCI_QUIRK_INVERTED_WRITE_PROTECT;
 
+	pdata->ext_cd_gpio = of_get_named_gpio_flags(np, "cd-gpios", 0, &gpio_flags);
+	if (gpio_flags != OF_GPIO_ACTIVE_LOW)
+		pdata->host_caps2 |= MMC_CAP2_CD_ACTIVE_HIGH;
+
 	return pdata;
 }
 #else
@@ -274,6 +278,15 @@ static int __devinit sdhci_pxav3_probe(struct platform_device *pdev)
 			host->mmc->caps |= pdata->host_caps;
 		if (pdata->pm_caps)
 			host->mmc->pm_caps |= pdata->pm_caps;
+
+		if (gpio_is_valid(pdata->ext_cd_gpio)) {
+			ret = mmc_gpio_request_cd(host->mmc, pdata->ext_cd_gpio);
+			if (ret) {
+				dev_err(mmc_dev(host->mmc),
+					"failed to allocate card detect gpio\n");
+				goto err_cd_req;
+			}
+		}
 	}
 
 	host->ops = &pxav3_sdhci_ops;
@@ -291,6 +304,8 @@ static int __devinit sdhci_pxav3_probe(struct platform_device *pdev)
 err_add_host:
 	clk_disable_unprepare(clk);
 	clk_put(clk);
+	mmc_gpio_free_cd(host->mmc);
+err_cd_req:
 err_clk_get:
 	sdhci_pltfm_free(pdev);
 	kfree(pxa);
@@ -307,6 +322,10 @@ static int __devexit sdhci_pxav3_remove(struct platform_device *pdev)
 
 	clk_disable_unprepare(pltfm_host->clk);
 	clk_put(pltfm_host->clk);
+
+	if (gpio_is_valid(pdata->ext_cd_gpio))
+		mmc_gpio_free_cd(host->mmc);
+
 	sdhci_pltfm_free(pdev);
 	kfree(pxa);
 
