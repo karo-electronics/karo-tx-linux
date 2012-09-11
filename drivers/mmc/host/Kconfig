@@ -621,3 +621,10 @@ config MMC_USHC
 
 	  Note: These controllers only support SDIO cards and do not
 	  support MMC or SD memory cards.
+
+config MMC_REALTEK_PCI
+	tristate "Realtek PCI-E SD/MMC card interface driver"
+	depends on MFD_RTSX_PCI
+	help
+	  Say Y or M here to include driver code to support the SD/MMC
+	  card interfaces of Realtek PCI-E driver-based card readers.
