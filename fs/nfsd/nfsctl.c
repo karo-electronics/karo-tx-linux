@@ -406,7 +406,7 @@ static ssize_t write_threads(struct file *file, char *buf, size_t size)
 			return rv;
 		if (newthreads < 0)
 			return -EINVAL;
-		rv = nfsd_svc(NFS_PORT, newthreads);
+		rv = nfsd_svc(newthreads);
 		if (rv < 0)
 			return rv;
 	} else
@@ -712,7 +712,7 @@ static ssize_t __write_ports_addxprt(char *buf)
 	int port, err;
 	struct net *net = &init_net;
 
-	if (sscanf(buf, "%15s %4u", transport, &port) != 2)
+	if (sscanf(buf, "%15s %5u", transport, &port) != 2)
 		return -EINVAL;
 
 	if (port < 1 || port > USHRT_MAX)
@@ -1007,8 +1007,6 @@ static ssize_t write_gracetime(struct file *file, char *buf, size_t size)
 {
 	return nfsd4_write_time(file, buf, size, &nfsd4_grace);
 }
-
-extern char *nfs4_recoverydir(void);
 
 static ssize_t __write_recoverydir(struct file *file, char *buf, size_t size)
 {
