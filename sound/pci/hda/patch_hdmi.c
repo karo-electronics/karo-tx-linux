@@ -34,6 +34,7 @@
 #include <linux/module.h>
 #include <sound/core.h>
 #include <sound/jack.h>
+#include <sound/asoundef.h>
 #include "hda_codec.h"
 #include "hda_local.h"
 #include "hda_jack.h"
@@ -71,6 +72,7 @@ struct hdmi_spec_per_pin {
 	struct hdmi_eld sink_eld;
 	struct delayed_work work;
 	int repoll_count;
+	bool non_pcm;
 };
 
 struct hdmi_spec {
@@ -469,6 +471,17 @@ static void init_channel_allocations(void)
 	}
 }
 
+static int get_channel_allocation_order(int ca)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(channel_allocations); i++) {
+		if (channel_allocations[i].ca_index == ca)
+			break;
+	}
+	return i;
+}
+
 /*
  * The transformation takes two steps:
  *
@@ -537,22 +550,34 @@ static void hdmi_debug_channel_mapping(struct hda_codec *codec,
 
 static void hdmi_setup_channel_mapping(struct hda_codec *codec,
 				       hda_nid_t pin_nid,
+				       bool non_pcm,
 				       int ca)
 {
 	int i;
 	int err;
+	int order;
+	int non_pcm_mapping[8];
+
+	order = get_channel_allocation_order(ca);
 
 	if (hdmi_channel_mapping[ca][1] == 0) {
-		for (i = 0; i < channel_allocations[ca].channels; i++)
+		for (i = 0; i < channel_allocations[order].channels; i++)
 			hdmi_channel_mapping[ca][i] = i | (i << 4);
 		for (; i < 8; i++)
 			hdmi_channel_mapping[ca][i] = 0xf | (i << 4);
 	}
 
+	if (non_pcm) {
+		for (i = 0; i < channel_allocations[order].channels; i++)
+			non_pcm_mapping[i] = i | (i << 4);
+		for (; i < 8; i++)
+			non_pcm_mapping[i] = 0xf | (i << 4);
+	}
+
 	for (i = 0; i < 8; i++) {
 		err = snd_hda_codec_write(codec, pin_nid, 0,
 					  AC_VERB_SET_HDMI_CHAN_SLOT,
-					  hdmi_channel_mapping[ca][i]);
+					  non_pcm ? non_pcm_mapping[i] : hdmi_channel_mapping[ca][i]);
 		if (err) {
 			snd_printdd(KERN_NOTICE
 				    "HDMI: channel mapping failed\n");
@@ -686,7 +711,8 @@ static bool hdmi_infoframe_uptodate(struct hda_codec *codec, hda_nid_t pin_nid,
 }
 
 static void hdmi_setup_audio_infoframe(struct hda_codec *codec, int pin_idx,
-					struct snd_pcm_substream *substream)
+				       bool non_pcm,
+				       struct snd_pcm_substream *substream)
 {
 	struct hdmi_spec *spec = codec->spec;
 	struct hdmi_spec_per_pin *per_pin = &spec->pins[pin_idx];
@@ -737,12 +763,19 @@ static void hdmi_setup_audio_infoframe(struct hda_codec *codec, int pin_idx,
 			    "pin=%d channels=%d\n",
 			    pin_nid,
 			    channels);
-		hdmi_setup_channel_mapping(codec, pin_nid, ca);
+		hdmi_setup_channel_mapping(codec, pin_nid, non_pcm, ca);
 		hdmi_stop_infoframe_trans(codec, pin_nid);
 		hdmi_fill_audio_infoframe(codec, pin_nid,
 					    ai.bytes, sizeof(ai));
 		hdmi_start_infoframe_trans(codec, pin_nid);
+	} else {
+		/* For non-pcm audio switch, setup new channel mapping
+		 * accordingly */
+		if (per_pin->non_pcm != non_pcm)
+			hdmi_setup_channel_mapping(codec, pin_nid, non_pcm, ca);
 	}
+
+	per_pin->non_pcm = non_pcm;
 }
 
 
@@ -1035,6 +1068,7 @@ static int hdmi_add_pin(struct hda_codec *codec, hda_nid_t pin_nid)
 	per_pin = &spec->pins[pin_idx];
 
 	per_pin->pin_nid = pin_nid;
+	per_pin->non_pcm = false;
 
 	err = hdmi_read_pin_conn(codec, pin_idx);
 	if (err < 0)
@@ -1115,7 +1149,7 @@ static int hdmi_parse_codec(struct hda_codec *codec)
 	 * can be lost and presence sense verb will become inaccurate if the
 	 * HDA link is powered off at hot plug or hw initialization time.
 	 */
-#ifdef CONFIG_SND_HDA_POWER_SAVE
+#ifdef CONFIG_PM
 	if (!(snd_hda_param_read(codec, codec->afg, AC_PAR_POWER_STATE) &
 	      AC_PWRST_EPSS))
 		codec->bus->power_keep_link_on = 1;
@@ -1133,6 +1167,19 @@ static char *get_hdmi_pcm_name(int idx)
 	return &names[idx][0];
 }
 
+static bool check_non_pcm_per_cvt(struct hda_codec *codec, hda_nid_t cvt_nid)
+{
+	struct hda_spdif_out *spdif;
+	bool non_pcm;
+
+	mutex_lock(&codec->spdif_mutex);
+	spdif = snd_hda_spdif_out_of_nid(codec, cvt_nid);
+	non_pcm = !!(spdif->status & IEC958_AES0_NONAUDIO);
+	mutex_unlock(&codec->spdif_mutex);
+	return non_pcm;
+}
+
+
 /*
  * HDMI callbacks
  */
@@ -1148,10 +1195,13 @@ static int generic_hdmi_playback_pcm_prepare(struct hda_pcm_stream *hinfo,
 	int pin_idx = hinfo_to_pin_index(spec, hinfo);
 	hda_nid_t pin_nid = spec->pins[pin_idx].pin_nid;
 	int pinctl;
+	bool non_pcm;
+
+	non_pcm = check_non_pcm_per_cvt(codec, cvt_nid);
 
 	hdmi_set_channel_count(codec, cvt_nid, substream->runtime->channels);
 
-	hdmi_setup_audio_infoframe(codec, pin_idx, substream);
+	hdmi_setup_audio_infoframe(codec, pin_idx, non_pcm, substream);
 
 	pinctl = snd_hda_codec_read(codec, pin_nid, 0,
 				    AC_VERB_GET_PIN_WIDGET_CONTROL, 0);
@@ -1311,7 +1361,6 @@ static int generic_hdmi_init(struct hda_codec *codec)
 		hdmi_init_pin(codec, pin_nid);
 		snd_hda_jack_detect_enable(codec, pin_nid, pin_nid);
 	}
-	snd_hda_jack_report_sync(codec);
 	return 0;
 }
 
@@ -1428,7 +1477,6 @@ static int simple_playback_init(struct hda_codec *codec)
 		snd_hda_codec_write(codec, pin, 0, AC_VERB_SET_AMP_GAIN_MUTE,
 				    AMP_OUT_UNMUTE);
 	snd_hda_jack_detect_enable(codec, pin, pin);
-	snd_hda_jack_report_sync(codec);
 	return 0;
 }
 
