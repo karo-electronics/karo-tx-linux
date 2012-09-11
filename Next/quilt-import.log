@@ -1,0 +1,41 @@
+Importing i2c based on 3.6-rc5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 55d512e245bc7699a8800e23df1a24195dd08217
+HEAD is now at 55d512e Linux 3.6-rc5
+$ git am ../quilt/i2c/i2c-i801-add-device-ids-for-intel-lynx-point-lp-pch.patch
+Applying: i2c-i801: Add Device IDs for Intel Lynx Point-LP PCH
+$ git am ../quilt/i2c/i2c-designware-fix-build-error-if-platform-y-and-pci-y.patch
+Applying: i2c-designware: Fix build error if CONFIG_I2C_DESIGNWARE_PLATFORM=y && CONFIG_I2C_DESIGNWARE_PCI=y
+$ git am ../quilt/i2c/i2c-core-fix-for-dep-lock-validator.patch
+Applying: i2c-core: Fix for lockdep validator
+$ git am ../quilt/i2c/i2c-mux-support-class.patch
+Applying: i2c-mux: Add support for device auto-detection
+$ git am ../quilt/i2c/i2c-i801-asus-multiplexing-2.patch
+Applying: i2c-i801: Support SMBus multiplexing on Asus Z8 series
+$ git am ../quilt/i2c/i2c-smbus-convert-kzalloc-to-devm_kzalloc.patch
+Applying: i2c-smbus: Convert kzalloc to devm_kzalloc
+$ git am ../quilt/i2c/i2c-convert-struct-i2c_msg-initialization-to-c99-format.patch
+Applying: i2c: Convert struct i2c_msg initialization to C99 format
+$ git am ../quilt/i2c/i2c-make-I2C-available-on-UML.patch
+Applying: i2c: Make I2C available on UML
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + b281e3d...12dc268 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 5b716ac728bcc01b1f2a7ed6e437196602237c27
+Unchanged quilt series jdelvare-hwmon
+Importing rr based on v3.6-rc1-133-g42a579a
+Unchanged quilt series rr
+Importing device-mapper based on v3.6-rc4
+$ cd ../quilt-tmp
+$ git reset --hard 4cbe5a555fa58a79b6ecbb6c531b8bab0650778d
+HEAD is now at 4cbe5a5 Linux 3.6-rc4
+$ git am ../quilt/device-mapper/dm-verity-fix-overflow-check.patch
+Applying: This patch fixes sector_t overflow checking in dm-verity.
+$ git am ../quilt/device-mapper/dm-mpath-fix-check-for-null-mpio-in-end_io-fn.patch
+Applying: The mpio dereference should be moved below the BUG_ON NULL test
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 057d040...0019218 master     -> quilt/device-mapper  (forced update)
