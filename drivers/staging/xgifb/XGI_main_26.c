@@ -913,17 +913,10 @@ static void XGIfb_post_setmode(struct xgifb_video_info *xgifb_info)
 			}
 
 			if ((filter >= 0) && (filter <= 7)) {
-				pr_debug("FilterTable[%d]-%d: %02x %02x %02x %02x\n",
+				pr_debug("FilterTable[%d]-%d: %*ph\n",
 					 filter_tb, filter,
-					 XGI_TV_filter[filter_tb].
-						filter[filter][0],
-					 XGI_TV_filter[filter_tb].
-						filter[filter][1],
-					 XGI_TV_filter[filter_tb].
-						filter[filter][2],
-					 XGI_TV_filter[filter_tb].
-						filter[filter][3]
-				);
+					 4, XGI_TV_filter[filter_tb].
+						   filter[filter]);
 				xgifb_reg_set(
 					XGIPART2,
 					0x35,
@@ -1404,11 +1397,10 @@ static int XGIfb_pan_display(struct fb_var_screeninfo *var,
 		if (var->yoffset < 0 || var->yoffset >= info->var.yres_virtual
 				|| var->xoffset)
 			return -EINVAL;
-	} else {
-		if (var->xoffset + info->var.xres > info->var.xres_virtual
+	} else if (var->xoffset + info->var.xres > info->var.xres_virtual
 				|| var->yoffset + info->var.yres
-						> info->var.yres_virtual)
-			return -EINVAL;
+						> info->var.yres_virtual) {
+		return -EINVAL;
 	}
 	err = XGIfb_pan_var(var, info);
 	if (err < 0)

@@ -62,6 +62,7 @@
 #include <linux/if_arp.h>
 #include <linux/ioport.h>
 #include <linux/delay.h>
+#include <linux/etherdevice.h>
 #include <asm/uaccess.h>
 
 #include <debug.h>
@@ -173,7 +174,7 @@ static int hermes_clear_tkip_keys(ltv_t *ltv, u16 key_idx, u8 *addr)
 
 	switch (key_idx) {
 	case 0:
-		if (memcmp(addr, "\xff\xff\xff\xff\xff\xff", ETH_ALEN) != 0) {
+		if (!is_broadcast_ether_addr(addr)) {
 			ltv->len = 7;
 			ltv->typ = CFG_REMOVE_TKIP_MAPPED_KEY;
 			memcpy(&ltv->u.u8[0], addr, ETH_ALEN);
@@ -2595,7 +2596,7 @@ static int wireless_set_scan(struct net_device *dev, struct iw_request_info *inf
 	int		    retries = 0;
 	/*------------------------------------------------------------------------*/
 
-	//;? Note: shows results as trace, retruns always 0 unless BUSY
+	//;? Note: shows results as trace, returns always 0 unless BUSY
 
 	DBG_FUNC( "wireless_set_scan" );
 	DBG_ENTER( DbgInfo );
