@@ -1,0 +1,21 @@
+Importing i2c based on 3.6-rc5
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 5b716ac728bcc01b1f2a7ed6e437196602237c27
+Unchanged quilt series jdelvare-hwmon
+Importing rr based on v3.6-rc1-133-g42a579a
+Unchanged quilt series rr
+Importing device-mapper based on v3.6-rc4
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 4cbe5a555fa58a79b6ecbb6c531b8bab0650778d
+HEAD is now at 4cbe5a5 Linux 3.6-rc4
+$ git am ../quilt/device-mapper/dm-verity-fix-overflow-check.patch
+Applying: This patch fixes sector_t overflow checking in dm-verity.
+$ git am ../quilt/device-mapper/dm-mpath-fix-check-for-null-mpio-in-end_io-fn.patch
+Applying: The mpio dereference should be moved below the BUG_ON NULL test
+$ git am ../quilt/device-mapper/dm-thin-tidy-discard-support.patch
+Applying: A little thin discard code refactoring in preparation for the next
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 0019218...94a22dc master     -> quilt/device-mapper  (forced update)
