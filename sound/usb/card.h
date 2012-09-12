@@ -92,6 +92,8 @@ struct snd_usb_endpoint {
 	unsigned char silence_value;
 	unsigned int stride;
 	int iface, alt_idx;
+	int skip_packets;		/* quirks for devices to ignore the first n packets
+					   in a stream */
 
 	spinlock_t lock;
 	struct list_head list;
@@ -115,8 +117,6 @@ struct snd_usb_substream {
 
 	unsigned int hwptr_done;	/* processed byte position in the buffer */
 	unsigned int transfer_done;		/* processed frames since last period update */
-	unsigned long active_mask;	/* bitmask of active urbs */
-	unsigned long unlink_mask;	/* bitmask of unlinked urbs */
 
 	/* data and sync endpoints for this stream */
 	unsigned int ep_num;		/* the endpoint number */
