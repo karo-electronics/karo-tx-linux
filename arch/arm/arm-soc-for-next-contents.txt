@@ -18,6 +18,7 @@ csr/marco-prepare git://gitorious.org/sirfprima2-kernel/sirfprima2-kernel.git ma
 			(includes two patches from clk-next that adds prima2 clocks)
 pmu/cleanup       git://git.kernel.org/pub/scm/linux/kernel/git/will/linux.git tags/arm-perf-3.7
 ks8695/timer      http://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ks8695-time-for-arm-soc
+			+ http://marc.info/?l=linux-arm-kernel&m=134734253519144
 renesas/ag5evm    git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git ag5evm
 nxp4008/removal   git://git.antcom.de/linux-2.6.git pnx4008-removal
 
