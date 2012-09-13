@@ -1798,6 +1798,7 @@ static bool khugepaged_prealloc_page(struct page **hpage, bool *wait)
 			return false;
 
 		*wait = false;
+		*hpage = NULL;
 		khugepaged_alloc_sleep();
 	} else if (*hpage) {
 		put_page(*hpage);
