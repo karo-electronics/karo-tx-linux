@@ -55,6 +55,7 @@ mxs/sparse-irq	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-spars
 next/defconfig:
 renesas/defconfig git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git defconfig
 lpc32xx/defconfig git://git.antcom.de/linux-2.6.git lpc32xx/defconfig
+mxs/defconfig	  git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-defconfig-3.7
 
 next/drivers:
 devel/led-driver	git://git.kernel.org/pub/scm/linux/kernel/git/cooloney/linux-leds.git for-arm-soc
