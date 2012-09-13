@@ -114,7 +114,7 @@ static unsigned int input_to_handler(struct input_handle *handle,
 
 	if (handler->events)
 		handler->events(handle, vals, count);
-	else
+	else if (handler->event)
 		for (v = vals; v != end; v++)
 			handler->event(handle, v->type, v->code, v->value);
 
