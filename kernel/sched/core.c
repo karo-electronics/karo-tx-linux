@@ -1925,6 +1925,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 #endif
 
 	/* Here we just switch the register state and the stack. */
+	rcu_switch(prev, next);
 	switch_to(prev, next, prev);
 
 	barrier();
@@ -2948,6 +2949,13 @@ asmlinkage void __sched schedule(void)
 }
 EXPORT_SYMBOL(schedule);
 
+asmlinkage void __sched schedule_user(void)
+{
+	rcu_user_exit();
+	schedule();
+	rcu_user_enter();
+}
+
 /**
  * schedule_preempt_disabled - called with preemption disabled
  *
@@ -3049,6 +3057,7 @@ asmlinkage void __sched preempt_schedule_irq(void)
 	/* Catch callers which need to be fixed */
 	BUG_ON(ti->preempt_count || !irqs_disabled());
 
+	rcu_user_exit();
 	do {
 		add_preempt_count(PREEMPT_ACTIVE);
 		local_irq_enable();
@@ -5086,8 +5095,18 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
 		migrate_tasks(cpu);
 		BUG_ON(rq->nr_running != 1); /* the migration thread */
 		raw_spin_unlock_irqrestore(&rq->lock, flags);
+		break;
 
-		calc_load_migrate(rq);
+	case CPU_DEAD:
+		{
+			struct rq *dest_rq;
+
+			local_irq_save(flags);
+			dest_rq = cpu_rq(smp_processor_id());
+			raw_spin_lock(&dest_rq->lock);
+			calc_load_migrate(rq);
+			raw_spin_unlock_irqrestore(&dest_rq->lock, flags);
+		}
 		break;
 #endif
 	}
