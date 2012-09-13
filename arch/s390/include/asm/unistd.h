@@ -277,7 +277,9 @@
 #define __NR_setns		339
 #define __NR_process_vm_readv	340
 #define __NR_process_vm_writev	341
-#define NR_syscalls 342
+/* Number 342 is reserved for sys_s390_runtime_instr */
+#define __NR_kcmp		343
+#define NR_syscalls 344
 
 /* 
  * There are some system calls that are not present on 64 bit, some
