@@ -12,6 +12,8 @@ fixes:
 
 next/fixes-non-critical:
 ux500/fixes-non-critical http://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-core-updates
+cleanup/of-deviceid-data git://git.pengutronix.de/git/ukl/linux ofdeviceiddata 
+				(pulled again on Sep 12)
 
 next/cleanup:
 cleanup/io-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci-v2
