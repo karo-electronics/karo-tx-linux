@@ -17,6 +17,7 @@
 #include <linux/workqueue.h>
 #include <linux/spi/spi.h>
 #include <linux/pm.h>
+#include <linux/of.h>
 #include <linux/of_platform.h>
 
 #include "lis3lv02d.h"
