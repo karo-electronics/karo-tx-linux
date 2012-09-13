@@ -5,6 +5,9 @@ and their external dependencies.
 It also includes a couple of directly applied patches for build breaks with subject
 The next/* branches are kept in the order in which they get applied.
 
+external dependencies:
+depends/clk-3.7	git://git.linaro.org/people/mturquette/linux.git clk-3.7
+
 fixes:
 
 next/fixes-non-critical:
@@ -41,6 +44,9 @@ renesas/soc-core git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git
 csr/pinmux-dt   git://gitorious.org/sirfprima2-kernel/sirfprima2-kernel.git pinmux-dt
 lpc32xx/dts	git://git.antcom.de/linux-2.6.git lpc32xx/dts
 mxs/dt		git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-dt-3.7
+depends/clk-3.7	git://git.linaro.org/people/mturquette/linux.git clk-3.7
+			-> this is a prereq for mxs/clk-dt-lookup below
+mxs/clk-dt-lookup	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-clk-dt-lookup
 
 next/soc2:
 mxs/sparse-irq	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-sparse-irq
