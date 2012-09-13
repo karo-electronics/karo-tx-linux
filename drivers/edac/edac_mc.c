@@ -1182,6 +1182,12 @@ void edac_mc_handle_error(const enum hw_event_mc_err_type type,
 	if (!enable_per_layer_report) {
 		strcpy(label, "any memory");
 	} else {
+
+		if (mci->csbased) {
+			row  = top_layer;
+			chan = mid_layer;
+		}
+
 		edac_dbg(4, "csrow/channel to increment: (%d,%d)\n", row, chan);
 		if (p == label)
 			strcpy(label, "unknown memory");
