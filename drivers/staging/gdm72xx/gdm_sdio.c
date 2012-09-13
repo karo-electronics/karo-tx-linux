@@ -62,11 +62,9 @@ static struct sdio_tx *alloc_tx_struct(struct tx_cxt *tx)
 {
 	struct sdio_tx *t = NULL;
 
-	t = kmalloc(sizeof(*t), GFP_ATOMIC);
+	t = kzalloc(sizeof(*t), GFP_ATOMIC);
 	if (t == NULL)
 		goto out;
-
-	memset(t, 0, sizeof(*t));
 
 	t->buf = kmalloc(TX_BUF_SIZE, GFP_ATOMIC);
 	if (t->buf == NULL)
@@ -96,17 +94,14 @@ static struct sdio_rx *alloc_rx_struct(struct rx_cxt *rx)
 	struct sdio_rx *r = NULL;
 
 	r = kmalloc(sizeof(*r), GFP_ATOMIC);
-	if (r == NULL)
-		goto out;
+	if (!r)
+		return NULL;
 
 	memset(r, 0, sizeof(*r));
 
 	r->rx_cxt = rx;
 
 	return r;
-out:
-	kfree(r);
-	return NULL;
 }
 
 static void free_rx_struct(struct sdio_rx *r)
@@ -680,7 +675,7 @@ static int sdio_wimax_probe(struct sdio_func *func,
 	phy_dev->rcv_func = gdm_sdio_receive;
 
 	ret = init_sdio(sdev);
-	if (sdev < 0)
+	if (ret < 0)
 		goto out;
 
 	sdev->func = func;

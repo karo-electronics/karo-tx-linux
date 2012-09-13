@@ -661,7 +661,7 @@ static const struct attribute_group ade7758_attribute_group = {
 	.attrs = ade7758_attributes,
 };
 
-static struct iio_chan_spec ade7758_channels[] = {
+static const struct iio_chan_spec ade7758_channels[] = {
 	{
 		.type = IIO_VOLTAGE,
 		.indexed = 1,
@@ -962,7 +962,7 @@ error_ret:
 	return ret;
 }
 
-static int ade7758_remove(struct spi_device *spi)
+static int __devexit ade7758_remove(struct spi_device *spi)
 {
 	struct iio_dev *indio_dev = spi_get_drvdata(spi);
 	struct ade7758_state *st = iio_priv(indio_dev);
