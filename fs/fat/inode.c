@@ -1464,7 +1464,7 @@ static int writeback_inode(struct inode *inode)
 	*/
 	ret = sync_inode_metadata(inode, 0);
 	if (!ret)
-	       ret = filemap_fdatawrite(inode->i_mapping);
+		= filemap_fdatawrite(inode->i_mapping);
 	return ret;
 }
 
