@@ -47,6 +47,7 @@
 #include <xen/interface/memory.h>
 #include <xen/hvc-console.h>
 #include <asm/xen/hypercall.h>
+#include <asm/xen/interface.h>
 
 #include <asm/pgtable.h>
 #include <asm/sync_bitops.h>
@@ -285,10 +286,9 @@ int gnttab_grant_foreign_access(domid_t domid, unsigned long frame,
 }
 EXPORT_SYMBOL_GPL(gnttab_grant_foreign_access);
 
-void gnttab_update_subpage_entry_v2(grant_ref_t ref, domid_t domid,
-				    unsigned long frame, int flags,
-				    unsigned page_off,
-				    unsigned length)
+static void gnttab_update_subpage_entry_v2(grant_ref_t ref, domid_t domid,
+					   unsigned long frame, int flags,
+					   unsigned page_off, unsigned length)
 {
 	gnttab_shared.v2[ref].sub_page.frame = frame;
 	gnttab_shared.v2[ref].sub_page.page_off = page_off;
@@ -345,9 +345,9 @@ bool gnttab_subpage_grants_available(void)
 }
 EXPORT_SYMBOL_GPL(gnttab_subpage_grants_available);
 
-void gnttab_update_trans_entry_v2(grant_ref_t ref, domid_t domid,
-				  int flags, domid_t trans_domid,
-				  grant_ref_t trans_gref)
+static void gnttab_update_trans_entry_v2(grant_ref_t ref, domid_t domid,
+					 int flags, domid_t trans_domid,
+					 grant_ref_t trans_gref)
 {
 	gnttab_shared.v2[ref].transitive.trans_domid = trans_domid;
 	gnttab_shared.v2[ref].transitive.gref = trans_gref;
@@ -870,7 +870,8 @@ int gnttab_map_refs(struct gnttab_map_grant_ref *map_ops,
 EXPORT_SYMBOL_GPL(gnttab_map_refs);
 
 int gnttab_unmap_refs(struct gnttab_unmap_grant_ref *unmap_ops,
-		      struct page **pages, unsigned int count, bool clear_pte)
+		      struct gnttab_map_grant_ref *kmap_ops,
+		      struct page **pages, unsigned int count)
 {
 	int i, ret;
 	bool lazy = false;
@@ -888,7 +889,8 @@ int gnttab_unmap_refs(struct gnttab_unmap_grant_ref *unmap_ops,
 	}
 
 	for (i = 0; i < count; i++) {
-		ret = m2p_remove_override(pages[i], clear_pte);
+		ret = m2p_remove_override(pages[i], kmap_ops ?
+				       &kmap_ops[i] : NULL);
 		if (ret)
 			return ret;
 	}
