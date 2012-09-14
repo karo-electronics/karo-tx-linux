@@ -47,9 +47,7 @@
 #include <linux/thermal.h>
 #include <acpi/acpi_bus.h>
 #include <acpi/acpi_drivers.h>
-#ifdef CONFIG_ACPI_VIDEO
 #include <acpi/video.h>
-#endif
 
 #include "asus-wmi.h"
 
@@ -189,6 +187,8 @@ struct asus_wmi {
 	struct device *hwmon_device;
 	struct platform_device *platform_device;
 
+	struct led_classdev wlan_led;
+	int wlan_led_wk;
 	struct led_classdev tpd_led;
 	int tpd_led_wk;
 	struct led_classdev kbd_led;
@@ -196,6 +196,7 @@ struct asus_wmi {
 	struct workqueue_struct *led_workqueue;
 	struct work_struct tpd_led_work;
 	struct work_struct kbd_led_work;
+	struct work_struct wlan_led_work;
 
 	struct asus_rfkill wlan;
 	struct asus_rfkill bluetooth;
@@ -458,12 +459,65 @@ static enum led_brightness kbd_led_get(struct led_classdev *led_cdev)
 	return value;
 }
 
+static int wlan_led_unknown_state(struct asus_wmi *asus)
+{
+	u32 result;
+
+	asus_wmi_get_devstate(asus, ASUS_WMI_DEVID_WIRELESS_LED, &result);
+
+	return result & ASUS_WMI_DSTS_UNKNOWN_BIT;
+}
+
+static int wlan_led_presence(struct asus_wmi *asus)
+{
+	u32 result;
+
+	asus_wmi_get_devstate(asus, ASUS_WMI_DEVID_WIRELESS_LED, &result);
+
+	return result & ASUS_WMI_DSTS_PRESENCE_BIT;
+}
+
+static void wlan_led_update(struct work_struct *work)
+{
+	int ctrl_param;
+	struct asus_wmi *asus;
+
+	asus = container_of(work, struct asus_wmi, wlan_led_work);
+
+	ctrl_param = asus->wlan_led_wk;
+	asus_wmi_set_devstate(ASUS_WMI_DEVID_WIRELESS_LED, ctrl_param, NULL);
+}
+
+static void wlan_led_set(struct led_classdev *led_cdev,
+			 enum led_brightness value)
+{
+	struct asus_wmi *asus;
+
+	asus = container_of(led_cdev, struct asus_wmi, wlan_led);
+
+	asus->wlan_led_wk = !!value;
+	queue_work(asus->led_workqueue, &asus->wlan_led_work);
+}
+
+static enum led_brightness wlan_led_get(struct led_classdev *led_cdev)
+{
+	struct asus_wmi *asus;
+	u32 result;
+
+	asus = container_of(led_cdev, struct asus_wmi, wlan_led);
+	asus_wmi_get_devstate(asus, ASUS_WMI_DEVID_WIRELESS_LED, &result);
+
+	return result & ASUS_WMI_DSTS_BRIGHTNESS_MASK;
+}
+
 static void asus_wmi_led_exit(struct asus_wmi *asus)
 {
 	if (!IS_ERR_OR_NULL(asus->kbd_led.dev))
 		led_classdev_unregister(&asus->kbd_led);
 	if (!IS_ERR_OR_NULL(asus->tpd_led.dev))
 		led_classdev_unregister(&asus->tpd_led);
+	if (!IS_ERR_OR_NULL(asus->wlan_led.dev))
+		led_classdev_unregister(&asus->wlan_led);
 	if (asus->led_workqueue)
 		destroy_workqueue(asus->led_workqueue);
 }
@@ -500,6 +554,23 @@ static int asus_wmi_led_init(struct asus_wmi *asus)
 
 		rv = led_classdev_register(&asus->platform_device->dev,
 					   &asus->kbd_led);
+		if (rv)
+			goto error;
+	}
+
+	if (wlan_led_presence(asus)) {
+		INIT_WORK(&asus->wlan_led_work, wlan_led_update);
+
+		asus->wlan_led.name = "asus::wlan";
+		asus->wlan_led.brightness_set = wlan_led_set;
+		if (!wlan_led_unknown_state(asus))
+			asus->wlan_led.brightness_get = wlan_led_get;
+		asus->wlan_led.flags = LED_CORE_SUSPENDRESUME;
+		asus->wlan_led.max_brightness = 1;
+		asus->wlan_led.default_trigger = "asus-wlan";
+
+		rv = led_classdev_register(&asus->platform_device->dev,
+					   &asus->wlan_led);
 	}
 
 error:
@@ -814,6 +885,9 @@ static int asus_new_rfkill(struct asus_wmi *asus,
 
 	if (!*rfkill)
 		return -EINVAL;
+
+	if (dev_id == ASUS_WMI_DEVID_WLAN)
+		rfkill_set_led_trigger_name(*rfkill, "asus-wlan");
 
 	rfkill_init_sw_state(*rfkill, !result);
 	result = rfkill_register(*rfkill);
@@ -1704,10 +1778,8 @@ static int asus_wmi_add(struct platform_device *pdev)
 	if (asus->driver->quirks->wmi_backlight_power)
 		acpi_video_dmi_promote_vendor();
 	if (!acpi_video_backlight_support()) {
-#ifdef CONFIG_ACPI_VIDEO
 		pr_info("Disabling ACPI video driver\n");
 		acpi_video_unregister();
-#endif
 		err = asus_wmi_backlight_init(asus);
 		if (err && err != -ENODEV)
 			goto fail_backlight;
