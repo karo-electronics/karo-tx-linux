@@ -989,10 +989,19 @@ __kuser_helper_end:
  * SP points to a minimal amount of processor-private memory, the address
  * of which is copied into r0 for the mode specific abort handler.
  */
+#ifdef CONFIG_ARM_ERRATA_775420
+	.macro	vector_stub, name, mode, correction=0, abort=0
+#else
 	.macro	vector_stub, name, mode, correction=0
+#endif
 	.align	5
 
 vector_\name:
+#ifdef CONFIG_ARM_ERRATA_775420
+	.if \abort
+	dsb
+	.endif
+#endif
 	.if \correction
 	sub	lr, lr, #\correction
 	.endif
@@ -1056,7 +1065,11 @@ __stubs_start:
  * Data abort dispatcher
  * Enter in ABT mode, spsr = USR CPSR, lr = USR PC
  */
+#ifdef CONFIG_ARM_ERRATA_775420
+	vector_stub	dabt, ABT_MODE, 8, 1
+#else
 	vector_stub	dabt, ABT_MODE, 8
+#endif
 
 	.long	__dabt_usr			@  0  (USR_26 / USR_32)
 	.long	__dabt_invalid			@  1  (FIQ_26 / FIQ_32)
@@ -1079,7 +1092,11 @@ __stubs_start:
  * Prefetch abort dispatcher
  * Enter in ABT mode, spsr = USR CPSR, lr = USR PC
  */
+#ifdef CONFIG_ARM_ERRATA_775420
+	vector_stub	pabt, ABT_MODE, 4, 1
+#else
 	vector_stub	pabt, ABT_MODE, 4
+#endif
 
 	.long	__pabt_usr			@  0 (USR_26 / USR_32)
 	.long	__pabt_invalid			@  1 (FIQ_26 / FIQ_32)
