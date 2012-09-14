@@ -26,11 +26,11 @@
 
 MODULE_DEVICE_TABLE(usb, id_table);
 
-#define TX_BUF_SIZE	2048
+#define TX_BUF_SIZE		2048
 #if defined(CONFIG_WIMAX_GDM72XX_WIMAX2)
-#define RX_BUF_SIZE	(128*1024)	/* For packet aggregation */
+#define RX_BUF_SIZE		(128*1024)	/* For packet aggregation */
 #else
-#define RX_BUF_SIZE	2048
+#define RX_BUF_SIZE		2048
 #endif
 
 #define GDM7205_PADDING		256
@@ -39,7 +39,7 @@ MODULE_DEVICE_TABLE(usb, id_table);
 #define B2H(x)		__be16_to_cpu(x)
 #define DB2H(x)		__be32_to_cpu(x)
 
-#define DOWNLOAD_CONF_VALUE		0x21
+#define DOWNLOAD_CONF_VALUE	0x21
 
 #ifdef CONFIG_WIMAX_GDM72XX_K_MODE
 
@@ -48,7 +48,7 @@ static LIST_HEAD(k_list);
 static DEFINE_SPINLOCK(k_lock);
 static int k_mode_stop;
 
-#define K_WAIT_TIME	(2 * HZ / 100)
+#define K_WAIT_TIME		(2 * HZ / 100)
 
 #endif /* CONFIG_WIMAX_GDM72XX_K_MODE */
 
@@ -75,11 +75,9 @@ static struct usb_tx *alloc_tx_struct(struct tx_cxt *tx)
 {
 	struct usb_tx *t = NULL;
 
-	t = kmalloc(sizeof(*t), GFP_ATOMIC);
+	t = kzalloc(sizeof(*t), GFP_ATOMIC);
 	if (t == NULL)
 		goto out;
-
-	memset(t, 0, sizeof(*t));
 
 	t->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	t->buf = kmalloc(TX_BUF_SIZE, GFP_ATOMIC);
@@ -180,8 +178,7 @@ static struct usb_rx *get_rx_struct(struct rx_cxt *rx)
 	}
 
 	r = list_entry(rx->free_list.next, struct usb_rx, list);
-	list_del(&r->list);
-	list_add_tail(&r->list, &rx->used_list);
+	list_move_tail(&r->list, &rx->used_list);
 
 	return r;
 }
@@ -189,8 +186,7 @@ static struct usb_rx *get_rx_struct(struct rx_cxt *rx)
 /* Before this function is called, spin lock should be locked. */
 static void put_rx_struct(struct rx_cxt *rx, struct usb_rx *r)
 {
-	list_del(&r->list);
-	list_add(&r->list, &rx->free_list);
+	list_move(&r->list, &rx->free_list);
 }
 
 static int init_usb(struct usbwm_dev *udev)

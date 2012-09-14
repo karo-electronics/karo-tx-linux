@@ -329,6 +329,7 @@ static int XGIfb_validate_mode(struct xgifb_video_info *xgifb_info, int myindex)
 {
 	u16 xres, yres;
 	struct xgi_hw_device_info *hw_info = &xgifb_info->hw_info;
+	unsigned long required_mem;
 
 	if (xgifb_info->chip == XG21) {
 		if (xgifb_info->display2 == XGIFB_DISP_LCD) {
@@ -345,13 +346,13 @@ static int XGIfb_validate_mode(struct xgifb_video_info *xgifb_info, int myindex)
 			}
 
 		}
-		return myindex;
+		goto check_memory;
 
 	}
 
 	/* FIXME: for now, all is valid on XG27 */
 	if (xgifb_info->chip == XG27)
-		return myindex;
+		goto check_memory;
 
 	if (!(XGIbios_mode[myindex].chipset & MD_XGI315))
 		return -1;
@@ -539,6 +540,12 @@ static int XGIfb_validate_mode(struct xgifb_video_info *xgifb_info, int myindex)
 	case XGIFB_DISP_NONE:
 		break;
 	}
+
+check_memory:
+	required_mem = XGIbios_mode[myindex].xres * XGIbios_mode[myindex].yres *
+		       XGIbios_mode[myindex].bpp / 8;
+	if (required_mem > xgifb_info->video_size)
+		return -1;
 	return myindex;
 
 }
@@ -913,17 +920,10 @@ static void XGIfb_post_setmode(struct xgifb_video_info *xgifb_info)
 			}
 
 			if ((filter >= 0) && (filter <= 7)) {
-				pr_debug("FilterTable[%d]-%d: %02x %02x %02x %02x\n",
+				pr_debug("FilterTable[%d]-%d: %*ph\n",
 					 filter_tb, filter,
-					 XGI_TV_filter[filter_tb].
-						filter[filter][0],
-					 XGI_TV_filter[filter_tb].
-						filter[filter][1],
-					 XGI_TV_filter[filter_tb].
-						filter[filter][2],
-					 XGI_TV_filter[filter_tb].
-						filter[filter][3]
-				);
+					 4, XGI_TV_filter[filter_tb].
+						   filter[filter]);
 				xgifb_reg_set(
 					XGIPART2,
 					0x35,
@@ -1404,11 +1404,10 @@ static int XGIfb_pan_display(struct fb_var_screeninfo *var,
 		if (var->yoffset < 0 || var->yoffset >= info->var.yres_virtual
 				|| var->xoffset)
 			return -EINVAL;
-	} else {
-		if (var->xoffset + info->var.xres > info->var.xres_virtual
+	} else if (var->xoffset + info->var.xres > info->var.xres_virtual
 				|| var->yoffset + info->var.yres
-						> info->var.yres_virtual)
-			return -EINVAL;
+						> info->var.yres_virtual) {
+		return -EINVAL;
 	}
 	err = XGIfb_pan_var(var, info);
 	if (err < 0)
@@ -1701,6 +1700,7 @@ static int __devinit xgifb_probe(struct pci_dev *pdev,
 	struct fb_info *fb_info;
 	struct xgifb_video_info *xgifb_info;
 	struct xgi_hw_device_info *hw_info;
+	unsigned long video_size_max;
 
 	fb_info = framebuffer_alloc(sizeof(*xgifb_info), &pdev->dev);
 	if (!fb_info)
@@ -1721,6 +1721,7 @@ static int __devinit xgifb_probe(struct pci_dev *pdev,
 	xgifb_info->subsysvendor = pdev->subsystem_vendor;
 	xgifb_info->subsysdevice = pdev->subsystem_device;
 
+	video_size_max = pci_resource_len(pdev, 0);
 	xgifb_info->video_base = pci_resource_start(pdev, 0);
 	xgifb_info->mmio_base = pci_resource_start(pdev, 1);
 	xgifb_info->mmio_size = pci_resource_len(pdev, 1);
@@ -1781,6 +1782,8 @@ static int __devinit xgifb_probe(struct pci_dev *pdev,
 			"Fatal error: Unable to determine RAM size.\n");
 		ret = -ENODEV;
 		goto error_disable;
+	} else if (xgifb_info->video_size > video_size_max) {
+		xgifb_info->video_size = video_size_max;
 	}
 
 	/* Enable PCI_LINEAR_ADDRESSING and MMIO_ENABLE  */
