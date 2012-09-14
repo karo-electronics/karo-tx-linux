@@ -1,0 +1,84 @@
+This file lists all branches that are pulled into the for-next branch
+of git://git.kernel.org/pub/scm/linux/kernel/git/arm/arm-soc.git
+and their external dependencies.
+
+It also includes a couple of directly applied patches for build breaks with subject
+The next/* branches are kept in the order in which they get applied.
+
+external dependencies:
+depends/clk-3.7	git://git.linaro.org/people/mturquette/linux.git clk-3.7
+
+fixes:
+
+next/fixes-non-critical:
+ux500/fixes-non-critical http://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-core-updates
+cleanup/of-deviceid-data git://git.pengutronix.de/git/ukl/linux ofdeviceiddata 
+				(pulled again on Sep 12)
+
+next/cleanup:
+cleanup/io-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci-v2
+bcmring/cleanup:  patches from Arnd
+u300/cleanup	  git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git u300-cleanup
+csr/marco-prepare git://gitorious.org/sirfprima2-kernel/sirfprima2-kernel.git marco-prepare
+			(includes two patches from clk-next that adds prima2 clocks)
+pmu/cleanup       git://git.kernel.org/pub/scm/linux/kernel/git/will/linux.git tags/arm-perf-3.7
+ks8695/timer      http://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ks8695-time-for-arm-soc
+			+ http://marc.info/?l=linux-arm-kernel&m=134734253519144
+renesas/ag5evm    git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git ag5evm
+nxp4008/removal   git://git.antcom.de/linux-2.6.git pnx4008-removal
+pxa/clk		  git://github.com/hzhuang1/linux.git clk
+
+next/maintainers:
+[email]		  Entry for ks8695 from Arnd
+
+next/soc:
+ux500/asic-id:	git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git ux500-core
+		 + http://marc.info/?l=linux-arm-kernel&m=134667789927502
+renesas/kzm9g   git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git kzm9g
+lpc32xx/core	git://git.antcom.de/linux-2.6.git lpc32xx/core
+renesas/soc	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git soc
+renesas/pmu	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git pmu/cleanup
+			depends on pmu/cleanup (next/cleanup)
+
+next/dt:
+pxa/dt:		git://github.com/hzhuang1/linux.git dt
+renesas/soc-core git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git soc-core
+csr/pinmux-dt   git://gitorious.org/sirfprima2-kernel/sirfprima2-kernel.git pinmux-dt
+lpc32xx/dts	git://git.antcom.de/linux-2.6.git lpc32xx/dts
+mxs/dt		git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-dt-3.7
+depends/clk-3.7	git://git.linaro.org/people/mturquette/linux.git clk-3.7
+			-> this is a prereq for mxs/clk-dt-lookup below
+mxs/clk-dt-lookup	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-clk-dt-lookup
+imx/dt		git://git.linaro.org/people/shawnguo/linux-2.6.git tags/imx-dt-3.7
+imx/clk-dt-lookup	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/imx-clk-dt-lookup
+
+next/soc2:
+mxs/sparse-irq	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-sparse-irq
+		 (functionally depends on mxs/dt)
+
+next/defconfig:
+renesas/defconfig git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git defconfig
+lpc32xx/defconfig git://git.antcom.de/linux-2.6.git lpc32xx/defconfig
+mxs/defconfig	  git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-defconfig-3.7
+
+next/drivers:
+devel/led-driver	git://git.kernel.org/pub/scm/linux/kernel/git/cooloney/linux-leds.git for-arm-soc
+at91/mci	git://github.com/at91linux/linux-at91 at91-for-next-soc
+drivers/ocp2scp	patches from Kishon Vijay Abraham I <kishon@ti.com>
+		+ http://marc.info/?l=linux-next&m=134574365000518&w=2
+
+next/boards:
+pxa/board	git://github.com/hzhuang1/linux.git board
+ks8695/boards	<1346995449-5436-1-git-send-email-gerg@snapgear.com> and
+		<1346996139-5692-1-git-send-email-gerg@snapgear.com>
+renesas/boards	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git boards
+pxa/boards	git://github.com/hzhuang1/linux.git board
+
+
+next/docs:
+mvebu/docs:	git://github.com/MISL-EBU-System-SW/mainline-public.git marvell-doc
+
+
+
+
+

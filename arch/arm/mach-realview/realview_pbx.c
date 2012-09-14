@@ -26,9 +26,9 @@
 #include <linux/amba/mmci.h>
 #include <linux/amba/pl022.h>
 #include <linux/io.h>
+#include <linux/platform_data/clk-realview.h>
 
 #include <asm/irq.h>
-#include <asm/leds.h>
 #include <asm/mach-types.h>
 #include <asm/smp_twd.h>
 #include <asm/pgtable.h>
@@ -319,6 +319,7 @@ static void __init realview_pbx_timer_init(void)
 	timer2_va_base = __io_address(REALVIEW_PBX_TIMER2_3_BASE);
 	timer3_va_base = __io_address(REALVIEW_PBX_TIMER2_3_BASE) + 0x20;
 
+	realview_clk_init(__io_address(REALVIEW_SYS_BASE), false);
 	realview_timer_init(IRQ_PBX_TIMER0_1);
 	realview_pbx_twd_init();
 }
@@ -393,10 +394,6 @@ static void __init realview_pbx_init(void)
 		struct amba_device *d = amba_devs[i];
 		amba_device_register(d, &iomem_resource);
 	}
-
-#ifdef CONFIG_LEDS
-	leds_event = realview_leds_event;
-#endif
 }
 
 MACHINE_START(REALVIEW_PBX, "ARM-RealView PBX")
