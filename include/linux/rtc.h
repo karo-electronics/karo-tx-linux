@@ -276,7 +276,7 @@ static inline bool is_leap_year(unsigned int year)
 	return (!(year % 4) && (year % 100)) || !(year % 400);
 }
 
-#ifdef CONFIG_RTC_HCTOSYS_DEVICE
+#ifdef CONFIG_RTC_HCTOSYS
 extern int rtc_hctosys_ret;
 #else
 #define rtc_hctosys_ret -ENODEV
