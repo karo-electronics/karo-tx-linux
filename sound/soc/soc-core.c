@@ -609,6 +609,10 @@ int snd_soc_suspend(struct device *dev)
 					  SND_SOC_DAPM_STREAM_SUSPEND);
 	}
 
+	/* Recheck all analogue paths too */
+	dapm_mark_io_dirty(&card->dapm);
+	snd_soc_dapm_sync(&card->dapm);
+
 	/* suspend all CODECs */
 	list_for_each_entry(codec, &card->codec_dev_list, card_list) {
 		/* If there are paths active then the CODEC will be held with
@@ -631,6 +635,8 @@ int snd_soc_suspend(struct device *dev)
 				codec->driver->suspend(codec);
 				codec->suspended = 1;
 				codec->cache_sync = 1;
+				if (codec->using_regmap)
+					regcache_mark_dirty(codec->control_data);
 				break;
 			default:
 				dev_dbg(codec->dev, "CODEC is on over suspend\n");
@@ -756,6 +762,10 @@ static void soc_resume_deferred(struct work_struct *work)
 
 	/* userspace can access us now we are back as we were before */
 	snd_power_change_state(card->snd_card, SNDRV_CTL_POWER_D0);
+
+	/* Recheck all analogue paths too */
+	dapm_mark_io_dirty(&card->dapm);
+	snd_soc_dapm_sync(&card->dapm);
 }
 
 /* powers up audio subsystem after a suspend */
@@ -1388,37 +1398,48 @@ static int soc_probe_link_dais(struct snd_soc_card *card, int num, int order)
 	if (ret < 0)
 		pr_warn("asoc: failed to add pmdown_time sysfs:%d\n", ret);
 
-	if (!dai_link->params) {
-		/* create the pcm */
-		ret = soc_new_pcm(rtd, num);
+	if (cpu_dai->driver->compress_dai) {
+		/*create compress_device"*/
+		ret = soc_new_compress(rtd, num);
 		if (ret < 0) {
-			pr_err("asoc: can't create pcm %s :%d\n",
-			       dai_link->stream_name, ret);
+			pr_err("asoc: can't create compress %s\n",
+					 dai_link->stream_name);
 			return ret;
 		}
 	} else {
-		/* link the DAI widgets */
-		play_w = codec_dai->playback_widget;
-		capture_w = cpu_dai->capture_widget;
-		if (play_w && capture_w) {
-			ret = snd_soc_dapm_new_pcm(card, dai_link->params,
-						   capture_w, play_w);
-			if (ret != 0) {
-				dev_err(card->dev, "Can't link %s to %s: %d\n",
-					play_w->name, capture_w->name, ret);
+
+		if (!dai_link->params) {
+			/* create the pcm */
+			ret = soc_new_pcm(rtd, num);
+			if (ret < 0) {
+				pr_err("asoc: can't create pcm %s :%d\n",
+				       dai_link->stream_name, ret);
 				return ret;
 			}
-		}
-
-		play_w = cpu_dai->playback_widget;
-		capture_w = codec_dai->capture_widget;
-		if (play_w && capture_w) {
-			ret = snd_soc_dapm_new_pcm(card, dai_link->params,
+		} else {
+			/* link the DAI widgets */
+			play_w = codec_dai->playback_widget;
+			capture_w = cpu_dai->capture_widget;
+			if (play_w && capture_w) {
+				ret = snd_soc_dapm_new_pcm(card, dai_link->params,
 						   capture_w, play_w);
-			if (ret != 0) {
-				dev_err(card->dev, "Can't link %s to %s: %d\n",
-					play_w->name, capture_w->name, ret);
-				return ret;
+				if (ret != 0) {
+					dev_err(card->dev, "Can't link %s to %s: %d\n",
+						play_w->name, capture_w->name, ret);
+					return ret;
+				}
+			}
+
+			play_w = cpu_dai->playback_widget;
+			capture_w = codec_dai->capture_widget;
+			if (play_w && capture_w) {
+				ret = snd_soc_dapm_new_pcm(card, dai_link->params,
+						   capture_w, play_w);
+				if (ret != 0) {
+					dev_err(card->dev, "Can't link %s to %s: %d\n",
+						play_w->name, capture_w->name, ret);
+					return ret;
+				}
 			}
 		}
 	}
@@ -1816,7 +1837,6 @@ base_error:
 static int soc_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
-	int ret = 0;
 
 	/*
 	 * no card, so machine driver should be registering card
@@ -1832,13 +1852,7 @@ static int soc_probe(struct platform_device *pdev)
 	/* Bodge while we unpick instantiation */
 	card->dev = &pdev->dev;
 
-	ret = snd_soc_register_card(card);
-	if (ret != 0) {
-		dev_err(&pdev->dev, "Failed to register card\n");
-		return ret;
-	}
-
-	return 0;
+	return snd_soc_register_card(card);
 }
 
 static int soc_cleanup_card_resources(struct snd_soc_card *card)
@@ -3717,6 +3731,9 @@ int snd_soc_register_dai(struct device *dev,
 		}
 	}
 
+	if (!dai->codec)
+		dai->dapm.idle_bias_off = 1;
+
 	list_add(&dai->list, &dai_list);
 
 	mutex_unlock(&client_mutex);
@@ -3804,6 +3821,9 @@ int snd_soc_register_dais(struct device *dev,
 				break;
 			}
 		}
+
+		if (!dai->codec)
+			dai->dapm.idle_bias_off = 1;
 
 		list_add(&dai->list, &dai_list);
 
@@ -4034,8 +4054,6 @@ int snd_soc_register_codec(struct device *dev,
 	return 0;
 
 fail:
-	kfree(codec->reg_def_copy);
-	codec->reg_def_copy = NULL;
 	kfree(codec->name);
 	kfree(codec);
 	return ret;
