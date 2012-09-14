@@ -1,0 +1,49 @@
+Importing i2c based on 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+HEAD is now at 6a2a2b8 Merge tag 'fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/arm/arm-soc
+$ git am ../quilt/i2c/i2c-mux-support-class.patch
+Applying: i2c-mux: Add support for device auto-detection
+$ git am ../quilt/i2c/i2c-i801-asus-multiplexing-2.patch
+Applying: i2c-i801: Support SMBus multiplexing on Asus Z8 series
+$ git am ../quilt/i2c/i2c-smbus-convert-kzalloc-to-devm_kzalloc.patch
+Applying: i2c-smbus: Convert kzalloc to devm_kzalloc
+$ git am ../quilt/i2c/i2c-convert-struct-i2c_msg-initialization-to-c99-format.patch
+Applying: i2c: Convert struct i2c_msg initialization to C99 format
+$ git am ../quilt/i2c/i2c-make-I2C-available-on-UML.patch
+Applying: i2c: Make I2C available on UML
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 12dc268...3969d54 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+$ cd ../quilt-tmp
+$ git reset --hard 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+HEAD is now at 6a2a2b8 Merge tag 'fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/arm/arm-soc
+$ git am ../quilt/jdelvare-hwmon/hwmon-via-cputemp-use-get_online_cpus-to-avoid-races-involving-cpu-hotplug.patch
+Applying: hwmon: (via-cputemp) Use get_online_cpus to avoid races involving CPU hotplug
+$ git am ../quilt/jdelvare-hwmon/hwmon-coretemp-use-get_online_cpus-to-avoid-races-involving-cpu-hotplug.patch
+Applying: hwmon: (coretemp) Use get_online_cpus to avoid races involving CPU hotplug
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 0c82d9f...820d1e2 master     -> quilt/jdelvare-hwmon  (forced update)
+Importing rr based on v3.6-rc1-133-g42a579a
+Unchanged quilt series rr
+Importing device-mapper based on v3.6-rc5
+$ cd ../quilt-tmp
+$ git reset --hard 55d512e245bc7699a8800e23df1a24195dd08217
+HEAD is now at 55d512e Linux 3.6-rc5
+$ git am ../quilt/device-mapper/dm-verity-fix-overflow-check.patch
+Applying: This patch fixes sector_t overflow checking in dm-verity.
+$ git am ../quilt/device-mapper/dm-mpath-fix-check-for-null-mpio-in-end_io-fn.patch
+Applying: The mpio dereference should be moved below the BUG_ON NULL test
+$ git am ../quilt/device-mapper/dm-mpath-only-retry-ioctl-when-no-paths-if-queue_if_no_path-set.patch
+Applying: When there are no paths and multipath receives an ioctl, it waits until
+$ git am ../quilt/device-mapper/dm-thin-tidy-discard-support.patch
+Applying: A little thin discard code refactoring in preparation for the next
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 3bcc599...310c28f master     -> quilt/device-mapper  (forced update)
