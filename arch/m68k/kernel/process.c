@@ -34,6 +34,7 @@
 
 
 asmlinkage void ret_from_fork(void);
+asmlinkage void ret_from_kernel_thread(void);
 
 
 /*
@@ -125,45 +126,16 @@ void show_regs(struct pt_regs * regs)
  */
 int kernel_thread(int (*fn)(void *), void * arg, unsigned long flags)
 {
-	int pid;
-	mm_segment_t fs;
-
-	fs = get_fs();
-	set_fs (KERNEL_DS);
-
-	{
-	register long retval __asm__ ("d0");
-	register long clone_arg __asm__ ("d1") = flags | CLONE_VM | CLONE_UNTRACED;
-
-	retval = __NR_clone;
-	__asm__ __volatile__
-	  ("clrl %%d2\n\t"
-	   "trap #0\n\t"		/* Linux/m68k system call */
-	   "tstl %0\n\t"		/* child or parent */
-	   "jne 1f\n\t"			/* parent - jump */
-#ifdef CONFIG_MMU
-	   "lea %%sp@(%c7),%6\n\t"	/* reload current */
-	   "movel %6@,%6\n\t"
-#endif
-	   "movel %3,%%sp@-\n\t"	/* push argument */
-	   "jsr %4@\n\t"		/* call fn */
-	   "movel %0,%%d1\n\t"		/* pass exit value */
-	   "movel %2,%%d0\n\t"		/* exit */
-	   "trap #0\n"
-	   "1:"
-	   : "+d" (retval)
-	   : "i" (__NR_clone), "i" (__NR_exit),
-	     "r" (arg), "a" (fn), "d" (clone_arg), "r" (current),
-	     "i" (-THREAD_SIZE)
-	   : "d2");
-
-	pid = retval;
-	}
-
-	set_fs (fs);
-	return pid;
+	struct {
+		struct switch_stack sw;
+		struct pt_regs regs;
+	} r = {
+		.regs.sr = PS_S,
+		.sw.a3 = (unsigned long)fn,
+		.sw.d7 = (unsigned long)arg
+	};
+	return do_fork(flags|CLONE_VM|CLONE_UNTRACED, 0, &r.regs, 0, NULL, NULL);
 }
-EXPORT_SYMBOL(kernel_thread);
 
 void flush_thread(void)
 {
@@ -233,10 +205,14 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 
 	childstack = ((struct switch_stack *) childregs) - 1;
 	*childstack = *stack;
-	childstack->retpc = (unsigned long)ret_from_fork;
+	if (likely(user_mode(regs)))
+		childstack->retpc = (unsigned long)ret_from_fork;
+	else
+		childstack->retpc = (unsigned long)ret_from_kernel_thread;
 
 	p->thread.usp = usp;
 	p->thread.ksp = (unsigned long)childstack;
+	p->thread.esp0 = (unsigned long)childregs;
 
 	if (clone_flags & CLONE_SETTLS)
 		task_thread_info(p)->tp_value = regs->d5;
