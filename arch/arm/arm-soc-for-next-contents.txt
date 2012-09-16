@@ -72,6 +72,7 @@ pxa/board	git://github.com/hzhuang1/linux.git board
 ks8695/boards	<1346995449-5436-1-git-send-email-gerg@snapgear.com> and
 		<1346996139-5692-1-git-send-email-gerg@snapgear.com>
 renesas/boards	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git boards
+		 (pulled twice)
 pxa/boards	git://github.com/hzhuang1/linux.git board
 
 
