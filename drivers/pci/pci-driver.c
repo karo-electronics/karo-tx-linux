@@ -274,11 +274,14 @@ struct drv_dev_and_id {
 	struct pci_driver *drv;
 	struct pci_dev *dev;
 	const struct pci_device_id *id;
+	struct work_struct work;
+	int error;
 };
 
-static long local_pci_probe(void *_ddi)
+static void pci_probe_fn(struct work_struct *work)
 {
-	struct drv_dev_and_id *ddi = _ddi;
+	struct drv_dev_and_id *ddi = container_of(work, struct drv_dev_and_id,
+						  work);
 	struct device *dev = &ddi->dev->dev;
 	struct device *parent = dev->parent;
 	int rc;
@@ -304,33 +307,38 @@ static long local_pci_probe(void *_ddi)
 	}
 	if (parent)
 		pm_runtime_put(parent);
-	return rc;
+
+	ddi->error = rc;
 }
 
 static int pci_call_probe(struct pci_driver *drv, struct pci_dev *dev,
 			  const struct pci_device_id *id)
 {
-	int error, node;
+	int node;
+	int cpu = nr_cpu_ids;
 	struct drv_dev_and_id ddi = { drv, dev, id };
 
-	/* Execute driver initialization on node where the device's
-	   bus is attached to.  This way the driver likely allocates
-	   its local memory on the right node without any need to
-	   change it. */
-	node = dev_to_node(&dev->dev);
-	if (node >= 0) {
-		int cpu;
+	/*
+	 * Execute driver initialization on node where the device's bus is
+	 * attached.  This way the driver likely allocates its local memory
+	 * on the right node without any need to change it.
+	 */
+	get_online_cpus();
 
-		get_online_cpus();
+	node = dev_to_node(&dev->dev);
+	if (node >= 0)
 		cpu = cpumask_any_and(cpumask_of_node(node), cpu_online_mask);
-		if (cpu < nr_cpu_ids)
-			error = work_on_cpu(cpu, local_pci_probe, &ddi);
-		else
-			error = local_pci_probe(&ddi);
-		put_online_cpus();
-	} else
-		error = local_pci_probe(&ddi);
-	return error;
+
+	if (cpu < nr_cpu_ids) {
+		INIT_WORK_ONSTACK(&ddi.work, pci_probe_fn);
+		schedule_work_on(cpu, &ddi.work);
+		flush_work(&ddi.work);
+	} else {
+		pci_probe_fn(&ddi.work);
+	}
+
+	put_online_cpus();
+	return ddi.error;
 }
 
 /**
