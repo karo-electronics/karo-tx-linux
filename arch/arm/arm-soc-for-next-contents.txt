@@ -39,6 +39,7 @@ tegra/board-removal git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-
 
 next/maintainers:
 [email]		  Entry for ks8695 from Arnd
+tegra/maintainers git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-maintainers
 
 next/soc:
 ux500/asic-id:	git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git ux500-core
