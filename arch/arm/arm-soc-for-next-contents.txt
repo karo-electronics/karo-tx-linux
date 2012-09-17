@@ -78,7 +78,7 @@ ks8695/boards	<1346995449-5436-1-git-send-email-gerg@snapgear.com> and
 renesas/boards	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git boards
 		 (pulled twice)
 pxa/boards	git://github.com/hzhuang1/linux.git board
-
+imx/boards	git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-boards
 
 next/docs:
 mvebu/docs:	git://github.com/MISL-EBU-System-SW/mainline-public.git marvell-doc
