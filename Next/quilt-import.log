@@ -1,0 +1,51 @@
+Importing i2c based on 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+Unchanged quilt series jdelvare-hwmon
+Importing rr based on v3.6-rc1-133-g42a579a
+Unchanged quilt series rr
+Importing device-mapper based on v3.6-rc5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 55d512e245bc7699a8800e23df1a24195dd08217
+HEAD is now at 55d512e Linux 3.6-rc5
+$ git am ../quilt/device-mapper/dm-verity-fix-overflow-check.patch
+Applying: This patch fixes sector_t overflow checking in dm-verity.
+$ git am ../quilt/device-mapper/dm-mpath-fix-check-for-null-mpio-in-end_io-fn.patch
+Applying: The mpio dereference should be moved below the BUG_ON NULL test
+$ git am ../quilt/device-mapper/dm-mpath-only-retry-ioctl-when-no-paths-if-queue_if_no_path-set.patch
+Applying: When there are no paths and multipath receives an ioctl, it waits until
+$ git am ../quilt/device-mapper/dm-thin-tidy-discard-support.patch
+Applying: A little thin discard code refactoring in preparation for the next
+$ git am ../quilt/device-mapper/dm-store-dm_target_io-in-bio-front_pad.patch
+Applying: Use the recently-added bio front_pad field to allocate struct dm_target_io.
+error: patch failed: drivers/md/dm.c:682
+error: drivers/md/dm.c: patch does not apply
+Patch failed at 0001 Use the recently-added bio front_pad field to allocate struct dm_target_io.
+When you have resolved this problem run "git am --resolved".
+If you would prefer to skip this patch, instead run "git am --skip".
+To restore the original branch and stop patching run "git am --abort".
+Importing i2c based on 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+Unchanged quilt series jdelvare-hwmon
+Importing rr based on v3.6-rc1-133-g42a579a
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+$ cd ../quilt-tmp
+$ git reset --hard 3406fea15f2f4111665fc89a1ce2d8448c1ba838
+HEAD is now at 3406fea Merge branch 'for-3.7/drivers' into for-next
+$ git am ../quilt/device-mapper/dm-verity-fix-overflow-check.patch
+Applying: This patch fixes sector_t overflow checking in dm-verity.
+$ git am ../quilt/device-mapper/dm-mpath-fix-check-for-null-mpio-in-end_io-fn.patch
+Applying: The mpio dereference should be moved below the BUG_ON NULL test
+$ git am ../quilt/device-mapper/dm-mpath-only-retry-ioctl-when-no-paths-if-queue_if_no_path-set.patch
+Applying: When there are no paths and multipath receives an ioctl, it waits until
+$ git am ../quilt/device-mapper/dm-thin-tidy-discard-support.patch
+Applying: A little thin discard code refactoring in preparation for the next
+$ git am ../quilt/device-mapper/dm-store-dm_target_io-in-bio-front_pad.patch
+Applying: Use the recently-added bio front_pad field to allocate struct dm_target_io.
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 310c28f...3ca51fb master     -> quilt/device-mapper  (forced update)
