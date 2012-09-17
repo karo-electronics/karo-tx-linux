@@ -60,6 +60,8 @@ imx/soc		git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-soc
 tegra/common-clk git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-common-clk
 tegra/cpu-hotplug git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-cpu-hotplug
 omap/omap-device git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/devel-omap-device-for-v3.7
+omap/am33xx	git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-am33xx-for-v3.7
+			depends on omap cleanup branches
 
 next/dt:
 pxa/dt:		git://github.com/hzhuang1/linux.git dt
