@@ -8,6 +8,7 @@ The next/* branches are kept in the order in which they get applied.
 external dependencies:
 depends/clk-3.7	git://git.linaro.org/people/mturquette/linux.git clk-3.7
 depends/tps6589x-dt  git://git.kernel.org/pub/scm/linux/kernel/git/broonie/regulator.git tps6589x-dt
+depends/tty-omap-serial git://git.kernel.org/pub/scm/linux/kernel/git/gregkh/tty.git tty-next @ cdd86b277dc82220aa630414896505517a02a201
 
 fixes:
 
@@ -39,6 +40,9 @@ tegra/board-removal git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-
 			depends on depends/tps6589x-dt
 omap/gpmc-cleanup   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-gpmc-fixed-for-v3.7
 omap/atag-cleanup   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/cleanup-omap-tags-for-v3.7
+omap/cleanup-sparseirq git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-cleanup-sparseirq-for-v3.7
+			depends on depends/tty-omap-serial
+omap/cleanup-makefile-sparse git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-cleanup-makefile-sparse-for-v3.7
 
 next/maintainers:
 [email]		  Entry for ks8695 from Arnd

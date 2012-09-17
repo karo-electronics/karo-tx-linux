@@ -15,6 +15,7 @@
 #include <linux/leds.h>
 #include <linux/io.h>
 #include <linux/slab.h>
+#include <linux/platform_data/gpio-omap.h>
 
 #include <mach/hardware.h>
 #include <asm/mach-types.h>
