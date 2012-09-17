@@ -41,6 +41,7 @@ lpc32xx/core	git://git.antcom.de/linux-2.6.git lpc32xx/core
 renesas/soc	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git soc
 renesas/pmu	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git pmu/cleanup
 			depends on pmu/cleanup (next/cleanup)
+imx/soc		git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-soc
 
 next/dt:
 pxa/dt:		git://github.com/hzhuang1/linux.git dt
