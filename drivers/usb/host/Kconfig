@@ -292,7 +292,7 @@ config USB_OHCI_HCD
 	depends on USB && USB_ARCH_HAS_OHCI
 	select ISP1301_OMAP if MACH_OMAP_H2 || MACH_OMAP_H3
 	select USB_OTG_UTILS if ARCH_OMAP
-	select USB_ISP1301 if ARCH_LPC32XX || ARCH_PNX4008
+	depends on USB_ISP1301 || !(ARCH_LPC32XX || ARCH_PNX4008)
 	---help---
 	  The Open Host Controller Interface (OHCI) is a standard for accessing
 	  USB 1.1 host controller hardware.  It does more in hardware than Intel's
@@ -418,7 +418,7 @@ config USB_OHCI_HCD_PLATFORM
 	default n
 	---help---
 	  Adds an OHCI host driver for a generic platform device, which
-	  provieds a memory space and an irq.
+	  provides a memory space and an irq.
 
 	  If unsure, say N.
 
@@ -428,7 +428,7 @@ config USB_EHCI_HCD_PLATFORM
 	default n
 	---help---
 	  Adds an EHCI host driver for a generic platform device, which
-	  provieds a memory space and an irq.
+	  provides a memory space and an irq.
 
 	  If unsure, say N.
 
@@ -450,7 +450,7 @@ config USB_OHCI_LITTLE_ENDIAN
 
 config USB_UHCI_HCD
 	tristate "UHCI HCD (most Intel and VIA) support"
-	depends on USB && (PCI || SPARC_LEON)
+	depends on USB && (PCI || SPARC_LEON || ARCH_VT8500)
 	---help---
 	  The Universal Host Controller Interface is a standard by Intel for
 	  accessing the USB hardware in the PC (which is also called the USB
@@ -468,7 +468,15 @@ config USB_UHCI_HCD
 config USB_UHCI_SUPPORT_NON_PCI_HC
 	bool
 	depends on USB_UHCI_HCD
-	default y if SPARC_LEON
+	default y if (SPARC_LEON || ARCH_VT8500)
+
+config USB_UHCI_PLATFORM
+	bool "Generic UHCI Platform Driver support"
+	depends on USB_UHCI_SUPPORT_NON_PCI_HC
+	default y if ARCH_VT8500
+	---help---
+	  Enable support for generic UHCI platform devices that require no
+	  additional configuration.
 
 config USB_UHCI_BIG_ENDIAN_MMIO
 	bool
