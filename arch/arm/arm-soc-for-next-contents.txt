@@ -18,6 +18,7 @@ cleanup/of-deviceid-data git://git.pengutronix.de/git/ukl/linux ofdeviceiddata
 imx/fixes-non-critical	 git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-fixes
 msm/fixes-non-critical	 git://git.kernel.org/pub/scm/linux/kernel/git/davidb/linux-msm.git tags/msm-fix-noncrit-for-3.7
 tegra/fixes-non-critical git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-fixes
+omap/fixes-non-critical   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-fixes-noncritical-for-v3.7
 
 next/cleanup:
 cleanup/io-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci-v2
