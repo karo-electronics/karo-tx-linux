@@ -31,16 +31,18 @@ static void rtc_device_release(struct device *dev)
 	kfree(rtc);
 }
 
-#if defined(CONFIG_PM) && defined(CONFIG_RTC_HCTOSYS_DEVICE)
+#ifdef CONFIG_RTC_HCTOSYS_DEVICE
+/* Result of the last RTC to system clock attempt. */
+int rtc_hctosys_ret = -ENODEV;
 
+#ifdef CONFIG_PM
 /*
  * On suspend(), measure the delta between one RTC and the
  * system's wall clock; restore it on resume().
  */
 
 static struct timespec old_rtc, old_system, old_delta;
-/* Result of the last RTC to system clock attempt. */
-int rtc_hctosys_ret = -ENODEV;
+
 
 static int rtc_suspend(struct device *dev, pm_message_t mesg)
 {
@@ -126,6 +128,7 @@ static int rtc_resume(struct device *dev)
 #else
 #define rtc_suspend	NULL
 #define rtc_resume	NULL
+#endif
 #endif
 
 
