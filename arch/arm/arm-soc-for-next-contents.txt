@@ -27,6 +27,7 @@ ks8695/timer      http://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-st
 renesas/ag5evm    git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git ag5evm
 nxp4008/removal   git://git.antcom.de/linux-2.6.git pnx4008-removal
 pxa/clk		  git://github.com/hzhuang1/linux.git clk
+imx/cleanup	  git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-cleanup
 
 next/maintainers:
 [email]		  Entry for ks8695 from Arnd
