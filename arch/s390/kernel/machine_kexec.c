@@ -159,7 +159,7 @@ int machine_kexec_prepare(struct kimage *image)
 
 	/* Can't replace kernel image since it is read-only. */
 	if (ipl_flags & IPL_NSS_VALID)
-		return -ENOSYS;
+		return -EOPNOTSUPP;
 
 	if (image->type == KEXEC_TYPE_CRASH)
 		return machine_kexec_prepare_kdump();
@@ -188,6 +188,10 @@ void arch_crash_save_vmcoreinfo(void)
 }
 
 void machine_shutdown(void)
+{
+}
+
+void machine_crash_shutdown(struct pt_regs *regs)
 {
 }
 
