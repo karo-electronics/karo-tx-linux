@@ -57,7 +57,7 @@ void kvm_cpu__delete(struct kvm_cpu *vcpu)
 	free(vcpu);
 }
 
-struct kvm_cpu *kvm_cpu__init(struct kvm *kvm, unsigned long cpu_id)
+struct kvm_cpu *kvm_cpu__arch_init(struct kvm *kvm, unsigned long cpu_id)
 {
 	struct kvm_cpu *vcpu;
 	int mmap_size;
@@ -115,7 +115,7 @@ static void kvm_cpu__setup_regs(struct kvm_cpu *vcpu)
 
 	if (vcpu->cpu_id == 0) {
 		r->pc = KERNEL_START_ADDR;
-		r->gpr[3] = vcpu->kvm->fdt_gra;
+		r->gpr[3] = vcpu->kvm->arch.fdt_gra;
 		r->gpr[5] = 0;
 	} else {
 		r->pc = KERNEL_SECONDARY_START_ADDR;
@@ -142,8 +142,8 @@ static void kvm_cpu__setup_sregs(struct kvm_cpu *vcpu)
 	if (ioctl(vcpu->vcpu_fd, KVM_GET_SREGS, &sregs) < 0)
 		die("KVM_GET_SREGS failed");
 
-	sregs.u.s.sdr1 = vcpu->kvm->sdr1;
-	sregs.pvr = vcpu->kvm->pvr;
+	sregs.u.s.sdr1 = vcpu->kvm->arch.sdr1;
+	sregs.pvr = vcpu->kvm->arch.pvr;
 
 	if (ioctl(vcpu->vcpu_fd, KVM_SET_SREGS, &sregs) < 0)
 		die("KVM_SET_SREGS failed");
