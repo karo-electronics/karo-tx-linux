@@ -56,6 +56,7 @@ depends/clk-3.7	git://git.linaro.org/people/mturquette/linux.git clk-3.7
 mxs/clk-dt-lookup	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-clk-dt-lookup
 imx/dt		git://git.linaro.org/people/shawnguo/linux-2.6.git tags/imx-dt-3.7
 imx/clk-dt-lookup	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/imx-clk-dt-lookup
+msm/dt		git://git.kernel.org/pub/scm/linux/kernel/git/davidb/linux-msm.git tags/msm-dt-for-3.7
 
 next/soc2:
 mxs/sparse-irq	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-sparse-irq
