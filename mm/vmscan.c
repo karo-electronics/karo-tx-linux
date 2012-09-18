@@ -674,8 +674,10 @@ static enum page_references page_check_references(struct page *page,
 static unsigned long shrink_page_list(struct list_head *page_list,
 				      struct zone *zone,
 				      struct scan_control *sc,
+				      enum ttu_flags ttu_flags,
 				      unsigned long *ret_nr_dirty,
-				      unsigned long *ret_nr_writeback)
+				      unsigned long *ret_nr_writeback,
+				      bool force_reclaim)
 {
 	LIST_HEAD(ret_pages);
 	LIST_HEAD(free_pages);
@@ -689,10 +691,10 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 
 	mem_cgroup_uncharge_start();
 	while (!list_empty(page_list)) {
-		enum page_references references;
 		struct address_space *mapping;
 		struct page *page;
 		int may_enter_fs;
+		enum page_references references = PAGEREF_RECLAIM;
 
 		cond_resched();
 
@@ -758,7 +760,9 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			wait_on_page_writeback(page);
 		}
 
-		references = page_check_references(page, sc);
+		if (!force_reclaim)
+			references = page_check_references(page, sc);
+
 		switch (references) {
 		case PAGEREF_ACTIVATE:
 			goto activate_locked;
@@ -788,7 +792,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		 * processes. Try to unmap it here.
 		 */
 		if (page_mapped(page) && mapping) {
-			switch (try_to_unmap(page, TTU_UNMAP)) {
+			switch (try_to_unmap(page, ttu_flags)) {
 			case SWAP_FAIL:
 				goto activate_locked;
 			case SWAP_AGAIN:
@@ -958,6 +962,33 @@ keep:
 	*ret_nr_dirty += nr_dirty;
 	*ret_nr_writeback += nr_writeback;
 	return nr_reclaimed;
+}
+
+unsigned long reclaim_clean_pages_from_list(struct zone *zone,
+					    struct list_head *page_list)
+{
+	struct scan_control sc = {
+		.gfp_mask = GFP_KERNEL,
+		.priority = DEF_PRIORITY,
+		.may_unmap = 1,
+	};
+	unsigned long ret, dummy1, dummy2;
+	struct page *page, *next;
+	LIST_HEAD(clean_pages);
+
+	list_for_each_entry_safe(page, next, page_list, lru) {
+		if (page_is_file_cache(page) && !PageDirty(page)) {
+			ClearPageActive(page);
+			list_move(&page->lru, &clean_pages);
+		}
+	}
+
+	ret = shrink_page_list(&clean_pages, zone, &sc,
+				TTU_UNMAP|TTU_IGNORE_ACCESS,
+				&dummy1, &dummy2, true);
+	list_splice(&clean_pages, page_list);
+	__mod_zone_page_state(zone, NR_ISOLATED_FILE, -ret);
+	return ret;
 }
 
 /*
@@ -1278,8 +1309,8 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 	if (nr_taken == 0)
 		return 0;
 
-	nr_reclaimed = shrink_page_list(&page_list, zone, sc,
-						&nr_dirty, &nr_writeback);
+	nr_reclaimed = shrink_page_list(&page_list, zone, sc, TTU_UNMAP,
+					&nr_dirty, &nr_writeback, false);
 
 	spin_lock_irq(&zone->lru_lock);
 
@@ -1729,6 +1760,28 @@ static bool in_reclaim_compaction(struct scan_control *sc)
 	return false;
 }
 
+#ifdef CONFIG_COMPACTION
+/*
+ * If compaction is deferred for sc->order then scale the number of pages
+ * reclaimed based on the number of consecutive allocation failures
+ */
+static unsigned long scale_for_compaction(unsigned long pages_for_compaction,
+			struct lruvec *lruvec, struct scan_control *sc)
+{
+	struct zone *zone = lruvec_zone(lruvec);
+
+	if (zone->compact_order_failed <= sc->order)
+		pages_for_compaction <<= zone->compact_defer_shift;
+	return pages_for_compaction;
+}
+#else
+static unsigned long scale_for_compaction(unsigned long pages_for_compaction,
+			struct lruvec *lruvec, struct scan_control *sc)
+{
+	return pages_for_compaction;
+}
+#endif
+
 /*
  * Reclaim/compaction is used for high-order allocation requests. It reclaims
  * order-0 pages before compacting the zone. should_continue_reclaim() returns
@@ -1776,6 +1829,9 @@ static inline bool should_continue_reclaim(struct lruvec *lruvec,
 	 * inactive lists are large enough, continue reclaiming
 	 */
 	pages_for_compaction = (2UL << sc->order);
+
+	pages_for_compaction = scale_for_compaction(pages_for_compaction,
+						    lruvec, sc);
 	inactive_lru_pages = get_lru_size(lruvec, LRU_INACTIVE_FILE);
 	if (nr_swap_pages > 0)
 		inactive_lru_pages += get_lru_size(lruvec, LRU_INACTIVE_ANON);
@@ -3101,9 +3157,9 @@ int kswapd_run(int nid)
 	if (IS_ERR(pgdat->kswapd)) {
 		/* failure at boot is fatal */
 		BUG_ON(system_state == SYSTEM_BOOTING);
-		printk("Failed to start kswapd on node %d\n",nid);
 		pgdat->kswapd = NULL;
-		ret = -1;
+		pr_err("Failed to start kswapd on node %d\n", nid);
+		ret = PTR_ERR(pgdat->kswapd);
 	}
 	return ret;
 }
