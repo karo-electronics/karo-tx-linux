@@ -2095,7 +2095,6 @@ static noinline int relink_extent_backref(struct btrfs_path *path,
 	struct inode *inode;
 	struct extent_state *cached = NULL;
 	int ret = 0;
-	u64 hint_byte;
 	u64 start;
 	u64 len;
 	bool merge = false;
@@ -2181,8 +2180,8 @@ static noinline int relink_extent_backref(struct btrfs_path *path,
 		  old->extent_offset + old->offset + old->len);
 	len -= max(backref->extent_offset, old->extent_offset + old->offset);
 
-	ret = btrfs_drop_extents(trans, inode, start,
-				 start + len, &hint_byte, 1);
+	ret = btrfs_drop_extents(trans, BTRFS_I(inode)->root, inode, start,
+				 start + len, 1);
 	if (ret)
 		goto out_free_path;
 again:
