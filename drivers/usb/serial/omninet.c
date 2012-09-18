@@ -167,8 +167,8 @@ static void omninet_read_bulk_callback(struct urb *urb)
 	int i;
 
 	if (status) {
-		dbg("%s - nonzero read bulk status received: %d",
-		    __func__, status);
+		dev_dbg(&port->dev, "%s - nonzero read bulk status received: %d\n",
+			__func__, status);
 		return;
 	}
 
@@ -185,10 +185,12 @@ static void omninet_read_bulk_callback(struct urb *urb)
 
 	if (urb->actual_length && header->oh_len) {
 		struct tty_struct *tty = tty_port_tty_get(&port->port);
-		tty_insert_flip_string(tty, data + OMNINET_DATAOFFSET,
+		if (tty) {
+			tty_insert_flip_string(tty, data + OMNINET_DATAOFFSET,
 							header->oh_len);
-		tty_flip_buffer_push(tty);
-		tty_kref_put(tty);
+			tty_flip_buffer_push(tty);
+			tty_kref_put(tty);
+		}
 	}
 
 	/* Continue trying to always read  */
@@ -212,12 +214,12 @@ static int omninet_write(struct tty_struct *tty, struct usb_serial_port *port,
 	int			result;
 
 	if (count == 0) {
-		dbg("%s - write request of 0 bytes", __func__);
+		dev_dbg(&port->dev, "%s - write request of 0 bytes\n", __func__);
 		return 0;
 	}
 
 	if (!test_and_clear_bit(0, &port->write_urbs_free)) {
-		dbg("%s - already writing", __func__);
+		dev_dbg(&port->dev, "%s - already writing\n", __func__);
 		return 0;
 	}
 
@@ -261,7 +263,7 @@ static int omninet_write_room(struct tty_struct *tty)
 	if (test_bit(0, &wport->write_urbs_free))
 		room = wport->bulk_out_size - OMNINET_HEADERLEN;
 
-	dbg("%s - returns %d", __func__, room);
+	dev_dbg(&port->dev, "%s - returns %d\n", __func__, room);
 
 	return room;
 }
@@ -275,8 +277,8 @@ static void omninet_write_bulk_callback(struct urb *urb)
 
 	set_bit(0, &port->write_urbs_free);
 	if (status) {
-		dbg("%s - nonzero write bulk status received: %d",
-		    __func__, status);
+		dev_dbg(&port->dev, "%s - nonzero write bulk status received: %d\n",
+			__func__, status);
 		return;
 	}
 
