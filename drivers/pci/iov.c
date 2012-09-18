@@ -152,15 +152,11 @@ failed1:
 static void virtfn_remove(struct pci_dev *dev, int id, int reset)
 {
 	char buf[VIRTFN_ID_LEN];
-	struct pci_bus *bus;
 	struct pci_dev *virtfn;
 	struct pci_sriov *iov = dev->sriov;
 
-	bus = pci_find_bus(pci_domain_nr(dev->bus), virtfn_bus(dev, id));
-	if (!bus)
-		return;
-
-	virtfn = pci_get_slot(bus, virtfn_devfn(dev, id));
+	virtfn = pci_get_domain_bus_and_slot(pci_domain_nr(dev->bus),
+			virtfn_bus(dev, id), virtfn_devfn(dev, id));
 	if (!virtfn)
 		return;
 
@@ -433,8 +429,8 @@ static int sriov_init(struct pci_dev *dev, int pos)
 	struct resource *res;
 	struct pci_dev *pdev;
 
-	if (dev->pcie_type != PCI_EXP_TYPE_RC_END &&
-	    dev->pcie_type != PCI_EXP_TYPE_ENDPOINT)
+	if (pci_pcie_type(dev) != PCI_EXP_TYPE_RC_END &&
+	    pci_pcie_type(dev) != PCI_EXP_TYPE_ENDPOINT)
 		return -ENODEV;
 
 	pci_read_config_word(dev, pos + PCI_SRIOV_CTRL, &ctrl);
@@ -503,7 +499,7 @@ found:
 	iov->self = dev;
 	pci_read_config_dword(dev, pos + PCI_SRIOV_CAP, &iov->cap);
 	pci_read_config_byte(dev, pos + PCI_SRIOV_FUNC_LINK, &iov->link);
-	if (dev->pcie_type == PCI_EXP_TYPE_RC_END)
+	if (pci_pcie_type(dev) == PCI_EXP_TYPE_RC_END)
 		iov->link = PCI_DEVFN(PCI_SLOT(dev->devfn), iov->link);
 
 	if (pdev)
