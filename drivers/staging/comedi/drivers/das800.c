@@ -435,7 +435,7 @@ static irqreturn_t das800_interrupt(int irq, void *d)
 	if (fifo_overflow) {
 		spin_unlock_irqrestore(&dev->spinlock, irq_flags);
 		comedi_error(dev, "DAS800 FIFO overflow");
-		das800_cancel(dev, dev->subdevices + 0);
+		das800_cancel(dev, s);
 		async->events |= COMEDI_CB_ERROR | COMEDI_CB_EOA;
 		comedi_event(dev, s);
 		async->events = 0;
@@ -517,7 +517,7 @@ static int das800_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 		return ret;
 
 	/* analog input subdevice */
-	s = dev->subdevices + 0;
+	s = &dev->subdevices[0];
 	dev->read_subdev = s;
 	s->type = COMEDI_SUBD_AI;
 	s->subdev_flags = SDF_READABLE | SDF_GROUND | SDF_CMD_READ;
@@ -531,7 +531,7 @@ static int das800_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	s->cancel = das800_cancel;
 
 	/* di */
-	s = dev->subdevices + 1;
+	s = &dev->subdevices[1];
 	s->type = COMEDI_SUBD_DI;
 	s->subdev_flags = SDF_READABLE;
 	s->n_chan = 3;
@@ -540,7 +540,7 @@ static int das800_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	s->insn_bits = das800_di_rbits;
 
 	/* do */
-	s = dev->subdevices + 2;
+	s = &dev->subdevices[2];
 	s->type = COMEDI_SUBD_DO;
 	s->subdev_flags = SDF_WRITABLE | SDF_READABLE;
 	s->n_chan = 4;
