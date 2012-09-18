@@ -34,8 +34,9 @@ static void rtc_device_release(struct device *dev)
 #ifdef CONFIG_RTC_HCTOSYS_DEVICE
 /* Result of the last RTC to system clock attempt. */
 int rtc_hctosys_ret = -ENODEV;
+#endif
 
-#ifdef CONFIG_PM
+#if defined(CONFIG_PM) && defined(CONFIG_RTC_HCTOSYS_DEVICE)
 /*
  * On suspend(), measure the delta between one RTC and the
  * system's wall clock; restore it on resume().
@@ -128,7 +129,6 @@ static int rtc_resume(struct device *dev)
 #else
 #define rtc_suspend	NULL
 #define rtc_resume	NULL
-#endif
 #endif
 
 
