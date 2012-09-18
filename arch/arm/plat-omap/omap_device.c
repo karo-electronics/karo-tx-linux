@@ -1,4 +1,3 @@
-
 /*
  * omap_device implementation
  *
@@ -153,21 +152,19 @@ static int _omap_device_activate(struct omap_device *od, u8 ignore_lat)
 		act_lat = timespec_to_ns(&c);
 
 		dev_dbg(&od->pdev->dev,
-			"omap_device: pm_lat %d: activate: elapsed time "
-			"%llu nsec\n", od->pm_lat_level, act_lat);
+			"omap_device: pm_lat %d: activate: elapsed time %llu nsec\n",
+			od->pm_lat_level, act_lat);
 
 		if (act_lat > odpl->activate_lat) {
 			odpl->activate_lat_worst = act_lat;
 			if (odpl->flags & OMAP_DEVICE_LATENCY_AUTO_ADJUST) {
 				odpl->activate_lat = act_lat;
 				dev_dbg(&od->pdev->dev,
-					"new worst case activate latency "
-					"%d: %llu\n",
+					"new worst case activate latency %d: %llu\n",
 					od->pm_lat_level, act_lat);
 			} else
 				dev_warn(&od->pdev->dev,
-					 "activate latency %d "
-					 "higher than exptected. (%llu > %d)\n",
+					 "activate latency %d higher than expected. (%llu > %d)\n",
 					 od->pm_lat_level, act_lat,
 					 odpl->activate_lat);
 		}
@@ -220,21 +217,19 @@ static int _omap_device_deactivate(struct omap_device *od, u8 ignore_lat)
 		deact_lat = timespec_to_ns(&c);
 
 		dev_dbg(&od->pdev->dev,
-			"omap_device: pm_lat %d: deactivate: elapsed time "
-			"%llu nsec\n", od->pm_lat_level, deact_lat);
+			"omap_device: pm_lat %d: deactivate: elapsed time %llu nsec\n",
+			od->pm_lat_level, deact_lat);
 
 		if (deact_lat > odpl->deactivate_lat) {
 			odpl->deactivate_lat_worst = deact_lat;
 			if (odpl->flags & OMAP_DEVICE_LATENCY_AUTO_ADJUST) {
 				odpl->deactivate_lat = deact_lat;
 				dev_dbg(&od->pdev->dev,
-					"new worst case deactivate latency "
-					"%d: %llu\n",
+					"new worst case deactivate latency %d: %llu\n",
 					od->pm_lat_level, deact_lat);
 			} else
 				dev_warn(&od->pdev->dev,
-					 "deactivate latency %d "
-					 "higher than exptected. (%llu > %d)\n",
+					 "deactivate latency %d higher than expected. (%llu > %d)\n",
 					 od->pm_lat_level, deact_lat,
 					 odpl->deactivate_lat);
 		}
@@ -385,17 +380,21 @@ static int _omap_device_notifier_call(struct notifier_block *nb,
 				      unsigned long event, void *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
+	struct omap_device *od;
 
 	switch (event) {
-	case BUS_NOTIFY_ADD_DEVICE:
-		if (pdev->dev.of_node)
-			omap_device_build_from_dt(pdev);
-		break;
-
 	case BUS_NOTIFY_DEL_DEVICE:
 		if (pdev->archdata.od)
 			omap_device_delete(pdev->archdata.od);
 		break;
+	case BUS_NOTIFY_ADD_DEVICE:
+		if (pdev->dev.of_node)
+			omap_device_build_from_dt(pdev);
+		/* fall through */
+	default:
+		od = to_omap_device(pdev);
+		if (od)
+			od->_driver_status = event;
 	}
 
 	return NOTIFY_DONE;
@@ -449,8 +448,8 @@ static int omap_device_count_resources(struct omap_device *od)
 	for (i = 0; i < od->hwmods_cnt; i++)
 		c += omap_hwmod_count_resources(od->hwmods[i]);
 
-	pr_debug("omap_device: %s: counted %d total resources across %d "
-		 "hwmods\n", od->pdev->name, c, od->hwmods_cnt);
+	pr_debug("omap_device: %s: counted %d total resources across %d hwmods\n",
+		 od->pdev->name, c, od->hwmods_cnt);
 
 	return c;
 }
@@ -751,6 +750,10 @@ static int _od_suspend_noirq(struct device *dev)
 	struct platform_device *pdev = to_platform_device(dev);
 	struct omap_device *od = to_omap_device(pdev);
 	int ret;
+
+	/* Don't attempt late suspend on a driver that is not bound */
+	if (od->_driver_status != BUS_NOTIFY_BOUND_DRIVER)
+		return 0;
 
 	ret = pm_generic_suspend_noirq(dev);
 
@@ -1125,3 +1128,41 @@ static int __init omap_device_init(void)
 	return 0;
 }
 core_initcall(omap_device_init);
+
+/**
+ * omap_device_late_idle - idle devices without drivers
+ * @dev: struct device * associated with omap_device
+ * @data: unused
+ *
+ * Check the driver bound status of this device, and idle it
+ * if there is no driver attached.
+ */
+static int __init omap_device_late_idle(struct device *dev, void *data)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct omap_device *od = to_omap_device(pdev);
+
+	if (!od)
+		return 0;
+
+	/*
+	 * If omap_device state is enabled, but has no driver bound,
+	 * idle it.
+	 */
+	if (od->_driver_status != BUS_NOTIFY_BOUND_DRIVER) {
+		if (od->_state == OMAP_DEVICE_STATE_ENABLED) {
+			dev_warn(dev, "%s: enabled but no driver.  Idling\n",
+				 __func__);
+			omap_device_idle(pdev);
+		}
+	}
+
+	return 0;
+}
+
+static int __init omap_device_late_init(void)
+{
+	bus_for_each_dev(&platform_bus_type, NULL, NULL, omap_device_late_idle);
+	return 0;
+}
+late_initcall(omap_device_late_init);
