@@ -627,7 +627,7 @@ static PyObject *pyrf_evsel__open(struct pyrf_evsel *pevsel,
 	 * This will group just the fds for this single evsel, to group
 	 * multiple events, use evlist.open().
 	 */
-	if (perf_evsel__open(evsel, cpus, threads, group, NULL) < 0) {
+	if (perf_evsel__open(evsel, cpus, threads) < 0) {
 		PyErr_SetFromErrno(PyExc_OSError);
 		return NULL;
 	}
@@ -672,7 +672,7 @@ struct pyrf_evlist {
 };
 
 static int pyrf_evlist__init(struct pyrf_evlist *pevlist,
-			     PyObject *args, PyObject *kwargs __used)
+			     PyObject *args, PyObject *kwargs __maybe_unused)
 {
 	PyObject *pcpus = NULL, *pthreads = NULL;
 	struct cpu_map *cpus;
@@ -733,7 +733,8 @@ static PyObject *pyrf_evlist__poll(struct pyrf_evlist *pevlist,
 }
 
 static PyObject *pyrf_evlist__get_pollfd(struct pyrf_evlist *pevlist,
-					 PyObject *args __used, PyObject *kwargs __used)
+					 PyObject *args __maybe_unused,
+					 PyObject *kwargs __maybe_unused)
 {
 	struct perf_evlist *evlist = &pevlist->evlist;
         PyObject *list = PyList_New(0);
@@ -765,7 +766,8 @@ free_list:
 
 
 static PyObject *pyrf_evlist__add(struct pyrf_evlist *pevlist,
-				  PyObject *args, PyObject *kwargs __used)
+				  PyObject *args,
+				  PyObject *kwargs __maybe_unused)
 {
 	struct perf_evlist *evlist = &pevlist->evlist;
 	PyObject *pevsel;
@@ -824,7 +826,10 @@ static PyObject *pyrf_evlist__open(struct pyrf_evlist *pevlist,
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|OOii", kwlist, &group))
 		return NULL;
 
-	if (perf_evlist__open(evlist, group) < 0) {
+	if (group)
+		perf_evlist__set_leader(evlist);
+
+	if (perf_evlist__open(evlist) < 0) {
 		PyErr_SetFromErrno(PyExc_OSError);
 		return NULL;
 	}
