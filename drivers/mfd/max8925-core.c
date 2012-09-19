@@ -23,7 +23,7 @@ static struct resource backlight_resources[] = {
 		.name	= "max8925-backlight",
 		.start	= MAX8925_WLED_MODE_CNTL,
 		.end	= MAX8925_WLED_CNTL,
-		.flags	= IORESOURCE_IO,
+		.flags	= IORESOURCE_REG,
 	},
 };
 
@@ -41,7 +41,7 @@ static struct resource touch_resources[] = {
 		.name	= "max8925-tsc",
 		.start	= MAX8925_TSC_IRQ,
 		.end	= MAX8925_ADC_RES_END,
-		.flags	= IORESOURCE_IO,
+		.flags	= IORESOURCE_REG,
 	},
 };
 
@@ -59,7 +59,7 @@ static struct resource power_supply_resources[] = {
 		.name	= "max8925-power",
 		.start	= MAX8925_CHG_IRQ1,
 		.end	= MAX8925_CHG_IRQ1_MASK,
-		.flags	= IORESOURCE_IO,
+		.flags	= IORESOURCE_REG,
 	},
 };
 
@@ -117,7 +117,7 @@ static struct mfd_cell onkey_devs[] = {
 {						\
 	.start	= MAX8925_##_start,		\
 	.end	= MAX8925_##_end,		\
-	.flags	= IORESOURCE_IO,		\
+	.flags	= IORESOURCE_REG,		\
 }
 
 static struct resource regulator_resources[] = {
