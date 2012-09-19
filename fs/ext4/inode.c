@@ -574,7 +574,16 @@ int ext4_map_blocks(handle_t *handle, struct inode *inode,
 		up_read((&EXT4_I(inode)->i_data_sem));
 
 	if (retval > 0 && map->m_flags & EXT4_MAP_MAPPED) {
-		int ret = check_block_validity(inode, map);
+		int ret;
+		if (flags & EXT4_GET_BLOCKS_DELALLOC_RESERVE) {
+			/* delayed alloc may be allocated by fallocate and
+			 * coverted to initialized by directIO.
+			 * we need to handle delayed extent here.
+			 */
+			down_write((&EXT4_I(inode)->i_data_sem));
+			goto delayed_mapped;
+		}
+		ret = check_block_validity(inode, map);
 		if (ret != 0)
 			return ret;
 	}
@@ -656,8 +665,16 @@ int ext4_map_blocks(handle_t *handle, struct inode *inode,
 		 * set the BH_Da_Mapped bit on them. Its important to do this
 		 * under the protection of i_data_sem.
 		 */
-		if (retval > 0 && map->m_flags & EXT4_MAP_MAPPED)
+		if (retval > 0 && map->m_flags & EXT4_MAP_MAPPED) {
+			int ret;
 			set_buffers_da_mapped(inode, map);
+delayed_mapped:
+			/* delayed allocation blocks has been allocated */
+			ret = ext4_es_remove_extent(inode, map->m_lblk,
+						    map->m_len);
+			if (ret < 0)
+				retval = ret;
+		}
 	}
 
 	up_write((&EXT4_I(inode)->i_data_sem));
@@ -1781,6 +1798,7 @@ static int ext4_da_map_blocks(struct inode *inode, sector_t iblock,
 			      struct buffer_head *bh)
 {
 	int retval;
+	int ret;
 	sector_t invalid_block = ~((sector_t) 0xffff);
 
 	if (invalid_block < ext4_blocks_count(EXT4_SB(inode->i_sb)->s_es))
@@ -1826,6 +1844,14 @@ static int ext4_da_map_blocks(struct inode *inode, sector_t iblock,
 
 out_unlock:
 	up_read((&EXT4_I(inode)->i_data_sem));
+
+	if (retval == 0) {
+		down_write((&EXT4_I(inode)->i_data_sem));
+		ret = ext4_es_insert_extent(inode, map->m_lblk, map->m_len);
+		up_write((&EXT4_I(inode)->i_data_sem));
+		if (ret)
+			return ret;
+	}
 
 	return retval;
 }
