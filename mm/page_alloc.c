@@ -368,8 +368,7 @@ static int destroy_compound_page(struct page *page, unsigned long order)
 	int nr_pages = 1 << order;
 	int bad = 0;
 
-	if (unlikely(compound_order(page) != order) ||
-	    unlikely(!PageHead(page))) {
+	if (unlikely(compound_order(page) != order)) {
 		bad_page(page);
 		bad++;
 	}
@@ -672,8 +671,10 @@ static void free_pcppages_bulk(struct zone *zone, int count,
 			/* must delete as __free_one_page list manipulates */
 			list_del(&page->lru);
 			/* MIGRATE_MOVABLE list may include MIGRATE_RESERVEs */
-			__free_one_page(page, zone, 0, page_private(page));
-			trace_mm_page_pcpu_drain(page, 0, page_private(page));
+			__free_one_page(page, zone, 0,
+				get_freepage_migratetype(page));
+			trace_mm_page_pcpu_drain(page, 0,
+				get_freepage_migratetype(page));
 		} while (--to_free && --batch_free && !list_empty(list));
 	}
 	__mod_zone_page_state(zone, NR_FREE_PAGES, count);
@@ -722,6 +723,7 @@ static void __free_pages_ok(struct page *page, unsigned int order)
 {
 	unsigned long flags;
 	int wasMlocked = __TestClearPageMlocked(page);
+	int migratetype;
 
 	if (!free_pages_prepare(page, order))
 		return;
@@ -730,8 +732,9 @@ static void __free_pages_ok(struct page *page, unsigned int order)
 	if (unlikely(wasMlocked))
 		free_page_mlock(page);
 	__count_vm_events(PGFREE, 1 << order);
-	free_one_page(page_zone(page), page, order,
-					get_pageblock_migratetype(page));
+	migratetype = get_pageblock_migratetype(page);
+	set_freepage_migratetype(page, migratetype);
+	free_one_page(page_zone(page), page, order, migratetype);
 	local_irq_restore(flags);
 }
 
@@ -915,7 +918,7 @@ static int fallbacks[MIGRATE_TYPES][4] = {
  * Note that start_page and end_pages are not aligned on a pageblock
  * boundary. If alignment is required, use move_freepages_block()
  */
-static int move_freepages(struct zone *zone,
+int move_freepages(struct zone *zone,
 			  struct page *start_page, struct page *end_page,
 			  int migratetype)
 {
@@ -951,6 +954,7 @@ static int move_freepages(struct zone *zone,
 		order = page_order(page);
 		list_move(&page->lru,
 			  &zone->free_area[order].free_list[migratetype]);
+		set_freepage_migratetype(page, migratetype);
 		page += 1 << order;
 		pages_moved += 1 << order;
 	}
@@ -1135,7 +1139,7 @@ static int rmqueue_bulk(struct zone *zone, unsigned int order,
 			if (!is_migrate_cma(mt) && mt != MIGRATE_ISOLATE)
 				mt = migratetype;
 		}
-		set_page_private(page, mt);
+		set_freepage_migratetype(page, mt);
 		list = &page->lru;
 	}
 	__mod_zone_page_state(zone, NR_FREE_PAGES, -(i << order));
@@ -1302,7 +1306,7 @@ void free_hot_cold_page(struct page *page, int cold)
 		return;
 
 	migratetype = get_pageblock_migratetype(page);
-	set_page_private(page, migratetype);
+	set_freepage_migratetype(page, migratetype);
 	local_irq_save(flags);
 	if (unlikely(wasMlocked))
 		free_page_mlock(page);
@@ -1380,16 +1384,11 @@ void split_page(struct page *page, unsigned int order)
 }
 
 /*
- * Similar to split_page except the page is already free. As this is only
- * being used for migration, the migratetype of the block also changes.
- * As this is called with interrupts disabled, the caller is responsible
- * for calling arch_alloc_page() and kernel_map_page() after interrupts
- * are enabled.
- *
- * Note: this is probably too low level an operation for use in drivers.
- * Please consult with lkml before using this in your driver.
+ * Similar to the split_page family of functions except that the page
+ * required at the given order and being isolated now to prevent races
+ * with parallel allocators
  */
-int split_free_page(struct page *page)
+int capture_free_page(struct page *page, int alloc_order, int migratetype)
 {
 	unsigned int order;
 	unsigned long watermark;
@@ -1411,10 +1410,11 @@ int split_free_page(struct page *page)
 	rmv_page_order(page);
 	__mod_zone_page_state(zone, NR_FREE_PAGES, -(1UL << order));
 
-	/* Split into individual pages */
-	set_page_refcounted(page);
-	split_page(page, order);
+	if (alloc_order != order)
+		expand(zone, page, alloc_order, order,
+			&zone->free_area[order], migratetype);
 
+	/* Set the pageblock if the captured page is at least a pageblock */
 	if (order >= pageblock_order - 1) {
 		struct page *endpage = page + (1 << order) - 1;
 		for (; page < endpage; page += pageblock_nr_pages) {
@@ -1425,7 +1425,35 @@ int split_free_page(struct page *page)
 		}
 	}
 
-	return 1 << order;
+	return 1UL << order;
+}
+
+/*
+ * Similar to split_page except the page is already free. As this is only
+ * being used for migration, the migratetype of the block also changes.
+ * As this is called with interrupts disabled, the caller is responsible
+ * for calling arch_alloc_page() and kernel_map_page() after interrupts
+ * are enabled.
+ *
+ * Note: this is probably too low level an operation for use in drivers.
+ * Please consult with lkml before using this in your driver.
+ */
+int split_free_page(struct page *page)
+{
+	unsigned int order;
+	int nr_pages;
+
+	BUG_ON(!PageBuddy(page));
+	order = page_order(page);
+
+	nr_pages = capture_free_page(page, order, 0);
+	if (!nr_pages)
+		return 0;
+
+	/* Split into individual pages */
+	set_page_refcounted(page);
+	split_page(page, order);
+	return nr_pages;
 }
 
 /*
@@ -2105,7 +2133,7 @@ __alloc_pages_direct_compact(gfp_t gfp_mask, unsigned int order,
 	bool *contended_compaction, bool *deferred_compaction,
 	unsigned long *did_some_progress)
 {
-	struct page *page;
+	struct page *page = NULL;
 
 	if (!order)
 		return NULL;
@@ -2118,10 +2146,16 @@ __alloc_pages_direct_compact(gfp_t gfp_mask, unsigned int order,
 	current->flags |= PF_MEMALLOC;
 	*did_some_progress = try_to_compact_pages(zonelist, order, gfp_mask,
 						nodemask, sync_migration,
-						contended_compaction);
+						contended_compaction, &page);
 	current->flags &= ~PF_MEMALLOC;
-	if (*did_some_progress != COMPACT_SKIPPED) {
 
+	/* If compaction captured a page, prep and use it */
+	if (page) {
+		prep_new_page(page, order, gfp_mask);
+		goto got_page;
+	}
+
+	if (*did_some_progress != COMPACT_SKIPPED) {
 		/* Page migration frees to the PCP lists but we want merging */
 		drain_pages(get_cpu());
 		put_cpu();
@@ -2131,6 +2165,7 @@ __alloc_pages_direct_compact(gfp_t gfp_mask, unsigned int order,
 				alloc_flags & ~ALLOC_NO_WATERMARKS,
 				preferred_zone, migratetype);
 		if (page) {
+got_page:
 			preferred_zone->compact_considered = 0;
 			preferred_zone->compact_defer_shift = 0;
 			if (order >= preferred_zone->compact_order_failed)
@@ -2362,9 +2397,8 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 		goto nopage;
 
 restart:
-	if (!(gfp_mask & __GFP_NO_KSWAPD))
-		wake_all_kswapd(order, zonelist, high_zoneidx,
-						zone_idx(preferred_zone));
+	wake_all_kswapd(order, zonelist, high_zoneidx,
+					zone_idx(preferred_zone));
 
 	/*
 	 * OK, we're below the kswapd watermark and have kicked background
@@ -2441,7 +2475,7 @@ rebalance:
 	 * system then fail the allocation instead of entering direct reclaim.
 	 */
 	if ((deferred_compaction || contended_compaction) &&
-						(gfp_mask & __GFP_NO_KSWAPD))
+	    (gfp_mask & (__GFP_MOVABLE|__GFP_REPEAT)) == __GFP_MOVABLE)
 		goto nopage;
 
 	/* Try direct reclaim and then allocating */
@@ -4879,7 +4913,7 @@ void __init free_area_init_nodes(unsigned long *max_zone_pfn)
 			       zone_movable_pfn[i] << PAGE_SHIFT);
 	}
 
-	/* Print out the early_node_map[] */
+	/* Print out the early node map */
 	printk("Early memory node ranges\n");
 	for_each_mem_pfn_range(i, MAX_NUMNODES, &start_pfn, &end_pfn, &nid)
 		printk("  node %3d: [mem %#010lx-%#010lx]\n", nid,
@@ -5619,18 +5653,6 @@ static unsigned long pfn_max_align_up(unsigned long pfn)
 				pageblock_nr_pages));
 }
 
-static struct page *
-__alloc_contig_migrate_alloc(struct page *page, unsigned long private,
-			     int **resultp)
-{
-	gfp_t gfp_mask = GFP_USER | __GFP_MOVABLE;
-
-	if (PageHighMem(page))
-		gfp_mask |= __GFP_HIGHMEM;
-
-	return alloc_page(gfp_mask);
-}
-
 /* [start, end) must belong to a single zone. */
 static int __alloc_contig_migrate_range(unsigned long start, unsigned long end)
 {
@@ -5670,8 +5692,10 @@ static int __alloc_contig_migrate_range(unsigned long start, unsigned long end)
 			break;
 		}
 
+		reclaim_clean_pages_from_list(cc.zone, &cc.migratepages);
+
 		ret = migrate_pages(&cc.migratepages,
-				    __alloc_contig_migrate_alloc,
+				    alloc_migrate_target,
 				    0, false, MIGRATE_SYNC);
 	}
 

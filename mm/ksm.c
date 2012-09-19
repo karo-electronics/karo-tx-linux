@@ -1469,9 +1469,13 @@ int ksm_madvise(struct vm_area_struct *vma, unsigned long start,
 		 */
 		if (*vm_flags & (VM_MERGEABLE | VM_SHARED  | VM_MAYSHARE   |
 				 VM_PFNMAP    | VM_IO      | VM_DONTEXPAND |
-				 VM_RESERVED  | VM_HUGETLB | VM_INSERTPAGE |
-				 VM_NONLINEAR | VM_MIXEDMAP | VM_SAO))
+				 VM_HUGETLB | VM_NONLINEAR | VM_MIXEDMAP))
 			return 0;		/* just ignore the advice */
+
+#ifdef VM_SAO
+		if (*vm_flags & VM_SAO)
+			return 0;
+#endif
 
 		if (!test_bit(MMF_VM_MERGEABLE, &mm->flags)) {
 			err = __ksm_enter(mm);
@@ -1614,7 +1618,8 @@ again:
 		struct vm_area_struct *vma;
 
 		anon_vma_lock(anon_vma);
-		list_for_each_entry(vmac, &anon_vma->head, same_anon_vma) {
+		anon_vma_interval_tree_foreach(vmac, &anon_vma->rb_root,
+					       0, ULONG_MAX) {
 			vma = vmac->vma;
 			if (rmap_item->address < vma->vm_start ||
 			    rmap_item->address >= vma->vm_end)
@@ -1667,7 +1672,8 @@ again:
 		struct vm_area_struct *vma;
 
 		anon_vma_lock(anon_vma);
-		list_for_each_entry(vmac, &anon_vma->head, same_anon_vma) {
+		anon_vma_interval_tree_foreach(vmac, &anon_vma->rb_root,
+					       0, ULONG_MAX) {
 			vma = vmac->vma;
 			if (rmap_item->address < vma->vm_start ||
 			    rmap_item->address >= vma->vm_end)
@@ -1719,7 +1725,8 @@ again:
 		struct vm_area_struct *vma;
 
 		anon_vma_lock(anon_vma);
-		list_for_each_entry(vmac, &anon_vma->head, same_anon_vma) {
+		anon_vma_interval_tree_foreach(vmac, &anon_vma->rb_root,
+					       0, ULONG_MAX) {
 			vma = vmac->vma;
 			if (rmap_item->address < vma->vm_start ||
 			    rmap_item->address >= vma->vm_end)

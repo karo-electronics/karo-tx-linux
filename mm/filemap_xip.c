@@ -167,7 +167,6 @@ __xip_unmap (struct address_space * mapping,
 {
 	struct vm_area_struct *vma;
 	struct mm_struct *mm;
-	struct prio_tree_iter iter;
 	unsigned long address;
 	pte_t *pte;
 	pte_t pteval;
@@ -184,7 +183,7 @@ __xip_unmap (struct address_space * mapping,
 
 retry:
 	mutex_lock(&mapping->i_mmap_mutex);
-	vma_prio_tree_foreach(vma, &iter, &mapping->i_mmap, pgoff, pgoff) {
+	vma_interval_tree_foreach(vma, &mapping->i_mmap, pgoff, pgoff) {
 		mm = vma->vm_mm;
 		address = vma->vm_start +
 			((pgoff - vma->vm_pgoff) << PAGE_SHIFT);
@@ -305,6 +304,7 @@ out:
 static const struct vm_operations_struct xip_file_vm_ops = {
 	.fault	= xip_file_fault,
 	.page_mkwrite	= filemap_page_mkwrite,
+	.remap_pages = generic_file_remap_pages,
 };
 
 int xip_file_mmap(struct file * file, struct vm_area_struct * vma)
@@ -313,7 +313,7 @@ int xip_file_mmap(struct file * file, struct vm_area_struct * vma)
 
 	file_accessed(file);
 	vma->vm_ops = &xip_file_vm_ops;
-	vma->vm_flags |= VM_CAN_NONLINEAR | VM_MIXEDMAP;
+	vma->vm_flags |= VM_MIXEDMAP;
 	return 0;
 }
 EXPORT_SYMBOL_GPL(xip_file_mmap);
