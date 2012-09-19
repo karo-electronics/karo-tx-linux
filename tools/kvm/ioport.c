@@ -21,7 +21,6 @@ DEFINE_MUTEX(ioport_mutex);
 static u16			free_io_port_idx; /* protected by ioport_mutex */
 
 static struct rb_root		ioport_tree = RB_ROOT;
-bool				ioport_debug;
 
 static u16 ioport__find_free_port(void)
 {
@@ -56,12 +55,12 @@ static void ioport_remove(struct rb_root *root, struct ioport *data)
 	rb_int_erase(root, &data->node);
 }
 
-int ioport__register(u16 port, struct ioport_operations *ops, int count, void *param)
+int ioport__register(struct kvm *kvm, u16 port, struct ioport_operations *ops, int count, void *param)
 {
 	struct ioport *entry;
 	int r;
 
-	br_write_lock();
+	br_write_lock(kvm);
 	if (port == IOPORT_EMPTY)
 		port = ioport__find_free_port();
 
@@ -84,20 +83,20 @@ int ioport__register(u16 port, struct ioport_operations *ops, int count, void *p
 	r = ioport_insert(&ioport_tree, entry);
 	if (r < 0) {
 		free(entry);
-		br_write_unlock();
+		br_write_unlock(kvm);
 		return r;
 	}
-	br_write_unlock();
+	br_write_unlock(kvm);
 
 	return port;
 }
 
-int ioport__unregister(u16 port)
+int ioport__unregister(struct kvm *kvm, u16 port)
 {
 	struct ioport *entry;
 	int r;
 
-	br_write_lock();
+	br_write_lock(kvm);
 
 	r = -ENOENT;
 	entry = ioport_search(&ioport_tree, port);
@@ -111,7 +110,7 @@ int ioport__unregister(u16 port)
 	r = 0;
 
 done:
-	br_write_unlock();
+	br_write_unlock(kvm);
 
 	return r;
 }
@@ -177,19 +176,23 @@ bool kvm__emulate_io(struct kvm *kvm, u16 port, void *data, int direction, int s
 error:
 	br_read_unlock();
 
-	if (ioport_debug)
+	if (kvm->cfg.ioport_debug)
 		ioport_error(port, data, direction, size, count);
 
-	return !ioport_debug;
+	return !kvm->cfg.ioport_debug;
 }
 
 int ioport__init(struct kvm *kvm)
 {
+	ioport__setup_arch(kvm);
+
 	return 0;
 }
+dev_base_init(ioport__init);
 
 int ioport__exit(struct kvm *kvm)
 {
 	ioport__unregister_all();
 	return 0;
 }
+dev_base_exit(ioport__exit);

@@ -62,13 +62,16 @@ static void virtio_console__inject_interrupt_callback(struct kvm *kvm, void *par
 	u16 head;
 	int len;
 
+	if (kvm->cfg.active_console != CONSOLE_VIRTIO)
+		return;
+
 	mutex_lock(&cdev.mutex);
 
 	vq = param;
 
-	if (term_readable(CONSOLE_VIRTIO, 0) && virt_queue__available(vq)) {
+	if (term_readable(0) && virt_queue__available(vq)) {
 		head = virt_queue__get_iov(vq, iov, &out, &in, kvm);
-		len = term_getc_iov(CONSOLE_VIRTIO, iov, in, 0);
+		len = term_getc_iov(kvm, iov, in, 0);
 		virt_queue__set_used_elem(vq, head, len);
 		cdev.vdev.ops->signal_vq(kvm, &cdev.vdev, vq - cdev.vqs);
 	}
@@ -99,7 +102,10 @@ static void virtio_console_handle_callback(struct kvm *kvm, void *param)
 
 	while (virt_queue__available(vq)) {
 		head = virt_queue__get_iov(vq, iov, &out, &in, kvm);
-		len = term_putc_iov(CONSOLE_VIRTIO, iov, out, 0);
+		if (kvm->cfg.active_console == CONSOLE_VIRTIO)
+			len = term_putc_iov(iov, out, 0);
+		else
+			len = 0;
 		virt_queue__set_used_elem(vq, head, len);
 	}
 
@@ -176,10 +182,22 @@ static struct virtio_ops con_dev_virtio_ops = (struct virtio_ops) {
 	.get_size_vq		= get_size_vq,
 };
 
-void virtio_console__init(struct kvm *kvm)
+int virtio_console__init(struct kvm *kvm)
 {
+	if (kvm->cfg.active_console != CONSOLE_VIRTIO)
+		return 0;
+
 	virtio_init(kvm, &cdev, &cdev.vdev, &con_dev_virtio_ops,
 		    VIRTIO_PCI, PCI_DEVICE_ID_VIRTIO_CONSOLE, VIRTIO_ID_CONSOLE, PCI_CLASS_CONSOLE);
 	if (compat_id == -1)
 		compat_id = virtio_compat_add_message("virtio-console", "CONFIG_VIRTIO_CONSOLE");
+
+	return 0;
 }
+virtio_dev_init(virtio_console__init);
+
+int virtio_console__exit(struct kvm *kvm)
+{
+	return 0;
+}
+virtio_dev_exit(virtio_console__exit);

@@ -1,4 +1,5 @@
 #include "kvm/framebuffer.h"
+#include "kvm/kvm.h"
 
 #include <linux/kernel.h>
 #include <linux/list.h>
@@ -44,7 +45,7 @@ static int start_targets(struct framebuffer *fb)
 	return 0;
 }
 
-int fb__start(void)
+int fb__init(struct kvm *kvm)
 {
 	struct framebuffer *fb;
 
@@ -58,8 +59,9 @@ int fb__start(void)
 
 	return 0;
 }
+firmware_init(fb__init);
 
-void fb__stop(void)
+int fb__exit(struct kvm *kvm)
 {
 	struct framebuffer *fb;
 
@@ -72,4 +74,7 @@ void fb__stop(void)
 
 		munmap(fb->mem, fb->mem_size);
 	}
+
+	return 0;
 }
+firmware_exit(fb__exit);
