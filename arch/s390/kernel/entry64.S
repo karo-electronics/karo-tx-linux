@@ -360,34 +360,15 @@ ENTRY(ret_from_fork)
 	ssm	__LC_SVC_NEW_PSW	# reenable interrupts
 	j	sysc_tracenogo
 
-#
-# kernel_execve function needs to deal with pt_regs that is not
-# at the usual place
-#
-ENTRY(kernel_execve)
-	stmg	%r12,%r15,96(%r15)
-	lgr	%r14,%r15
-	aghi	%r15,-(STACK_FRAME_OVERHEAD + __PT_SIZE)
-	stg	%r14,__SF_BACKCHAIN(%r15)
-	la	%r12,STACK_FRAME_OVERHEAD(%r15)
-	xc	0(__PT_SIZE,%r12),0(%r12)
-	lgr	%r5,%r12
-	brasl	%r14,do_execve
-	ltgfr	%r2,%r2
-	je	0f
-	aghi	%r15,(STACK_FRAME_OVERHEAD + __PT_SIZE)
-	lmg	%r12,%r15,96(%r15)
-	br	%r14
-	# execve succeeded.
-0:	ssm	__LC_PGM_NEW_PSW	# disable I/O and ext. interrupts
-	lg	%r15,__LC_KERNEL_STACK	# load ksp
-	aghi	%r15,-(STACK_FRAME_OVERHEAD + __PT_SIZE)
-	la	%r11,STACK_FRAME_OVERHEAD(%r15)
-	mvc	0(__PT_SIZE,%r11),0(%r12)	# copy pt_regs
-	lg	%r12,__LC_THREAD_INFO
+ENTRY(ret_from_kernel_execve)
+	ssm	__LC_PGM_NEW_PSW	# disable I/O and ext. interrupts
+	mvc	0(__PT_SIZE,%r2),0(%r3)	# copy pt_regs
+	lgr	%r15,%r2
+	lgr	%r11,%r2
+	aghi	%r15,-STACK_FRAME_OVERHEAD
 	xc	__SF_BACKCHAIN(8,%r15),__SF_BACKCHAIN(%r15)
+	lg	%r12,__LC_THREAD_INFO
 	ssm	__LC_SVC_NEW_PSW	# reenable interrupts
-	brasl	%r14,execve_tail
 	j	sysc_return
 
 /*
