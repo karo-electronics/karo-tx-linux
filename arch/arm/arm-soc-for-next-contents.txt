@@ -95,6 +95,7 @@ devel/led-driver	git://git.kernel.org/pub/scm/linux/kernel/git/cooloney/linux-le
 at91/mci	git://github.com/at91linux/linux-at91 at91-for-next-soc
 drivers/ocp2scp	patches from Kishon Vijay Abraham I <kishon@ti.com>
 		+ http://marc.info/?l=linux-next&m=134574365000518&w=2
+		+ http://lkml.org/lkml/2012/9/14/135
 tegra/drivers-i2c	git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-drivers-i2c
 
 next/boards:
