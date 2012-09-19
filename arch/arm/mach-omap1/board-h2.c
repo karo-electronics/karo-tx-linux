@@ -32,6 +32,7 @@
 #include <linux/smc91x.h>
 #include <linux/omapfb.h>
 #include <linux/leds.h>
+#include <linux/platform_data/gpio-omap.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>

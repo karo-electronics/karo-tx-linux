@@ -43,6 +43,8 @@ omap/atag-cleanup   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-o
 omap/cleanup-sparseirq git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-cleanup-sparseirq-for-v3.7
 			depends on depends/tty-omap-serial
 omap/cleanup-makefile-sparse git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-cleanup-makefile-sparse-for-v3.7
+omap/cleanup-fixes     git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/cleanup-fixes-for-v3.7
+
 
 next/maintainers:
 [email]		  Entry for ks8695 from Arnd
