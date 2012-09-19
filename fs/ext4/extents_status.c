@@ -13,6 +13,8 @@
 #include "extents_status.h"
 #include "ext4_extents.h"
 
+#include <trace/events/ext4.h>
+
 /*
  * extents status tree implementation for ext4.
  *
@@ -191,6 +193,8 @@ ext4_lblk_t ext4_es_find_extent(struct inode *inode, struct extent_status *es)
 	struct rb_node *node;
 	ext4_lblk_t ret = EXT_MAX_BLOCKS;
 
+	trace_ext4_es_find_extent_enter(inode, es->start);
+
 	tree = &EXT4_I(inode)->i_es_tree;
 
 	/* find delay extent in cache */
@@ -217,6 +221,8 @@ out:
 			ret = es1->start;
 		}
 	}
+
+	trace_ext4_es_find_extent_exit(inode, es, ret);
 
 	return ret;
 }
@@ -297,6 +303,7 @@ int ext4_es_insert_extent(struct inode *inode, ext4_lblk_t offset,
 	ext4_lblk_t end = offset + len - 1;
 
 	BUG_ON(end < offset);
+	trace_ext4_es_insert_extent(inode, offset, len);
 
 	es = tree->cache_es;
 	es_debug("add [%u/%u) to extent status tree of inode %lu\n",
@@ -367,6 +374,7 @@ int ext4_es_remove_extent(struct inode *inode, ext4_lblk_t offset,
 	struct extent_status orig_es;
 	ext4_lblk_t len1, len2, end;
 
+	trace_ext4_es_remove_extent(inode, offset, len);
 	es_debug("remove [%u/%u) from extent status tree of inode %lu\n",
 		 offset, len, inode->i_ino);
 
