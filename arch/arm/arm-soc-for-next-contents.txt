@@ -37,6 +37,8 @@ imx/cleanup	  git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-cleanup
 msm/cleanup	  git://git.kernel.org/pub/scm/linux/kernel/git/davidb/linux-msm.git tags/msm-cleanup-for-3.7
 tegra/cleanup	  git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-cleanup
 tegra/board-removal git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-board-removal
+		+patch for omap platform-data headers from Arnd
+
 			depends on depends/tps6589x-dt
 omap/gpmc-cleanup   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-gpmc-fixed-for-v3.7
 omap/atag-cleanup   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/cleanup-omap-tags-for-v3.7
