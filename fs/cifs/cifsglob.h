@@ -179,6 +179,7 @@ struct smb_rqst {
 enum smb_version {
 	Smb_1 = 1,
 	Smb_21,
+	Smb_30,
 };
 
 struct mid_q_entry;
@@ -1498,4 +1499,7 @@ extern struct smb_version_values smb1_values;
 #define SMB21_VERSION_STRING	"2.1"
 extern struct smb_version_operations smb21_operations;
 extern struct smb_version_values smb21_values;
+#define SMB30_VERSION_STRING	"3.0"
+/*extern struct smb_version_operations smb30_operations; */ /* not needed yet */
+extern struct smb_version_values smb30_values;
 #endif	/* _CIFS_GLOB_H */
