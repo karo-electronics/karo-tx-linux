@@ -9,6 +9,7 @@ config CIFS
 	select CRYPTO_ARC4
 	select CRYPTO_ECB
 	select CRYPTO_DES
+	select CRYPTO_SHA256
 	help
 	  This is the client VFS module for the Common Internet File System
 	  (CIFS) protocol which is the successor to the Server Message Block
@@ -161,7 +162,7 @@ config CIFS_NFSD_EXPORT
 
 config CIFS_SMB2
 	bool "SMB2 network file system support (EXPERIMENTAL)"
-	depends on EXPERIMENTAL && INET && BROKEN
+	depends on EXPERIMENTAL && INET
 	select NLS
 	select KEYS
 	select FSCACHE
