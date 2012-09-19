@@ -732,11 +732,13 @@ struct buffer_head *ext4_getblk(handle_t *handle, struct inode *inode,
 	err = ext4_map_blocks(handle, inode, &map,
 			      create ? EXT4_GET_BLOCKS_CREATE : 0);
 
+	/* ensure we send some value back into *errp */
+	*errp = 0;
+
 	if (err < 0)
 		*errp = err;
 	if (err <= 0)
 		return NULL;
-	*errp = 0;
 
 	bh = sb_getblk(inode->i_sb, map.m_pblk);
 	if (!bh) {
@@ -1953,9 +1955,6 @@ static int __ext4_journalled_writepage(struct page *page,
 out:
 	return ret;
 }
-
-static int ext4_set_bh_endio(struct buffer_head *bh, struct inode *inode);
-static void ext4_end_io_buffer_write(struct buffer_head *bh, int uptodate);
 
 /*
  * Note that we don't need to start a transaction unless we're journaling data

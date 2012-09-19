@@ -55,6 +55,13 @@ static struct buffer_head *ext4_append(handle_t *handle,
 {
 	struct buffer_head *bh;
 
+	if (unlikely(EXT4_SB(inode->i_sb)->s_max_dir_size_kb &&
+		     ((inode->i_size >> 10) >=
+		      EXT4_SB(inode->i_sb)->s_max_dir_size_kb))) {
+		*err = -ENOSPC;
+		return NULL;
+	}
+
 	*block = inode->i_size >> inode->i_sb->s_blocksize_bits;
 
 	bh = ext4_bread(handle, inode, *block, 1, err);
@@ -839,7 +846,7 @@ static int htree_dirblock_to_tree(struct file *dir_file,
 {
 	struct buffer_head *bh;
 	struct ext4_dir_entry_2 *de, *top;
-	int err, count = 0;
+	int err = 0, count = 0;
 
 	dxtrace(printk(KERN_INFO "In htree dirblock_to_tree: block %lu\n",
 							(unsigned long)block));
@@ -2362,7 +2369,7 @@ int ext4_orphan_add(handle_t *handle, struct inode *inode)
 	struct ext4_iloc iloc;
 	int err = 0, rc;
 
-	if (!ext4_handle_valid(handle))
+	if (!EXT4_SB(sb)->s_journal)
 		return 0;
 
 	mutex_lock(&EXT4_SB(sb)->s_orphan_lock);
@@ -2436,8 +2443,7 @@ int ext4_orphan_del(handle_t *handle, struct inode *inode)
 	struct ext4_iloc iloc;
 	int err = 0;
 
-	/* ext4_handle_valid() assumes a valid handle_t pointer */
-	if (handle && !ext4_handle_valid(handle))
+	if (!EXT4_SB(inode->i_sb)->s_journal)
 		return 0;
 
 	mutex_lock(&EXT4_SB(inode->i_sb)->s_orphan_lock);
@@ -2456,7 +2462,7 @@ int ext4_orphan_del(handle_t *handle, struct inode *inode)
 	 * transaction handle with which to update the orphan list on
 	 * disk, but we still need to remove the inode from the linked
 	 * list in memory. */
-	if (sbi->s_journal && !handle)
+	if (!handle)
 		goto out;
 
 	err = ext4_reserve_inode_write(handle, inode, &iloc);
