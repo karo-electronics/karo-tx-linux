@@ -854,6 +854,10 @@ static void ops_run_biofill(struct stripe_head *sh)
 			dev->read = rbi = dev->toread;
 			dev->toread = NULL;
 			spin_unlock_irq(&sh->stripe_lock);
+
+			if (test_and_clear_bit(R5_WantZeroFill, &dev->flags))
+				memset(page_address(dev->page), 0, STRIPE_SIZE);
+
 			while (rbi && rbi->bi_sector <
 				dev->sector + STRIPE_SECTORS) {
 				tx = async_copy_data(0, rbi, dev->page,
@@ -923,9 +927,16 @@ ops_run_compute5(struct stripe_head *sh, struct raid5_percpu *percpu)
 		__func__, (unsigned long long)sh->sector, target);
 	BUG_ON(!test_bit(R5_Wantcompute, &tgt->flags));
 
-	for (i = disks; i--; )
-		if (i != target)
+	for (i = disks; i--; ) {
+		if (i != target) {
 			xor_srcs[count++] = sh->dev[i].page;
+			if (test_and_clear_bit(R5_WantZeroFill,
+			   &sh->dev[i].flags))
+				memset(page_address(sh->dev[i].page), 0,
+					STRIPE_SIZE);
+		}
+		clear_bit(R5_WantZeroFill, &sh->dev[i].flags);
+	}
 
 	atomic_inc(&sh->count);
 
@@ -1002,6 +1013,10 @@ ops_run_compute6_1(struct stripe_head *sh, struct raid5_percpu *percpu)
 
 	atomic_inc(&sh->count);
 
+	for (i = 0; i < sh->disks; i++)
+		if (test_and_clear_bit(R5_WantZeroFill, &sh->dev[i].flags))
+			memset(page_address(sh->dev[i].page), 0, STRIPE_SIZE);
+
 	if (target == qd_idx) {
 		count = set_syndrome_sources(blocks, sh);
 		blocks[count] = NULL; /* regenerating p is not necessary */
@@ -1052,8 +1067,11 @@ ops_run_compute6_2(struct stripe_head *sh, struct raid5_percpu *percpu)
 	/* we need to open-code set_syndrome_sources to handle the
 	 * slot number conversion for 'faila' and 'failb'
 	 */
-	for (i = 0; i < disks ; i++)
+	for (i = 0; i < disks ; i++) {
 		blocks[i] = NULL;
+		if (test_and_clear_bit(R5_WantZeroFill, &sh->dev[i].flags))
+			memset(page_address(sh->dev[i].page), 0, STRIPE_SIZE);
+	}
 	count = 0;
 	i = d0_idx;
 	do {
@@ -1164,6 +1182,9 @@ ops_run_prexor(struct stripe_head *sh, struct raid5_percpu *percpu,
 		/* Only process blocks that are known to be uptodate */
 		if (test_bit(R5_Wantdrain, &dev->flags))
 			xor_srcs[count++] = dev->page;
+		if ((i == pd_idx || test_bit(R5_Wantdrain, &dev->flags)) &&
+		   test_and_clear_bit(R5_WantZeroFill, &dev->flags))
+			memset(page_address(dev->page), 0, STRIPE_SIZE);
 	}
 
 	init_async_submit(&submit, ASYNC_TX_FENCE|ASYNC_TX_XOR_DROP_DST, tx,
@@ -1203,12 +1224,13 @@ ops_run_biodrain(struct stripe_head *sh, struct dma_async_tx_descriptor *tx)
 				if (wbi->bi_rw & REQ_SYNC)
 					set_bit(R5_SyncIO, &dev->flags);
 				if (wbi->bi_rw & REQ_DISCARD) {
-					memset(page_address(dev->page), 0,
-						STRIPE_SECTORS << 9);
+					set_bit(R5_WantZeroFill, &dev->flags);
 					set_bit(R5_Discard, &dev->flags);
-				} else
+				} else {
+					clear_bit(R5_WantZeroFill, &dev->flags);
 					tx = async_copy_data(1, wbi, dev->page,
 						dev->sector, tx);
+				}
 				wbi = r5_next_bio(wbi, dev->sector);
 			}
 		}
@@ -1282,8 +1304,7 @@ ops_run_reconstruct5(struct stripe_head *sh, struct raid5_percpu *percpu,
 	}
 	if (i >= sh->disks) {
 		atomic_inc(&sh->count);
-		memset(page_address(sh->dev[pd_idx].page), 0,
-			STRIPE_SECTORS << 9);
+		set_bit(R5_WantZeroFill, &sh->dev[pd_idx].flags);
 		set_bit(R5_Discard, &sh->dev[pd_idx].flags);
 		ops_complete_reconstruct(sh);
 		return;
@@ -1298,13 +1319,21 @@ ops_run_reconstruct5(struct stripe_head *sh, struct raid5_percpu *percpu,
 			struct r5dev *dev = &sh->dev[i];
 			if (dev->written)
 				xor_srcs[count++] = dev->page;
+			if ((i == pd_idx || dev->written) &&
+			   test_and_clear_bit(R5_WantZeroFill, &dev->flags))
+				memset(page_address(dev->page), 0, STRIPE_SIZE);
 		}
 	} else {
 		xor_dest = sh->dev[pd_idx].page;
+		clear_bit(R5_WantZeroFill, &sh->dev[pd_idx].flags);
 		for (i = disks; i--; ) {
 			struct r5dev *dev = &sh->dev[i];
-			if (i != pd_idx)
+			if (i != pd_idx) {
 				xor_srcs[count++] = dev->page;
+				if (test_and_clear_bit(R5_WantZeroFill, &dev->flags))
+					memset(page_address(dev->page), 0,
+					      STRIPE_SIZE);
+			}
 		}
 	}
 
@@ -1344,14 +1373,21 @@ ops_run_reconstruct6(struct stripe_head *sh, struct raid5_percpu *percpu,
 	}
 	if (i >= sh->disks) {
 		atomic_inc(&sh->count);
-		memset(page_address(sh->dev[sh->pd_idx].page), 0,
-			STRIPE_SECTORS << 9);
-		memset(page_address(sh->dev[sh->qd_idx].page), 0,
-			STRIPE_SECTORS << 9);
+		set_bit(R5_WantZeroFill, &sh->dev[sh->pd_idx].flags);
 		set_bit(R5_Discard, &sh->dev[sh->pd_idx].flags);
+		set_bit(R5_WantZeroFill, &sh->dev[sh->qd_idx].flags);
 		set_bit(R5_Discard, &sh->dev[sh->qd_idx].flags);
 		ops_complete_reconstruct(sh);
 		return;
+	}
+
+	for (i = 0; i < sh->disks; i++) {
+		if (sh->pd_idx == i || sh->qd_idx == i) {
+			clear_bit(R5_WantZeroFill, &sh->dev[i].flags);
+			continue;
+		}
+		if (test_and_clear_bit(R5_WantZeroFill, &sh->dev[i].flags))
+			memset(page_address(sh->dev[i].page), 0, STRIPE_SIZE);
 	}
 
 	count = set_syndrome_sources(blocks, sh);
@@ -1394,8 +1430,13 @@ static void ops_run_check_p(struct stripe_head *sh, struct raid5_percpu *percpu)
 	xor_dest = sh->dev[pd_idx].page;
 	xor_srcs[count++] = xor_dest;
 	for (i = disks; i--; ) {
-		if (i == pd_idx || i == qd_idx)
+		if (i != qd_idx &&
+		   test_and_clear_bit(R5_WantZeroFill, &sh->dev[i].flags))
+			memset(page_address(sh->dev[i].page), 0, STRIPE_SIZE);
+		if (i == pd_idx || i == qd_idx) {
+			clear_bit(R5_WantZeroFill, &sh->dev[i].flags);
 			continue;
+		}
 		xor_srcs[count++] = sh->dev[i].page;
 	}
 
@@ -1413,10 +1454,19 @@ static void ops_run_check_pq(struct stripe_head *sh, struct raid5_percpu *percpu
 {
 	struct page **srcs = percpu->scribble;
 	struct async_submit_ctl submit;
-	int count;
+	int count, i;
 
 	pr_debug("%s: stripe %llu checkp: %d\n", __func__,
 		(unsigned long long)sh->sector, checkp);
+
+	for (i = 0; i < sh->disks; i++) {
+		if (sh->pd_idx == i || sh->qd_idx == i) {
+			clear_bit(R5_WantZeroFill, &sh->dev[i].flags);
+			continue;
+		}
+		if (test_and_clear_bit(R5_WantZeroFill, &sh->dev[i].flags))
+			memset(page_address(sh->dev[i].page), 0, STRIPE_SIZE);
+	}
 
 	count = set_syndrome_sources(srcs, sh);
 	if (!checkp)
@@ -3217,6 +3267,9 @@ static void handle_stripe_expansion(struct r5conf *conf, struct stripe_head *sh)
 				release_stripe(sh2);
 				continue;
 			}
+			if (test_and_clear_bit(R5_WantZeroFill, &sh->dev[i].flags))
+				memset(page_address(sh->dev[i].page),
+					0, STRIPE_SIZE);
 
 			/* place all the copies on one channel */
 			init_async_submit(&submit, 0, tx, NULL, NULL, NULL);

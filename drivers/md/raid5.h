@@ -300,6 +300,7 @@ enum r5dev_flags {
 			 * data in, and now is a good time to write it out.
 			 */
 	R5_Discard,	/* Discard the stripe */
+	R5_WantZeroFill, /* should be zero filled before read */
 };
 
 /*
