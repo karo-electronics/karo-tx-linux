@@ -30,6 +30,7 @@
 #include <linux/cpumask.h>
 #include <linux/spinlock.h>
 #include <linux/page-flags.h>
+#include <linux/srcu.h>
 
 #include <asm/reg.h>
 #include <asm/cputable.h>
@@ -366,13 +367,16 @@ int kvmppc_pseries_do_hcall(struct kvm_vcpu *vcpu)
 	unsigned long req = kvmppc_get_gpr(vcpu, 3);
 	unsigned long target, ret = H_SUCCESS;
 	struct kvm_vcpu *tvcpu;
+	int idx;
 
 	switch (req) {
 	case H_ENTER:
+		idx = srcu_read_lock(&vcpu->kvm->srcu);
 		ret = kvmppc_virtmode_h_enter(vcpu, kvmppc_get_gpr(vcpu, 4),
 					      kvmppc_get_gpr(vcpu, 5),
 					      kvmppc_get_gpr(vcpu, 6),
 					      kvmppc_get_gpr(vcpu, 7));
+		srcu_read_unlock(&vcpu->kvm->srcu, idx);
 		break;
 	case H_CEDE:
 		break;
@@ -411,6 +415,7 @@ static int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 			      struct task_struct *tsk)
 {
 	int r = RESUME_HOST;
+	int srcu_idx;
 
 	vcpu->stat.sum_exits++;
 
@@ -470,12 +475,16 @@ static int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 	 * have been handled already.
 	 */
 	case BOOK3S_INTERRUPT_H_DATA_STORAGE:
+		srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
 		r = kvmppc_book3s_hv_page_fault(run, vcpu,
 				vcpu->arch.fault_dar, vcpu->arch.fault_dsisr);
+		srcu_read_unlock(&vcpu->kvm->srcu, srcu_idx);
 		break;
 	case BOOK3S_INTERRUPT_H_INST_STORAGE:
+		srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
 		r = kvmppc_book3s_hv_page_fault(run, vcpu,
 				kvmppc_get_pc(vcpu), 0);
+		srcu_read_unlock(&vcpu->kvm->srcu, srcu_idx);
 		break;
 	/*
 	 * This occurs if the guest executes an illegal instruction.
@@ -820,6 +829,7 @@ static int kvmppc_run_core(struct kvmppc_vcore *vc)
 	long ret;
 	u64 now;
 	int ptid, i, need_vpa_update;
+	int srcu_idx;
 
 	/* don't start if any threads have a signal pending */
 	need_vpa_update = 0;
@@ -898,6 +908,9 @@ static int kvmppc_run_core(struct kvmppc_vcore *vc)
 	spin_unlock(&vc->lock);
 
 	kvm_guest_enter();
+
+	srcu_idx = srcu_read_lock(&vcpu0->kvm->srcu);
+
 	__kvmppc_vcore_entry(NULL, vcpu0);
 	for (i = 0; i < threads_per_core; ++i)
 		kvmppc_release_hwthread(vc->pcpu + i);
@@ -912,6 +925,8 @@ static int kvmppc_run_core(struct kvmppc_vcore *vc)
 	/* prevent other vcpu threads from doing kvmppc_start_thread() now */
 	vc->vcore_state = VCORE_EXITING;
 	spin_unlock(&vc->lock);
+
+	srcu_read_unlock(&vcpu0->kvm->srcu, srcu_idx);
 
 	/* make sure updates to secondary vcpu structs are visible now */
 	smp_mb();
@@ -1273,7 +1288,7 @@ int kvm_vm_ioctl_get_dirty_log(struct kvm *kvm, struct kvm_dirty_log *log)
 	n = kvm_dirty_bitmap_bytes(memslot);
 	memset(memslot->dirty_bitmap, 0, n);
 
-	r = kvmppc_hv_get_dirty_log(kvm, memslot);
+	r = kvmppc_hv_get_dirty_log(kvm, memslot, memslot->dirty_bitmap);
 	if (r)
 		goto out;
 
@@ -1299,53 +1314,86 @@ static unsigned long slb_pgsize_encoding(unsigned long psize)
 	return senc;
 }
 
-int kvmppc_core_prepare_memory_region(struct kvm *kvm,
-				struct kvm_userspace_memory_region *mem)
-{
-	unsigned long npages;
-	unsigned long *phys;
-
-	/* Allocate a slot_phys array */
-	phys = kvm->arch.slot_phys[mem->slot];
-	if (!kvm->arch.using_mmu_notifiers && !phys) {
-		npages = mem->memory_size >> PAGE_SHIFT;
-		phys = vzalloc(npages * sizeof(unsigned long));
-		if (!phys)
-			return -ENOMEM;
-		kvm->arch.slot_phys[mem->slot] = phys;
-		kvm->arch.slot_npages[mem->slot] = npages;
-	}
-
-	return 0;
-}
-
-static void unpin_slot(struct kvm *kvm, int slot_id)
+static void unpin_slot(struct kvm_memory_slot *memslot)
 {
 	unsigned long *physp;
 	unsigned long j, npages, pfn;
 	struct page *page;
 
-	physp = kvm->arch.slot_phys[slot_id];
-	npages = kvm->arch.slot_npages[slot_id];
-	if (physp) {
-		spin_lock(&kvm->arch.slot_phys_lock);
-		for (j = 0; j < npages; j++) {
-			if (!(physp[j] & KVMPPC_GOT_PAGE))
-				continue;
-			pfn = physp[j] >> PAGE_SHIFT;
-			page = pfn_to_page(pfn);
-			SetPageDirty(page);
-			put_page(page);
-		}
-		kvm->arch.slot_phys[slot_id] = NULL;
-		spin_unlock(&kvm->arch.slot_phys_lock);
-		vfree(physp);
+	physp = memslot->arch.slot_phys;
+	npages = memslot->npages;
+	if (!physp)
+		return;
+	for (j = 0; j < npages; j++) {
+		if (!(physp[j] & KVMPPC_GOT_PAGE))
+			continue;
+		pfn = physp[j] >> PAGE_SHIFT;
+		page = pfn_to_page(pfn);
+		SetPageDirty(page);
+		put_page(page);
 	}
 }
 
-void kvmppc_core_commit_memory_region(struct kvm *kvm,
-				struct kvm_userspace_memory_region *mem)
+void kvmppc_core_free_memslot(struct kvm_memory_slot *free,
+			      struct kvm_memory_slot *dont)
 {
+	if (!dont || free->arch.rmap != dont->arch.rmap) {
+		vfree(free->arch.rmap);
+		free->arch.rmap = NULL;
+	}
+	if (!dont || free->arch.slot_phys != dont->arch.slot_phys) {
+		unpin_slot(free);
+		vfree(free->arch.slot_phys);
+		free->arch.slot_phys = NULL;
+	}
+}
+
+int kvmppc_core_create_memslot(struct kvm_memory_slot *slot,
+			       unsigned long npages)
+{
+	slot->arch.rmap = vzalloc(npages * sizeof(*slot->arch.rmap));
+	if (!slot->arch.rmap)
+		return -ENOMEM;
+	slot->arch.slot_phys = NULL;
+
+	return 0;
+}
+
+int kvmppc_core_prepare_memory_region(struct kvm *kvm,
+				      struct kvm_memory_slot *memslot,
+				      struct kvm_userspace_memory_region *mem)
+{
+	unsigned long *phys;
+
+	/* Allocate a slot_phys array if needed */
+	phys = memslot->arch.slot_phys;
+	if (!kvm->arch.using_mmu_notifiers && !phys && memslot->npages) {
+		phys = vzalloc(memslot->npages * sizeof(unsigned long));
+		if (!phys)
+			return -ENOMEM;
+		memslot->arch.slot_phys = phys;
+	}
+
+	return 0;
+}
+
+void kvmppc_core_commit_memory_region(struct kvm *kvm,
+				      struct kvm_userspace_memory_region *mem,
+				      struct kvm_memory_slot old)
+{
+	unsigned long npages = mem->memory_size >> PAGE_SHIFT;
+	struct kvm_memory_slot *memslot;
+
+	if (npages && old.npages) {
+		/*
+		 * If modifying a memslot, reset all the rmap dirty bits.
+		 * If this is a new memslot, we don't need to do anything
+		 * since the rmap array starts out as all zeroes,
+		 * i.e. no pages are dirty.
+		 */
+		memslot = id_to_memslot(kvm->memslots, mem->slot);
+		kvmppc_hv_get_dirty_log(kvm, memslot, NULL);
+	}
 }
 
 static int kvmppc_hv_setup_htab_rma(struct kvm_vcpu *vcpu)
@@ -1362,6 +1410,7 @@ static int kvmppc_hv_setup_htab_rma(struct kvm_vcpu *vcpu)
 	unsigned long rmls;
 	unsigned long *physp;
 	unsigned long i, npages;
+	int srcu_idx;
 
 	mutex_lock(&kvm->lock);
 	if (kvm->arch.rma_setup_done)
@@ -1377,12 +1426,13 @@ static int kvmppc_hv_setup_htab_rma(struct kvm_vcpu *vcpu)
 	}
 
 	/* Look up the memslot for guest physical address 0 */
+	srcu_idx = srcu_read_lock(&kvm->srcu);
 	memslot = gfn_to_memslot(kvm, 0);
 
 	/* We must have some memory at 0 by now */
 	err = -EINVAL;
 	if (!memslot || (memslot->flags & KVM_MEMSLOT_INVALID))
-		goto out;
+		goto out_srcu;
 
 	/* Look up the VMA for the start of this memory slot */
 	hva = memslot->userspace_addr;
@@ -1406,14 +1456,14 @@ static int kvmppc_hv_setup_htab_rma(struct kvm_vcpu *vcpu)
 		err = -EPERM;
 		if (cpu_has_feature(CPU_FTR_ARCH_201)) {
 			pr_err("KVM: CPU requires an RMO\n");
-			goto out;
+			goto out_srcu;
 		}
 
 		/* We can handle 4k, 64k or 16M pages in the VRMA */
 		err = -EINVAL;
 		if (!(psize == 0x1000 || psize == 0x10000 ||
 		      psize == 0x1000000))
-			goto out;
+			goto out_srcu;
 
 		/* Update VRMASD field in the LPCR */
 		senc = slb_pgsize_encoding(psize);
@@ -1436,7 +1486,7 @@ static int kvmppc_hv_setup_htab_rma(struct kvm_vcpu *vcpu)
 		err = -EINVAL;
 		if (rmls < 0) {
 			pr_err("KVM: Can't use RMA of 0x%lx bytes\n", rma_size);
-			goto out;
+			goto out_srcu;
 		}
 		atomic_inc(&ri->use_count);
 		kvm->arch.rma = ri;
@@ -1465,17 +1515,24 @@ static int kvmppc_hv_setup_htab_rma(struct kvm_vcpu *vcpu)
 		/* Initialize phys addrs of pages in RMO */
 		npages = ri->npages;
 		porder = __ilog2(npages);
-		physp = kvm->arch.slot_phys[memslot->id];
-		spin_lock(&kvm->arch.slot_phys_lock);
-		for (i = 0; i < npages; ++i)
-			physp[i] = ((ri->base_pfn + i) << PAGE_SHIFT) + porder;
-		spin_unlock(&kvm->arch.slot_phys_lock);
+		physp = memslot->arch.slot_phys;
+		if (physp) {
+			if (npages > memslot->npages)
+				npages = memslot->npages;
+			spin_lock(&kvm->arch.slot_phys_lock);
+			for (i = 0; i < npages; ++i)
+				physp[i] = ((ri->base_pfn + i) << PAGE_SHIFT) +
+					porder;
+			spin_unlock(&kvm->arch.slot_phys_lock);
+		}
 	}
 
 	/* Order updates to kvm->arch.lpcr etc. vs. rma_setup_done */
 	smp_wmb();
 	kvm->arch.rma_setup_done = 1;
 	err = 0;
+ out_srcu:
+	srcu_read_unlock(&kvm->srcu, srcu_idx);
  out:
 	mutex_unlock(&kvm->lock);
 	return err;
@@ -1528,12 +1585,6 @@ int kvmppc_core_init_vm(struct kvm *kvm)
 
 void kvmppc_core_destroy_vm(struct kvm *kvm)
 {
-	unsigned long i;
-
-	if (!kvm->arch.using_mmu_notifiers)
-		for (i = 0; i < KVM_MEM_SLOTS_NUM; i++)
-			unpin_slot(kvm, i);
-
 	if (kvm->arch.rma) {
 		kvm_release_rma(kvm->arch.rma);
 		kvm->arch.rma = NULL;
