@@ -215,8 +215,6 @@ struct drm_display_info {
 	u32 color_formats;
 
 	u8 cea_rev;
-
-	char *raw_edid; /* if any */
 };
 
 struct drm_framebuffer_funcs {
@@ -593,6 +591,7 @@ struct drm_connector {
 	int video_latency[2];	/* [0]: progressive, [1]: interlaced */
 	int audio_latency[2];
 	int null_edid_counter; /* needed to workaround some HW bugs where we get all 0s */
+	unsigned bad_edid_counter;
 };
 
 /**
@@ -1035,7 +1034,7 @@ extern int drm_add_modes_noedid(struct drm_connector *connector,
 				int hdisplay, int vdisplay);
 
 extern int drm_edid_header_is_valid(const u8 *raw_edid);
-extern bool drm_edid_block_valid(u8 *raw_edid, int block);
+extern bool drm_edid_block_valid(u8 *raw_edid, int block, bool print_bad_edid);
 extern bool drm_edid_is_valid(struct edid *edid);
 struct drm_display_mode *drm_mode_find_dmt(struct drm_device *dev,
 					   int hsize, int vsize, int fresh,
