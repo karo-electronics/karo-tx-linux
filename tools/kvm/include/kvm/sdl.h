@@ -6,16 +6,22 @@
 struct framebuffer;
 
 #ifdef CONFIG_HAS_SDL
-int sdl__init(struct framebuffer *fb);
-int sdl__exit(struct framebuffer *fb);
+int sdl__init(struct kvm *kvm);
+int sdl__exit(struct kvm *kvm);
 #else
-static inline void sdl__init(struct framebuffer *fb)
+static inline int sdl__init(struct kvm *kvm)
 {
-	die("SDL support not compiled in. (install the SDL-dev[el] package)");
+	if (kvm->cfg.sdl)
+		die("SDL support not compiled in. (install the SDL-dev[el] package)");
+
+	return 0;
 }
-static inline void sdl__exit(struct framebuffer *fb)
+static inline int sdl__exit(struct kvm *kvm)
 {
-	die("SDL support not compiled in. (install the SDL-dev[el] package)");
+	if (kvm->cfg.sdl)
+		die("SDL support not compiled in. (install the SDL-dev[el] package)");
+
+	return 0;
 }
 #endif
 
