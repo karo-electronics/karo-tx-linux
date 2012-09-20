@@ -57,11 +57,8 @@ You should also find the complete GPL in the COPYING file accompanying this sour
   +----------------------------------------------------------------------------+
 */
 #include "hwdrv_apci3200.h"
-/* Begin JK 21.10.2004: APCI-3200 / APCI-3300 Reading of EEPROM values */
-#include "addi_amcc_S5920.h"
-/* #define PRINT_INFO */
 
-/* End JK 21.10.2004: APCI-3200 / APCI-3300 Reading of EEPROM values */
+/* #define PRINT_INFO */
 
 /* BEGIN JK 06.07.04: Management of sevrals boards */
 /*
@@ -90,7 +87,12 @@ You should also find the complete GPL in the COPYING file accompanying this sour
 struct str_BoardInfos s_BoardInfos[100];	/*  100 will be the max number of boards to be used */
 /* END JK 06.07.04: Management of sevrals boards */
 
-/* Begin JK 21.10.2004: APCI-3200 / APCI-3300 Reading of EEPROM values */
+#define AMCC_OP_REG_MCSR	0x3c
+#define EEPROM_BUSY		0x80000000
+#define NVCMD_LOAD_LOW		(0x4 << 5)	/* nvRam load low command */
+#define NVCMD_LOAD_HIGH		(0x5 << 5)	/* nvRam load high command */
+#define NVCMD_BEGIN_READ	(0x7 << 5)	/* nvRam begin read command */
+#define NVCMD_BEGIN_WRITE	(0x6 << 5)	/* EEPROM begin write command */
 
 /*+----------------------------------------------------------------------------+*/
 /*| Function   Name   : int i_AddiHeaderRW_ReadEeprom                          |*/
@@ -3495,7 +3497,7 @@ void v_APCI3200_Interrupt(int irq, void *d)
 int i_APCI3200_InterruptHandleEos(struct comedi_device *dev)
 {
 	unsigned int ui_StatusRegister = 0;
-	struct comedi_subdevice *s = dev->subdevices + 0;
+	struct comedi_subdevice *s = &dev->subdevices[0];
 
 	/* BEGIN JK 18.10.2004: APCI-3200 Driver update 0.7.57 -> 0.7.68 */
 	/* comedi_async *async = s->async; */
