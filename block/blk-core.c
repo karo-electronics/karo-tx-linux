@@ -713,8 +713,6 @@ blk_init_allocated_queue(struct request_queue *q, request_fn_proc *rfn,
 	if (elevator_init(q, NULL))
 		return NULL;
 
-	blk_queue_congestion_threshold(q);
-
 	/* all done, end the initial bypass */
 	blk_queue_bypass_end(q);
 	return q;
@@ -2783,14 +2781,8 @@ int blk_rq_prep_clone(struct request *rq, struct request *rq_src,
 	blk_rq_init(NULL, rq);
 
 	__rq_for_each_bio(bio_src, rq_src) {
-		bio = bio_alloc_bioset(gfp_mask, bio_src->bi_max_vecs, bs);
+		bio = bio_clone_bioset(bio_src, gfp_mask, bs);
 		if (!bio)
-			goto free_and_out;
-
-		__bio_clone(bio, bio_src);
-
-		if (bio_integrity(bio_src) &&
-		    bio_integrity_clone(bio, bio_src, gfp_mask, bs))
 			goto free_and_out;
 
 		if (bio_ctr && bio_ctr(bio, bio_src, data))
@@ -2809,7 +2801,7 @@ int blk_rq_prep_clone(struct request *rq, struct request *rq_src,
 
 free_and_out:
 	if (bio)
-		bio_free(bio, bs);
+		bio_put(bio);
 	blk_rq_unprep_clone(rq);
 
 	return -ENOMEM;
