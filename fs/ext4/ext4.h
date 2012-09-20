@@ -1233,6 +1233,7 @@ struct ext4_sb_info {
 	spinlock_t s_md_lock;
 	unsigned short *s_mb_offsets;
 	unsigned int *s_mb_maxs;
+	unsigned int s_group_info_size;
 
 	/* tunables */
 	unsigned long s_stripe;
@@ -1243,6 +1244,7 @@ struct ext4_sb_info {
 	unsigned int s_mb_order2_reqs;
 	unsigned int s_mb_group_prealloc;
 	unsigned int s_max_writeback_mb_bump;
+	unsigned int s_max_dir_size_kb;
 	/* where last allocation was done - for stream allocation */
 	unsigned long s_mb_last_group;
 	unsigned long s_mb_last_start;
@@ -1270,8 +1272,12 @@ struct ext4_sb_info {
 	unsigned long s_sectors_written_start;
 	u64 s_kbytes_written;
 
+	/* the size of zero-out chunk */
+	unsigned int s_extent_max_zeroout_kb;
+
 	unsigned int s_log_groups_per_flex;
 	struct flex_groups *s_flex_groups;
+	ext4_group_t s_flex_groups_allocated;
 
 	/* workqueue for dio unwritten */
 	struct workqueue_struct *dio_unwritten_wq;
@@ -1966,6 +1972,8 @@ extern void ext4_exit_mballoc(void);
 extern void ext4_free_blocks(handle_t *handle, struct inode *inode,
 			     struct buffer_head *bh, ext4_fsblk_t block,
 			     unsigned long count, int flags);
+extern int ext4_mb_alloc_groupinfo(struct super_block *sb,
+				   ext4_group_t ngroups);
 extern int ext4_mb_add_groupinfo(struct super_block *sb,
 		ext4_group_t i, struct ext4_group_desc *desc);
 extern int ext4_group_add_blocks(handle_t *handle, struct super_block *sb,
@@ -2051,6 +2059,8 @@ extern void ext4_superblock_csum_set(struct super_block *sb,
 extern void *ext4_kvmalloc(size_t size, gfp_t flags);
 extern void *ext4_kvzalloc(size_t size, gfp_t flags);
 extern void ext4_kvfree(void *ptr);
+extern int ext4_alloc_flex_bg_array(struct super_block *sb,
+				    ext4_group_t ngroup);
 extern __printf(4, 5)
 void __ext4_error(struct super_block *, const char *, unsigned int,
 		  const char *, ...);
