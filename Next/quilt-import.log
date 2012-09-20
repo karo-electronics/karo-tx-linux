@@ -1,0 +1,65 @@
+Importing i2c based on 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+Unchanged quilt series jdelvare-hwmon
+Importing rr based on v3.6-rc6-28-g925a6f0
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 925a6f0bf8bd122d5d2429af7f0ca0fecf4ae71f
+HEAD is now at 925a6f0 Merge tag 'hwspinlock-3.6-fix' of git://git.kernel.org/pub/scm/linux/kernel/git/ohad/hwspinlock
+$ git am ../quilt/rr/module:taint_kernel_when_lve_is_loaded.patch
+Applying: module: taint kernel when lve module is loaded
+$ git am ../quilt/rr/module:mips_fix_c_build_for_32_bit.patch
+Applying: MIPS: Fix module.c build for 32 bit
+$ git am ../quilt/rr/module:make_most_arch_asm_h_files_use_asm_generic_h.patch
+Applying: Make most arch asm/module.h files use asm-generic/module.h
+$ git am ../quilt/rr/module-fix-wakeup-for-symbols.patch
+Applying: module: fix symbol waiting when module fails before init
+$ git am ../quilt/rr/module-wait-on-loading-module.patch
+Applying: module: wait when loading a module which is currently initializing.
+$ git am ../quilt/rr/virtio:console_add_splice_write_support.patch
+Applying: virtio/console: Add splice_write support
+$ git am ../quilt/rr/virtio:console_add_a_failback_for_unstealable_pipe_buffer.patch
+Applying: virtio/console: Add a failback for unstealable pipe buffer
+$ git am ../quilt/rr/virtio:console_wait_until_the_port_is_ready_on_splice.patch
+Applying: virtio/console: Wait until the port is ready on splice
+$ git am ../quilt/rr/misc:ftrace_allow_stealing_pages_from_pipe_buffer.patch
+Applying: ftrace: Allow stealing pages from pipe buffer
+$ git am ../quilt/rr/virtio:console_allocate_scatterlist_according_to_the_current_pipe_size.patch
+Applying: virtio/console: Allocate scatterlist according to the current pipe size
+$ git am ../quilt/rr/misc:tools_add_guest_trace_agent_as_a_user_tool.patch
+Applying: tools: Add guest trace agent as a user tool
+$ git am ../quilt/rr/virtio:tools_fix_pthread_flag_for_makefile_of_trace_agent_used_by_trace.patch
+Applying: tools: Fix pthread flag for Makefile of trace-agent used by virtio-trace
+$ git am ../quilt/rr/virtio:console_fix_error_handling_in_init_function.patch
+Applying: virtio: console: fix error handling in init() function
+$ git am ../quilt/rr/virtio:blk_add_bio_based_io_path_for_blk.patch
+Applying: virtio-blk: Add bio-based IO path for virtio-blk
+$ git am ../quilt/rr/virtio:blk_add_req_flush_and_req_fua_support_to_bio_path.patch
+Applying: virtio-blk: Add REQ_FLUSH and REQ_FUA support to bio path
+$ git am ../quilt/rr/virtio:blk_add_req_flush_and_req_fua_support_to_bio_path.patch-fix
+Applying: virtio-blk: fix NULL checking in virtblk_alloc_req()
+$ git am ../quilt/rr/virtio:blk_fix_kconfig_option.patch
+Applying: virtio-balloon: dependency fix
+$ git am ../quilt/rr/virtio-blk-not-experimental.patch
+Applying: virtio_balloon: not EXPERIMENTAL any more.
+$ git am ../quilt/rr/virtio:ring_move_queue_index_to_vring_virtqueue.patch
+Applying: virtio-ring: move queue_index to vring_virtqueue
+$ git am ../quilt/rr/virtio:introduce_an_api_to_set_affinity_for_a_virtqueue.patch
+Applying: virtio: introduce an API to set affinity for a virtqueue
+$ git am ../quilt/rr/virtio:support_reserved_vqs.patch
+Applying: virtio: support reserved vqs
+$ git am ../quilt/rr/virtio-config-cleanup.patch
+Applying: virtio: add help to CONFIG_VIRTIO option.
+$ git am ../quilt/rr/virtio-remove-ring-option.patch
+Applying: virtio: remove CONFIG_VIRTIO_RING
+$ git am ../quilt/rr/virtio-remove-extra-debug-check.patch
+Applying: virtio: don't crash when device is buggy
+$ git am ../quilt/rr/virtio:drivers_pci_c_fix_error_return_code.patch
+Applying: drivers/virtio/virtio_pci.c: fix error return code
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + a082636...98bec22 master     -> quilt/rr  (forced update)
+Importing device-mapper based on block/for-next
+Unchanged quilt series device-mapper
