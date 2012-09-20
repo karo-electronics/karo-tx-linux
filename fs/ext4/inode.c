@@ -2449,8 +2449,8 @@ static int ext4_nonda_switch(struct super_block *sb)
 	 * Even if we don't switch but are nearing capacity,
 	 * start pushing delalloc when 1/2 of free blocks are dirty.
 	 */
-	if (free_blocks < 2 * dirty_blocks)
-		writeback_inodes_sb_if_idle(sb, WB_REASON_FS_FREE_SPACE);
+	if ((free_blocks < 2 * dirty_blocks) && writeback_in_progress(sb->s_bdi))
+		writeback_inodes_sb(sb, WB_REASON_FS_FREE_SPACE);
 
 	return 0;
 }
