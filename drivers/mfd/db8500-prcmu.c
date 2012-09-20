@@ -520,6 +520,7 @@ static struct dsiescclk dsiescclk[3] = {
 	}
 };
 
+
 /*
 * Used by MCDE to setup all necessary PRCMU registers
 */

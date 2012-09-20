@@ -200,7 +200,6 @@ struct twl6040_gpo_data {
 
 struct twl6040_platform_data {
 	int audpwron_gpio;	/* audio power-on gpio */
-	unsigned int irq_base;
 
 	struct twl6040_codec_data *codec;
 	struct twl6040_vibra_data *vibra;

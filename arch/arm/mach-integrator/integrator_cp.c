@@ -55,7 +55,7 @@
 
 #define INTCP_PA_CLCD_BASE		0xc0000000
 
-#define INTCP_VA_CTRL_BASE		IO_ADDRESS(INTEGRATOR_CP_CTL_BASE)
+#define INTCP_VA_CTRL_BASE		__io_address(INTEGRATOR_CP_CTL_BASE)
 #define INTCP_FLASHPROG			0x04
 #define CINTEGRATOR_FLASHPROG_FLVPPEN	(1 << 0)
 #define CINTEGRATOR_FLASHPROG_FLWREN	(1 << 1)
@@ -189,8 +189,8 @@ static struct physmap_flash_data intcp_flash_data = {
  */
 static unsigned int mmc_status(struct device *dev)
 {
-	unsigned int status = readl(IO_ADDRESS(0xca000000 + 4));
-	writel(8, IO_ADDRESS(INTEGRATOR_CP_CTL_BASE + 8));
+	unsigned int status = readl(__io_address(0xca000000 + 4));
+	writel(8, __io_address(INTEGRATOR_CP_CTL_BASE + 8));
 
 	return status & 8;
 }
