@@ -12,6 +12,7 @@
 #define __MM_INTERNAL_H
 
 #include <linux/mm.h>
+#include <linux/rmap.h>
 
 void free_pgtables(struct mmu_gather *tlb, struct vm_area_struct *start_vma,
 		unsigned long floor, unsigned long ceiling);
@@ -130,7 +131,8 @@ struct compact_control {
 	int order;			/* order a direct compactor needs */
 	int migratetype;		/* MOVABLE, RECLAIMABLE etc */
 	struct zone *zone;
-	bool *contended;		/* True if a lock was contended */
+	bool contended;			/* True if a lock was contended */
+	struct page **page;		/* Page captured of requested size */
 };
 
 unsigned long
@@ -340,7 +342,6 @@ static inline void mminit_validate_memmodel_limits(unsigned long *start_pfn,
 #define ZONE_RECLAIM_FULL	-1
 #define ZONE_RECLAIM_SOME	0
 #define ZONE_RECLAIM_SUCCESS	1
-#endif
 
 extern int hwpoison_filter(struct page *p);
 
@@ -356,3 +357,54 @@ extern unsigned long vm_mmap_pgoff(struct file *, unsigned long,
         unsigned long, unsigned long);
 
 extern void set_pageblock_order(void);
+unsigned long reclaim_clean_pages_from_list(struct zone *zone,
+					    struct list_head *page_list);
+
+/*
+ * Unnecessary readahead harms performance, especially for SSD devices, where
+ * large reads are significantly more expensive than small ones.
+ * These implements simple swap random access detection. In swap page fault: if
+ * the page is found in swapcache, decrease a counter in the vma, otherwise we
+ * need to perform sync swapin and the counter is increased.  Optionally swapin
+ * will perform readahead if the counter is below a threshold.
+ */
+#ifdef CONFIG_SWAP
+#define SWAPRA_MISS_THRESHOLD  (100)
+#define SWAPRA_MAX_MISS ((SWAPRA_MISS_THRESHOLD) * 10)
+static inline void swap_cache_hit(struct vm_area_struct *vma)
+{
+	if (vma && vma->anon_vma)
+		atomic_dec_if_positive(&vma->anon_vma->swapra_miss);
+}
+
+static inline void swap_cache_miss(struct vm_area_struct *vma)
+{
+	if (!vma || !vma->anon_vma)
+		return;
+	if (atomic_read(&vma->anon_vma->swapra_miss) < SWAPRA_MAX_MISS)
+		atomic_inc(&vma->anon_vma->swapra_miss);
+}
+
+static inline int swap_cache_skip_readahead(struct vm_area_struct *vma)
+{
+	if (!vma || !vma->anon_vma)
+		return 0;
+	return atomic_read(&vma->anon_vma->swapra_miss) >
+		SWAPRA_MISS_THRESHOLD;
+}
+#else
+static inline void swap_cache_hit(struct vm_area_struct *vma)
+{
+}
+
+static inline void swap_cache_miss(struct vm_area_struct *vma)
+{
+}
+
+static inline int swap_cache_skip_readahead(struct vm_area_struct *vma)
+{
+	return 0;
+}
+#endif	/* CONFIG_SWAP */
+
+#endif	/* __MM_INTERNAL_H */
