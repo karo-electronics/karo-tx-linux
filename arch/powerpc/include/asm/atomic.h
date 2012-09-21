@@ -247,7 +247,7 @@ static __inline__ int atomic_inc_not_zero(atomic_t *v)
  * The function returns the old value of *v minus 1, even if
  * the atomic variable, v, was not decremented.
  */
-static __inline__ int atomic_dec_if_positive(atomic_t *v)
+static __inline__ int __atomic_dec_if_positive(atomic_t *v)
 {
 	int t;
 
@@ -268,6 +268,7 @@ static __inline__ int atomic_dec_if_positive(atomic_t *v)
 
 	return t;
 }
+#define atomic_dec_if_positive __atomic_dec_if_positive
 
 #define smp_mb__before_atomic_dec()     smp_mb()
 #define smp_mb__after_atomic_dec()      smp_mb()
