@@ -32,6 +32,7 @@
 #include <linux/elf.h>
 #include <linux/utsname.h>
 #include <linux/coredump.h>
+#include <linux/vmalloc.h>
 #include <asm/uaccess.h>
 #include <asm/param.h>
 #include <asm/page.h>
