@@ -1949,26 +1949,6 @@ static int simplify_symbols(struct module *mod, const struct load_info *info)
 	return ret;
 }
 
-int __weak apply_relocate(Elf_Shdr *sechdrs,
-			  const char *strtab,
-			  unsigned int symindex,
-			  unsigned int relsec,
-			  struct module *me)
-{
-	pr_err("module %s: REL relocation unsupported\n", me->name);
-	return -ENOEXEC;
-}
-
-int __weak apply_relocate_add(Elf_Shdr *sechdrs,
-			      const char *strtab,
-			      unsigned int symindex,
-			      unsigned int relsec,
-			      struct module *me)
-{
-	pr_err("module %s: RELA relocation unsupported\n", me->name);
-	return -ENOEXEC;
-}
-
 static int apply_relocations(struct module *mod, const struct load_info *info)
 {
 	unsigned int i;
@@ -2730,6 +2710,10 @@ static int check_module_license_and_versions(struct module *mod)
 	if (strcmp(mod->name, "driverloader") == 0)
 		add_taint_module(mod, TAINT_PROPRIETARY_MODULE);
 
+	/* lve claims to be GPL but upstream won't provide source */
+	if (strcmp(mod->name, "lve") == 0)
+		add_taint_module(mod, TAINT_PROPRIETARY_MODULE);
+
 #ifdef CONFIG_MODVERSIONS
 	if ((mod->num_syms && !mod->crcs)
 	    || (mod->num_gpl_syms && !mod->gpl_crcs)
@@ -2861,6 +2845,20 @@ static int post_relocation(struct module *mod, const struct load_info *info)
 	return module_finalize(info->hdr, info->sechdrs, mod);
 }
 
+/* Is this module of this name done loading?  No locks held. */
+static bool finished_loading(const char *name)
+{
+	struct module *mod;
+	bool ret;
+
+	mutex_lock(&module_mutex);
+	mod = find_module(name);
+	ret = !mod || mod->state != MODULE_STATE_COMING;
+	mutex_unlock(&module_mutex);
+
+	return ret;
+}
+
 /* Allocate and load the module: note that size of section 0 is always
    zero, and we rely on this for optional sections. */
 static struct module *load_module(void __user *umod,
@@ -2868,7 +2866,7 @@ static struct module *load_module(void __user *umod,
 				  const char __user *uargs)
 {
 	struct load_info info = { NULL, };
-	struct module *mod;
+	struct module *mod, *old;
 	long err;
 
 	pr_debug("load_module: umod=%p, len=%lu, uargs=%p\n",
@@ -2934,8 +2932,18 @@ static struct module *load_module(void __user *umod,
 	 * function to insert in a way safe to concurrent readers.
 	 * The mutex protects against concurrent writers.
 	 */
+again:
 	mutex_lock(&module_mutex);
-	if (find_module(mod->name)) {
+	if ((old = find_module(mod->name)) != NULL) {
+		if (old->state == MODULE_STATE_COMING) {
+			/* Wait in case it fails to load. */
+			mutex_unlock(&module_mutex);
+			err = wait_event_interruptible(module_wq,
+					       finished_loading(mod->name));
+			if (err)
+				goto free_arch_cleanup;
+			goto again;
+		}
 		err = -EEXIST;
 		goto unlock;
 	}
@@ -2975,7 +2983,7 @@ static struct module *load_module(void __user *umod,
 	/* Unlink carefully: kallsyms could be walking list. */
 	list_del_rcu(&mod->list);
 	module_bug_cleanup(mod);
-
+	wake_up_all(&module_wq);
  ddebug:
 	dynamic_debug_remove(info.debug);
  unlock:
@@ -3050,7 +3058,7 @@ SYSCALL_DEFINE3(init_module, void __user *, umod,
 		blocking_notifier_call_chain(&module_notify_list,
 					     MODULE_STATE_GOING, mod);
 		free_module(mod);
-		wake_up(&module_wq);
+		wake_up_all(&module_wq);
 		return ret;
 	}
 	if (ret > 0) {
@@ -3062,9 +3070,8 @@ SYSCALL_DEFINE3(init_module, void __user *, umod,
 		dump_stack();
 	}
 
-	/* Now it's a first class citizen!  Wake up anyone waiting for it. */
+	/* Now it's a first class citizen! */
 	mod->state = MODULE_STATE_LIVE;
-	wake_up(&module_wq);
 	blocking_notifier_call_chain(&module_notify_list,
 				     MODULE_STATE_LIVE, mod);
 
@@ -3087,6 +3094,7 @@ SYSCALL_DEFINE3(init_module, void __user *, umod,
 	mod->init_ro_size = 0;
 	mod->init_text_size = 0;
 	mutex_unlock(&module_mutex);
+	wake_up_all(&module_wq);
 
 	return 0;
 }
