@@ -257,12 +257,12 @@ int test_pages_isolated(unsigned long start_pfn, unsigned long end_pfn)
 }
 
 struct page *alloc_migrate_target(struct page *page, unsigned long private,
-                             int **resultp)
+				  int **resultp)
 {
-        gfp_t gfp_mask = GFP_USER | __GFP_MOVABLE;
+	gfp_t gfp_mask = GFP_USER | __GFP_MOVABLE;
 
-        if (PageHighMem(page))
-                gfp_mask |= __GFP_HIGHMEM;
+	if (PageHighMem(page))
+		gfp_mask |= __GFP_HIGHMEM;
 
-        return alloc_page(gfp_mask);
+	return alloc_page(gfp_mask);
 }
