@@ -60,11 +60,13 @@ static int lis3_spi_init(struct lis3lv02d *lis3)
 static union axis_conversion lis3lv02d_axis_normal =
 	{ .as_array = { 1, 2, 3 } };
 
+#ifdef CONFIG_OF
 static struct of_device_id lis302dl_spi_dt_ids[] = {
 	{ .compatible = "st,lis302dl-spi" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, lis302dl_spi_dt_ids);
+#endif
 
 static int __devinit lis302dl_spi_probe(struct spi_device *spi)
 {
