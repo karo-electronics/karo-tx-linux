@@ -1070,7 +1070,8 @@ pnfs_update_layout(struct inode *ino,
 	lo = pnfs_find_alloc_layout(ino, ctx, gfp_flags);
 	if (lo == NULL) {
 		dprintk("%s ERROR: can't get pnfs_layout_hdr\n", __func__);
-		goto out_unlock;
+		spin_unlock(&ino->i_lock);
+		return NULL;
 	}
 
 	/* Do we even need to bother with this? */
@@ -1125,8 +1126,8 @@ pnfs_update_layout(struct inode *ino,
 		spin_unlock(&clp->cl_lock);
 	}
 	atomic_dec(&lo->plh_outstanding);
-	pnfs_put_layout_hdr(lo);
 out:
+	pnfs_put_layout_hdr(lo);
 	dprintk("%s end, state 0x%lx lseg %p\n", __func__,
 		nfsi->layout ? nfsi->layout->plh_flags : -1, lseg);
 	return lseg;
