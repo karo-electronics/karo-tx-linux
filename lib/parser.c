@@ -142,7 +142,7 @@ static int match_number(substring_t *s, int *result, int base)
 	val = simple_strtol(buf, &endp, base);
 	if (endp == buf)
 		ret = -EINVAL;
-	else if (val < (long) INT_MIN || val > (long) INT_MAX)
+	else if (val < (long)INT_MIN || val > (long)INT_MAX)
 		ret = -ERANGE;
 	else
 		*result = (int) val;
