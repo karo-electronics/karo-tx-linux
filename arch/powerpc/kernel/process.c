@@ -738,6 +738,8 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 {
 	struct pt_regs *childregs, *kregs;
 	extern void ret_from_fork(void);
+	extern void ret_from_kernel_thread(void);
+	void (*f)(void);
 	unsigned long sp = (unsigned long)task_stack_page(p) + THREAD_SIZE;
 
 	CHECK_FULL_REGS(regs);
@@ -754,6 +756,8 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 		clear_tsk_thread_flag(p, TIF_32BIT);
 #endif
 		p->thread.regs = NULL;	/* no user register state */
+
+		f = ret_from_kernel_thread;
 	} else {
 		childregs->gpr[1] = usp;
 		p->thread.regs = childregs;
@@ -765,6 +769,8 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 #endif
 				childregs->gpr[2] = childregs->gpr[6];
 		}
+
+		f = ret_from_fork;
 	}
 	childregs->gpr[3] = 0;  /* Result from fork() */
 	sp -= STACK_FRAME_OVERHEAD;
@@ -805,19 +811,17 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 		p->thread.dscr = current->thread.dscr;
 	}
 #endif
-
 	/*
 	 * The PPC64 ABI makes use of a TOC to contain function 
 	 * pointers.  The function (ret_from_except) is actually a pointer
 	 * to the TOC entry.  The first entry is a pointer to the actual
 	 * function.
- 	 */
+	 */
 #ifdef CONFIG_PPC64
-	kregs->nip = *((unsigned long *)ret_from_fork);
+	kregs->nip = *((unsigned long *)f);
 #else
-	kregs->nip = (unsigned long)ret_from_fork;
+	kregs->nip = (unsigned long)f;
 #endif
-
 	return 0;
 }
 
@@ -1055,26 +1059,13 @@ int sys_vfork(unsigned long p1, unsigned long p2, unsigned long p3,
 			regs, 0, NULL, NULL);
 }
 
-int sys_execve(unsigned long a0, unsigned long a1, unsigned long a2,
-	       unsigned long a3, unsigned long a4, unsigned long a5,
-	       struct pt_regs *regs)
-{
-	int error;
-	char *filename;
+void __ret_from_kernel_execve(struct pt_regs *normal)
+__noreturn;
 
-	filename = getname((const char __user *) a0);
-	error = PTR_ERR(filename);
-	if (IS_ERR(filename))
-		goto out;
-	flush_fp_to_thread(current);
-	flush_altivec_to_thread(current);
-	flush_spe_to_thread(current);
-	error = do_execve(filename,
-			  (const char __user *const __user *) a1,
-			  (const char __user *const __user *) a2, regs);
-	putname(filename);
-out:
-	return error;
+void ret_from_kernel_execve(struct pt_regs *normal)
+{
+	set_thread_flag(TIF_RESTOREALL);
+	__ret_from_kernel_execve(normal);
 }
 
 static inline int valid_irq_stack(unsigned long sp, struct task_struct *p,
@@ -1299,4 +1290,18 @@ unsigned long randomize_et_dyn(unsigned long base)
 		return base;
 
 	return ret;
+}
+
+long kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
+{
+	struct pt_regs regs = {
+#ifdef CONFIG_PPC64
+		.gpr[14] = *(unsigned long *)fn,
+		.gpr[2] = ((unsigned long *)fn)[1],
+#else
+		.gpr[14] = (unsigned long)fn,
+#endif
+		.gpr[15] = (unsigned long)arg
+	};
+	return do_fork(flags|CLONE_VM|CLONE_UNTRACED, 0, &regs, 0, NULL, NULL);
 }

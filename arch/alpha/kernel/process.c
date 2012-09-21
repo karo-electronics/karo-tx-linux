@@ -263,13 +263,6 @@ alpha_vfork(struct pt_regs *regs)
 
 /*
  * Copy an alpha thread..
- *
- * Note the "stack_offset" stuff: when returning to kernel mode, we need
- * to have some extra stack-space for the kernel stack that still exists
- * after the "ret_from_fork".  When returning to user mode, we only want
- * the space needed by the syscall stack frame (ie "struct pt_regs").
- * Use the passed "regs" pointer to determine how much space we need
- * for a kernel fork().
  */
 
 int
@@ -278,18 +271,13 @@ copy_thread(unsigned long clone_flags, unsigned long usp,
 	    struct task_struct * p, struct pt_regs * regs)
 {
 	extern void ret_from_fork(void);
+	extern void ret_from_kernel_thread(void);
 
 	struct thread_info *childti = task_thread_info(p);
-	struct pt_regs * childregs;
-	struct switch_stack * childstack, *stack;
-	unsigned long stack_offset, settls;
+	struct pt_regs *childregs = task_pt_regs(p);
+	struct switch_stack *childstack, *stack;
+	unsigned long settls;
 
-	stack_offset = PAGE_SIZE - sizeof(struct pt_regs);
-	if (!(regs->ps & 8))
-		stack_offset = (PAGE_SIZE-1) & (unsigned long) regs;
-	childregs = (struct pt_regs *)
-	  (stack_offset + PAGE_SIZE + task_stack_page(p));
-		
 	*childregs = *regs;
 	settls = regs->r20;
 	childregs->r0 = 0;
@@ -299,7 +287,10 @@ copy_thread(unsigned long clone_flags, unsigned long usp,
 	stack = ((struct switch_stack *) regs) - 1;
 	childstack = ((struct switch_stack *) childregs) - 1;
 	*childstack = *stack;
-	childstack->r26 = (unsigned long) ret_from_fork;
+	if (unlikely(!user_mode(regs)))
+		childstack->r26 = (unsigned long) ret_from_kernel_thread;
+	else
+		childstack->r26 = (unsigned long) ret_from_fork;
 	childti->pcb.usp = usp;
 	childti->pcb.ksp = (unsigned long) childstack;
 	childti->pcb.flags = 1;	/* set FEN, clear everything else */
@@ -386,27 +377,6 @@ dump_elf_task_fp(elf_fpreg_t *dest, struct task_struct *task)
 EXPORT_SYMBOL(dump_elf_task_fp);
 
 /*
- * sys_execve() executes a new program.
- */
-asmlinkage int
-do_sys_execve(const char __user *ufilename,
-	      const char __user *const __user *argv,
-	      const char __user *const __user *envp, struct pt_regs *regs)
-{
-	int error;
-	char *filename;
-
-	filename = getname(ufilename);
-	error = PTR_ERR(filename);
-	if (IS_ERR(filename))
-		goto out;
-	error = do_execve(filename, argv, envp, regs);
-	putname(filename);
-out:
-	return error;
-}
-
-/*
  * Return saved PC of a blocked thread.  This assumes the frame
  * pointer is the 6th saved long on the kernel stack and that the
  * saved return address is the first long in the frame.  This all
@@ -435,6 +405,22 @@ thread_saved_pc(struct task_struct *t)
 	return 0;
 }
 
+long kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
+{
+	/* Avoid the HAE being gratuitously wrong, which would cause us
+	   to do the whole turn off interrupts thing and restore it.  */
+	struct { struct switch_stack sw; struct pt_regs regs; } r = {
+		.regs = {
+			.hae = alpha_mv.hae_cache,
+			.r27 = (unsigned long)fn,
+			.r16 = (unsigned long)arg,
+			.ps = 0	/* !user_mode */
+		}
+	};
+
+	return do_fork(flags|CLONE_VM|CLONE_UNTRACED, 0, &r.regs, 0, NULL, NULL);
+}
+
 unsigned long
 get_wchan(struct task_struct *p)
 {
@@ -459,22 +445,3 @@ get_wchan(struct task_struct *p)
 	}
 	return pc;
 }
-
-int kernel_execve(const char *path, const char *const argv[], const char *const envp[])
-{
-	/* Avoid the HAE being gratuitously wrong, which would cause us
-	   to do the whole turn off interrupts thing and restore it.  */
-	struct pt_regs regs = {.hae = alpha_mv.hae_cache};
-	int err = do_execve(path, argv, envp, &regs);
-	if (!err) {
-		struct pt_regs *p = current_pt_regs();
-		/* copy regs to normal position and off to userland we go... */
-		*p = regs;
-		__asm__ __volatile__ (
-			"mov	%0, $sp;"
-			"br	$31, ret_from_sys_call"
-			: : "r"(p));
-	}
-	return err;
-}
-EXPORT_SYMBOL(kernel_execve);

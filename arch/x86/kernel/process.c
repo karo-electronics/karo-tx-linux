@@ -293,13 +293,6 @@ sys_clone(unsigned long clone_flags, unsigned long newsp,
 }
 
 /*
- * This gets run with %si containing the
- * function to call, and %di containing
- * the "args".
- */
-extern void kernel_thread_helper(void);
-
-/*
  * Create a kernel thread
  */
 int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
@@ -307,9 +300,6 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 	struct pt_regs regs;
 
 	memset(&regs, 0, sizeof(regs));
-
-	regs.si = (unsigned long) fn;
-	regs.di = (unsigned long) arg;
 
 #ifdef CONFIG_X86_32
 	regs.ds = __USER_DS;
@@ -319,9 +309,10 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 #else
 	regs.ss = __KERNEL_DS;
 #endif
+	regs.bx = (unsigned long) fn;
+	regs.bp = (unsigned long) arg;
 
 	regs.orig_ax = -1;
-	regs.ip = (unsigned long) kernel_thread_helper;
 	regs.cs = __KERNEL_CS | get_kernel_rpl();
 	regs.flags = X86_EFLAGS_IF | X86_EFLAGS_BIT1;
 
@@ -329,33 +320,6 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 	return do_fork(flags | CLONE_VM | CLONE_UNTRACED, 0, &regs, 0, NULL, NULL);
 }
 EXPORT_SYMBOL(kernel_thread);
-
-/*
- * sys_execve() executes a new program.
- */
-long sys_execve(const char __user *name,
-		const char __user *const __user *argv,
-		const char __user *const __user *envp, struct pt_regs *regs)
-{
-	long error;
-	char *filename;
-
-	filename = getname(name);
-	error = PTR_ERR(filename);
-	if (IS_ERR(filename))
-		return error;
-	error = do_execve(filename, argv, envp, regs);
-
-#ifdef CONFIG_X86_32
-	if (error == 0) {
-		/* Make sure we don't return using sysenter.. */
-                set_thread_flag(TIF_IRET);
-        }
-#endif
-
-	putname(filename);
-	return error;
-}
 
 /*
  * Idle related variables and functions

@@ -100,16 +100,6 @@ void cpu_idle(void)
 
 extern void __kprobes kernel_thread_starter(void);
 
-asm(
-	".section .kprobes.text, \"ax\"\n"
-	".global kernel_thread_starter\n"
-	"kernel_thread_starter:\n"
-	"    la    2,0(10)\n"
-	"    basr  14,9\n"
-	"    la    2,0\n"
-	"    br    11\n"
-	".previous\n");
-
 int kernel_thread(int (*fn)(void *), void * arg, unsigned long flags)
 {
 	struct pt_regs regs;
@@ -255,31 +245,6 @@ asmlinkage void execve_tail(void)
 	current->thread.fp_regs.fpc = 0;
 	if (MACHINE_HAS_IEEE)
 		asm volatile("sfpc %0,%0" : : "d" (0));
-}
-
-/*
- * sys_execve() executes a new program.
- */
-SYSCALL_DEFINE3(execve, const char __user *, name,
-		const char __user *const __user *, argv,
-		const char __user *const __user *, envp)
-{
-	struct pt_regs *regs = task_pt_regs(current);
-	char *filename;
-	long rc;
-
-	filename = getname(name);
-	rc = PTR_ERR(filename);
-	if (IS_ERR(filename))
-		return rc;
-	rc = do_execve(filename, argv, envp, regs);
-	if (rc)
-		goto out;
-	execve_tail();
-	rc = regs->gprs[2];
-out:
-	putname(filename);
-	return rc;
 }
 
 /*
