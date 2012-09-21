@@ -256,7 +256,8 @@ pnfs_layout_io_set_failed(struct pnfs_layout_hdr *lo, u32 iomode)
 }
 
 static bool
-pnfs_layout_io_test_failed(struct pnfs_layout_hdr *lo, u32 iomode)
+pnfs_layout_io_test_failed(struct pnfs_layout_hdr *lo, u32 iomode,
+		struct list_head *head)
 {
 	unsigned long start, end;
 	if (test_bit(pnfs_iomode_to_fail_bit(iomode), &lo->plh_flags) == 0)
@@ -267,6 +268,7 @@ pnfs_layout_io_test_failed(struct pnfs_layout_hdr *lo, u32 iomode)
 		/* It is time to retry the failed layoutgets */
 		clear_bit(NFS_LAYOUT_RW_FAILED, &lo->plh_flags);
 		clear_bit(NFS_LAYOUT_RO_FAILED, &lo->plh_flags);
+		pnfs_mark_matching_lsegs_invalid(lo, head, NULL);
 		return false;
 	}
 	return true;
@@ -1058,6 +1060,7 @@ pnfs_update_layout(struct inode *ino,
 	struct nfs_client *clp = server->nfs_client;
 	struct pnfs_layout_hdr *lo;
 	struct pnfs_layout_segment *lseg = NULL;
+	LIST_HEAD(tmp_list);
 	bool first = false;
 
 	if (!pnfs_enabled_sb(NFS_SERVER(ino)))
@@ -1081,7 +1084,7 @@ pnfs_update_layout(struct inode *ino,
 	}
 
 	/* if LAYOUTGET already failed once we don't try again */
-	if (pnfs_layout_io_test_failed(nfsi->layout, iomode))
+	if (pnfs_layout_io_test_failed(nfsi->layout, iomode, &tmp_list))
 		goto out_unlock;
 
 	/* Check to see if the layout for the given range already exists */
@@ -1127,6 +1130,7 @@ pnfs_update_layout(struct inode *ino,
 	}
 	atomic_dec(&lo->plh_outstanding);
 out:
+	pnfs_free_lseg_list(&tmp_list);
 	pnfs_put_layout_hdr(lo);
 	dprintk("%s end, state 0x%lx lseg %p\n", __func__,
 		nfsi->layout ? nfsi->layout->plh_flags : -1, lseg);
