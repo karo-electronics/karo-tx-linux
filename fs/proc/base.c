@@ -1398,7 +1398,7 @@ static int task_dumpable(struct task_struct *task)
 	if (mm)
 		dumpable = get_dumpable(mm);
 	task_unlock(task);
-	if(dumpable == SUID_DUMPABLE_ENABLED)
+	if (dumpable == SUID_DUMPABLE_ENABLED)
 		return 1;
 	return 0;
 }
