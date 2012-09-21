@@ -1422,7 +1422,7 @@ static void fill_files_note(struct memelfnote *note)
 		goto err;
 
 	start_end_ofs = data + 2;
-	name_base = name_curpos = ((char *)data) + names_ofs;
+	name_base = name_curpos = ((char*)data) + names_ofs;
 	remaining = size - names_ofs;
 	count = 0;
 	for (vma = current->mm->mmap; vma != NULL; vma = vma->vm_next) {
@@ -1465,12 +1465,11 @@ static void fill_files_note(struct memelfnote *note)
 	n = current->mm->map_count - count;
 	if (n != 0) {
 		unsigned shift_bytes = n * 3 * sizeof(data[0]);
-		memmove(name_base - shift_bytes, name_base,
-			name_curpos - name_base);
+		memmove(name_base - shift_bytes, name_base, name_curpos - name_base);
 		name_curpos -= shift_bytes;
 	}
 
-	size = name_curpos - (char *)data;
+	size = name_curpos - (char*)data;
 	fill_note(note, "CORE", NT_FILE, size, data);
  err: ;
 }
