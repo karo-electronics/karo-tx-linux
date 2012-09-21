@@ -979,7 +979,7 @@ static void __devinit device_power_init(struct pm860x_chip *chip,
 		power_devs[3].platform_data = pdata->chg_desc;
 		power_devs[3].pdata_size = sizeof(*pdata->chg_desc);
 		ret = mfd_add_devices(chip->dev, 0, &power_devs[3], 1,
-				      NULL, chip->irq_base);
+				      NULL, chip->irq_base, NULL);
 		if (ret < 0)
 			dev_err(chip->dev, "Failed to add chg-manager subdev\n");
 	}
