@@ -8,6 +8,7 @@ config MIPS
 	select HAVE_PERF_EVENTS
 	select PERF_USE_VMALLOC
 	select HAVE_ARCH_KGDB
+	select HAVE_ARCH_TRACEHOOK
 	select ARCH_HAVE_CUSTOM_GPIO_H
 	select HAVE_FUNCTION_TRACER
 	select HAVE_FUNCTION_TRACE_MCOUNT_TEST
@@ -242,6 +243,8 @@ config LANTIQ
 	select HAVE_MACH_CLKDEV
 	select CLKDEV_LOOKUP
 	select USE_OF
+	select PINCTRL
+	select PINCTRL_LANTIQ
 
 config LASAT
 	bool "LASAT Networks platforms"
@@ -318,6 +321,36 @@ config MIPS_MALTA
 	select SYS_SUPPORTS_ZBOOT
 	help
 	  This enables support for the MIPS Technologies Malta evaluation
+	  board.
+
+config MIPS_SEAD3
+	bool "MIPS SEAD3 board"
+	select BOOT_ELF32
+	select BOOT_RAW
+	select CEVT_R4K
+	select CSRC_R4K
+	select CPU_MIPSR2_IRQ_VI
+	select CPU_MIPSR2_IRQ_EI
+	select DMA_NONCOHERENT
+	select IRQ_CPU
+	select IRQ_GIC
+	select MIPS_BOARDS_GEN
+	select MIPS_CPU_SCACHE
+	select MIPS_MSC
+	select SYS_HAS_CPU_MIPS32_R1
+	select SYS_HAS_CPU_MIPS32_R2
+	select SYS_HAS_CPU_MIPS64_R1
+	select SYS_HAS_EARLY_PRINTK
+	select SYS_SUPPORTS_32BIT_KERNEL
+	select SYS_SUPPORTS_64BIT_KERNEL
+	select SYS_SUPPORTS_BIG_ENDIAN
+	select SYS_SUPPORTS_LITTLE_ENDIAN
+	select SYS_SUPPORTS_SMARTMIPS
+	select USB_ARCH_HAS_EHCI
+	select USB_EHCI_BIG_ENDIAN_DESC
+	select USB_EHCI_BIG_ENDIAN_MMIO
+	help
+	  This enables support for the MIPS Technologies SEAD3 evaluation
 	  board.
 
 config MIPS_SIM
@@ -831,6 +864,7 @@ config NLM_XLP_BOARD
 	select ZONE_DMA if 64BIT
 	select SYNC_R4K
 	select SYS_HAS_EARLY_PRINTK
+	select USE_OF
 	help
 	  This board is based on Netlogic XLP Processor.
 	  Say Y here if you have a XLP based board.
@@ -1749,7 +1783,6 @@ config HARDWARE_WATCHPOINTS
 menu "Kernel type"
 
 choice
-
 	prompt "Kernel code model"
 	help
 	  You should only select this option if you have a workload that
@@ -1880,6 +1913,18 @@ config SIBYTE_DMA_PAGEOPS
 config CPU_HAS_PREFETCH
 	bool
 
+config CPU_GENERIC_DUMP_TLB
+	bool
+	default y if !(CPU_R3000 || CPU_R6000 || CPU_R8000 || CPU_TX39XX)
+
+config CPU_R4K_FPU
+	bool
+	default y if !(CPU_R3000 || CPU_R6000 || CPU_TX39XX || CPU_CAVIUM_OCTEON)
+
+config CPU_R4K_CACHE_TLB
+	bool
+	default y if !(CPU_R3000 || CPU_R8000 || CPU_SB1 || CPU_TX39XX || CPU_CAVIUM_OCTEON)
+
 choice
 	prompt "MIPS MT options"
 
@@ -1902,6 +1947,7 @@ config MIPS_MT_SMP
 	select SYS_SUPPORTS_SCHED_SMT if SMP
 	select SYS_SUPPORTS_SMP
 	select SMP_UP
+	select MIPS_PERF_SHARED_TC_COUNTERS
 	help
 	  This is a kernel model which is known a VSMP but lately has been
 	  marketesed into SMVP.
@@ -1954,7 +2000,6 @@ config SCHED_SMT
 
 config SYS_SUPPORTS_SCHED_SMT
 	bool
-
 
 config SYS_SUPPORTS_MULTITHREADING
 	bool
@@ -2251,6 +2296,9 @@ config NR_CPUS
 	  approximately eight kilobytes to the kernel image.  For best
 	  performance should round up your number of processors to the next
 	  power of two.
+
+config MIPS_PERF_SHARED_TC_COUNTERS
+	bool
 
 #
 # Timer Interrupt Frequency Configuration
