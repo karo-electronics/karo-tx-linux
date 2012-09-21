@@ -1,0 +1,35 @@
+Importing i2c based on 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 6a2a2b85db0edf92ace1198a0a35b99ba201388c
+Unchanged quilt series jdelvare-hwmon
+Importing rr based on v3.6-rc6-28-g925a6f0
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard cd93f60c6ca8b13bc88efc738c20b3a676d62a9f
+HEAD is now at cd93f60 Merge branch 'for-3.7/core' into for-next
+$ git am ../quilt/device-mapper/dm-verity-fix-overflow-check.patch
+Applying: This patch fixes sector_t overflow checking in dm-verity.
+$ git am ../quilt/device-mapper/dm-mpath-fix-check-for-null-mpio-in-end_io-fn.patch
+Applying: The mpio dereference should be moved below the BUG_ON NULL test
+$ git am ../quilt/device-mapper/dm-mpath-only-retry-ioctl-when-no-paths-if-queue_if_no_path-set.patch
+Applying: When there are no paths and multipath receives an ioctl, it waits until
+$ git am ../quilt/device-mapper/dm-table-clear-add_random-unless-all-devices-have-it-set.patch
+Applying: Always clear QUEUE_FLAG_ADD_RANDOM if any underlying device does not
+$ git am ../quilt/device-mapper/dm-thin-do-not-set-discard_zeroes_data.patch
+Applying: The dm thin pool target claims to support the zeroing of discarded
+$ git am ../quilt/device-mapper/dm-thin-tidy-discard-support.patch
+Applying: A little thin discard code refactoring in preparation for the next
+$ git am ../quilt/device-mapper/dm-thin-fix-discard-support-for-data-devices.patch
+Applying: The discard limits that get established for a thin-pool or thin device
+$ git am ../quilt/device-mapper/dm-bufio-use-list_move.patch
+Applying: Use list_move() instead of list_del() + list_add().
+$ git am ../quilt/device-mapper/dm-use-ACCESS_ONCE-for-sysfs-values.patch
+Applying: Use the ACCESS_ONCE macro in dm-bufio and dm-verity where a variable
+$ git am ../quilt/device-mapper/dm-store-dm_target_io-in-bio-front_pad.patch
+Applying: Use the recently-added bio front_pad field to allocate struct dm_target_io.
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + e56559b...e004254 master     -> quilt/device-mapper  (forced update)
