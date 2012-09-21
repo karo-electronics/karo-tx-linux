@@ -120,10 +120,10 @@ static void __spin_lock_debug(raw_spinlock_t *lock)
 #endif
 
 	/*
-	 * In case the trylock above was causing a livelock, give the lower
-	 * level arch specific lock code a chance to acquire the lock. We have
-	 * already printed a warning/backtrace at this point. The non-debug arch
-	 * specific code might actually succeed in acquiring the lock. If it is
+	 * The trylock above was causing a livelock.  Give the lower level arch
+	 * specific lock code a chance to acquire the lock. We have already
+	 * printed a warning/backtrace at this point. The non-debug arch
+	 * specific code might actually succeed in acquiring the lock.  If it is
 	 * not successful, the end-result is the same - there is no forward
 	 * progress.
 	 */
