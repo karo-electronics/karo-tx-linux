@@ -1,6 +1,4 @@
-obj-y                                   += board-pinmux.o
 obj-y                                   += common.o
-obj-y                                   += devices.o
 obj-y                                   += io.o
 obj-y                                   += irq.o
 obj-y                                   += clock.o
@@ -22,7 +20,6 @@ obj-$(CONFIG_ARCH_TEGRA_3x_SOC)		+= sleep-t30.o
 obj-$(CONFIG_SMP)			+= platsmp.o headsmp.o
 obj-$(CONFIG_SMP)                       += reset.o
 obj-$(CONFIG_HOTPLUG_CPU)               += hotplug.o
-obj-$(CONFIG_TEGRA_SYSTEM_DMA)		+= dma.o
 obj-$(CONFIG_CPU_FREQ)                  += cpu-tegra.o
 obj-$(CONFIG_TEGRA_PCI)			+= pcie.o
 
