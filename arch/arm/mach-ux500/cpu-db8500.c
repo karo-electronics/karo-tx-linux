@@ -18,6 +18,7 @@
 #include <linux/io.h>
 #include <linux/mfd/abx500/ab8500.h>
 
+#include <asm/pmu.h>
 #include <asm/mach/map.h>
 #include <plat/gpio-nomadik.h>
 #include <mach/hardware.h>
@@ -79,7 +80,7 @@ void __init u8500_map_io(void)
 
 	iotable_init(u8500_common_io_desc, ARRAY_SIZE(u8500_common_io_desc));
 
-	if (cpu_is_u9540())
+	if (cpu_is_ux540_family())
 		iotable_init(u9540_io_desc, ARRAY_SIZE(u9540_io_desc));
 	else
 		iotable_init(u8500_io_desc, ARRAY_SIZE(u8500_io_desc));
