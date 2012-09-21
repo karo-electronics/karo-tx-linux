@@ -147,6 +147,9 @@ int virtio_rng__init(struct kvm *kvm)
 	struct rng_dev *rdev;
 	int r;
 
+	if (!kvm->cfg.virtio_rng)
+		return 0;
+
 	rdev = malloc(sizeof(*rdev));
 	if (rdev == NULL)
 		return -ENOMEM;
@@ -173,6 +176,7 @@ cleanup:
 
 	return r;
 }
+virtio_dev_init(virtio_rng__init);
 
 int virtio_rng__exit(struct kvm *kvm)
 {
@@ -186,3 +190,4 @@ int virtio_rng__exit(struct kvm *kvm)
 
 	return 0;
 }
+virtio_dev_exit(virtio_rng__exit);
