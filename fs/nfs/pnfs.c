@@ -662,7 +662,7 @@ _pnfs_return_layout(struct inode *ino)
 
 	spin_lock(&ino->i_lock);
 	lo = nfsi->layout;
-	if (!lo || pnfs_test_layout_returned(lo)) {
+	if (!lo) {
 		spin_unlock(&ino->i_lock);
 		dprintk("NFS: %s no layout to return\n", __func__);
 		goto out;
@@ -680,7 +680,6 @@ _pnfs_return_layout(struct inode *ino)
 		goto out;
 	}
 	lo->plh_block_lgets++;
-	pnfs_mark_layout_returned(lo);
 	spin_unlock(&ino->i_lock);
 	pnfs_free_lseg_list(&tmp_list);
 
@@ -691,7 +690,6 @@ _pnfs_return_layout(struct inode *ino)
 		status = -ENOMEM;
 		pnfs_layout_io_set_failed(lo, IOMODE_RW);
 		pnfs_layout_io_set_failed(lo, IOMODE_READ);
-		pnfs_clear_layout_returned(lo);
 		pnfs_put_layout_hdr(lo);
 		goto out;
 	}
@@ -1083,9 +1081,6 @@ pnfs_update_layout(struct inode *ino,
 
 	if (list_empty(&lo->plh_segs))
 		first = true;
-
-	/* Enable LAYOUTRETURNs */
-	pnfs_clear_layout_returned(lo);
 
 	spin_unlock(&ino->i_lock);
 	if (first) {
