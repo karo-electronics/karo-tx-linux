@@ -756,7 +756,7 @@ int __init_memblock memblock_set_node(phys_addr_t base, phys_addr_t size,
 		return ret;
 
 	for (i = start_rgn; i < end_rgn; i++)
-		type->regions[i].nid = nid;
+		memblock_set_region_node(&type->regions[i], nid);
 
 	memblock_merge_regions(type);
 	return 0;
@@ -888,6 +888,11 @@ int __init memblock_is_reserved(phys_addr_t addr)
 
 int __init_memblock memblock_is_memory(phys_addr_t addr)
 {
+
+	if (unlikely(addr < memblock_start_of_DRAM() ||
+		addr >= memblock_end_of_DRAM()))
+		return 0;
+
 	return memblock_search(&memblock.memory, addr) != -1;
 }
 
