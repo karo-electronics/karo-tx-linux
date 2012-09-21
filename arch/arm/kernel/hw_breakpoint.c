@@ -135,11 +135,10 @@ static u8 get_debug_arch(void)
 	u32 didr;
 
 	/* Do we implement the extended CPUID interface? */
-	if (((read_cpuid_id() >> 16) & 0xf) != 0xf) {
-		pr_warning("CPUID feature registers not supported. "
-			   "Assuming v6 debug is present.\n");
+	if (WARN_ONCE(((read_cpuid_id() >> 16) & 0xf) != 0xf,
+		"CPUID feature registers not supported. "
+		"Assuming v6 debug is present.\n"))
 		return ARM_DEBUG_ARCH_V6;
-	}
 
 	ARM_DBG_READ(c0, 0, didr);
 	return (didr >> 16) & 0xf;
