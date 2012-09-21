@@ -19,6 +19,7 @@
 
 #include <linux/elfcore-compat.h>
 #include <linux/time.h>
+#include <asm/sigframe.h> /* for compat_siginfo_t */
 
 /*
  * Rename the basic ELF layout types to refer to the 32-bit class of files.
@@ -36,6 +37,12 @@
 #define elf_shdr	elf32_shdr
 #define elf_note	elf32_note
 #define elf_addr_t	Elf32_Addr
+
+/*
+ * Some data types as stored in coredump.
+ */
+#define user_siginfo_t		compat_siginfo_t
+#define copy_siginfo_to_user	copy_siginfo_to_user32
 
 /*
  * The machine-dependent core note format types are defined in elfcore-compat.h,
