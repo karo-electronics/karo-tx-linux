@@ -8,7 +8,9 @@
  */
 
 #include <byteswap.h>
+#include <linux/bitops.h>
 #include "asm/bug.h"
+#include "event-parse.h"
 #include "evsel.h"
 #include "evlist.h"
 #include "util.h"
@@ -16,9 +18,10 @@
 #include "thread_map.h"
 #include "target.h"
 #include "../../../include/linux/hw_breakpoint.h"
+#include "../../include/linux/perf_event.h"
+#include "perf_regs.h"
 
 #define FD(e, x, y) (*(int *)xyarray__entry(e->fd, x, y))
-#define GROUP_FD(group_fd, cpu) (*(int *)xyarray__entry(group_fd, cpu, 0))
 
 static int __perf_evsel__sample_size(u64 sample_type)
 {
@@ -66,7 +69,7 @@ struct perf_evsel *perf_evsel__new(struct perf_event_attr *attr, int idx)
 	return evsel;
 }
 
-static const char *perf_evsel__hw_names[PERF_COUNT_HW_MAX] = {
+const char *perf_evsel__hw_names[PERF_COUNT_HW_MAX] = {
 	"cycles",
 	"instructions",
 	"cache-references",
@@ -129,12 +132,12 @@ static int perf_evsel__hw_name(struct perf_evsel *evsel, char *bf, size_t size)
 	return r + perf_evsel__add_modifiers(evsel, bf + r, size - r);
 }
 
-static const char *perf_evsel__sw_names[PERF_COUNT_SW_MAX] = {
+const char *perf_evsel__sw_names[PERF_COUNT_SW_MAX] = {
 	"cpu-clock",
 	"task-clock",
 	"page-faults",
 	"context-switches",
-	"CPU-migrations",
+	"cpu-migrations",
 	"minor-faults",
 	"major-faults",
 	"alignment-faults",
@@ -317,7 +320,8 @@ const char *perf_evsel__name(struct perf_evsel *evsel)
 		break;
 
 	default:
-		scnprintf(bf, sizeof(bf), "%s", "unknown attr type");
+		scnprintf(bf, sizeof(bf), "unknown attr type: %d",
+			  evsel->attr.type);
 		break;
 	}
 
@@ -367,8 +371,17 @@ void perf_evsel__config(struct perf_evsel *evsel, struct perf_record_opts *opts,
 		attr->mmap_data = track;
 	}
 
-	if (opts->call_graph)
+	if (opts->call_graph) {
 		attr->sample_type	|= PERF_SAMPLE_CALLCHAIN;
+
+		if (opts->call_graph == CALLCHAIN_DWARF) {
+			attr->sample_type |= PERF_SAMPLE_REGS_USER |
+					     PERF_SAMPLE_STACK_USER;
+			attr->sample_regs_user = PERF_REGS_MASK;
+			attr->sample_stack_user = opts->stack_dump_size;
+			attr->exclude_callchain_user = 1;
+		}
+	}
 
 	if (perf_target__has_cpu(&opts->target))
 		attr->sample_type	|= PERF_SAMPLE_CPU;
@@ -481,6 +494,7 @@ void perf_evsel__delete(struct perf_evsel *evsel)
 {
 	perf_evsel__exit(evsel);
 	close_cgroup(evsel->cgrp);
+	free(evsel->group_name);
 	free(evsel->name);
 	free(evsel);
 }
@@ -556,9 +570,28 @@ int __perf_evsel__read(struct perf_evsel *evsel,
 	return 0;
 }
 
+static int get_group_fd(struct perf_evsel *evsel, int cpu, int thread)
+{
+	struct perf_evsel *leader = evsel->leader;
+	int fd;
+
+	if (!leader)
+		return -1;
+
+	/*
+	 * Leader must be already processed/open,
+	 * if not it's a bug.
+	 */
+	BUG_ON(!leader->fd);
+
+	fd = FD(leader, cpu, thread);
+	BUG_ON(fd == -1);
+
+	return fd;
+}
+
 static int __perf_evsel__open(struct perf_evsel *evsel, struct cpu_map *cpus,
-			      struct thread_map *threads, bool group,
-			      struct xyarray *group_fds)
+			      struct thread_map *threads)
 {
 	int cpu, thread;
 	unsigned long flags = 0;
@@ -574,12 +607,14 @@ static int __perf_evsel__open(struct perf_evsel *evsel, struct cpu_map *cpus,
 	}
 
 	for (cpu = 0; cpu < cpus->nr; cpu++) {
-		int group_fd = group_fds ? GROUP_FD(group_fds, cpu) : -1;
 
 		for (thread = 0; thread < threads->nr; thread++) {
+			int group_fd;
 
 			if (!evsel->cgrp)
 				pid = threads->map[thread];
+
+			group_fd = get_group_fd(evsel, cpu, thread);
 
 			FD(evsel, cpu, thread) = sys_perf_event_open(&evsel->attr,
 								     pid,
@@ -589,9 +624,6 @@ static int __perf_evsel__open(struct perf_evsel *evsel, struct cpu_map *cpus,
 				err = -errno;
 				goto out_close;
 			}
-
-			if (group && group_fd == -1)
-				group_fd = FD(evsel, cpu, thread);
 		}
 	}
 
@@ -635,8 +667,7 @@ static struct {
 };
 
 int perf_evsel__open(struct perf_evsel *evsel, struct cpu_map *cpus,
-		     struct thread_map *threads, bool group,
-		     struct xyarray *group_fd)
+		     struct thread_map *threads)
 {
 	if (cpus == NULL) {
 		/* Work around old compiler warnings about strict aliasing */
@@ -646,23 +677,19 @@ int perf_evsel__open(struct perf_evsel *evsel, struct cpu_map *cpus,
 	if (threads == NULL)
 		threads = &empty_thread_map.map;
 
-	return __perf_evsel__open(evsel, cpus, threads, group, group_fd);
+	return __perf_evsel__open(evsel, cpus, threads);
 }
 
 int perf_evsel__open_per_cpu(struct perf_evsel *evsel,
-			     struct cpu_map *cpus, bool group,
-			     struct xyarray *group_fd)
+			     struct cpu_map *cpus)
 {
-	return __perf_evsel__open(evsel, cpus, &empty_thread_map.map, group,
-				  group_fd);
+	return __perf_evsel__open(evsel, cpus, &empty_thread_map.map);
 }
 
 int perf_evsel__open_per_thread(struct perf_evsel *evsel,
-				struct thread_map *threads, bool group,
-				struct xyarray *group_fd)
+				struct thread_map *threads)
 {
-	return __perf_evsel__open(evsel, &empty_cpu_map.map, threads, group,
-				  group_fd);
+	return __perf_evsel__open(evsel, &empty_cpu_map.map, threads);
 }
 
 static int perf_event__parse_id_sample(const union perf_event *event, u64 type,
@@ -733,6 +760,7 @@ int perf_evsel__parse_sample(struct perf_evsel *evsel, union perf_event *event,
 			     struct perf_sample *data, bool swapped)
 {
 	u64 type = evsel->attr.sample_type;
+	u64 regs_user = evsel->attr.sample_regs_user;
 	const u64 *array;
 
 	/*
@@ -869,6 +897,32 @@ int perf_evsel__parse_sample(struct perf_evsel *evsel, union perf_event *event,
 		sz /= sizeof(u64);
 		array += sz;
 	}
+
+	if (type & PERF_SAMPLE_REGS_USER) {
+		/* First u64 tells us if we have any regs in sample. */
+		u64 avail = *array++;
+
+		if (avail) {
+			data->user_regs.regs = (u64 *)array;
+			array += hweight_long(regs_user);
+		}
+	}
+
+	if (type & PERF_SAMPLE_STACK_USER) {
+		u64 size = *array++;
+
+		data->user_stack.offset = ((char *)(array - 1)
+					  - (char *) event);
+
+		if (!size) {
+			data->user_stack.size = 0;
+		} else {
+			data->user_stack.data = (char *)array;
+			array += size / sizeof(*array);
+			data->user_stack.size = *array;
+		}
+	}
+
 	return 0;
 }
 
@@ -946,4 +1000,38 @@ int perf_event__synthesize_sample(union perf_event *event, u64 type,
 	}
 
 	return 0;
+}
+
+char *perf_evsel__strval(struct perf_evsel *evsel, struct perf_sample *sample,
+			 const char *name)
+{
+	struct format_field *field = pevent_find_field(evsel->tp_format, name);
+	int offset;
+
+        if (!field)
+                return NULL;
+
+	offset = field->offset;
+
+	if (field->flags & FIELD_IS_DYNAMIC) {
+		offset = *(int *)(sample->raw_data + field->offset);
+		offset &= 0xffff;
+	}
+
+	return sample->raw_data + offset;
+}
+
+u64 perf_evsel__intval(struct perf_evsel *evsel, struct perf_sample *sample,
+		       const char *name)
+{
+	struct format_field *field = pevent_find_field(evsel->tp_format, name);
+	u64 val;
+
+        if (!field)
+                return 0;
+
+	val = pevent_read_number(evsel->tp_format->pevent,
+				 sample->raw_data + field->offset, field->size);
+	return val;
+
 }

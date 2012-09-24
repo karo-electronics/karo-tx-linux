@@ -1646,9 +1646,11 @@ static __init void event_trace_self_tests(void)
 		event_test_stuff();
 
 		ret = __ftrace_set_clr_event(NULL, system->name, NULL, 0);
-		if (WARN_ON_ONCE(ret))
+		if (WARN_ON_ONCE(ret)) {
 			pr_warning("error disabling system %s\n",
 				   system->name);
+			continue;
+		}
 
 		pr_cont("OK\n");
 	}
@@ -1681,7 +1683,8 @@ static __init void event_trace_self_tests(void)
 static DEFINE_PER_CPU(atomic_t, ftrace_test_event_disable);
 
 static void
-function_test_events_call(unsigned long ip, unsigned long parent_ip)
+function_test_events_call(unsigned long ip, unsigned long parent_ip,
+			  struct ftrace_ops *op, struct pt_regs *pt_regs)
 {
 	struct ring_buffer_event *event;
 	struct ring_buffer *buffer;
@@ -1720,6 +1723,7 @@ function_test_events_call(unsigned long ip, unsigned long parent_ip)
 static struct ftrace_ops trace_ops __initdata  =
 {
 	.func = function_test_events_call,
+	.flags = FTRACE_OPS_FL_RECURSION_SAFE,
 };
 
 static __init void event_trace_self_test_with_function(void)
