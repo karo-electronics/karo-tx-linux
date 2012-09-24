@@ -188,6 +188,7 @@ struct rt2x00_chip {
 #define RT3071		0x3071
 #define RT3090		0x3090	/* 2.4GHz PCIe */
 #define RT3290		0x3290
+#define RT3352		0x3352  /* WSOC */
 #define RT3390		0x3390
 #define RT3572		0x3572
 #define RT3593		0x3593
@@ -1287,7 +1288,9 @@ void rt2x00lib_rxdone(struct queue_entry *entry, gfp_t gfp);
 /*
  * mac80211 handlers.
  */
-void rt2x00mac_tx(struct ieee80211_hw *hw, struct sk_buff *skb);
+void rt2x00mac_tx(struct ieee80211_hw *hw,
+		  struct ieee80211_tx_control *control,
+		  struct sk_buff *skb);
 int rt2x00mac_start(struct ieee80211_hw *hw);
 void rt2x00mac_stop(struct ieee80211_hw *hw);
 int rt2x00mac_add_interface(struct ieee80211_hw *hw,
