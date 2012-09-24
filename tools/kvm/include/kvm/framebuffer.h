@@ -22,6 +22,7 @@ struct framebuffer {
 	char				*mem;
 	u64				mem_addr;
 	u64				mem_size;
+	struct kvm			*kvm;
 
 	unsigned long			nr_targets;
 	struct fb_target_operations	*targets[FB_MAX_TARGETS];
@@ -29,7 +30,7 @@ struct framebuffer {
 
 struct framebuffer *fb__register(struct framebuffer *fb);
 int fb__attach(struct framebuffer *fb, struct fb_target_operations *ops);
-int fb__start(void);
-void fb__stop(void);
+int fb__init(struct kvm *kvm);
+int fb__exit(struct kvm *kvm);
 
 #endif /* KVM__FRAMEBUFFER_H */
