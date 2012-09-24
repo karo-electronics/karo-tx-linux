@@ -285,6 +285,145 @@ static int ext4_file_open(struct inode * inode, struct file * filp)
 	return dquot_file_open(inode, filp);
 }
 
+static loff_t ext4_seek_data(struct file *file, loff_t offset, loff_t maxsize)
+{
+	struct inode *inode = file->f_mapping->host;
+	struct ext4_map_blocks map;
+	struct extent_status es;
+	ext4_lblk_t start_block, end_block, len, delblk;
+	loff_t dataoff, isize;
+	int blkbits;
+	int ret = 0;
+
+	mutex_lock(&inode->i_mutex);
+
+	blkbits = inode->i_sb->s_blocksize_bits;
+	isize = i_size_read(inode);
+	start_block = offset >> blkbits;
+	end_block = isize >> blkbits;
+	len = isize - offset + 1;
+
+	do {
+		map.m_lblk = start_block;
+		map.m_len = len >> blkbits;
+
+		ret = ext4_map_blocks(NULL, inode, &map, 0);
+
+		if (ret > 0) {
+			dataoff = start_block << blkbits;
+			break;
+		} else {
+			/* search in extent status */
+			es.start = start_block;
+			down_read(&EXT4_I(inode)->i_data_sem);
+			delblk = ext4_es_find_extent(inode, &es);
+			up_read(&EXT4_I(inode)->i_data_sem);
+
+			if (start_block >= es.start &&
+			    start_block < es.start + es.len) {
+				dataoff = start_block << blkbits;
+				break;
+			}
+
+			start_block++;
+
+			/*
+			 * currently hole punching doesn't change the size of
+			 * file.  So after hole punching, maybe there has a
+			 * hole at the end of file.
+			 */
+			if (start_block > end_block) {
+				dataoff = -ENXIO;
+				break;
+			}
+		}
+	} while (1);
+
+	mutex_unlock(&inode->i_mutex);
+	return dataoff;
+}
+
+static loff_t ext4_seek_hole(struct file *file, loff_t offset, loff_t maxsize)
+{
+	struct inode *inode = file->f_mapping->host;
+	struct ext4_map_blocks map;
+	struct extent_status es;
+	ext4_lblk_t start_block, end_block, len, delblk;
+	loff_t holeoff, isize;
+	int blkbits;
+	int ret = 0;
+
+	mutex_lock(&inode->i_mutex);
+
+	blkbits = inode->i_sb->s_blocksize_bits;
+	isize = i_size_read(inode);
+	start_block = offset >> blkbits;
+	end_block = isize >> blkbits;
+	len = isize - offset + 1;
+
+	do {
+		map.m_lblk = start_block;
+		map.m_len = len >> blkbits;
+
+		ret = ext4_map_blocks(NULL, inode, &map, 0);
+
+		if (ret > 0) {
+			/* skip this extent */
+			start_block += ret;
+			if (start_block > end_block) {
+				holeoff = isize;
+				break;
+			}
+		} else {
+			/* search in extent status */
+			es.start = start_block;
+			down_read(&EXT4_I(inode)->i_data_sem);
+			delblk = ext4_es_find_extent(inode, &es);
+			up_read(&EXT4_I(inode)->i_data_sem);
+
+			if (start_block >= es.start &&
+			    start_block < es.start + es.len) {
+				/* skip this delay extent */
+				start_block = es.start + es.len;
+				continue;
+			}
+
+			holeoff = start_block << blkbits;
+			break;
+		}
+	} while (1);
+
+	mutex_unlock(&inode->i_mutex);
+	return holeoff;
+}
+
+static loff_t ext4_seek_data_hole(struct file *file, loff_t offset,
+				  int origin, loff_t maxsize)
+{
+	struct inode *inode = file->f_mapping->host;
+
+	BUG_ON((origin != SEEK_DATA) && (origin != SEEK_HOLE));
+
+	if (offset >= i_size_read(inode))
+		return -ENXIO;
+
+	if (offset < 0 && !(file->f_mode & FMODE_UNSIGNED_OFFSET))
+		return -EINVAL;
+	if (offset > maxsize)
+		return -EINVAL;
+
+	switch (origin) {
+	case SEEK_DATA:
+		return ext4_seek_data(file, offset, maxsize);
+	case SEEK_HOLE:
+		return ext4_seek_hole(file, offset, maxsize);
+	default:
+		ext4_error(inode->i_sb, "Unknown origin");
+	}
+
+	return -EINVAL;
+}
+
 /*
  * ext4_llseek() handles both block-mapped and extent-mapped maxbytes values
  * by calling generic_file_llseek_size() with the appropriate maxbytes
@@ -300,8 +439,18 @@ loff_t ext4_llseek(struct file *file, loff_t offset, int origin)
 	else
 		maxbytes = inode->i_sb->s_maxbytes;
 
-	return generic_file_llseek_size(file, offset, origin,
-					maxbytes, i_size_read(inode));
+	switch (origin) {
+	case SEEK_END:
+	case SEEK_CUR:
+	case SEEK_SET:
+		return generic_file_llseek_size(file, offset, origin,
+						maxbytes, i_size_read(inode));
+	case SEEK_DATA:
+	case SEEK_HOLE:
+		return ext4_seek_data_hole(file, offset, origin, maxbytes);
+	}
+
+	return -EINVAL;
 }
 
 const struct file_operations ext4_file_operations = {

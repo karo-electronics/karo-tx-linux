@@ -50,6 +50,7 @@
 #include "xattr.h"
 #include "acl.h"
 #include "mballoc.h"
+#include "ext4_extents.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/ext4.h>
@@ -850,7 +851,6 @@ static void ext4_put_super(struct super_block *sb)
 	flush_workqueue(sbi->dio_unwritten_wq);
 	destroy_workqueue(sbi->dio_unwritten_wq);
 
-	lock_super(sb);
 	if (sbi->s_journal) {
 		err = jbd2_journal_destroy(sbi->s_journal);
 		sbi->s_journal = NULL;
@@ -917,7 +917,6 @@ static void ext4_put_super(struct super_block *sb)
 	 * Now that we are completely done shutting down the
 	 * superblock, we need to actually destroy the kobject.
 	 */
-	unlock_super(sb);
 	kobject_put(&sbi->s_kobj);
 	wait_for_completion(&sbi->s_kobj_unregister);
 	if (sbi->s_chksum_driver)
@@ -944,6 +943,7 @@ static struct inode *ext4_alloc_inode(struct super_block *sb)
 	memset(&ei->i_cached_extent, 0, sizeof(struct ext4_ext_cache));
 	INIT_LIST_HEAD(&ei->i_prealloc_list);
 	spin_lock_init(&ei->i_prealloc_lock);
+	ext4_es_init_tree(&ei->i_es_tree);
 	ei->i_reserved_data_blocks = 0;
 	ei->i_reserved_meta_blocks = 0;
 	ei->i_allocated_meta_blocks = 0;
@@ -1028,6 +1028,7 @@ void ext4_clear_inode(struct inode *inode)
 	clear_inode(inode);
 	dquot_drop(inode);
 	ext4_discard_preallocations(inode);
+	ext4_es_remove_extent(inode, 0, EXT_MAX_BLOCKS);
 	if (EXT4_I(inode)->jinode) {
 		jbd2_journal_release_jbd_inode(EXT4_JOURNAL(inode),
 					       EXT4_I(inode)->jinode);
@@ -1219,6 +1220,7 @@ enum {
 	Opt_inode_readahead_blks, Opt_journal_ioprio,
 	Opt_dioread_nolock, Opt_dioread_lock,
 	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
+	Opt_max_dir_size_kb,
 };
 
 static const match_table_t tokens = {
@@ -1292,6 +1294,7 @@ static const match_table_t tokens = {
 	{Opt_init_itable, "init_itable=%u"},
 	{Opt_init_itable, "init_itable"},
 	{Opt_noinit_itable, "noinit_itable"},
+	{Opt_max_dir_size_kb, "max_dir_size_kb=%u"},
 	{Opt_removed, "check=none"},	/* mount option from ext2/3 */
 	{Opt_removed, "nocheck"},	/* mount option from ext2/3 */
 	{Opt_removed, "reservation"},	/* mount option from ext2/3 */
@@ -1472,6 +1475,7 @@ static const struct mount_opts {
 	{Opt_jqfmt_vfsold, QFMT_VFS_OLD, MOPT_QFMT},
 	{Opt_jqfmt_vfsv0, QFMT_VFS_V0, MOPT_QFMT},
 	{Opt_jqfmt_vfsv1, QFMT_VFS_V1, MOPT_QFMT},
+	{Opt_max_dir_size_kb, 0, MOPT_GTE0},
 	{Opt_err, 0, 0}
 };
 
@@ -1587,6 +1591,8 @@ static int handle_mount_opt(struct super_block *sb, char *opt, int token,
 			if (!args->from)
 				arg = EXT4_DEF_LI_WAIT_MULT;
 			sbi->s_li_wait_mult = arg;
+		} else if (token == Opt_max_dir_size_kb) {
+			sbi->s_max_dir_size_kb = arg;
 		} else if (token == Opt_stripe) {
 			sbi->s_stripe = arg;
 		} else if (m->flags & MOPT_DATAJ) {
@@ -1659,7 +1665,7 @@ static int parse_options(char *options, struct super_block *sb,
 		 * Initialize args struct so we know whether arg was
 		 * found; some options take optional arguments.
 		 */
-		args[0].to = args[0].from = 0;
+		args[0].to = args[0].from = NULL;
 		token = match_token(p, tokens, args);
 		if (handle_mount_opt(sb, p, token, args, journal_devnum,
 				     journal_ioprio, is_remount) < 0)
@@ -1818,6 +1824,8 @@ static int _ext4_show_options(struct seq_file *seq, struct super_block *sb,
 	if (nodefs || (test_opt(sb, INIT_INODE_TABLE) &&
 		       (sbi->s_li_wait_mult != EXT4_DEF_LI_WAIT_MULT)))
 		SEQ_OPTS_PRINT("init_itable=%u", sbi->s_li_wait_mult);
+	if (nodefs || sbi->s_max_dir_size_kb)
+		SEQ_OPTS_PRINT("max_dir_size_kb=%u", sbi->s_max_dir_size_kb);
 
 	ext4_show_quota_options(seq, sb);
 	return 0;
@@ -1909,15 +1917,45 @@ done:
 	return res;
 }
 
+int ext4_alloc_flex_bg_array(struct super_block *sb, ext4_group_t ngroup)
+{
+	struct ext4_sb_info *sbi = EXT4_SB(sb);
+	struct flex_groups *new_groups;
+	int size;
+
+	if (!sbi->s_log_groups_per_flex)
+		return 0;
+
+	size = ext4_flex_group(sbi, ngroup - 1) + 1;
+	if (size <= sbi->s_flex_groups_allocated)
+		return 0;
+
+	size = roundup_pow_of_two(size * sizeof(struct flex_groups));
+	new_groups = ext4_kvzalloc(size, GFP_KERNEL);
+	if (!new_groups) {
+		ext4_msg(sb, KERN_ERR, "not enough memory for %d flex groups",
+			 size / (int) sizeof(struct flex_groups));
+		return -ENOMEM;
+	}
+
+	if (sbi->s_flex_groups) {
+		memcpy(new_groups, sbi->s_flex_groups,
+		       (sbi->s_flex_groups_allocated *
+			sizeof(struct flex_groups)));
+		ext4_kvfree(sbi->s_flex_groups);
+	}
+	sbi->s_flex_groups = new_groups;
+	sbi->s_flex_groups_allocated = size / sizeof(struct flex_groups);
+	return 0;
+}
+
 static int ext4_fill_flex_info(struct super_block *sb)
 {
 	struct ext4_sb_info *sbi = EXT4_SB(sb);
 	struct ext4_group_desc *gdp = NULL;
-	ext4_group_t flex_group_count;
 	ext4_group_t flex_group;
 	unsigned int groups_per_flex = 0;
-	size_t size;
-	int i;
+	int i, err;
 
 	sbi->s_log_groups_per_flex = sbi->s_es->s_log_groups_per_flex;
 	if (sbi->s_log_groups_per_flex < 1 || sbi->s_log_groups_per_flex > 31) {
@@ -1926,17 +1964,9 @@ static int ext4_fill_flex_info(struct super_block *sb)
 	}
 	groups_per_flex = 1 << sbi->s_log_groups_per_flex;
 
-	/* We allocate both existing and potentially added groups */
-	flex_group_count = ((sbi->s_groups_count + groups_per_flex - 1) +
-			((le16_to_cpu(sbi->s_es->s_reserved_gdt_blocks) + 1) <<
-			      EXT4_DESC_PER_BLOCK_BITS(sb))) / groups_per_flex;
-	size = flex_group_count * sizeof(struct flex_groups);
-	sbi->s_flex_groups = ext4_kvzalloc(size, GFP_KERNEL);
-	if (sbi->s_flex_groups == NULL) {
-		ext4_msg(sb, KERN_ERR, "not enough memory for %u flex groups",
-			 flex_group_count);
+	err = ext4_alloc_flex_bg_array(sb, sbi->s_groups_count);
+	if (err)
 		goto failed;
-	}
 
 	for (i = 0; i < sbi->s_groups_count; i++) {
 		gdp = ext4_get_group_desc(sb, i, NULL);
@@ -2523,6 +2553,7 @@ EXT4_RW_ATTR_SBI_UI(mb_order2_req, s_mb_order2_reqs);
 EXT4_RW_ATTR_SBI_UI(mb_stream_req, s_mb_stream_request);
 EXT4_RW_ATTR_SBI_UI(mb_group_prealloc, s_mb_group_prealloc);
 EXT4_RW_ATTR_SBI_UI(max_writeback_mb_bump, s_max_writeback_mb_bump);
+EXT4_RW_ATTR_SBI_UI(extent_max_zeroout_kb, s_extent_max_zeroout_kb);
 EXT4_ATTR(trigger_fs_error, 0200, NULL, trigger_test_error);
 
 static struct attribute *ext4_attrs[] = {
@@ -2538,6 +2569,7 @@ static struct attribute *ext4_attrs[] = {
 	ATTR_LIST(mb_stream_req),
 	ATTR_LIST(mb_group_prealloc),
 	ATTR_LIST(max_writeback_mb_bump),
+	ATTR_LIST(extent_max_zeroout_kb),
 	ATTR_LIST(trigger_fs_error),
 	NULL,
 };
@@ -2545,10 +2577,12 @@ static struct attribute *ext4_attrs[] = {
 /* Features this copy of ext4 supports */
 EXT4_INFO_ATTR(lazy_itable_init);
 EXT4_INFO_ATTR(batched_discard);
+EXT4_INFO_ATTR(meta_bg_resize);
 
 static struct attribute *ext4_feat_attrs[] = {
 	ATTR_LIST(lazy_itable_init),
 	ATTR_LIST(batched_discard),
+	ATTR_LIST(meta_bg_resize),
 	NULL,
 };
 
@@ -3369,7 +3403,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
 	 * enable delayed allocation by default
 	 * Use -o nodelalloc to turn it off
 	 */
-	if (!IS_EXT3_SB(sb) &&
+	if (!IS_EXT3_SB(sb) && !IS_EXT2_SB(sb) &&
 	    ((def_mount_opts & EXT4_DEFM_NODELALLOC) == 0))
 		set_opt(sb, DELALLOC);
 
@@ -3738,6 +3772,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
 
 	sbi->s_stripe = ext4_get_stripe_size(sbi);
 	sbi->s_max_writeback_mb_bump = 128;
+	sbi->s_extent_max_zeroout_kb = 32;
 
 	/*
 	 * set up enough so that it can read an inode
@@ -4514,11 +4549,9 @@ static int ext4_unfreeze(struct super_block *sb)
 	if (sb->s_flags & MS_RDONLY)
 		return 0;
 
-	lock_super(sb);
 	/* Reset the needs_recovery flag before the fs is unlocked. */
 	EXT4_SET_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_RECOVER);
 	ext4_commit_super(sb, 1);
-	unlock_super(sb);
 	return 0;
 }
 
@@ -4554,7 +4587,6 @@ static int ext4_remount(struct super_block *sb, int *flags, char *data)
 	char *orig_data = kstrdup(data, GFP_KERNEL);
 
 	/* Store the original options */
-	lock_super(sb);
 	old_sb_flags = sb->s_flags;
 	old_opts.s_mount_opt = sbi->s_mount_opt;
 	old_opts.s_mount_opt2 = sbi->s_mount_opt2;
@@ -4696,7 +4728,6 @@ static int ext4_remount(struct super_block *sb, int *flags, char *data)
 	if (sbi->s_journal == NULL)
 		ext4_commit_super(sb, 1);
 
-	unlock_super(sb);
 #ifdef CONFIG_QUOTA
 	/* Release old quota file names */
 	for (i = 0; i < MAXQUOTAS; i++)
@@ -4709,10 +4740,8 @@ static int ext4_remount(struct super_block *sb, int *flags, char *data)
 		else if (EXT4_HAS_RO_COMPAT_FEATURE(sb,
 					EXT4_FEATURE_RO_COMPAT_QUOTA)) {
 			err = ext4_enable_quotas(sb);
-			if (err) {
-				lock_super(sb);
+			if (err)
 				goto restore_opts;
-			}
 		}
 	}
 #endif
@@ -4739,7 +4768,6 @@ restore_opts:
 		sbi->s_qf_names[i] = old_opts.s_qf_names[i];
 	}
 #endif
-	unlock_super(sb);
 	kfree(orig_data);
 	return err;
 }
@@ -5257,15 +5285,22 @@ static int __init ext4_init_fs(void)
 		init_waitqueue_head(&ext4__ioend_wq[i]);
 	}
 
-	err = ext4_init_pageio();
+	err = ext4_init_es();
 	if (err)
 		return err;
+
+	err = ext4_init_pageio();
+	if (err)
+		goto out7;
+
 	err = ext4_init_system_zone();
 	if (err)
 		goto out6;
 	ext4_kset = kset_create_and_add("ext4", NULL, fs_kobj);
-	if (!ext4_kset)
+	if (!ext4_kset) {
+		err = -ENOMEM;
 		goto out5;
+	}
 	ext4_proc_root = proc_mkdir("fs/ext4", NULL);
 
 	err = ext4_init_feat_adverts();
@@ -5307,6 +5342,9 @@ out5:
 	ext4_exit_system_zone();
 out6:
 	ext4_exit_pageio();
+out7:
+	ext4_exit_es();
+
 	return err;
 }
 
