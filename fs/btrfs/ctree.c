@@ -2441,6 +2441,7 @@ int btrfs_search_slot(struct btrfs_trans_handle *trans, struct btrfs_root
 	lowest_level = p->lowest_level;
 	WARN_ON(lowest_level && ins_len > 0);
 	WARN_ON(p->nodes[0] != NULL);
+	p->shecantgoanyfarthercapt = 1;
 
 	if (ins_len < 0) {
 		lowest_unlock = 2;
@@ -2568,6 +2569,13 @@ cow_done:
 
 		if (level != 0) {
 			int dec = 0;
+
+			/*
+			 * Slot is not the last in the node, we can go farther
+			 * capt.
+			 */
+			if (slot < btrfs_header_nritems(b))
+				p->shecantgoanyfarthercapt = 0;
 			if (ret && slot > 0) {
 				dec = 1;
 				slot -= 1;
@@ -5615,8 +5623,27 @@ int btrfs_next_old_leaf(struct btrfs_root *root, struct btrfs_path *path,
 	nritems = btrfs_header_nritems(path->nodes[0]);
 	if (nritems == 0)
 		return 1;
+	if (path->shecantgoanyfarthercapt)
+		return 1;
+	if (!path->nodes[1])
+		return 1;
 
 	btrfs_item_key_to_cpu(path->nodes[0], &key, nritems - 1);
+
+	/*
+	 * If we have the level above us locked already just check and see if
+	 * the key in the next leaf even has the same objectid, and if not
+	 * return 1 and avoid the search.
+	 */
+	if (path->locks[1] &&
+	    path->slots[1] + 1 < btrfs_header_nritems(path->nodes[1])) {
+		struct btrfs_key tmp;
+
+		btrfs_node_key_to_cpu(path->nodes[1], &tmp,
+				      path->slots[1] + 1);
+		if (key.objectid != tmp.objectid)
+			return 1;
+	}
 again:
 	level = 1;
 	next = NULL;
