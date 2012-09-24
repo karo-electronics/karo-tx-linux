@@ -1004,7 +1004,6 @@ config UIDGID_CONVERTED
 
 	# The rare drivers that won't build
 	depends on INFINIBAND_QIB = n
-	depends on BLK_DEV_LOOP = n
 	depends on ANDROID_BINDER_IPC = n
 
 	# Security modules
