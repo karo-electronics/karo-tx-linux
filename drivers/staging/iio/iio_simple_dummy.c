@@ -63,7 +63,7 @@ static const struct iio_dummy_accel_calibscale dummy_scales[] = {
  * This array of structures tells the IIO core about what the device
  * actually provides for a given channel.
  */
-static struct iio_chan_spec iio_dummy_channels[] = {
+static const struct iio_chan_spec iio_dummy_channels[] = {
 	/* indexed ADC channel in_voltage0_raw etc */
 	{
 		.type = IIO_VOLTAGE,
@@ -558,6 +558,6 @@ static __exit void iio_dummy_exit(void)
 }
 module_exit(iio_dummy_exit);
 
-MODULE_AUTHOR("Jonathan Cameron <jic23@cam.ac.uk>");
+MODULE_AUTHOR("Jonathan Cameron <jic23@kernel.org>");
 MODULE_DESCRIPTION("IIO dummy driver");
 MODULE_LICENSE("GPL v2");

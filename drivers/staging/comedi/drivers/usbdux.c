@@ -404,7 +404,7 @@ static void usbduxsub_ai_IsocIrq(struct urb *urb)
 	/* the private structure of the subdevice is struct usbduxsub */
 	this_usbduxsub = this_comedidev->private;
 	/* subdevice which is the AD converter */
-	s = this_comedidev->subdevices + SUBDEV_AD;
+	s = &this_comedidev->subdevices[SUBDEV_AD];
 
 	/* first we test if something unusual has just happened */
 	switch (urb->status) {
@@ -604,7 +604,7 @@ static void usbduxsub_ao_IsocIrq(struct urb *urb)
 	/* the private structure of the subdevice is struct usbduxsub */
 	this_usbduxsub = this_comedidev->private;
 
-	s = this_comedidev->subdevices + SUBDEV_DA;
+	s = &this_comedidev->subdevices[SUBDEV_DA];
 
 	switch (urb->status) {
 	case 0:
@@ -1947,7 +1947,7 @@ static void usbduxsub_pwm_irq(struct urb *urb)
 	/* the private structure of the subdevice is struct usbduxsub */
 	this_usbduxsub = this_comedidev->private;
 
-	s = this_comedidev->subdevices + SUBDEV_DA;
+	s = &this_comedidev->subdevices[SUBDEV_DA];
 
 	switch (urb->status) {
 	case 0:
@@ -2293,10 +2293,8 @@ static void tidy_up(struct usbduxsub *usbduxsub_tmp)
 	usbduxsub_tmp->pwm_cmd_running = 0;
 }
 
-/* common part of attach and attach_usb */
 static int usbdux_attach_common(struct comedi_device *dev,
-				struct usbduxsub *udev,
-				void *aux_data, int aux_len)
+				struct usbduxsub *udev)
 {
 	int ret;
 	struct comedi_subdevice *s = NULL;
@@ -2305,10 +2303,6 @@ static int usbdux_attach_common(struct comedi_device *dev,
 	down(&udev->sem);
 	/* pointer back to the corresponding comedi device */
 	udev->comedidev = dev;
-
-	/* trying to upload the firmware into the chip */
-	if (aux_data)
-		firmwareUpload(udev, aux_data, aux_len);
 
 	dev->board_name = "usbdux";
 
@@ -2331,7 +2325,7 @@ static int usbdux_attach_common(struct comedi_device *dev,
 	dev->private = udev;
 
 	/* the first subdevice is the A/D converter */
-	s = dev->subdevices + SUBDEV_AD;
+	s = &dev->subdevices[SUBDEV_AD];
 	/* the URBs get the comedi subdevice */
 	/* which is responsible for reading */
 	/* this is the subdevice which reads data */
@@ -2358,7 +2352,7 @@ static int usbdux_attach_common(struct comedi_device *dev,
 	s->range_table = (&range_usbdux_ai_range);
 
 	/* analog out */
-	s = dev->subdevices + SUBDEV_DA;
+	s = &dev->subdevices[SUBDEV_DA];
 	/* analog out */
 	s->type = COMEDI_SUBD_AO;
 	/* backward pointer */
@@ -2384,7 +2378,7 @@ static int usbdux_attach_common(struct comedi_device *dev,
 	s->insn_write = usbdux_ao_insn_write;
 
 	/* digital I/O */
-	s = dev->subdevices + SUBDEV_DIO;
+	s = &dev->subdevices[SUBDEV_DIO];
 	s->type = COMEDI_SUBD_DIO;
 	s->subdev_flags = SDF_READABLE | SDF_WRITABLE;
 	s->n_chan = 8;
@@ -2396,7 +2390,7 @@ static int usbdux_attach_common(struct comedi_device *dev,
 	s->private = NULL;
 
 	/* counter */
-	s = dev->subdevices + SUBDEV_COUNTER;
+	s = &dev->subdevices[SUBDEV_COUNTER];
 	s->type = COMEDI_SUBD_COUNTER;
 	s->subdev_flags = SDF_WRITABLE | SDF_READABLE;
 	s->n_chan = 4;
@@ -2407,7 +2401,7 @@ static int usbdux_attach_common(struct comedi_device *dev,
 
 	if (udev->high_speed) {
 		/* timer / pwm */
-		s = dev->subdevices + SUBDEV_PWM;
+		s = &dev->subdevices[SUBDEV_PWM];
 		s->type = COMEDI_SUBD_PWM;
 		s->subdev_flags = SDF_WRITABLE | SDF_PWM_HBRIDGE;
 		s->n_chan = 8;
@@ -2429,48 +2423,6 @@ static int usbdux_attach_common(struct comedi_device *dev,
 	return 0;
 }
 
-/* is called when comedi-config is called */
-static int usbdux_attach(struct comedi_device *dev, struct comedi_devconfig *it)
-{
-	int ret;
-	int index;
-	int i;
-	void *aux_data;
-	int aux_len;
-
-	dev->private = NULL;
-
-	aux_data = comedi_aux_data(it->options, 0);
-	aux_len = it->options[COMEDI_DEVCONF_AUX_DATA_LENGTH];
-	if (aux_data == NULL)
-		aux_len = 0;
-	else if (aux_len == 0)
-		aux_data = NULL;
-
-	down(&start_stop_sem);
-	/* find a valid device which has been detected by the probe function of
-	 * the usb */
-	index = -1;
-	for (i = 0; i < NUMUSBDUX; i++) {
-		if ((usbduxsub[i].probed) && (!usbduxsub[i].attached)) {
-			index = i;
-			break;
-		}
-	}
-
-	if (index < 0) {
-		printk(KERN_ERR
-		       "comedi%d: usbdux: error: attach failed, no usbdux devs connected to the usb bus.\n",
-		       dev->minor);
-		ret = -ENODEV;
-	} else
-		ret = usbdux_attach_common(dev, &usbduxsub[index],
-					   aux_data, aux_len);
-	up(&start_stop_sem);
-	return ret;
-}
-
-/* is called from comedi_usb_auto_config() */
 static int usbdux_attach_usb(struct comedi_device *dev,
 			     struct usb_interface *uinterf)
 {
@@ -2492,7 +2444,7 @@ static int usbdux_attach_usb(struct comedi_device *dev,
 		       dev->minor);
 		ret = -ENODEV;
 	} else
-		ret = usbdux_attach_common(dev, this_usbduxsub, NULL, 0);
+		ret = usbdux_attach_common(dev, this_usbduxsub);
 	up(&start_stop_sem);
 	return ret;
 }
@@ -2513,9 +2465,8 @@ static void usbdux_detach(struct comedi_device *dev)
 static struct comedi_driver usbdux_driver = {
 	.driver_name	= "usbdux",
 	.module		= THIS_MODULE,
-	.attach		= usbdux_attach,
-	.detach		= usbdux_detach,
 	.attach_usb	= usbdux_attach_usb,
+	.detach		= usbdux_detach,
 };
 
 static void usbdux_firmware_request_complete_handler(const struct firmware *fw,
