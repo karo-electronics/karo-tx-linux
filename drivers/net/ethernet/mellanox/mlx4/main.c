@@ -384,6 +384,7 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 		dev->caps.reserved_qps_cnt[MLX4_QP_REGION_FC_ADDR] +
 		dev->caps.reserved_qps_cnt[MLX4_QP_REGION_FC_EXCH];
 
+	dev->caps.sqp_demux = (mlx4_is_master(dev)) ? MLX4_MAX_NUM_SLAVES : 0;
 	return 0;
 }
 /*The function checks if there are live vf, return the num of them*/
@@ -409,19 +410,53 @@ static int mlx4_how_many_lives_vf(struct mlx4_dev *dev)
 int mlx4_get_parav_qkey(struct mlx4_dev *dev, u32 qpn, u32 *qkey)
 {
 	u32 qk = MLX4_RESERVED_QKEY_BASE;
-	if (qpn >= dev->caps.base_tunnel_sqpn + 8 * MLX4_MFUNC_MAX ||
-	    qpn < dev->caps.sqp_start)
+
+	if (qpn >= dev->phys_caps.base_tunnel_sqpn + 8 * MLX4_MFUNC_MAX ||
+	    qpn < dev->phys_caps.base_proxy_sqpn)
 		return -EINVAL;
 
-	if (qpn >= dev->caps.base_tunnel_sqpn)
+	if (qpn >= dev->phys_caps.base_tunnel_sqpn)
 		/* tunnel qp */
-		qk += qpn - dev->caps.base_tunnel_sqpn;
+		qk += qpn - dev->phys_caps.base_tunnel_sqpn;
 	else
-		qk += qpn - dev->caps.sqp_start;
+		qk += qpn - dev->phys_caps.base_proxy_sqpn;
 	*qkey = qk;
 	return 0;
 }
 EXPORT_SYMBOL(mlx4_get_parav_qkey);
+
+void mlx4_sync_pkey_table(struct mlx4_dev *dev, int slave, int port, int i, int val)
+{
+	struct mlx4_priv *priv = container_of(dev, struct mlx4_priv, dev);
+
+	if (!mlx4_is_master(dev))
+		return;
+
+	priv->virt2phys_pkey[slave][port - 1][i] = val;
+}
+EXPORT_SYMBOL(mlx4_sync_pkey_table);
+
+void mlx4_put_slave_node_guid(struct mlx4_dev *dev, int slave, __be64 guid)
+{
+	struct mlx4_priv *priv = container_of(dev, struct mlx4_priv, dev);
+
+	if (!mlx4_is_master(dev))
+		return;
+
+	priv->slave_node_guids[slave] = guid;
+}
+EXPORT_SYMBOL(mlx4_put_slave_node_guid);
+
+__be64 mlx4_get_slave_node_guid(struct mlx4_dev *dev, int slave)
+{
+	struct mlx4_priv *priv = container_of(dev, struct mlx4_priv, dev);
+
+	if (!mlx4_is_master(dev))
+		return 0;
+
+	return priv->slave_node_guids[slave];
+}
+EXPORT_SYMBOL(mlx4_get_slave_node_guid);
 
 int mlx4_is_slave_active(struct mlx4_dev *dev, int slave)
 {
@@ -493,9 +528,10 @@ static int mlx4_slave_cap(struct mlx4_dev *dev)
 	}
 
 	memset(&func_cap, 0, sizeof(func_cap));
-	err = mlx4_QUERY_FUNC_CAP(dev, &func_cap);
+	err = mlx4_QUERY_FUNC_CAP(dev, 0, &func_cap);
 	if (err) {
-		mlx4_err(dev, "QUERY_FUNC_CAP command failed, aborting.\n");
+		mlx4_err(dev, "QUERY_FUNC_CAP general command failed, aborting (%d).\n",
+			  err);
 		return err;
 	}
 
@@ -523,12 +559,33 @@ static int mlx4_slave_cap(struct mlx4_dev *dev)
 		return -ENODEV;
 	}
 
+	dev->caps.qp0_tunnel = kcalloc(dev->caps.num_ports, sizeof (u32), GFP_KERNEL);
+	dev->caps.qp0_proxy = kcalloc(dev->caps.num_ports, sizeof (u32), GFP_KERNEL);
+	dev->caps.qp1_tunnel = kcalloc(dev->caps.num_ports, sizeof (u32), GFP_KERNEL);
+	dev->caps.qp1_proxy = kcalloc(dev->caps.num_ports, sizeof (u32), GFP_KERNEL);
+
+	if (!dev->caps.qp0_tunnel || !dev->caps.qp0_proxy ||
+	    !dev->caps.qp1_tunnel || !dev->caps.qp1_proxy) {
+		err = -ENOMEM;
+		goto err_mem;
+	}
+
 	for (i = 1; i <= dev->caps.num_ports; ++i) {
+		err = mlx4_QUERY_FUNC_CAP(dev, (u32) i, &func_cap);
+		if (err) {
+			mlx4_err(dev, "QUERY_FUNC_CAP port command failed for"
+				 " port %d, aborting (%d).\n", i, err);
+			goto err_mem;
+		}
+		dev->caps.qp0_tunnel[i - 1] = func_cap.qp0_tunnel_qpn;
+		dev->caps.qp0_proxy[i - 1] = func_cap.qp0_proxy_qpn;
+		dev->caps.qp1_tunnel[i - 1] = func_cap.qp1_tunnel_qpn;
+		dev->caps.qp1_proxy[i - 1] = func_cap.qp1_proxy_qpn;
 		dev->caps.port_mask[i] = dev->caps.port_type[i];
 		if (mlx4_get_slave_pkey_gid_tbl_len(dev, i,
 						    &dev->caps.gid_table_len[i],
 						    &dev->caps.pkey_table_len[i]))
-			return -ENODEV;
+			goto err_mem;
 	}
 
 	if (dev->caps.uar_page_size * (dev->caps.num_uars -
@@ -538,10 +595,20 @@ static int mlx4_slave_cap(struct mlx4_dev *dev)
 			 "PCI resource 2 size of 0x%llx, aborting.\n",
 			 dev->caps.uar_page_size * dev->caps.num_uars,
 			 (unsigned long long) pci_resource_len(dev->pdev, 2));
-		return -ENODEV;
+		goto err_mem;
 	}
 
 	return 0;
+
+err_mem:
+	kfree(dev->caps.qp0_tunnel);
+	kfree(dev->caps.qp0_proxy);
+	kfree(dev->caps.qp1_tunnel);
+	kfree(dev->caps.qp1_proxy);
+	dev->caps.qp0_tunnel = dev->caps.qp0_proxy =
+		dev->caps.qp1_tunnel = dev->caps.qp1_proxy = NULL;
+
+	return err;
 }
 
 /*
@@ -2223,6 +2290,12 @@ static void mlx4_remove_one(struct pci_dev *pdev)
 
 		if (!mlx4_is_slave(dev))
 			mlx4_free_ownership(dev);
+
+		kfree(dev->caps.qp0_tunnel);
+		kfree(dev->caps.qp0_proxy);
+		kfree(dev->caps.qp1_tunnel);
+		kfree(dev->caps.qp1_proxy);
+
 		kfree(priv);
 		pci_release_regions(pdev);
 		pci_disable_device(pdev);
