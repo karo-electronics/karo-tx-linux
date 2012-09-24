@@ -100,7 +100,8 @@ static int __init setup_vcpu_hotplug_event(void)
 	static struct notifier_block xsn_cpu = {
 		.notifier_call = setup_cpu_watcher };
 
-	if (!xen_pv_domain())
+	/* PVH TBD/FIXME: future work */
+	if (!xen_pv_domain() || xen_pvh_domain())
 		return -ENODEV;
 
 	register_xenstore_notifier(&xsn_cpu);
