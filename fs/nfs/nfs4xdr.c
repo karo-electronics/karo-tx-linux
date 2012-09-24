@@ -1509,8 +1509,12 @@ static void encode_open_stateid(struct xdr_stream *xdr,
 	nfs4_stateid stateid;
 
 	if (ctx->state != NULL) {
+		const struct nfs_lockowner *lockowner = NULL;
+
+		if (l_ctx != NULL)
+			lockowner = &l_ctx->lockowner;
 		nfs4_select_rw_stateid(&stateid, ctx->state,
-				fmode, l_ctx->lockowner, l_ctx->pid);
+				fmode, lockowner);
 		if (zero_seqid)
 			stateid.seqid = 0;
 		encode_nfs4_stateid(xdr, &stateid);
@@ -5642,7 +5646,8 @@ static int decode_getdeviceinfo(struct xdr_stream *xdr,
 	 * and places the remaining xdr data in xdr_buf->tail
 	 */
 	pdev->mincount = be32_to_cpup(p);
-	xdr_read_pages(xdr, pdev->mincount); /* include space for the length */
+	if (xdr_read_pages(xdr, pdev->mincount) != pdev->mincount)
+		goto out_overflow;
 
 	/* Parse notification bitmap, verifying that it is zero. */
 	p = xdr_inline_decode(xdr, 4);
