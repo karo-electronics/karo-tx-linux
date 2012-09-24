@@ -1052,7 +1052,8 @@ omap_i2c_probe(struct platform_device *pdev)
 	struct omap_i2c_dev	*dev;
 	struct i2c_adapter	*adap;
 	struct resource		*mem;
-	struct omap_i2c_bus_platform_data *pdata = pdev->dev.platform_data;
+	const struct omap_i2c_bus_platform_data *pdata =
+		pdev->dev.platform_data;
 	struct device_node	*node = pdev->dev.of_node;
 	const struct of_device_id *match;
 	int irq;

@@ -13,7 +13,11 @@
 #define _ASMARM_TIMEX_H
 
 #include <asm/arch_timer.h>
+#ifdef CONFIG_ARCH_MULTIPLATFORM
+#define CLOCK_TICK_RATE 1000000
+#else
 #include <mach/timex.h>
+#endif
 
 #ifdef ARCH_HAS_READ_CURRENT_TIMER
 #define get_cycles()	({ cycles_t c; read_current_timer(&c) ? 0 : c; })

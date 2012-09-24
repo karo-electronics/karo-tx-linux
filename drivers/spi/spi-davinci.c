@@ -32,7 +32,7 @@
 #include <linux/spi/spi_bitbang.h>
 #include <linux/slab.h>
 
-#include <mach/spi.h>
+#include <linux/platform_data/spi-davinci.h>
 
 #define SPI_NO_RESOURCE		((resource_size_t)-1)
 

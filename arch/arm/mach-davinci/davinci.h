@@ -24,7 +24,7 @@
 #include <linux/spi/spi.h>
 #include <linux/platform_data/davinci_asp.h>
 
-#include <mach/keyscan.h>
+#include <linux/platform_data/keyscan-davinci.h>
 #include <mach/hardware.h>
 #include <mach/edma.h>
 
