@@ -783,7 +783,7 @@ static irqreturn_t rtd_interrupt(int irq,	/* interrupt number (ignored) */
 				 void *d)
 {				/* our data *//* cpu context (ignored) */
 	struct comedi_device *dev = d;
-	struct comedi_subdevice *s = dev->subdevices + 0;	/* analog in subdevice */
+	struct comedi_subdevice *s = &dev->subdevices[0];
 	struct rtdPrivate *devpriv = dev->private;
 	u32 overrun;
 	u16 status;
@@ -964,7 +964,7 @@ static int rtd_ai_poll(struct comedi_device *dev, struct comedi_subdevice *s)
 /*
   cmdtest tests a particular command to see if it is valid.
   Using the cmdtest ioctl, a user can create a valid cmd
-  and then have it executed by the cmd ioctl (asyncronously).
+  and then have it executed by the cmd ioctl (asynchronously).
 
   cmdtest returns 1,2,3,4 or 0, depending on which tests
   the command passes.
@@ -1706,7 +1706,7 @@ static int rtd_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	if (ret)
 		return ret;
 
-	s = dev->subdevices + 0;
+	s = &dev->subdevices[0];
 	dev->read_subdev = s;
 	/* analog input subdevice */
 	s->type = COMEDI_SUBD_AI;
@@ -1726,7 +1726,7 @@ static int rtd_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	s->cancel = rtd_ai_cancel;
 	/* s->poll = rtd_ai_poll; *//* not ready yet */
 
-	s = dev->subdevices + 1;
+	s = &dev->subdevices[1];
 	/* analog output subdevice */
 	s->type = COMEDI_SUBD_AO;
 	s->subdev_flags = SDF_WRITABLE;
@@ -1736,7 +1736,7 @@ static int rtd_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	s->insn_write = rtd_ao_winsn;
 	s->insn_read = rtd_ao_rinsn;
 
-	s = dev->subdevices + 2;
+	s = &dev->subdevices[2];
 	/* digital i/o subdevice */
 	s->type = COMEDI_SUBD_DIO;
 	s->subdev_flags = SDF_READABLE | SDF_WRITABLE;
@@ -1748,7 +1748,7 @@ static int rtd_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	s->insn_config = rtd_dio_insn_config;
 
 	/* timer/counter subdevices (not currently supported) */
-	s = dev->subdevices + 3;
+	s = &dev->subdevices[3];
 	s->type = COMEDI_SUBD_COUNTER;
 	s->subdev_flags = SDF_READABLE | SDF_WRITABLE;
 	s->n_chan = 3;

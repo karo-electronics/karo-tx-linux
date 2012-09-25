@@ -558,7 +558,7 @@ static int das16_cmd_test(struct comedi_device *dev, struct comedi_subdevice *s,
 
 /* utility function that suggests a dma transfer size in bytes */
 static unsigned int das16_suggest_transfer_size(struct comedi_device *dev,
-						struct comedi_cmd cmd)
+						const struct comedi_cmd *cmd)
 {
 	unsigned int size;
 	unsigned int freq;
@@ -571,16 +571,16 @@ static unsigned int das16_suggest_transfer_size(struct comedi_device *dev,
 
 	/* otherwise, we are relying on dma terminal count interrupt,
 	 * so pick a reasonable size */
-	if (cmd.convert_src == TRIG_TIMER)
-		freq = 1000000000 / cmd.convert_arg;
-	else if (cmd.scan_begin_src == TRIG_TIMER)
-		freq = (1000000000 / cmd.scan_begin_arg) * cmd.chanlist_len;
+	if (cmd->convert_src == TRIG_TIMER)
+		freq = 1000000000 / cmd->convert_arg;
+	else if (cmd->scan_begin_src == TRIG_TIMER)
+		freq = (1000000000 / cmd->scan_begin_arg) * cmd->chanlist_len;
 	/*  return some default value */
 	else
 		freq = 0xffffffff;
 
-	if (cmd.flags & TRIG_WAKE_EOS) {
-		size = sample_size * cmd.chanlist_len;
+	if (cmd->flags & TRIG_WAKE_EOS) {
+		size = sample_size * cmd->chanlist_len;
 	} else {
 		/*  make buffer fill in no more than 1/3 second */
 		size = (freq / 3) * sample_size;
@@ -592,7 +592,7 @@ static unsigned int das16_suggest_transfer_size(struct comedi_device *dev,
 	else if (size < sample_size)
 		size = sample_size;
 
-	if (cmd.stop_src == TRIG_COUNT && size > devpriv->adc_byte_count)
+	if (cmd->stop_src == TRIG_COUNT && size > devpriv->adc_byte_count)
 		size = devpriv->adc_byte_count;
 
 	return size;
@@ -685,7 +685,7 @@ static int das16_cmd_exec(struct comedi_device *dev, struct comedi_subdevice *s)
 	set_dma_addr(devpriv->dma_chan,
 		     devpriv->dma_buffer_addr[devpriv->current_buffer]);
 	/*  set appropriate size of transfer */
-	devpriv->dma_transfer_size = das16_suggest_transfer_size(dev, *cmd);
+	devpriv->dma_transfer_size = das16_suggest_transfer_size(dev, cmd);
 	set_dma_count(devpriv->dma_chan, devpriv->dma_transfer_size);
 	enable_dma(devpriv->dma_chan);
 	release_dma_lock(flags);
@@ -1268,7 +1268,7 @@ static int das16_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	if (ret)
 		return ret;
 
-	s = dev->subdevices + 0;
+	s = &dev->subdevices[0];
 	dev->read_subdev = s;
 	/* ai */
 	if (board->ai) {
@@ -1300,7 +1300,7 @@ static int das16_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 		s->type = COMEDI_SUBD_UNUSED;
 	}
 
-	s = dev->subdevices + 1;
+	s = &dev->subdevices[1];
 	/* ao */
 	if (board->ao) {
 		s->type = COMEDI_SUBD_AO;
@@ -1318,7 +1318,7 @@ static int das16_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 		s->type = COMEDI_SUBD_UNUSED;
 	}
 
-	s = dev->subdevices + 2;
+	s = &dev->subdevices[2];
 	/* di */
 	if (board->di) {
 		s->type = COMEDI_SUBD_DI;
@@ -1331,7 +1331,7 @@ static int das16_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 		s->type = COMEDI_SUBD_UNUSED;
 	}
 
-	s = dev->subdevices + 3;
+	s = &dev->subdevices[3];
 	/* do */
 	if (board->do_) {
 		s->type = COMEDI_SUBD_DO;
@@ -1346,7 +1346,7 @@ static int das16_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 		s->type = COMEDI_SUBD_UNUSED;
 	}
 
-	s = dev->subdevices + 4;
+	s = &dev->subdevices[4];
 	/* 8255 */
 	if (board->i8255_offset != 0) {
 		subdev_8255_init(dev, s, NULL, (dev->iobase +
@@ -1376,7 +1376,7 @@ static void das16_detach(struct comedi_device *dev)
 
 	das16_reset(dev);
 	if (dev->subdevices)
-		subdev_8255_cleanup(dev, dev->subdevices + 4);
+		subdev_8255_cleanup(dev, &dev->subdevices[4]);
 	if (devpriv) {
 		int i;
 		for (i = 0; i < 2; i++) {
