@@ -18,7 +18,8 @@
 
 #include <sys/mman.h>
 
-static int vmlinux_matches_kallsyms_filter(struct map *map __used, struct symbol *sym)
+static int vmlinux_matches_kallsyms_filter(struct map *map __maybe_unused,
+					   struct symbol *sym)
 {
 	bool *visited = symbol__priv(sym);
 	*visited = true;
@@ -294,7 +295,7 @@ static int test__open_syscall_event(void)
 		goto out_thread_map_delete;
 	}
 
-	if (perf_evsel__open_per_thread(evsel, threads, false, NULL) < 0) {
+	if (perf_evsel__open_per_thread(evsel, threads) < 0) {
 		pr_debug("failed to open counter: %s, "
 			 "tweak /proc/sys/kernel/perf_event_paranoid?\n",
 			 strerror(errno));
@@ -369,7 +370,7 @@ static int test__open_syscall_event_on_all_cpus(void)
 		goto out_thread_map_delete;
 	}
 
-	if (perf_evsel__open(evsel, cpus, threads, false, NULL) < 0) {
+	if (perf_evsel__open(evsel, cpus, threads) < 0) {
 		pr_debug("failed to open counter: %s, "
 			 "tweak /proc/sys/kernel/perf_event_paranoid?\n",
 			 strerror(errno));
@@ -533,7 +534,7 @@ static int test__basic_mmap(void)
 
 		perf_evlist__add(evlist, evsels[i]);
 
-		if (perf_evsel__open(evsels[i], cpus, threads, false, NULL) < 0) {
+		if (perf_evsel__open(evsels[i], cpus, threads) < 0) {
 			pr_debug("failed to open counter: %s, "
 				 "tweak /proc/sys/kernel/perf_event_paranoid?\n",
 				 strerror(errno));
@@ -710,7 +711,7 @@ static int test__PERF_RECORD(void)
 	/*
 	 * Config the evsels, setting attr->comm on the first one, etc.
 	 */
-	evsel = list_entry(evlist->entries.next, struct perf_evsel, node);
+	evsel = perf_evlist__first(evlist);
 	evsel->attr.sample_type |= PERF_SAMPLE_CPU;
 	evsel->attr.sample_type |= PERF_SAMPLE_TID;
 	evsel->attr.sample_type |= PERF_SAMPLE_TIME;
@@ -737,7 +738,7 @@ static int test__PERF_RECORD(void)
 	 * Call sys_perf_event_open on all the fds on all the evsels,
 	 * grouping them if asked to.
 	 */
-	err = perf_evlist__open(evlist, opts.group);
+	err = perf_evlist__open(evlist);
 	if (err < 0) {
 		pr_debug("perf_evlist__open: %s\n", strerror(errno));
 		goto out_delete_evlist;
@@ -996,7 +997,9 @@ static u64 mmap_read_self(void *addr)
 /*
  * If the RDPMC instruction faults then signal this back to the test parent task:
  */
-static void segfault_handler(int sig __used, siginfo_t *info __used, void *uc __used)
+static void segfault_handler(int sig __maybe_unused,
+			     siginfo_t *info __maybe_unused,
+			     void *uc __maybe_unused)
 {
 	exit(-1);
 }
@@ -1023,14 +1026,16 @@ static int __test__rdpmc(void)
 
 	fd = sys_perf_event_open(&attr, 0, -1, -1, 0);
 	if (fd < 0) {
-		die("Error: sys_perf_event_open() syscall returned "
-		    "with %d (%s)\n", fd, strerror(errno));
+		pr_err("Error: sys_perf_event_open() syscall returned "
+		       "with %d (%s)\n", fd, strerror(errno));
+		return -1;
 	}
 
 	addr = mmap(NULL, page_size, PROT_READ, MAP_SHARED, fd, 0);
 	if (addr == (void *)(-1)) {
-		die("Error: mmap() syscall returned "
-		    "with (%s)\n", strerror(errno));
+		pr_err("Error: mmap() syscall returned with (%s)\n",
+		       strerror(errno));
+		goto out_close;
 	}
 
 	for (n = 0; n < 6; n++) {
@@ -1051,9 +1056,9 @@ static int __test__rdpmc(void)
 	}
 
 	munmap(addr, page_size);
-	close(fd);
-
 	pr_debug("   ");
+out_close:
+	close(fd);
 
 	if (!delta_sum)
 		return -1;
@@ -1090,6 +1095,116 @@ static int test__rdpmc(void)
 static int test__perf_pmu(void)
 {
 	return perf_pmu__test();
+}
+
+static int perf_evsel__roundtrip_cache_name_test(void)
+{
+	char name[128];
+	int type, op, err = 0, ret = 0, i, idx;
+	struct perf_evsel *evsel;
+        struct perf_evlist *evlist = perf_evlist__new(NULL, NULL);
+
+        if (evlist == NULL)
+                return -ENOMEM;
+
+	for (type = 0; type < PERF_COUNT_HW_CACHE_MAX; type++) {
+		for (op = 0; op < PERF_COUNT_HW_CACHE_OP_MAX; op++) {
+			/* skip invalid cache type */
+			if (!perf_evsel__is_cache_op_valid(type, op))
+				continue;
+
+			for (i = 0; i < PERF_COUNT_HW_CACHE_RESULT_MAX; i++) {
+				__perf_evsel__hw_cache_type_op_res_name(type, op, i,
+									name, sizeof(name));
+				err = parse_events(evlist, name, 0);
+				if (err)
+					ret = err;
+			}
+		}
+	}
+
+	idx = 0;
+	evsel = perf_evlist__first(evlist);
+
+	for (type = 0; type < PERF_COUNT_HW_CACHE_MAX; type++) {
+		for (op = 0; op < PERF_COUNT_HW_CACHE_OP_MAX; op++) {
+			/* skip invalid cache type */
+			if (!perf_evsel__is_cache_op_valid(type, op))
+				continue;
+
+			for (i = 0; i < PERF_COUNT_HW_CACHE_RESULT_MAX; i++) {
+				__perf_evsel__hw_cache_type_op_res_name(type, op, i,
+									name, sizeof(name));
+				if (evsel->idx != idx)
+					continue;
+
+				++idx;
+
+				if (strcmp(perf_evsel__name(evsel), name)) {
+					pr_debug("%s != %s\n", perf_evsel__name(evsel), name);
+					ret = -1;
+				}
+
+				evsel = perf_evsel__next(evsel);
+			}
+		}
+	}
+
+	perf_evlist__delete(evlist);
+	return ret;
+}
+
+static int __perf_evsel__name_array_test(const char *names[], int nr_names)
+{
+	int i, err;
+	struct perf_evsel *evsel;
+        struct perf_evlist *evlist = perf_evlist__new(NULL, NULL);
+
+        if (evlist == NULL)
+                return -ENOMEM;
+
+	for (i = 0; i < nr_names; ++i) {
+		err = parse_events(evlist, names[i], 0);
+		if (err) {
+			pr_debug("failed to parse event '%s', err %d\n",
+				 names[i], err);
+			goto out_delete_evlist;
+		}
+	}
+
+	err = 0;
+	list_for_each_entry(evsel, &evlist->entries, node) {
+		if (strcmp(perf_evsel__name(evsel), names[evsel->idx])) {
+			--err;
+			pr_debug("%s != %s\n", perf_evsel__name(evsel), names[evsel->idx]);
+		}
+	}
+
+out_delete_evlist:
+	perf_evlist__delete(evlist);
+	return err;
+}
+
+#define perf_evsel__name_array_test(names) \
+	__perf_evsel__name_array_test(names, ARRAY_SIZE(names))
+
+static int perf_evsel__roundtrip_name_test(void)
+{
+	int err = 0, ret = 0;
+
+	err = perf_evsel__name_array_test(perf_evsel__hw_names);
+	if (err)
+		ret = err;
+
+	err = perf_evsel__name_array_test(perf_evsel__sw_names);
+	if (err)
+		ret = err;
+
+	err = perf_evsel__roundtrip_cache_name_test();
+	if (err)
+		ret = err;
+
+	return ret;
 }
 
 static struct test {
@@ -1133,6 +1248,10 @@ static struct test {
 	{
 		.desc = "Test dso data interface",
 		.func = dso__test_data,
+	},
+	{
+		.desc = "roundtrip evsel->name check",
+		.func = perf_evsel__roundtrip_name_test,
 	},
 	{
 		.func = NULL,
@@ -1199,7 +1318,7 @@ static int perf_test__list(int argc, const char **argv)
 	return 0;
 }
 
-int cmd_test(int argc, const char **argv, const char *prefix __used)
+int cmd_test(int argc, const char **argv, const char *prefix __maybe_unused)
 {
 	const char * const test_usage[] = {
 	"perf test [<options>] [{list <test-name-fragment>|[<test-name-fragments>|<test-numbers>]}]",
