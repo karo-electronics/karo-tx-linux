@@ -387,7 +387,7 @@ config SPI_MXS
 
 config SPI_TEGRA
 	tristate "Nvidia Tegra SPI controller"
-	depends on ARCH_TEGRA && (TEGRA_SYSTEM_DMA || TEGRA20_APB_DMA)
+	depends on ARCH_TEGRA && TEGRA20_APB_DMA
 	help
 	  SPI driver for NVidia Tegra SoCs
 

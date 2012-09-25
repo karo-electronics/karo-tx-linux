@@ -28,7 +28,6 @@
 #include <mach/cm.h>
 #include <mach/irqs.h>
 
-#include <asm/leds.h>
 #include <asm/mach-types.h>
 #include <asm/mach/time.h>
 #include <asm/pgtable.h>
@@ -97,8 +96,8 @@ int __init integrator_init(bool is_cp)
  *  UART0  7    6
  *  UART1  5    4
  */
-#define SC_CTRLC	IO_ADDRESS(INTEGRATOR_SC_CTRLC)
-#define SC_CTRLS	IO_ADDRESS(INTEGRATOR_SC_CTRLS)
+#define SC_CTRLC	__io_address(INTEGRATOR_SC_CTRLC)
+#define SC_CTRLS	__io_address(INTEGRATOR_SC_CTRLS)
 
 static void integrator_uart_set_mctrl(struct amba_device *dev, void __iomem *base, unsigned int mctrl)
 {
@@ -132,8 +131,6 @@ static void integrator_uart_set_mctrl(struct amba_device *dev, void __iomem *bas
 struct amba_pl010_data integrator_uart_data = {
 	.set_mctrl = integrator_uart_set_mctrl,
 };
-
-#define CM_CTRL	IO_ADDRESS(INTEGRATOR_HDR_CTRL)
 
 static DEFINE_RAW_SPINLOCK(cm_lock);
 

@@ -42,7 +42,7 @@
 #include <linux/of_device.h>
 
 #include <mach/hardware.h>
-#include <mach/i2c.h>
+#include <linux/platform_data/i2c-davinci.h>
 
 /* ----- global defines ----------------------------------------------- */
 
