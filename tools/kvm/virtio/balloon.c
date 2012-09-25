@@ -48,7 +48,6 @@ struct bln_dev {
 };
 
 static struct bln_dev bdev;
-extern struct kvm *kvm;
 static int compat_id = -1;
 
 static bool virtio_bln_do_io_request(struct kvm *kvm, struct bln_dev *bdev, struct virt_queue *queue)
@@ -125,7 +124,7 @@ static void virtio_bln_do_io(struct kvm *kvm, void *param)
 	}
 }
 
-static int virtio_bln__collect_stats(void)
+static int virtio_bln__collect_stats(struct kvm *kvm)
 {
 	u64 tmp;
 
@@ -139,14 +138,14 @@ static int virtio_bln__collect_stats(void)
 	return 0;
 }
 
-static void virtio_bln__print_stats(int fd, u32 type, u32 len, u8 *msg)
+static void virtio_bln__print_stats(struct kvm *kvm, int fd, u32 type, u32 len, u8 *msg)
 {
 	int r;
 
 	if (WARN_ON(type != KVM_IPC_STAT || len))
 		return;
 
-	if (virtio_bln__collect_stats() < 0)
+	if (virtio_bln__collect_stats(kvm) < 0)
 		return;
 
 	r = write(fd, bdev.stats, sizeof(bdev.stats));
@@ -154,7 +153,7 @@ static void virtio_bln__print_stats(int fd, u32 type, u32 len, u8 *msg)
 		pr_warning("Failed sending memory stats");
 }
 
-static void handle_mem(int fd, u32 type, u32 len, u8 *msg)
+static void handle_mem(struct kvm *kvm, int fd, u32 type, u32 len, u8 *msg)
 {
 	int mem;
 
@@ -243,8 +242,11 @@ struct virtio_ops bln_dev_virtio_ops = (struct virtio_ops) {
 	.get_size_vq		= get_size_vq,
 };
 
-void virtio_bln__init(struct kvm *kvm)
+int virtio_bln__init(struct kvm *kvm)
 {
+	if (!kvm->cfg.balloon)
+		return 0;
+
 	kvm_ipc__register_handler(KVM_IPC_BALLOON, handle_mem);
 	kvm_ipc__register_handler(KVM_IPC_STAT, virtio_bln__print_stats);
 
@@ -256,4 +258,13 @@ void virtio_bln__init(struct kvm *kvm)
 
 	if (compat_id == -1)
 		compat_id = virtio_compat_add_message("virtio-balloon", "CONFIG_VIRTIO_BALLOON");
+
+	return 0;
 }
+virtio_dev_init(virtio_bln__init);
+
+int virtio_bln__exit(struct kvm *kvm)
+{
+	return 0;
+}
+virtio_dev_exit(virtio_bln__exit);

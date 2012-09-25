@@ -191,23 +191,25 @@ int pci__init(struct kvm *kvm)
 {
 	int r;
 
-	r = ioport__register(PCI_CONFIG_DATA + 0, &pci_config_data_ops, 4, NULL);
+	r = ioport__register(kvm, PCI_CONFIG_DATA + 0, &pci_config_data_ops, 4, NULL);
 	if (r < 0)
 		return r;
 
-	r = ioport__register(PCI_CONFIG_ADDRESS + 0, &pci_config_address_ops, 4, NULL);
+	r = ioport__register(kvm, PCI_CONFIG_ADDRESS + 0, &pci_config_address_ops, 4, NULL);
 	if (r < 0) {
-		ioport__unregister(PCI_CONFIG_DATA);
+		ioport__unregister(kvm, PCI_CONFIG_DATA);
 		return r;
 	}
 
 	return 0;
 }
+base_init(pci__init);
 
 int pci__exit(struct kvm *kvm)
 {
-	ioport__unregister(PCI_CONFIG_DATA);
-	ioport__unregister(PCI_CONFIG_ADDRESS);
+	ioport__unregister(kvm, PCI_CONFIG_DATA);
+	ioport__unregister(kvm, PCI_CONFIG_ADDRESS);
 
 	return 0;
 }
+base_exit(pci__exit);
