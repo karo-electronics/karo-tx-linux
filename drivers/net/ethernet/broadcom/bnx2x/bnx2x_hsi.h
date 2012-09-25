@@ -1286,6 +1286,9 @@ struct drv_func_mb {
 	#define DRV_MSG_CODE_SET_MF_BW_MIN_MASK         0x00ff0000
 	#define DRV_MSG_CODE_SET_MF_BW_MAX_MASK         0xff000000
 
+	#define DRV_MSG_CODE_UNLOAD_SKIP_LINK_RESET     0x00000002
+
+	#define DRV_MSG_CODE_LOAD_REQ_WITH_LFA          0x0000100a
 	u32 fw_mb_header;
 	#define FW_MSG_CODE_MASK                        0xffff0000
 	#define FW_MSG_CODE_DRV_LOAD_COMMON             0x10100000
@@ -1908,6 +1911,54 @@ struct lldp_local_mib {
 	u32 suffix_seq_num;
 };
 /***END OF DCBX STRUCTURES DECLARATIONS***/
+
+/***********************************************************/
+/*                         Elink section                   */
+/***********************************************************/
+#define SHMEM_LINK_CONFIG_SIZE 2
+struct shmem_lfa {
+	u32 req_duplex;
+	#define REQ_DUPLEX_PHY0_MASK        0x0000ffff
+	#define REQ_DUPLEX_PHY0_SHIFT       0
+	#define REQ_DUPLEX_PHY1_MASK        0xffff0000
+	#define REQ_DUPLEX_PHY1_SHIFT       16
+	u32 req_flow_ctrl;
+	#define REQ_FLOW_CTRL_PHY0_MASK     0x0000ffff
+	#define REQ_FLOW_CTRL_PHY0_SHIFT    0
+	#define REQ_FLOW_CTRL_PHY1_MASK     0xffff0000
+	#define REQ_FLOW_CTRL_PHY1_SHIFT    16
+	u32 req_line_speed; /* Also determine AutoNeg */
+	#define REQ_LINE_SPD_PHY0_MASK      0x0000ffff
+	#define REQ_LINE_SPD_PHY0_SHIFT     0
+	#define REQ_LINE_SPD_PHY1_MASK      0xffff0000
+	#define REQ_LINE_SPD_PHY1_SHIFT     16
+	u32 speed_cap_mask[SHMEM_LINK_CONFIG_SIZE];
+	u32 additional_config;
+	#define REQ_FC_AUTO_ADV_MASK        0x0000ffff
+	#define REQ_FC_AUTO_ADV0_SHIFT      0
+	#define NO_LFA_DUE_TO_DCC_MASK      0x00010000
+	u32 lfa_sts;
+	#define LFA_LINK_FLAP_REASON_OFFSET		0
+	#define LFA_LINK_FLAP_REASON_MASK		0x000000ff
+		#define LFA_LINK_DOWN			    0x1
+		#define LFA_LOOPBACK_ENABLED		0x2
+		#define LFA_DUPLEX_MISMATCH		    0x3
+		#define LFA_MFW_IS_TOO_OLD		    0x4
+		#define LFA_LINK_SPEED_MISMATCH		0x5
+		#define LFA_FLOW_CTRL_MISMATCH		0x6
+		#define LFA_SPEED_CAP_MISMATCH		0x7
+		#define LFA_DCC_LFA_DISABLED		0x8
+		#define LFA_EEE_MISMATCH		0x9
+
+	#define LINK_FLAP_AVOIDANCE_COUNT_OFFSET	8
+	#define LINK_FLAP_AVOIDANCE_COUNT_MASK		0x0000ff00
+
+	#define LINK_FLAP_COUNT_OFFSET			16
+	#define LINK_FLAP_COUNT_MASK			0x00ff0000
+
+	#define LFA_FLAGS_MASK				0xff000000
+	#define SHMEM_LFA_DONT_CLEAR_STAT		(1<<24)
+};
 
 struct ncsi_oem_fcoe_features {
 	u32 fcoe_features1;
