@@ -106,6 +106,7 @@ static void get_page_bootmem(unsigned long info,  struct page *page,
 void __ref put_page_bootmem(struct page *page)
 {
 	unsigned long type;
+	struct zone *zone;
 
 	type = (unsigned long) page->lru.next;
 	BUG_ON(type < MEMORY_HOTPLUG_MIN_BOOTMEM_TYPE ||
@@ -116,6 +117,12 @@ void __ref put_page_bootmem(struct page *page)
 		set_page_private(page, 0);
 		INIT_LIST_HEAD(&page->lru);
 		__free_pages_bootmem(page, 0);
+
+		zone = page_zone(page);
+		zone_span_writelock(zone);
+		zone->present_pages++;
+		zone_span_writeunlock(zone);
+		totalram_pages++;
 	}
 
 }
@@ -756,13 +763,6 @@ static unsigned long scan_lru_pages(unsigned long start, unsigned long end)
 	return 0;
 }
 
-static struct page *
-hotremove_migrate_alloc(struct page *page, unsigned long private, int **x)
-{
-	/* This should be improooooved!! */
-	return alloc_page(GFP_HIGHUSER_MOVABLE);
-}
-
 #define NR_OFFLINE_AT_ONCE_PAGES	(256)
 static int
 do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
@@ -813,8 +813,12 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
 			putback_lru_pages(&source);
 			goto out;
 		}
-		/* this function returns # of failed pages */
-		ret = migrate_pages(&source, hotremove_migrate_alloc, 0,
+
+		/*
+		 * alloc_migrate_target should be improooooved!!
+		 * migrate_pages returns # of failed pages.
+		 */
+		ret = migrate_pages(&source, alloc_migrate_target, 0,
 							true, MIGRATE_SYNC);
 		if (ret)
 			putback_lru_pages(&source);
@@ -970,8 +974,13 @@ repeat:
 
 	init_per_zone_wmark_min();
 
-	if (!populated_zone(zone))
+	if (!populated_zone(zone)) {
 		zone_pcp_reset(zone);
+		mutex_lock(&zonelists_mutex);
+		build_all_zonelists(NULL, NULL);
+		mutex_unlock(&zonelists_mutex);
+	} else
+		zone_pcp_update(zone);
 
 	if (!node_present_pages(node)) {
 		node_clear_state(node, N_HIGH_MEMORY);

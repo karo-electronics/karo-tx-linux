@@ -314,6 +314,10 @@ struct lis3lv02d {
 
 	struct lis3lv02d_platform_data *pdata;	/* for passing board config */
 	struct mutex		mutex;     /* Serialize poll and selftest */
+
+#ifdef CONFIG_OF
+	struct device_node	*of_node;
+#endif
 };
 
 int lis3lv02d_init_device(struct lis3lv02d *lis3);
@@ -322,5 +326,6 @@ void lis3lv02d_joystick_disable(struct lis3lv02d *lis3);
 void lis3lv02d_poweroff(struct lis3lv02d *lis3);
 int lis3lv02d_poweron(struct lis3lv02d *lis3);
 int lis3lv02d_remove_fs(struct lis3lv02d *lis3);
+int lis3lv02d_init_dt(struct lis3lv02d *lis3);
 
 extern struct lis3lv02d lis3_dev;
