@@ -1,0 +1,67 @@
+Importing i2c based on 3.6-rc7
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 979570e02981d4a8fc20b3cc8fd651856c98ee9d
+HEAD is now at 979570e Linux 3.6-rc7
+$ git am ../quilt/i2c/i2c-mux-support-class.patch
+Applying: i2c-mux: Add support for device auto-detection
+$ git am ../quilt/i2c/i2c-i801-asus-multiplexing-2.patch
+Applying: i2c-i801: Support SMBus multiplexing on Asus Z8 series
+$ git am ../quilt/i2c/i2c-smbus-convert-kzalloc-to-devm_kzalloc.patch
+Applying: i2c-smbus: Convert kzalloc to devm_kzalloc
+$ git am ../quilt/i2c/i2c-convert-struct-i2c_msg-initialization-to-c99-format.patch
+Applying: i2c: Convert struct i2c_msg initialization to C99 format
+$ git am ../quilt/i2c/i2c-make-I2C-available-on-UML.patch
+Applying: i2c: Make I2C available on UML
+$ git am ../quilt/i2c/i2c-scx200-replace-printks-with-pr_levels.patch
+Applying: i2c/scx200_*: Replace printks with pr_<level>s
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + ea7c0bd...cde3336 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 3.6-rc7
+$ cd ../quilt-tmp
+$ git reset --hard 979570e02981d4a8fc20b3cc8fd651856c98ee9d
+HEAD is now at 979570e Linux 3.6-rc7
+$ git am ../quilt/jdelvare-hwmon/hwmon-drop-Alexey-Fisher-email.patch
+Applying: hwmon: Drop Alexey Fisher's e-mail address
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 71b5ba9...5e25f31 master     -> quilt/jdelvare-hwmon  (forced update)
+Importing rr based on v3.6-rc6-28-g925a6f0
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+$ cd ../quilt-tmp
+$ git reset --hard 1b6576ccd0d9ac0f5a84e0864a43362cc0f6b39f
+HEAD is now at 1b6576c Merge branch 'for-3.7/core' into for-next
+$ git am ../quilt/device-mapper/dm-verity-fix-overflow-check.patch
+Applying: This patch fixes sector_t overflow checking in dm-verity.
+$ git am ../quilt/device-mapper/dm-mpath-fix-check-for-null-mpio-in-end_io-fn.patch
+Applying: The mpio dereference should be moved below the BUG_ON NULL test
+$ git am ../quilt/device-mapper/dm-mpath-only-retry-ioctl-when-no-paths-if-queue_if_no_path-set.patch
+Applying: When there are no paths and multipath receives an ioctl, it waits until
+$ git am ../quilt/device-mapper/dm-table-clear-add_random-unless-all-devices-have-it-set.patch
+Applying: Always clear QUEUE_FLAG_ADD_RANDOM if any underlying device does not
+$ git am ../quilt/device-mapper/dm-retain-table-limits-when-swapping-to-new-table-with-no-devices.patch
+Applying: Add a safety net that will re-use the DM device's existing limits in the
+$ git am ../quilt/device-mapper/dm-thin-do-not-set-discard_zeroes_data.patch
+Applying: The dm thin pool target claims to support the zeroing of discarded
+$ git am ../quilt/device-mapper/dm-thin-tidy-discard-support.patch
+Applying: A little thin discard code refactoring in preparation for the next
+$ git am ../quilt/device-mapper/dm-thin-fix-discard-support-for-data-devices.patch
+Applying: The discard limits that get established for a thin-pool or thin device
+$ git am ../quilt/device-mapper/dm-handle-requests-beyond-end-of-device-instead-of-using-BUG_ON.patch
+Applying: The access beyond the end of device BUG_ON that was introduced to
+$ git am ../quilt/device-mapper/dm-bufio-use-list_move.patch
+Applying: Use list_move() instead of list_del() + list_add().
+$ git am ../quilt/device-mapper/dm-use-ACCESS_ONCE-for-sysfs-values.patch
+Applying: Use the ACCESS_ONCE macro in dm-bufio and dm-verity where a variable
+$ git am ../quilt/device-mapper/dm-thin-support-discard-with-non-power-of-two-block-size.patch
+Applying: Support discards when the pool's block size is not a power of 2.
+$ git am ../quilt/device-mapper/dm-store-dm_target_io-in-bio-front_pad.patch
+Applying: Use the recently-added bio front_pad field to allocate struct dm_target_io.
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 75bda72...1cad277 master     -> quilt/device-mapper  (forced update)
