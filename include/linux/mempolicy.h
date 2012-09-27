@@ -69,6 +69,7 @@ enum mpol_rebind_step {
 #define MPOL_F_LOCAL   (1 << 1)	/* preferred local allocation */
 #define MPOL_F_REBINDING (1 << 2)	/* identify policies in rebinding */
 #define MPOL_F_MOF	(1 << 3) /* this policy wants migrate on fault */
+#define MPOL_F_HOME	(1 << 4) /* this is the home-node policy */
 
 #ifdef __KERNEL__
 
@@ -263,7 +264,8 @@ static inline int vma_migratable(struct vm_area_struct *vma)
 	return 1;
 }
 
-extern int mpol_misplaced(struct page *, struct vm_area_struct *, unsigned long);
+extern int mpol_misplaced(struct page *, struct vm_area_struct *,
+			  unsigned long, int);
 
 extern void lazy_migrate_process(struct mm_struct *mm);
 
@@ -393,7 +395,7 @@ static inline int mpol_to_str(char *buffer, int maxlen, struct mempolicy *pol,
 }
 
 static inline int mpol_misplaced(struct page *page, struct vm_area_struct *vma,
-				 unsigned long address)
+				 unsigned long address, int multi)
 {
 	return -1; /* no node preference */
 }

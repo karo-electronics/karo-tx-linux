@@ -68,6 +68,10 @@
 
 #include "internal.h"
 
+#ifdef LAST_NID_NOT_IN_PAGE_FLAGS
+#warning Unfortunate NUMA config, growing page-frame for last_nid.
+#endif
+
 #ifndef CONFIG_NEED_MULTIPLE_NODES
 /* use the per-pgdat data instead for discontigmem - mbligh */
 unsigned long max_mapnr;
@@ -3438,55 +3442,44 @@ static bool pte_prot_none(struct vm_area_struct *vma, pte_t pte)
 	return pte_same(pte, pte_modify(pte, vma_prot_none(vma)));
 }
 
+#ifdef CONFIG_NUMA
+static void do_prot_none_numa(struct mm_struct *mm, struct vm_area_struct *vma,
+			      unsigned long address, struct page *page)
+{
+	int node, ret;
+
+	/*
+	 * For NUMA systems we use the special PROT_NONE maps to drive
+	 * lazy page migration, see MPOL_MF_LAZY and related.
+	 */
+	node = mpol_misplaced(page, vma, address, mm_numa_big(mm));
+	if (node != -1) {
+		ret = migrate_misplaced_page(mm, page, node);
+		if (!ret)
+			mm_inc_numa_migrate(mm, true);
+		else if (ret == -ENOMEM || ret == -EBUSY)
+			mm_inc_numa_migrate(mm, false);
+	} else
+		mm_inc_numa_migrate(mm, true);
+}
+#else
+static void do_prot_none_numa(struct mm_struct *mm, struct vm_area_struct *vma,
+			      unsigned long address, struct page *page)
+{
+}
+#endif /* CONFIG_NUMA */
+
 static int do_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
 			unsigned long address, pte_t *ptep, pmd_t *pmd,
 			unsigned int flags, pte_t entry)
 {
 	struct page *page = NULL;
 	spinlock_t *ptl;
-	int node;
 
 	ptl = pte_lockptr(mm, pmd);
 	spin_lock(ptl);
 	if (unlikely(!pte_same(*ptep, entry)))
 		goto unlock;
-
-#ifdef CONFIG_NUMA
-	/*
-	 * For NUMA systems we use the special PROT_NONE maps to drive
-	 * lazy page migration, see MPOL_MF_LAZY and related.
-	 */
-	page = vm_normal_page(vma, address, entry);
-	if (!page)
-		goto do_fixup_locked;
-
-	get_page(page);
-	pte_unmap_unlock(ptep, ptl);
-
-	node = mpol_misplaced(page, vma, address);
-	if (node == -1)
-		goto do_fixup;
-
-	/*
-	 * Page migration will install a new pte with vma->vm_page_prot,
-	 * otherwise fall-through to the fixup. Next time,.. perhaps.
-	 */
-	if (!migrate_misplaced_page(mm, page, node)) {
-		put_page(page);
-		return 0;
-	}
-
-do_fixup:
-	/*
-	 * OK, nothing to do,.. change the protection back to what it
-	 * ought to be.
-	 */
-	ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
-	if (unlikely(!pte_same(*ptep, entry)))
-		goto unlock;
-
-do_fixup_locked:
-#endif /* CONFIG_NUMA */
 
 	flush_cache_page(vma, address, pte_pfn(entry));
 
@@ -3495,10 +3488,17 @@ do_fixup_locked:
 	ptep_modify_prot_commit(mm, address, ptep, entry);
 
 	update_mmu_cache(vma, address, ptep);
+
+	page = vm_normal_page(vma, address, entry);
+	if (page)
+		get_page(page);
+
 unlock:
 	pte_unmap_unlock(ptep, ptl);
-	if (page)
+	if (page) {
+		do_prot_none_numa(mm, vma, address, page);
 		put_page(page);
+	}
 	return 0;
 }
 
