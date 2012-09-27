@@ -1159,10 +1159,10 @@ static void mlx4_slave_exit(struct mlx4_dev *dev)
 {
 	struct mlx4_priv *priv = mlx4_priv(dev);
 
-	down(&priv->cmd.slave_sem);
+	mutex_lock(&priv->cmd.slave_cmd_mutex);
 	if (mlx4_comm_cmd(dev, MLX4_COMM_CMD_RESET, 0, MLX4_COMM_TIME))
 		mlx4_warn(dev, "Failed to close slave function.\n");
-	up(&priv->cmd.slave_sem);
+	mutex_unlock(&priv->cmd.slave_cmd_mutex);
 }
 
 static int map_bf_area(struct mlx4_dev *dev)
@@ -1214,7 +1214,7 @@ static int mlx4_init_slave(struct mlx4_dev *dev)
 	u32 slave_read;
 	u32 cmd_channel_ver;
 
-	down(&priv->cmd.slave_sem);
+	mutex_lock(&priv->cmd.slave_cmd_mutex);
 	priv->cmd.max_cmds = 1;
 	mlx4_warn(dev, "Sending reset\n");
 	ret_from_reset = mlx4_comm_cmd(dev, MLX4_COMM_CMD_RESET, 0,
@@ -1263,12 +1263,13 @@ static int mlx4_init_slave(struct mlx4_dev *dev)
 		goto err;
 	if (mlx4_comm_cmd(dev, MLX4_COMM_CMD_VHCR_EN, dma, MLX4_COMM_TIME))
 		goto err;
-	up(&priv->cmd.slave_sem);
+
+	mutex_unlock(&priv->cmd.slave_cmd_mutex);
 	return 0;
 
 err:
 	mlx4_comm_cmd(dev, MLX4_COMM_CMD_RESET, 0, 0);
-	up(&priv->cmd.slave_sem);
+	mutex_unlock(&priv->cmd.slave_cmd_mutex);
 	return -EIO;
 }
 
@@ -2035,12 +2036,11 @@ static int __mlx4_init_one(struct pci_dev *pdev, const struct pci_device_id *id)
 		}
 
 		if (num_vfs) {
-			mlx4_warn(dev, "Enabling sriov with:%d vfs\n", num_vfs);
+			mlx4_warn(dev, "Enabling SR-IOV with %d VFs\n", num_vfs);
 			err = pci_enable_sriov(pdev, num_vfs);
 			if (err) {
-				mlx4_err(dev, "Failed to enable sriov,"
-					 "continuing without sriov enabled"
-					 " (err = %d).\n", err);
+				mlx4_err(dev, "Failed to enable SR-IOV, continuing without SR-IOV (err = %d).\n",
+					 err);
 				err = 0;
 			} else {
 				mlx4_warn(dev, "Running in master mode\n");
@@ -2282,7 +2282,7 @@ static void mlx4_remove_one(struct pci_dev *pdev)
 		if (dev->flags & MLX4_FLAG_MSI_X)
 			pci_disable_msix(pdev);
 		if (dev->flags & MLX4_FLAG_SRIOV) {
-			mlx4_warn(dev, "Disabling sriov\n");
+			mlx4_warn(dev, "Disabling SR-IOV\n");
 			pci_disable_sriov(pdev);
 		}
 
