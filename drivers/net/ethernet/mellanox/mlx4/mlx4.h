@@ -692,12 +692,19 @@ struct mlx4_steer {
 	struct list_head steer_entries[MLX4_NUM_STEERS];
 };
 
+enum {
+	MLX4_PCI_DEV_IS_VF		= 1 << 0,
+	MLX4_PCI_DEV_FORCE_SENSE_PORT	= 1 << 1,
+};
+
 struct mlx4_priv {
 	struct mlx4_dev		dev;
 
 	struct list_head	dev_list;
 	struct list_head	ctx_list;
 	spinlock_t		ctx_lock;
+
+	int			pci_dev_data;
 
 	struct list_head        pgdir_list;
 	struct mutex            pgdir_mutex;
