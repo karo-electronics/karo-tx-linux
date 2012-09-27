@@ -4306,7 +4306,8 @@ static ssize_t
 mismatch_cnt_show(struct mddev *mddev, char *page)
 {
 	return sprintf(page, "%llu\n",
-		       (unsigned long long) mddev->resync_mismatches);
+		       (unsigned long long)
+		       atomic64_read(&mddev->resync_mismatches));
 }
 
 static struct md_sysfs_entry md_scan_mode =
@@ -5277,7 +5278,7 @@ static void md_clean(struct mddev *mddev)
 	mddev->new_layout = 0;
 	mddev->new_chunk_sectors = 0;
 	mddev->curr_resync = 0;
-	mddev->resync_mismatches = 0;
+	atomic64_set(&mddev->resync_mismatches, 0);
 	mddev->suspend_lo = mddev->suspend_hi = 0;
 	mddev->sync_speed_min = mddev->sync_speed_max = 0;
 	mddev->recovery = 0;
@@ -7403,7 +7404,7 @@ void md_do_sync(struct md_thread *thread)
 		 * which defaults to physical size, but can be virtual size
 		 */
 		max_sectors = mddev->resync_max_sectors;
-		mddev->resync_mismatches = 0;
+		atomic64_set(&mddev->resync_mismatches, 0);
 		/* we don't use the checkpoint if there's a bitmap */
 		if (test_bit(MD_RECOVERY_REQUESTED, &mddev->recovery))
 			j = mddev->resync_min;
