@@ -118,6 +118,7 @@ static int hfsplus_system_write_inode(struct inode *inode)
 	case HFSPLUS_ATTR_CNID:
 		fork = &vhdr->attr_file;
 		tree = sbi->attr_tree;
+		break;
 	default:
 		return -EIO;
 	}
@@ -185,6 +186,12 @@ static int hfsplus_sync_fs(struct super_block *sb, int wait)
 	error2 = filemap_write_and_wait(sbi->ext_tree->inode->i_mapping);
 	if (!error)
 		error = error2;
+	if (sbi->attr_tree) {
+		error2 =
+		    filemap_write_and_wait(sbi->attr_tree->inode->i_mapping);
+		if (!error)
+			error = error2;
+	}
 	error2 = filemap_write_and_wait(sbi->alloc_file->i_mapping);
 	if (!error)
 		error = error2;
@@ -272,6 +279,7 @@ static void hfsplus_put_super(struct super_block *sb)
 		hfsplus_sync_fs(sb, 1);
 	}
 
+	hfs_btree_close(sbi->attr_tree);
 	hfs_btree_close(sbi->cat_tree);
 	hfs_btree_close(sbi->ext_tree);
 	iput(sbi->alloc_file);
@@ -468,12 +476,19 @@ static int hfsplus_fill_super(struct super_block *sb, void *data, int silent)
 		printk(KERN_ERR "hfs: failed to load catalog file\n");
 		goto out_close_ext_tree;
 	}
+	if (vhdr->attr_file.total_blocks != 0) {
+		sbi->attr_tree = hfs_btree_open(sb, HFSPLUS_ATTR_CNID);
+		if (!sbi->attr_tree) {
+			printk(KERN_ERR "hfs: failed to load attributes file\n");
+			goto out_close_cat_tree;
+		}
+	}
 
 	inode = hfsplus_iget(sb, HFSPLUS_ALLOC_CNID);
 	if (IS_ERR(inode)) {
 		printk(KERN_ERR "hfs: failed to load allocation file\n");
 		err = PTR_ERR(inode);
-		goto out_close_cat_tree;
+		goto out_close_attr_tree;
 	}
 	sbi->alloc_file = inode;
 
@@ -553,6 +568,8 @@ out_put_root:
 	sb->s_root = NULL;
 out_put_alloc_file:
 	iput(sbi->alloc_file);
+out_close_attr_tree:
+	hfs_btree_close(sbi->attr_tree);
 out_close_cat_tree:
 	hfs_btree_close(sbi->cat_tree);
 out_close_ext_tree:
@@ -626,15 +643,27 @@ static int __init init_hfsplus_fs(void)
 		hfsplus_init_once);
 	if (!hfsplus_inode_cachep)
 		return -ENOMEM;
+	err = hfsplus_create_attr_tree_cache();
+	if (err)
+		goto destroy_inode_cache;
 	err = register_filesystem(&hfsplus_fs_type);
 	if (err)
-		kmem_cache_destroy(hfsplus_inode_cachep);
-	return err;
+		goto destroy_attr_tree_cache;
+	return 0;
+
+destroy_attr_tree_cache:
+	hfsplus_destroy_attr_tree_cache();
+
+destroy_inode_cache:
+	kmem_cache_destroy(hfsplus_inode_cachep);
+
+ 	return err;
 }
 
 static void __exit exit_hfsplus_fs(void)
 {
 	unregister_filesystem(&hfsplus_fs_type);
+	hfsplus_destroy_attr_tree_cache();
 
 	/*
 	 * Make sure all delayed rcu free inodes are flushed before we
