@@ -222,8 +222,9 @@ static void lm3639_torch_brightness_set(struct led_classdev *cdev,
 {
 	int ret;
 	unsigned int reg_val;
-	struct lm3639_chip_data *pchip =
-	    container_of(cdev, struct lm3639_chip_data, cdev_torch);
+	struct lm3639_chip_data *pchip;
+
+	pchip = container_of(cdev, struct lm3639_chip_data, cdev_torch);
 
 	ret = regmap_read(pchip->regmap, REG_FLAG, &reg_val);
 	if (ret < 0)
@@ -259,8 +260,9 @@ static void lm3639_flash_brightness_set(struct led_classdev *cdev,
 {
 	int ret;
 	unsigned int reg_val;
-	struct lm3639_chip_data *pchip =
-	    container_of(cdev, struct lm3639_chip_data, cdev_flash);
+	struct lm3639_chip_data *pchip;
+
+	pchip = container_of(cdev, struct lm3639_chip_data, cdev_flash);
 
 	ret = regmap_read(pchip->regmap, REG_FLAG, &reg_val);
 	if (ret < 0)
@@ -303,7 +305,6 @@ static int __devinit lm3639_probe(struct i2c_client *client,
 	int ret;
 	struct lm3639_chip_data *pchip;
 	struct lm3639_platform_data *pdata = client->dev.platform_data;
-
 	struct backlight_properties props;
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
