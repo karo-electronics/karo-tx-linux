@@ -746,14 +746,6 @@ static void mxc_nand_read_buf(struct mtd_info *mtd, u_char *buf, int len)
 	host->buf_start += n;
 }
 
-/* Used by the upper layer to verify the data in NAND Flash
- * with the data in the buf. */
-static int mxc_nand_verify_buf(struct mtd_info *mtd,
-				const u_char *buf, int len)
-{
-	return -EFAULT;
-}
-
 /* This function is used by upper layer for select and
  * deselect of the NAND chip */
 static void mxc_nand_select_chip_v1_v3(struct mtd_info *mtd, int chip)
@@ -1371,7 +1363,7 @@ static int __init mxcnd_probe_pdata(struct mxc_nand_host *host)
 	return 0;
 }
 
-static int __init mxcnd_probe(struct platform_device *pdev)
+static int __devinit mxcnd_probe(struct platform_device *pdev)
 {
 	struct nand_chip *this;
 	struct mtd_info *mtd;
@@ -1406,9 +1398,8 @@ static int __init mxcnd_probe(struct platform_device *pdev)
 	this->read_word = mxc_nand_read_word;
 	this->write_buf = mxc_nand_write_buf;
 	this->read_buf = mxc_nand_read_buf;
-	this->verify_buf = mxc_nand_verify_buf;
 
-	host->clk = devm_clk_get(&pdev->dev, "nfc");
+	host->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(host->clk))
 		return PTR_ERR(host->clk);
 
@@ -1564,22 +1555,10 @@ static struct platform_driver mxcnd_driver = {
 		   .owner = THIS_MODULE,
 		   .of_match_table = of_match_ptr(mxcnd_dt_ids),
 	},
+	.probe = mxcnd_probe,
 	.remove = __devexit_p(mxcnd_remove),
 };
-
-static int __init mxc_nd_init(void)
-{
-	return platform_driver_probe(&mxcnd_driver, mxcnd_probe);
-}
-
-static void __exit mxc_nd_cleanup(void)
-{
-	/* Unregister the device structure */
-	platform_driver_unregister(&mxcnd_driver);
-}
-
-module_init(mxc_nd_init);
-module_exit(mxc_nd_cleanup);
+module_platform_driver(mxcnd_driver);
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc.");
 MODULE_DESCRIPTION("MXC NAND MTD driver");
