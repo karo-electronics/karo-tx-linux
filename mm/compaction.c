@@ -414,9 +414,10 @@ isolate_migratepages_range(struct zone *zone, struct compact_control *cc,
 		 * splitting and collapsing (collapsing has already happened
 		 * if PageLRU is set) but the lock is not necessarily taken
 		 * here and it is wasteful to take it just to check transhuge.
-		 * Check transhuge without lock and skip if it's either a
-		 * transhuge or hugetlbfs page because calling compound_order()
-		 * requires lru_lock to exclude isolation and splitting.
+		 * Check TransHuge without lock and skip the whole pageblock if
+		 * it's either a transhuge or hugetlbfs page, as calling
+		 * compound_order() without preventing THP from splitting the
+		 * page underneath us may return surprising results.
 		 */
 		if (PageTransHuge(page)) {
 			if (!locked)
