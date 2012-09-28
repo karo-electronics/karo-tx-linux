@@ -43,7 +43,8 @@ int rtc_hctosys_ret = -ENODEV;
  */
 
 static struct timespec old_rtc, old_system, old_delta;
-
+/* Result of the last RTC to system clock attempt. */
+int rtc_hctosys_ret = -ENODEV;
 
 static int rtc_suspend(struct device *dev, pm_message_t mesg)
 {
