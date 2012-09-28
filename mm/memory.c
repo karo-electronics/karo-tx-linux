@@ -3444,7 +3444,6 @@ static int do_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
 {
 	struct page *page = NULL;
 	spinlock_t *ptl;
-	int node;
 
 	ptl = pte_lockptr(mm, pmd);
 	spin_lock(ptl);
@@ -3457,35 +3456,32 @@ static int do_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
 	 * lazy page migration, see MPOL_MF_LAZY and related.
 	 */
 	page = vm_normal_page(vma, address, entry);
-	if (!page)
-		goto do_fixup_locked;
+	if (page) {
+		int node;
 
-	get_page(page);
-	pte_unmap_unlock(ptep, ptl);
+		get_page(page);
+		pte_unmap_unlock(ptep, ptl);
 
-	node = mpol_misplaced(page, vma, address);
-	if (node == -1)
-		goto do_fixup;
-
-	/*
-	 * Page migration will install a new pte with vma->vm_page_prot,
-	 * otherwise fall-through to the fixup. Next time,.. perhaps.
-	 */
-	if (!migrate_misplaced_page(mm, page, node)) {
-		put_page(page);
-		return 0;
+		node = mpol_misplaced(page, vma, address);
+		if (node != -1) {
+			/*
+			 * Page migration will install a new pte with
+			 * vma->vm_page_prot, otherwise fall-through to the
+			 * fixup. Next time,.. perhaps.
+			 */
+			if (!migrate_misplaced_page(mm, page, node)) {
+				put_page(page);
+				return 0;
+			}
+		}
+		/*
+		 * OK, nothing to do,.. change the protection back to what it
+		 * ought to be.
+		 */
+		ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
+		if (unlikely(!pte_same(*ptep, entry)))
+			goto unlock;
 	}
-
-do_fixup:
-	/*
-	 * OK, nothing to do,.. change the protection back to what it
-	 * ought to be.
-	 */
-	ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
-	if (unlikely(!pte_same(*ptep, entry)))
-		goto unlock;
-
-do_fixup_locked:
 #endif /* CONFIG_NUMA */
 
 	flush_cache_page(vma, address, pte_pfn(entry));
