@@ -1305,7 +1305,8 @@ static inline int pmdp_test_and_clear_young(struct vm_area_struct *vma,
 			"	ogr	%1,%0\n"
 			"	la	%3,0(%4,%3)\n"
 			"	brct	%2,0b\n"
-			: "=d" (tmp), "+d" (rc), "+d" (counter), "+a" (pmd_addr)
+			: "=&d" (tmp), "+&d" (rc), "+d" (counter),
+			  "+a" (pmd_addr)
 			: "a" (64 * 4096UL) : "cc");
 		rc = !!rc;
 	} else {
