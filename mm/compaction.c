@@ -50,6 +50,7 @@ static inline bool migrate_async_suitable(int migratetype)
 	return is_migrate_cma(migratetype) || migratetype == MIGRATE_MOVABLE;
 }
 
+#ifdef CONFIG_COMPACTION
 /* Returns true if the pageblock should be scanned for pages to isolate. */
 static inline bool isolation_suitable(struct compact_control *cc,
 					struct page *page)
@@ -107,6 +108,17 @@ static void update_pageblock_skip(struct page *page, unsigned long nr_isolated)
 	if (!nr_isolated)
 		set_pageblock_skip(page);
 }
+#else
+static inline bool isolation_suitable(struct compact_control *cc,
+					struct page *page)
+{
+	return true;
+}
+
+static void update_pageblock_skip(struct page *page, unsigned long nr_isolated)
+{
+}
+#endif /* CONFIG_COMPACTION */
 
 static inline bool should_release_lock(spinlock_t *lock)
 {
