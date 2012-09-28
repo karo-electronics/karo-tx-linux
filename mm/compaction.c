@@ -909,8 +909,7 @@ static unsigned long compact_zone_order(struct zone *zone,
 	INIT_LIST_HEAD(&cc.migratepages);
 
 	ret = compact_zone(zone, &cc);
-	if (contended)
-		*contended = cc.contended;
+	*contended = cc.contended;
 	return ret;
 }
 
