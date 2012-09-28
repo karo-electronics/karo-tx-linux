@@ -1429,8 +1429,7 @@ static int __split_huge_page_map(struct page *page,
 	 * complete. The ptl also protects against concurrent faults due to
 	 * making the pmd not-present.
 	 */
-	set_pmd_at(mm, address, pmd, pmd_mknotpresent(*pmd));
-	flush_tlb_range(vma, address, address + HPAGE_PMD_SIZE);
+	pmdp_invalidate(vma, address, pmd);
 	pmd_populate(mm, pmd, pgtable);
 	ret = 1;
 
