@@ -446,13 +446,19 @@ void mark_page_accessed(struct page *page)
 }
 EXPORT_SYMBOL(mark_page_accessed);
 
+/*
+ * Check pagevec space before adding new page into as
+ * it will prevent ununiform page status in
+ * mark_page_accessed() after __lru_cache_add()
+ */
 void __lru_cache_add(struct page *page, enum lru_list lru)
 {
 	struct pagevec *pvec = &get_cpu_var(lru_add_pvecs)[lru];
 
 	page_cache_get(page);
-	if (!pagevec_add(pvec, page))
+	if (!pagevec_space(pvec))
 		__pagevec_lru_add(pvec, lru);
+	pagevec_add(pvec, page);
 	put_cpu_var(lru_add_pvecs);
 }
 EXPORT_SYMBOL(__lru_cache_add);
