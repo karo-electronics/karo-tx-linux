@@ -10,7 +10,7 @@ scripts=`dirname $0`
 CONFIG_MODULE_SIG_SHA512=y
 if [ -r .config ]
 then
-    source ./.config
+    . ./.config
 fi
 
 key="$1"
