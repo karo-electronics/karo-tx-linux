@@ -4558,7 +4558,9 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 	for_each_online_node(i)
 		if (node_distance(nid, i) <= RECLAIM_DISTANCE) {
 			node_set(i, pgdat->reclaim_nodes);
+#ifdef CONFIG_NUMA
 			zone_reclaim_mode = 1;
+#endif
 		}
 	calculate_node_totalpages(pgdat, zones_size, zholes_size);
 
