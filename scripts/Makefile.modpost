@@ -165,11 +165,13 @@ endif
 
 # We strip the module as best we can - note that using both strip and eu-strip
 # results in a smaller module than using either alone.
+EU_STRIP = $(shell which eu-strip || echo true)
+
 quiet_cmd_sign_ko_stripped_ko_unsigned = STRIP [M] $@
       cmd_sign_ko_stripped_ko_unsigned = \
 		cp $< $@ && \
 		strip -x -g $@ && \
-		eu-strip $@
+		$(EU_STRIP) $@
 
 ifeq ($(SIGN_MODULES),1)
 
