@@ -9,7 +9,7 @@
  * Atomically test *v and decrement if it is greater than 0.
  * The function returns the old value of *v minus 1.
  */
-static inline int __atomic_dec_if_positive(atomic_t *v)
+static inline int atomic_dec_if_positive(atomic_t *v)
 {
 	unsigned long flags;
 	int res;
@@ -22,6 +22,6 @@ static inline int __atomic_dec_if_positive(atomic_t *v)
 
 	return res;
 }
-#define atomic_dec_if_positive __atomic_dec_if_positive
+#define atomic_dec_if_positive atomic_dec_if_positive
 
 #endif /* _ASM_MICROBLAZE_ATOMIC_H */
