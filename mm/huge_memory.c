@@ -1768,6 +1768,9 @@ void __khugepaged_exit(struct mm_struct *mm)
 
 static void release_pte_page(struct page *page)
 {
+#ifdef CONFIG_DEBUG_VM
+	page_unfreeze_refs(page, 2);
+#endif
 	/* 0 stands for page_is_file_cache(page) == false */
 	dec_zone_page_state(page, NR_ISOLATED_ANON + 0);
 	unlock_page(page);
@@ -1848,6 +1851,20 @@ static int __collapse_huge_page_isolate(struct vm_area_struct *vma,
 		VM_BUG_ON(!PageLocked(page));
 		VM_BUG_ON(PageLRU(page));
 
+#ifdef CONFIG_DEBUG_VM
+		/*
+		 * For the VM_BUG_ON check on page_count(page) in
+		 * __collapse_huge_page_copy not to trigger false
+		 * positives we've to prevent the speculative
+		 * pagecache lookups too with page_freeze_refs. We
+		 * could check for >= 2 instead but this provides for
+		 * a more strict debugging behavior.
+		 */
+		if (!page_freeze_refs(page, 2)) {
+			release_pte_pages(pte, _pte+1);
+			goto out;
+		}
+#endif
 		/* If there is no mapped pte young don't collapse the page */
 		if (pte_young(pteval) || PageReferenced(page) ||
 		    mmu_notifier_test_young(vma->vm_mm, address))
@@ -1878,7 +1895,7 @@ static void __collapse_huge_page_copy(pte_t *pte, struct page *page,
 			src_page = pte_page(pteval);
 			copy_user_highpage(page, src_page, address, vma);
 			VM_BUG_ON(page_mapcount(src_page) != 1);
-			VM_BUG_ON(page_count(src_page) != 2);
+			VM_BUG_ON(page_count(src_page) != 0);
 			release_pte_page(src_page);
 			/*
 			 * ptl mostly unnecessary, but preempt has to
