@@ -341,7 +341,7 @@ static struct platform_driver tps65910_rtc_driver = {
 	.remove		= __devexit_p(tps65910_rtc_remove),
 	.driver		= {
 		.owner	= THIS_MODULE,
-		.name	= "rtc-tps65910",
+		.name	= "tps65910-rtc",
 		.pm	= DEV_PM_OPS,
 	},
 };
