@@ -1803,6 +1803,17 @@ static bool zone_allows_reclaim(struct zone *local_zone, struct zone *zone)
 	return node_isset(local_zone->node, zone->zone_pgdat->reclaim_nodes);
 }
 
+static void __paginginit init_zone_allows_reclaim(int nid)
+{
+	int i;
+
+	for_each_online_node(i)
+		if (node_distance(nid, i) <= RECLAIM_DISTANCE) {
+			node_set(i, NODE_DATA(nid)->reclaim_nodes);
+			zone_reclaim_mode = 1;
+		}
+}
+
 #else	/* CONFIG_NUMA */
 
 static nodemask_t *zlc_setup(struct zonelist *zonelist, int alloc_flags)
@@ -1827,6 +1838,10 @@ static void zlc_clear_zones_full(struct zonelist *zonelist)
 static bool zone_allows_reclaim(struct zone *local_zone, struct zone *zone)
 {
 	return true;
+}
+
+static inline void init_zone_allows_reclaim(int nid)
+{
 }
 #endif	/* CONFIG_NUMA */
 
@@ -4548,20 +4563,13 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 		unsigned long node_start_pfn, unsigned long *zholes_size)
 {
 	pg_data_t *pgdat = NODE_DATA(nid);
-	int i;
 
 	/* pg_data_t should be reset to zero when it's allocated */
 	WARN_ON(pgdat->nr_zones || pgdat->classzone_idx);
 
 	pgdat->node_id = nid;
 	pgdat->node_start_pfn = node_start_pfn;
-	for_each_online_node(i)
-		if (node_distance(nid, i) <= RECLAIM_DISTANCE) {
-			node_set(i, pgdat->reclaim_nodes);
-#ifdef CONFIG_NUMA
-			zone_reclaim_mode = 1;
-#endif
-		}
+	init_zone_allows_reclaim(nid);
 	calculate_node_totalpages(pgdat, zones_size, zholes_size);
 
 	alloc_node_mem_map(pgdat);
