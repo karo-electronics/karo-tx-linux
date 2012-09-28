@@ -180,8 +180,6 @@ char *put_dec_trunc8(char *buf, unsigned r)
 		*buf++ = q - 10*r;
 	}
 
-	if (r == 0)
-		return buf;
 	q      = (r * 0x199a) >> 16;
 	*buf++ = (r - 10 * q)  + '0'; /* 6 */
 	if (q == 0)
