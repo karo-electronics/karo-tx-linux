@@ -39,7 +39,8 @@ static void rtc_device_release(struct device *dev)
  */
 
 static struct timespec old_rtc, old_system, old_delta;
-
+/* Result of the last RTC to system clock attempt. */
+int rtc_hctosys_ret = -ENODEV;
 
 static int rtc_suspend(struct device *dev, pm_message_t mesg)
 {
@@ -84,6 +85,7 @@ static int rtc_resume(struct device *dev)
 	struct timespec		new_system, new_rtc;
 	struct timespec		sleep_time;
 
+	rtc_hctosys_ret = -ENODEV;
 	if (strcmp(dev_name(&rtc->dev), CONFIG_RTC_HCTOSYS_DEVICE) != 0)
 		return 0;
 
@@ -117,6 +119,7 @@ static int rtc_resume(struct device *dev)
 
 	if (sleep_time.tv_sec >= 0)
 		timekeeping_inject_sleeptime(&sleep_time);
+	rtc_hctosys_ret = 0;
 	return 0;
 }
 
