@@ -447,8 +447,12 @@ void mark_page_accessed(struct page *page)
 EXPORT_SYMBOL(mark_page_accessed);
 
 /*
- * Check the pagevec space before adding a new page into it, to prevent
- * nonuniform page status in mark_page_accessed() after __lru_cache_add().
+ * Order of operations is important: flush the pagevec when it's already
+ * full, not when adding the last page, to make sure that last page is
+ * not added to the LRU directly when passed to this function. Because
+ * mark_page_accessed() (called after this when writing) only activates
+ * pages that are on the LRU, linear writes in subpage chunks would see
+ * every PAGEVEC_SIZE page activated, which is unexpected.
  */
 void __lru_cache_add(struct page *page, enum lru_list lru)
 {
