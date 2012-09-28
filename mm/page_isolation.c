@@ -209,8 +209,9 @@ __test_page_isolated_in_pageblock(unsigned long pfn, unsigned long end_pfn)
 			 * MIGRATE_ISOLATE list.
 			 */
 			if (get_freepage_migratetype(page) != MIGRATE_ISOLATE) {
-				struct page *end_page = page +
-						(1 << page_order(page)) - 1;
+				struct page *end_page;
+
+				end_page = page + (1 << page_order(page)) - 1;
 				move_freepages(page_zone(page), page, end_page,
 						MIGRATE_ISOLATE);
 			}
