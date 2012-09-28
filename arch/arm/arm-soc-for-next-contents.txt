@@ -99,6 +99,7 @@ vt8500/devel	git://git.code.sf.net/p/linuxwmt/code tags/vt8500-for-next
 next/cleanup2:
 tegra/cleanup2	git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-cleanup2
 clps711x/cleanup patches from Alexander Shiyan <shc_work@mail.ru>
+bcmring/removal  patch from "Christian Daudt" <csd@broadcom.com>
 
 next/soc2:
 mxs/sparse-irq	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-sparse-irq
