@@ -96,7 +96,6 @@ static inline bool compact_trylock_irqsave(spinlock_t *lock,
 /* Returns true if the page is within a block suitable for migration to */
 static bool suitable_migration_target(struct page *page)
 {
-
 	int migratetype = get_pageblock_migratetype(page);
 
 	/* Don't interfere with memory hot-remove or the min_free_kbytes blocks */
@@ -188,21 +187,20 @@ static unsigned long isolate_freepages_block(struct compact_control *cc,
 
 	cursor = pfn_to_page(blockpfn);
 
-	/* Isolate free pages. This assumes the block is valid */
+	/* Isolate free pages. */
 	for (; blockpfn < end_pfn; blockpfn++, cursor++) {
 		int isolated, i;
 		struct page *page = cursor;
 
-		if (!pfn_valid_within(blockpfn))
-			goto strict_check;
 		nr_scanned++;
-
+		if (!pfn_valid_within(blockpfn))
+			continue;
 		if (!PageBuddy(page))
-			goto strict_check;
+			continue;
 
 		/*
-		 * The zone lock must be held to isolate freepages. This
-		 * unfortunately this is a very coarse lock and can be
+		 * The zone lock must be held to isolate freepages.
+		 * Unfortunately this is a very coarse lock and can be
 		 * heavily contended if there are parallel allocations
 		 * or parallel compactions. For async compaction do not
 		 * spin on the lock and we acquire the lock as late as
@@ -219,12 +217,12 @@ static unsigned long isolate_freepages_block(struct compact_control *cc,
 
 		/* Recheck this is a buddy page under lock */
 		if (!PageBuddy(page))
-			goto strict_check;
+			continue;
 
 		/* Found a free page, break it into order-0 pages */
 		isolated = split_free_page(page);
 		if (!isolated && strict)
-			goto strict_check;
+			break;
 		total_isolated += isolated;
 		for (i = 0; i < isolated; i++) {
 			list_add(&page->lru, freelist);
@@ -236,20 +234,18 @@ static unsigned long isolate_freepages_block(struct compact_control *cc,
 			blockpfn += isolated - 1;
 			cursor += isolated - 1;
 		}
-
-		continue;
-
-strict_check:
-		/* Abort isolation if the caller requested strict isolation */
-		if (strict) {
-			total_isolated = 0;
-			goto out;
-		}
 	}
 
 	trace_mm_compaction_isolate_freepages(nr_scanned, total_isolated);
 
-out:
+	/*
+	 * If strict isolation is requested by CMA then check that all the
+	 * pages scanned were isolated. If there were any failures, 0 is
+	 * returned and CMA will fail.
+	 */
+	if (strict && nr_scanned != total_isolated)
+		total_isolated = 0;
+
 	if (locked)
 		spin_unlock_irqrestore(&cc->zone->lock, flags);
 
@@ -275,14 +271,14 @@ isolate_freepages_range(unsigned long start_pfn, unsigned long end_pfn)
 	unsigned long isolated, pfn, block_end_pfn;
 	struct zone *zone = NULL;
 	LIST_HEAD(freelist);
-	struct compact_control cc;
-
-	if (pfn_valid(start_pfn))
-		zone = page_zone(pfn_to_page(start_pfn));
 
 	/* cc needed for isolate_freepages_block to acquire zone->lock */
-	cc.zone = zone;
-	cc.sync = true;
+	struct compact_control cc = {
+		.sync = true,
+	};
+
+	if (pfn_valid(start_pfn))
+		cc.zone = zone = page_zone(pfn_to_page(start_pfn));
 
 	for (pfn = start_pfn; pfn < end_pfn; pfn += isolated) {
 		if (!pfn_valid(pfn) || zone != page_zone(pfn_to_page(pfn)))
