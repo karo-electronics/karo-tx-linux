@@ -18,6 +18,7 @@ config ARCH_OMAP2PLUS_TYPICAL
 	select TWL4030_CORE if ARCH_OMAP3 || ARCH_OMAP4
 	select TWL4030_POWER if ARCH_OMAP3 || ARCH_OMAP4
 	select HIGHMEM
+	select PINCTRL
 	help
 	  Compile a kernel suitable for booting most boards
 
@@ -44,6 +45,7 @@ config ARCH_OMAP3
 	select ARM_CPU_SUSPEND if PM
 	select MULTI_IRQ_HANDLER
 	select SOC_HAS_OMAP2_SDRC
+	select OMAP_INTERCONNECT
 
 config ARCH_OMAP4
 	bool "TI OMAP4"
@@ -63,6 +65,7 @@ config ARCH_OMAP4
 	select USB_ARCH_HAS_EHCI if USB_SUPPORT
 	select ARM_CPU_SUSPEND if PM
 	select ARCH_NEEDS_CPU_IDLE_COUPLED if SMP
+	select OMAP_INTERCONNECT
 
 config SOC_OMAP5
 	bool "TI OMAP5"
