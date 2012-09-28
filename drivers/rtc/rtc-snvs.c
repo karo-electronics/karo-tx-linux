@@ -83,8 +83,8 @@ static void rtc_write_sync_lp(void __iomem *ioaddr)
 
 static int snvs_rtc_enable(struct snvs_rtc_data *data, bool enable)
 {
-	unsigned long timeout = jiffies + msecs_to_jiffies(1);
 	unsigned long flags;
+	int timeout = 1000;
 	u32 lpcr;
 
 	spin_lock_irqsave(&data->lock, flags);
@@ -98,7 +98,7 @@ static int snvs_rtc_enable(struct snvs_rtc_data *data, bool enable)
 
 	spin_unlock_irqrestore(&data->lock, flags);
 
-	while (1) {
+	while (--timeout) {
 		lpcr = readl(data->ioaddr + SNVS_LPCR);
 
 		if (enable) {
@@ -108,10 +108,10 @@ static int snvs_rtc_enable(struct snvs_rtc_data *data, bool enable)
 			if (!(lpcr & SNVS_LPCR_SRTC_ENV))
 				break;
 		}
-
-		if (time_after(jiffies, timeout))
-			return -ETIMEDOUT;
 	}
+
+	if (!timeout)
+		return -ETIMEDOUT;
 
 	return 0;
 }
