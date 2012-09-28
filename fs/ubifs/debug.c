@@ -243,8 +243,8 @@ void ubifs_dump_inode(struct ubifs_info *c, const struct inode *inode)
 	pr_err("\tsize           %llu\n",
 	       (unsigned long long)i_size_read(inode));
 	pr_err("\tnlink          %u\n", inode->i_nlink);
-	pr_err("\tuid            %u\n", (unsigned int)inode->i_uid);
-	pr_err("\tgid            %u\n", (unsigned int)inode->i_gid);
+	pr_err("\tuid            %u\n", (unsigned int)i_uid_read(inode));
+	pr_err("\tgid            %u\n", (unsigned int)i_gid_read(inode));
 	pr_err("\tatime          %u.%u\n",
 	       (unsigned int)inode->i_atime.tv_sec,
 	       (unsigned int)inode->i_atime.tv_nsec);
