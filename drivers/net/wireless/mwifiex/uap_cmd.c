@@ -167,11 +167,31 @@ mwifiex_set_ht_params(struct mwifiex_private *priv,
 	if (ht_ie) {
 		memcpy(&bss_cfg->ht_cap, ht_ie + 2,
 		       sizeof(struct ieee80211_ht_cap));
+		priv->ap_11n_enabled = 1;
 	} else {
 		memset(&bss_cfg->ht_cap , 0, sizeof(struct ieee80211_ht_cap));
 		bss_cfg->ht_cap.cap_info = cpu_to_le16(MWIFIEX_DEF_HT_CAP);
 		bss_cfg->ht_cap.ampdu_params_info = MWIFIEX_DEF_AMPDU;
 	}
+
+	return;
+}
+
+/* This function finds supported rates IE from beacon parameter and sets
+ * these rates into bss_config structure.
+ */
+void
+mwifiex_set_uap_rates(struct mwifiex_uap_bss_param *bss_cfg,
+		      struct cfg80211_ap_settings *params)
+{
+	struct ieee_types_header *rate_ie;
+	int var_offset = offsetof(struct ieee80211_mgmt, u.beacon.variable);
+	const u8 *var_pos = params->beacon.head + var_offset;
+	int len = params->beacon.head_len - var_offset;
+
+	rate_ie = (void *)cfg80211_find_ie(WLAN_EID_SUPP_RATES, var_pos, len);
+	if (rate_ie)
+		memcpy(bss_cfg->rates, rate_ie + 1, rate_ie->len);
 
 	return;
 }
@@ -322,8 +342,10 @@ mwifiex_uap_bss_param_prepare(u8 *tlv, void *cmd_buf, u16 *param_size)
 	struct host_cmd_tlv_retry_limit *retry_limit;
 	struct host_cmd_tlv_encrypt_protocol *encrypt_protocol;
 	struct host_cmd_tlv_auth_type *auth_type;
+	struct host_cmd_tlv_rates *tlv_rates;
 	struct mwifiex_ie_types_htcap *htcap;
 	struct mwifiex_uap_bss_param *bss_cfg = cmd_buf;
+	int i;
 	u16 cmd_size = *param_size;
 
 	if (bss_cfg->ssid.ssid_len) {
@@ -343,7 +365,23 @@ mwifiex_uap_bss_param_prepare(u8 *tlv, void *cmd_buf, u16 *param_size)
 		cmd_size += sizeof(struct host_cmd_tlv_bcast_ssid);
 		tlv += sizeof(struct host_cmd_tlv_bcast_ssid);
 	}
-	if (bss_cfg->channel && bss_cfg->channel <= MAX_CHANNEL_BAND_BG) {
+	if (bss_cfg->rates[0]) {
+		tlv_rates = (struct host_cmd_tlv_rates *)tlv;
+		tlv_rates->tlv.type = cpu_to_le16(TLV_TYPE_UAP_RATES);
+
+		for (i = 0; i < MWIFIEX_SUPPORTED_RATES && bss_cfg->rates[i];
+		     i++)
+			tlv_rates->rates[i] = bss_cfg->rates[i];
+
+		tlv_rates->tlv.len = cpu_to_le16(i);
+		cmd_size += sizeof(struct host_cmd_tlv_rates) + i;
+		tlv += sizeof(struct host_cmd_tlv_rates) + i;
+	}
+	if (bss_cfg->channel &&
+	    ((bss_cfg->band_cfg == BAND_CONFIG_BG &&
+	      bss_cfg->channel <= MAX_CHANNEL_BAND_BG) ||
+	    (bss_cfg->band_cfg == BAND_CONFIG_A &&
+	     bss_cfg->channel <= MAX_CHANNEL_BAND_A))) {
 		chan_band = (struct host_cmd_tlv_channel_band *)tlv;
 		chan_band->tlv.type = cpu_to_le16(TLV_TYPE_CHANNELBANDLIST);
 		chan_band->tlv.len =
