@@ -5691,6 +5691,7 @@ static int __alloc_contig_migrate_range(unsigned long start, unsigned long end)
 		.order = -1,
 		.zone = page_zone(pfn_to_page(start)),
 		.sync = true,
+		.ignore_skip_hint = true,
 	};
 	INIT_LIST_HEAD(&cc.migratepages);
 
