@@ -21,6 +21,7 @@
  */
 
 #include "ext4_jbd2.h"
+#include "ext4_extents.h"
 #include "truncate.h"
 
 #include <trace/events/ext4.h>
@@ -1398,6 +1399,8 @@ void ext4_ind_truncate(struct inode *inode)
 	down_write(&ei->i_data_sem);
 
 	ext4_discard_preallocations(inode);
+	ext4_es_remove_extent(inode, last_block,
+			      EXT_MAX_BLOCKS - last_block);
 
 	/*
 	 * The orphan list entry will now protect us from any crash which
@@ -1499,4 +1502,3 @@ out_stop:
 	ext4_journal_stop(handle);
 	trace_ext4_truncate_exit(inode);
 }
-
