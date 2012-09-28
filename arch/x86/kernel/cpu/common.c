@@ -278,6 +278,31 @@ static __cpuinit void setup_smep(struct cpuinfo_x86 *c)
 	}
 }
 
+static int disable_smap __cpuinitdata;
+static __init int setup_disable_smap(char *arg)
+{
+	disable_smap = 1;
+	return 1;
+}
+__setup("nosmap", setup_disable_smap);
+
+static __cpuinit void setup_smap(struct cpuinfo_x86 *c)
+{
+	if (cpu_has(c, X86_FEATURE_SMAP)) {
+		if (unlikely(disable_smap)) {
+			setup_clear_cpu_cap(X86_FEATURE_SMAP);
+			clear_in_cr4(X86_CR4_SMAP);
+		} else {
+			set_in_cr4(X86_CR4_SMAP);
+			/*
+			 * Don't use clac() here since alternatives
+			 * haven't run yet...
+			 */
+			asm volatile(__stringify(__ASM_CLAC) ::: "memory");
+		}
+	}
+}
+
 /*
  * Some CPU features depend on higher CPUID levels, which may not always
  * be available due to CPUID level capping or broken virtualization
@@ -476,7 +501,7 @@ void __cpuinit cpu_detect_tlb(struct cpuinfo_x86 *c)
 
 	printk(KERN_INFO "Last level iTLB entries: 4KB %d, 2MB %d, 4MB %d\n" \
 		"Last level dTLB entries: 4KB %d, 2MB %d, 4MB %d\n"	     \
-		"tlb_flushall_shift is 0x%x\n",
+		"tlb_flushall_shift: %d\n",
 		tlb_lli_4k[ENTRIES], tlb_lli_2m[ENTRIES],
 		tlb_lli_4m[ENTRIES], tlb_lld_4k[ENTRIES],
 		tlb_lld_2m[ENTRIES], tlb_lld_4m[ENTRIES],
@@ -713,6 +738,7 @@ static void __init early_identify_cpu(struct cpuinfo_x86 *c)
 	filter_cpuid_features(c, false);
 
 	setup_smep(c);
+	setup_smap(c);
 
 	if (this_cpu->c_bsp_init)
 		this_cpu->c_bsp_init(c);
@@ -942,8 +968,7 @@ void __init identify_boot_cpu(void)
 #else
 	vgetcpu_set_mode();
 #endif
-	if (boot_cpu_data.cpuid_level >= 2)
-		cpu_detect_tlb(&boot_cpu_data);
+	cpu_detect_tlb(&boot_cpu_data);
 }
 
 void __cpuinit identify_secondary_cpu(struct cpuinfo_x86 *c)
@@ -1023,14 +1048,16 @@ void __cpuinit print_cpu_info(struct cpuinfo_x86 *c)
 		printk(KERN_CONT "%s ", vendor);
 
 	if (c->x86_model_id[0])
-		printk(KERN_CONT "%s", c->x86_model_id);
+		printk(KERN_CONT "%s", strim(c->x86_model_id));
 	else
 		printk(KERN_CONT "%d86", c->x86);
 
+	printk(KERN_CONT " (fam: %02x, model: %02x", c->x86, c->x86_model);
+
 	if (c->x86_mask || c->cpuid_level >= 0)
-		printk(KERN_CONT " stepping %02x\n", c->x86_mask);
+		printk(KERN_CONT ", stepping: %02x)\n", c->x86_mask);
 	else
-		printk(KERN_CONT "\n");
+		printk(KERN_CONT ")\n");
 
 	print_cpu_msr(c);
 }
@@ -1113,10 +1140,9 @@ void syscall_init(void)
 
 	/* Flags to clear on syscall */
 	wrmsrl(MSR_SYSCALL_MASK,
-	       X86_EFLAGS_TF|X86_EFLAGS_DF|X86_EFLAGS_IF|X86_EFLAGS_IOPL);
+	       X86_EFLAGS_TF|X86_EFLAGS_DF|X86_EFLAGS_IF|
+	       X86_EFLAGS_IOPL|X86_EFLAGS_AC);
 }
-
-unsigned long kernel_eflags;
 
 /*
  * Copies of the original ist values from the tss are only accessed during
@@ -1297,9 +1323,6 @@ void __cpuinit cpu_init(void)
 	dbg_restore_debug_regs();
 
 	fpu_init();
-	xsave_init();
-
-	raw_local_save_flags(kernel_eflags);
 
 	if (is_uv_system())
 		uv_cpu_init();
@@ -1352,6 +1375,5 @@ void __cpuinit cpu_init(void)
 	dbg_restore_debug_regs();
 
 	fpu_init();
-	xsave_init();
 }
 #endif
