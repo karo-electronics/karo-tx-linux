@@ -1958,15 +1958,12 @@ static void collapse_huge_page(struct mm_struct *mm,
 		*hpage = ERR_PTR(-ENOMEM);
 		return;
 	}
+	*hpage = new_page;
 	count_vm_event(THP_COLLAPSE_ALLOC);
 #endif
 
-	if (unlikely(mem_cgroup_newpage_charge(new_page, mm, GFP_KERNEL))) {
-#ifdef CONFIG_NUMA
-		put_page(new_page);
-#endif
+	if (unlikely(mem_cgroup_newpage_charge(new_page, mm, GFP_KERNEL)))
 		return;
-	}
 
 	/*
 	 * Prevent all access to pagetables with the exception of
@@ -2067,9 +2064,8 @@ static void collapse_huge_page(struct mm_struct *mm,
 	prepare_pmd_huge_pte(pgtable, mm);
 	spin_unlock(&mm->page_table_lock);
 
-#ifndef CONFIG_NUMA
 	*hpage = NULL;
-#endif
+
 	khugepaged_pages_collapsed++;
 out_up_write:
 	up_write(&mm->mmap_sem);
@@ -2077,9 +2073,6 @@ out_up_write:
 
 out:
 	mem_cgroup_uncharge_page(new_page);
-#ifdef CONFIG_NUMA
-	put_page(new_page);
-#endif
 	goto out_up_write;
 }
 
@@ -2343,8 +2336,6 @@ static void khugepaged_do_scan(void)
 	bool wait = true;
 
 	while (progress < pages) {
-		cond_resched();
-
 #ifndef CONFIG_NUMA
 		if (!hpage)
 			hpage = khugepaged_alloc_hugepage(&wait);
@@ -2357,8 +2348,12 @@ static void khugepaged_do_scan(void)
 				break;
 			wait = false;
 			khugepaged_alloc_sleep();
+		} else if (hpage) {
+			put_page(hpage);
+			hpage = NULL;
 		}
 #endif
+		cond_resched();
 
 		if (unlikely(kthread_should_stop() || freezing(current)))
 			break;
