@@ -215,7 +215,7 @@ static int do_mmu_notifier_register(struct mmu_notifier *mn,
 
 	if (!mm_has_notifiers(mm)) {
 		mmu_notifier_mm = kmalloc(sizeof(struct mmu_notifier_mm),
-					GFP_ATOMIC);
+					GFP_KERNEL);
 		if (unlikely(!mmu_notifier_mm)) {
 			ret = -ENOMEM;
 			goto out_of_mem;
