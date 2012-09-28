@@ -20,8 +20,6 @@
 
 #include <linux/io.h>
 
-#define DEBUG
-
 #define DS2404_STATUS_REG 0x200
 #define DS2404_CONTROL_REG 0x201
 #define DS2404_RTC_REG 0x202
