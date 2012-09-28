@@ -14,6 +14,15 @@ Required properties:
 Optional properties:
   - pwm-names: a list of names for the PWM devices specified in the
                "pwms" property (see PWM binding[0])
+  - low-threshold-brightness: brightness threshold low level. Low threshold
+    brightness set to value so that backlight present on low end of
+    brightness.
+    Some panels, backlight would absent if duty percentage of PWM wave is less
+    than certain level (say 20%). By setting low-threshold-brightness to a
+    value above (percentage of brightness-levels max) 50 (20% of 255, if 255
+    is max). On setting low-threshold-brightness, range of brightness-levels
+    is calculated in a region of low-threshold-brightness to brightness-levels
+    max.
 
 [0]: Documentation/devicetree/bindings/pwm/pwm.txt
 
@@ -25,4 +34,5 @@ Example:
 
 		brightness-levels = <0 4 8 16 32 64 128 255>;
 		default-brightness-level = <6>;
+		low-threshold-brightness = <50>;
 	};
