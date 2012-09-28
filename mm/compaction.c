@@ -85,6 +85,9 @@ static void reset_isolation_suitable(struct zone *zone)
 	/* Walk the zone and mark every pageblock as suitable for isolation */
 	for (pfn = start_pfn; pfn < end_pfn; pfn += pageblock_nr_pages) {
 		struct page *page;
+
+		cond_resched();
+
 		if (!pfn_valid(pfn))
 			continue;
 
