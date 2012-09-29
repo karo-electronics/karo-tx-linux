@@ -64,6 +64,7 @@ ux500/asic-id:	git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-steric
 		 + http://marc.info/?l=linux-arm-kernel&m=134667789927502
 renesas/kzm9g   git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git kzm9g
 lpc32xx/core	git://git.antcom.de/linux-2.6.git lpc32xx/core
+		(pulled twice)
 renesas/soc	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git soc
 renesas/pmu	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git pmu/cleanup
 			depends on pmu/cleanup (next/cleanup)
