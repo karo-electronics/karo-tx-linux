@@ -135,6 +135,10 @@ imx/boards	git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-boards
 msm/boards	git://git.kernel.org/pub/scm/linux/kernel/git/davidb/linux-msm.git tags/msm-board-for-3.7
 samsung/boards  git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/board-samsung
 
+next/dt2:
+samsung/dt2	git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/dt-samsung-new
+			depends on samsung/boards and samsung/pinctrl
+
 next/docs:
 mvebu/docs:	git://github.com/MISL-EBU-System-SW/mainline-public.git marvell-doc
 
