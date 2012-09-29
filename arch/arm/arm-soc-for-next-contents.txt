@@ -23,6 +23,7 @@ tegra/fixes-non-critical git://git.kernel.org/pub/scm/linux/kernel/git/swarren/l
 omap/fixes-non-critical   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-fixes-noncritical-for-v3.7
 samsung/fixes-non-critical git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git v3.7-samsung-fixes-1
 pxa/fixes		git://github.com/hzhuang1/linux.git fixes
+ep93xx/fixes-non-critical	  git://github.com/RyanMallon/linux-ep93xx.git tags/ep93xx-fixes-for-3.7
 
 next/cleanup:
 cleanup/io-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci-v2
