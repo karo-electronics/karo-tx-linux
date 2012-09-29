@@ -158,6 +158,8 @@ multiplatform/devel git://sources.calxeda.com/kernel/linux.git tags/multi-platfo
 			+ Message-Id: <1347893712-21819-1-git-send-email-robherring2@gmail.com>
 multiplatform/smp_ops  <local contents from testing/smp_ops>
 			+ Message-Id: <1347490900-8409-2-git-send-email-davidb@codeaurora.org>
+(patch)			Message-Id: <1348774765-9420-1-git-send-email-robherring2@gmail.com>
+
 
 
 late/kirkwood:
