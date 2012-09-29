@@ -52,6 +52,7 @@ omap/cleanup-fixes     git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linu
 (email)			message-id = 1348176039-6094-1-git-send-email-swarren@wwwdotorg.org
 tegra/dmaengine-removal git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-dmaengine
 omap/cleanup-headers	git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-cleanup-local-headers-for-v3.7
+			+   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-board-late-v3-for-v3.7
 pxa/cleanup	  git://github.com/hzhuang1/linux.git board
 
 next/maintainers:
