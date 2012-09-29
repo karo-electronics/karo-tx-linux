@@ -160,3 +160,7 @@ kirkwood/dt		git://git.infradead.org/users/jcooper/linux.git kirkwood/dt
 kirkwood/cleanup	git://git.infradead.org/users/jcooper/linux.git kirkwood/cleanup
 kirkwood/addr_decode	git://git.infradead.org/users/jcooper/linux.git kirkwood/addr_decode
 kirkwood/drivers	git://git.infradead.org/users/jcooper/linux.git kirkwood/drivers
+
+late/soc:
+omap/devel-late		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-late-for-v3.7
+
