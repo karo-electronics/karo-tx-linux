@@ -330,14 +330,6 @@ Why:	Internal alias support has been present in module-init-tools for some
 
 Who:	Wey-Yi Guy <wey-yi.w.guy@intel.com>
 
----------------------------
-
-What:	xt_NOTRACK
-Files:	net/netfilter/xt_NOTRACK.c
-When:	April 2011
-Why:	Superseded by xt_CT
-Who:	Netfilter developer team <netfilter-devel@vger.kernel.org>
-
 ----------------------------
 
 What:	IRQF_DISABLED
@@ -480,18 +472,6 @@ Why:	There appear to be no production users of the get_robust_list syscall,
 	of ASLR. It was only ever intended for debugging, so it should be
 	removed.
 Who:	Kees Cook <keescook@chromium.org>
-
-----------------------------
-
-What:	Removing the pn544 raw driver.
-When:	3.6
-Why:	With the introduction of the NFC HCI and SHDL kernel layers, pn544.c
-	is being replaced by pn544_hci.c which is accessible through the netlink
-	and socket NFC APIs. Moreover, pn544.c is outdated and does not seem to
-	work properly with the latest Android stacks.
-	Having 2 drivers for the same hardware is confusing and as such we
-	should only keep the one following the kernel NFC APIs.
-Who:	Samuel Ortiz <sameo@linux.intel.com>
 
 ----------------------------
 

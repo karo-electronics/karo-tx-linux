@@ -529,9 +529,7 @@ static void efx_ethtool_self_test(struct net_device *net_dev,
 	if (!efx_tests)
 		goto fail;
 
-
-	ASSERT_RTNL();
-	if (efx->state != STATE_RUNNING) {
+	if (efx->state != STATE_READY) {
 		rc = -EIO;
 		goto fail1;
 	}
@@ -1176,6 +1174,7 @@ const struct ethtool_ops efx_ethtool_ops = {
 	.get_rxfh_indir_size	= efx_ethtool_get_rxfh_indir_size,
 	.get_rxfh_indir		= efx_ethtool_get_rxfh_indir,
 	.set_rxfh_indir		= efx_ethtool_set_rxfh_indir,
+	.get_ts_info		= efx_ptp_get_ts_info,
 	.get_module_info	= efx_ethtool_get_module_info,
 	.get_module_eeprom	= efx_ethtool_get_module_eeprom,
 };

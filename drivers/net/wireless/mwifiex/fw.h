@@ -65,10 +65,12 @@ enum KEY_TYPE_ID {
 	KEY_TYPE_ID_TKIP,
 	KEY_TYPE_ID_AES,
 	KEY_TYPE_ID_WAPI,
+	KEY_TYPE_ID_AES_CMAC,
 };
 #define KEY_MCAST	BIT(0)
 #define KEY_UNICAST	BIT(1)
 #define KEY_ENABLED	BIT(2)
+#define KEY_IGTK	BIT(10)
 
 #define WAPI_KEY_LEN			50
 
@@ -106,6 +108,7 @@ enum MWIFIEX_802_11_PRIVACY_FILTER {
 #define MGMT_MASK_BEACON			0x100
 
 #define TLV_TYPE_UAP_SSID			0x0000
+#define TLV_TYPE_UAP_RATES			0x0001
 
 #define PROPRIETARY_TLV_BASE_ID                 0x0100
 #define TLV_TYPE_KEY_MATERIAL       (PROPRIETARY_TLV_BASE_ID + 0)
@@ -307,7 +310,7 @@ enum ENH_PS_MODES {
 #define HostCmd_SCAN_RADIO_TYPE_A           1
 
 #define HOST_SLEEP_CFG_CANCEL		0xffffffff
-#define HOST_SLEEP_CFG_COND_DEF		0x0000000f
+#define HOST_SLEEP_CFG_COND_DEF		0x00000000
 #define HOST_SLEEP_CFG_GPIO_DEF		0xff
 #define HOST_SLEEP_CFG_GAP_DEF		0
 
@@ -424,10 +427,10 @@ struct txpd {
 struct rxpd {
 	u8 bss_type;
 	u8 bss_num;
-	u16 rx_pkt_length;
-	u16 rx_pkt_offset;
-	u16 rx_pkt_type;
-	u16 seq_num;
+	__le16 rx_pkt_length;
+	__le16 rx_pkt_offset;
+	__le16 rx_pkt_type;
+	__le16 seq_num;
 	u8 priority;
 	u8 rx_rate;
 	s8 snr;
@@ -438,6 +441,31 @@ struct rxpd {
 	u8 ht_info;
 	u8 reserved;
 } __packed;
+
+struct uap_txpd {
+	u8 bss_type;
+	u8 bss_num;
+	__le16 tx_pkt_length;
+	__le16 tx_pkt_offset;
+	__le16 tx_pkt_type;
+	__le32 tx_control;
+	u8 priority;
+	u8 flags;
+	u8 pkt_delay_2ms;
+	u8 reserved1;
+	__le32 reserved2;
+};
+
+struct uap_rxpd {
+	u8 bss_type;
+	u8 bss_num;
+	__le16 rx_pkt_length;
+	__le16 rx_pkt_offset;
+	__le16 rx_pkt_type;
+	__le16 seq_num;
+	u8 priority;
+	u8 reserved1;
+};
 
 enum mwifiex_chan_scan_mode_bitmasks {
 	MWIFIEX_PASSIVE_SCAN = BIT(0),
@@ -556,6 +584,13 @@ struct mwifiex_ie_type_key_param_set {
 	__le16 key_info;
 	__le16 key_len;
 	u8 key[50];
+} __packed;
+
+#define IGTK_PN_LEN		8
+
+struct mwifiex_cmac_param {
+	u8 ipn[IGTK_PN_LEN];
+	u8 key[WLAN_KEY_LEN_AES_CMAC];
 } __packed;
 
 struct host_cmd_ds_802_11_key_material {
@@ -1248,6 +1283,11 @@ struct host_cmd_tlv_encrypt_protocol {
 struct host_cmd_tlv_ssid {
 	struct host_cmd_tlv tlv;
 	u8 ssid[0];
+} __packed;
+
+struct host_cmd_tlv_rates {
+	struct host_cmd_tlv tlv;
+	u8 rates[0];
 } __packed;
 
 struct host_cmd_tlv_bcast_ssid {

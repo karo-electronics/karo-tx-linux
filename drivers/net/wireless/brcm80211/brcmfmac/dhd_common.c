@@ -80,8 +80,10 @@ brcmf_c_mkiovar(char *name, char *data, uint datalen, char *buf, uint buflen)
 	strncpy(buf, name, buflen);
 
 	/* append data onto the end of the name string */
-	memcpy(&buf[len], data, datalen);
-	len += datalen;
+	if (data && datalen) {
+		memcpy(&buf[len], data, datalen);
+		len += datalen;
+	}
 
 	return len;
 }
@@ -205,7 +207,8 @@ brcmf_c_show_host_event(struct brcmf_event_msg *event, void *event_data)
 		BRCMF_E_ACTION_FRAME_COMPLETE, "ACTION FRAME TX COMPLETE"}, {
 		BRCMF_E_IF, "IF"}, {
 		BRCMF_E_RSSI, "RSSI"}, {
-		BRCMF_E_PFN_SCAN_COMPLETE, "SCAN_COMPLETE"}
+		BRCMF_E_PFN_SCAN_COMPLETE, "SCAN_COMPLETE"}, {
+		BRCMF_E_ESCAN_RESULT, "ESCAN_RESULT"}
 	};
 	uint event_type, flags, auth_type, datalen;
 	static u32 seqnum_prev;
@@ -350,6 +353,11 @@ brcmf_c_show_host_event(struct brcmf_event_msg *event, void *event_data)
 		brcmf_dbg(EVENT, "MACEVENT: %s\n", event_name);
 		break;
 
+	case BRCMF_E_ESCAN_RESULT:
+		brcmf_dbg(EVENT, "MACEVENT: %s\n", event_name);
+		datalen = 0;
+		break;
+
 	case BRCMF_E_PFN_NET_FOUND:
 	case BRCMF_E_PFN_NET_LOST:
 	case BRCMF_E_PFN_SCAN_COMPLETE:
@@ -425,13 +433,7 @@ brcmf_c_show_host_event(struct brcmf_event_msg *event, void *event_data)
 	}
 
 	/* show any appended data */
-	if (datalen) {
-		buf = (unsigned char *) event_data;
-		brcmf_dbg(EVENT, " data (%d) : ", datalen);
-		for (i = 0; i < datalen; i++)
-			brcmf_dbg(EVENT, " 0x%02x ", *buf++);
-		brcmf_dbg(EVENT, "\n");
-	}
+	brcmf_dbg_hex_dump(datalen, event_data, datalen, "Received data");
 }
 #endif				/* DEBUG */
 
@@ -522,8 +524,9 @@ brcmf_c_host_event(struct brcmf_pub *drvr, int *ifidx, void *pktdata,
 	}
 
 #ifdef DEBUG
-	brcmf_c_show_host_event(event, event_data);
-#endif				/* DEBUG */
+	if (BRCMF_EVENT_ON())
+		brcmf_c_show_host_event(event, event_data);
+#endif /* DEBUG */
 
 	return 0;
 }

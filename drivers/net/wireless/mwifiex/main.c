@@ -72,7 +72,6 @@ static int mwifiex_register(void *card, struct mwifiex_if_ops *if_ops,
 			goto error;
 
 		adapter->priv[i]->adapter = adapter;
-		adapter->priv[i]->bss_priority = i;
 		adapter->priv_num++;
 	}
 	mwifiex_init_lock_list(adapter);
@@ -519,6 +518,9 @@ mwifiex_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	mwifiex_wmm_add_buf_txqueue(priv, skb);
 	atomic_inc(&priv->adapter->tx_pending);
+
+	if (priv->adapter->scan_delay_cnt)
+		atomic_set(&priv->adapter->is_tx_received, true);
 
 	if (atomic_read(&priv->adapter->tx_pending) >= MAX_TX_PENDING) {
 		mwifiex_set_trans_start(dev);
