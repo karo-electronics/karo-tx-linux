@@ -16,6 +16,9 @@
 #if !defined(_ASM_C6X_UNISTD_H) || defined(__SYSCALL)
 #define _ASM_C6X_UNISTD_H
 
+#define __ARCH_WANT_KERNEL_EXECVE
+#define __ARCH_WANT_SYS_EXECVE
+
 /* Use the standard ABI for syscalls. */
 #include <asm-generic/unistd.h>
 
