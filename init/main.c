@@ -602,10 +602,8 @@ asmlinkage void __init start_kernel(void)
 	calibrate_delay();
 	pidmap_init();
 	anon_vma_init();
-#ifdef CONFIG_X86
 	if (efi_enabled)
 		efi_enter_virtual_mode();
-#endif
 	thread_info_cache_init();
 	cred_init();
 	fork_init(totalram_pages);
@@ -630,6 +628,11 @@ asmlinkage void __init start_kernel(void)
 
 	acpi_early_init(); /* before LAPIC and SMP init */
 	sfi_init_late();
+
+	if (efi_enabled) {
+		efi_late_init();
+		efi_free_boot_services();
+	}
 
 	ftrace_init();
 
