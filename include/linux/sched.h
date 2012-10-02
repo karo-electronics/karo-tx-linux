@@ -1416,7 +1416,7 @@ struct task_struct {
 
 	struct audit_context *audit_context;
 #ifdef CONFIG_AUDITSYSCALL
-	uid_t loginuid;
+	kuid_t loginuid;
 	unsigned int sessionid;
 #endif
 	struct seccomp seccomp;
