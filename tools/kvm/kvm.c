@@ -55,8 +55,6 @@ const char *kvm_exit_reasons[] = {
 #endif
 };
 
-extern struct kvm *kvm;
-extern struct kvm_cpu **kvm_cpus;
 static int pause_event;
 static DEFINE_MUTEX(pause_lock);
 extern struct kvm_ext kvm_req_ext[];
@@ -121,7 +119,7 @@ static int kvm__check_extensions(struct kvm *kvm)
 	return 0;
 }
 
-static struct kvm *kvm__new(void)
+struct kvm *kvm__new(void)
 {
 	struct kvm *kvm = calloc(1, sizeof(*kvm));
 	if (!kvm)
@@ -133,140 +131,14 @@ static struct kvm *kvm__new(void)
 	return kvm;
 }
 
-#define KVM_SOCK_SUFFIX		".sock"
-#define KVM_SOCK_SUFFIX_LEN	((ssize_t)sizeof(KVM_SOCK_SUFFIX) - 1)
-
-static int kvm__create_socket(struct kvm *kvm)
-{
-	char full_name[PATH_MAX];
-	unsigned int s;
-	struct sockaddr_un local;
-	int len, r;
-
-	/* This usually 108 bytes long */
-	BUILD_BUG_ON(sizeof(local.sun_path) < 32);
-
-	if (!kvm->name)
-		return -EINVAL;
-
-	snprintf(full_name, sizeof(full_name), "%s/%s%s",
-		 kvm__get_dir(), kvm->name, KVM_SOCK_SUFFIX);
-	if (access(full_name, F_OK) == 0) {
-		pr_err("Socket file %s already exist", full_name);
-		return -EEXIST;
-	}
-
-	s = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (s < 0)
-		return s;
-	local.sun_family = AF_UNIX;
-	strlcpy(local.sun_path, full_name, sizeof(local.sun_path));
-	len = strlen(local.sun_path) + sizeof(local.sun_family);
-	r = bind(s, (struct sockaddr *)&local, len);
-	if (r < 0)
-		goto fail;
-
-	r = listen(s, 5);
-	if (r < 0)
-		goto fail;
-
-	return s;
-
-fail:
-	close(s);
-	return r;
-}
-
-void kvm__remove_socket(const char *name)
-{
-	char full_name[PATH_MAX];
-
-	snprintf(full_name, sizeof(full_name), "%s/%s%s",
-		 kvm__get_dir(), name, KVM_SOCK_SUFFIX);
-	unlink(full_name);
-}
-
-int kvm__get_sock_by_instance(const char *name)
-{
-	int s, len, r;
-	char sock_file[PATH_MAX];
-	struct sockaddr_un local;
-
-	snprintf(sock_file, sizeof(sock_file), "%s/%s%s",
-		 kvm__get_dir(), name, KVM_SOCK_SUFFIX);
-	s = socket(AF_UNIX, SOCK_STREAM, 0);
-
-	local.sun_family = AF_UNIX;
-	strlcpy(local.sun_path, sock_file, sizeof(local.sun_path));
-	len = strlen(local.sun_path) + sizeof(local.sun_family);
-
-	r = connect(s, &local, len);
-	if (r < 0 && errno == ECONNREFUSED) {
-		/* Tell the user clean ghost socket file */
-		pr_err("\"%s\" could be a ghost socket file, please remove it",
-				sock_file);
-		return r;
-	} else if (r < 0) {
-		return r;
-	}
-
-	return s;
-}
-
-int kvm__enumerate_instances(int (*callback)(const char *name, int fd))
-{
-	int sock;
-	DIR *dir;
-	struct dirent entry, *result;
-	int ret = 0;
-
-	dir = opendir(kvm__get_dir());
-	if (!dir)
-		return -errno;
-
-	for (;;) {
-		readdir_r(dir, &entry, &result);
-		if (result == NULL)
-			break;
-		if (entry.d_type == DT_SOCK) {
-			ssize_t name_len = strlen(entry.d_name);
-			char *p;
-
-			if (name_len <= KVM_SOCK_SUFFIX_LEN)
-				continue;
-
-			p = &entry.d_name[name_len - KVM_SOCK_SUFFIX_LEN];
-			if (memcmp(KVM_SOCK_SUFFIX, p, KVM_SOCK_SUFFIX_LEN))
-				continue;
-
-			*p = 0;
-			sock = kvm__get_sock_by_instance(entry.d_name);
-			if (sock < 0)
-				continue;
-			ret = callback(entry.d_name, sock);
-			close(sock);
-			if (ret < 0)
-				break;
-		}
-	}
-
-	closedir(dir);
-
-	return ret;
-}
-
 int kvm__exit(struct kvm *kvm)
 {
-	kvm__stop_timer(kvm);
-
 	kvm__arch_delete_ram(kvm);
-	kvm_ipc__stop();
-	kvm__remove_socket(kvm->name);
-	free(kvm->name);
 	free(kvm);
 
 	return 0;
 }
+core_exit(kvm__exit);
 
 /*
  * Note: KVM_SET_USER_MEMORY_REGION assumes that we don't pass overlapping
@@ -307,18 +179,6 @@ int kvm__recommended_cpus(struct kvm *kvm)
 	return ret;
 }
 
-static void kvm__pid(int fd, u32 type, u32 len, u8 *msg)
-{
-	pid_t pid = getpid();
-	int r = 0;
-
-	if (type == KVM_IPC_PID)
-		r = write(fd, &pid, sizeof(pid));
-
-	if (r < 0)
-		pr_warning("Failed sending PID");
-}
-
 /*
  * The following hack should be removed once 'x86: Raise the hard
  * VCPU count limit' makes it's way into the mainline.
@@ -338,9 +198,8 @@ int kvm__max_cpus(struct kvm *kvm)
 	return ret;
 }
 
-struct kvm *kvm__init(const char *kvm_dev, const char *hugetlbfs_path, u64 ram_size, const char *name)
+int kvm__init(struct kvm *kvm)
 {
-	struct kvm *kvm;
 	int ret;
 
 	if (!kvm__arch_cpu_supports_vm()) {
@@ -349,21 +208,17 @@ struct kvm *kvm__init(const char *kvm_dev, const char *hugetlbfs_path, u64 ram_s
 		goto err;
 	}
 
-	kvm = kvm__new();
-	if (IS_ERR(kvm))
-		return kvm;
-
-	kvm->sys_fd = open(kvm_dev, O_RDWR);
+	kvm->sys_fd = open(kvm->cfg.dev, O_RDWR);
 	if (kvm->sys_fd < 0) {
 		if (errno == ENOENT)
 			pr_err("'%s' not found. Please make sure your kernel has CONFIG_KVM "
-			       "enabled and that the KVM modules are loaded.", kvm_dev);
+			       "enabled and that the KVM modules are loaded.", kvm->cfg.dev);
 		else if (errno == ENODEV)
 			pr_err("'%s' KVM driver not available.\n  # (If the KVM "
 			       "module is loaded then 'dmesg' may offer further clues "
-			       "about the failure.)", kvm_dev);
+			       "about the failure.)", kvm->cfg.dev);
 		else
-			pr_err("Could not open %s: ", kvm_dev);
+			pr_err("Could not open %s: ", kvm->cfg.dev);
 
 		ret = -errno;
 		goto err_free;
@@ -382,36 +237,33 @@ struct kvm *kvm__init(const char *kvm_dev, const char *hugetlbfs_path, u64 ram_s
 		goto err_sys_fd;
 	}
 
-	kvm->name = strdup(name);
-	if (!kvm->name) {
-		ret = -ENOMEM;
-		goto err_vm_fd;
-	}
-
 	if (kvm__check_extensions(kvm)) {
 		pr_err("A required KVM extention is not supported by OS");
 		ret = -ENOSYS;
 		goto err_vm_fd;
 	}
 
-	kvm__arch_init(kvm, hugetlbfs_path, ram_size);
+	kvm__arch_init(kvm, kvm->cfg.hugetlbfs_path, kvm->cfg.ram_size);
 
-	ret = kvm_ipc__start(kvm__create_socket(kvm));
-	if (ret < 0) {
-		pr_err("Starting ipc failed.");
-		goto err_vm_fd;
+	kvm__init_ram(kvm);
+
+	if (!kvm->cfg.firmware_filename) {
+		if (!kvm__load_kernel(kvm, kvm->cfg.kernel_filename,
+				kvm->cfg.initrd_filename, kvm->cfg.real_cmdline, kvm->cfg.vidmode))
+			die("unable to load kernel %s", kvm->cfg.kernel_filename);
 	}
 
-	ret = kvm_ipc__register_handler(KVM_IPC_PID, kvm__pid);
-	if (ret < 0) {
-		pr_err("Register ipc handler failed.");
-		goto err_ipc;
+	if (kvm->cfg.firmware_filename) {
+		if (!kvm__load_firmware(kvm, kvm->cfg.firmware_filename))
+			die("unable to load firmware image %s: %s", kvm->cfg.firmware_filename, strerror(errno));
+	} else {
+		ret = kvm__arch_setup_firmware(kvm);
+		if (ret < 0)
+			die("kvm__arch_setup_firmware() failed with error %d\n", ret);
 	}
 
-	return kvm;
+	return 0;
 
-err_ipc:
-	kvm_ipc__stop();
 err_vm_fd:
 	close(kvm->vm_fd);
 err_sys_fd:
@@ -419,8 +271,9 @@ err_sys_fd:
 err_free:
 	free(kvm);
 err:
-	return ERR_PTR(ret);
+	return ret;
 }
+core_init(kvm__init);
 
 /* RFC 1952 */
 #define GZIP_ID1		0x1f
@@ -493,37 +346,49 @@ found_kernel:
  * userspace hypervisor into the guest at periodical intervals. Please note
  * that clock interrupt, for example, is not handled here.
  */
-void kvm__start_timer(struct kvm *kvm)
+int kvm_timer__init(struct kvm *kvm)
 {
 	struct itimerspec its;
 	struct sigevent sev;
+	int r;
 
 	memset(&sev, 0, sizeof(struct sigevent));
 	sev.sigev_value.sival_int	= 0;
 	sev.sigev_notify		= SIGEV_THREAD_ID;
 	sev.sigev_signo			= SIGALRM;
+	sev.sigev_value.sival_ptr	= kvm;
 	sev._sigev_un._tid		= syscall(__NR_gettid);
 
-	if (timer_create(CLOCK_REALTIME, &sev, &kvm->timerid) < 0)
-		die("timer_create()");
+	r = timer_create(CLOCK_REALTIME, &sev, &kvm->timerid);
+	if (r < 0)
+		return r;
 
 	its.it_value.tv_sec		= TIMER_INTERVAL_NS / 1000000000;
 	its.it_value.tv_nsec		= TIMER_INTERVAL_NS % 1000000000;
 	its.it_interval.tv_sec		= its.it_value.tv_sec;
 	its.it_interval.tv_nsec		= its.it_value.tv_nsec;
 
-	if (timer_settime(kvm->timerid, 0, &its, NULL) < 0)
-		die("timer_settime()");
-}
+	r = timer_settime(kvm->timerid, 0, &its, NULL);
+	if (r < 0) {
+		timer_delete(kvm->timerid);
+		return r;
+	}
 
-void kvm__stop_timer(struct kvm *kvm)
+	return 0;
+}
+firmware_init(kvm_timer__init);
+
+int kvm_timer__exit(struct kvm *kvm)
 {
 	if (kvm->timerid)
 		if (timer_delete(kvm->timerid) < 0)
 			die("timer_delete()");
 
 	kvm->timerid = 0;
+
+	return 0;
 }
+firmware_exit(kvm_timer__exit);
 
 void kvm__dump_mem(struct kvm *kvm, unsigned long addr, unsigned long size)
 {
@@ -546,12 +411,12 @@ void kvm__dump_mem(struct kvm *kvm, unsigned long addr, unsigned long size)
 	}
 }
 
-void kvm__pause(void)
+void kvm__pause(struct kvm *kvm)
 {
 	int i, paused_vcpus = 0;
 
 	/* Check if the guest is running */
-	if (!kvm_cpus[0] || kvm_cpus[0]->thread == 0)
+	if (!kvm->cpus[0] || kvm->cpus[0]->thread == 0)
 		return;
 
 	mutex_lock(&pause_lock);
@@ -560,7 +425,7 @@ void kvm__pause(void)
 	if (pause_event < 0)
 		die("Failed creating pause notification event");
 	for (i = 0; i < kvm->nrcpus; i++)
-		pthread_kill(kvm_cpus[i]->thread, SIGKVMPAUSE);
+		pthread_kill(kvm->cpus[i]->thread, SIGKVMPAUSE);
 
 	while (paused_vcpus < kvm->nrcpus) {
 		u64 cur_read;
@@ -572,10 +437,10 @@ void kvm__pause(void)
 	close(pause_event);
 }
 
-void kvm__continue(void)
+void kvm__continue(struct kvm *kvm)
 {
 	/* Check if the guest is running */
-	if (!kvm_cpus[0] || kvm_cpus[0]->thread == 0)
+	if (!kvm->cpus[0] || kvm->cpus[0]->thread == 0)
 		return;
 
 	mutex_unlock(&pause_lock);

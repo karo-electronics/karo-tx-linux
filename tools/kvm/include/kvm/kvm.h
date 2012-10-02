@@ -2,6 +2,9 @@
 #define KVM__KVM_H
 
 #include "kvm/kvm-arch.h"
+#include "kvm/kvm-config.h"
+#include "kvm/util-init.h"
+#include "kvm/kvm.h"
 
 #include <stdbool.h>
 #include <linux/types.h>
@@ -31,10 +34,35 @@ struct kvm_ext {
 	int code;
 };
 
+struct kvm {
+	struct kvm_arch		arch;
+	struct kvm_config	cfg;
+	int			sys_fd;		/* For system ioctls(), i.e. /dev/kvm */
+	int			vm_fd;		/* For VM ioctls() */
+	timer_t			timerid;	/* Posix timer for interrupts */
+
+	int			nrcpus;		/* Number of cpus to run */
+	struct kvm_cpu		**cpus;
+
+	u32			mem_slots;	/* for KVM_SET_USER_MEMORY_REGION */
+	u64			ram_size;
+	void			*ram_start;
+	u64			ram_pagesize;
+
+	bool			nmi_disabled;
+
+	const char		*vmlinux;
+	struct disk_image       **disks;
+	int                     nr_disks;
+
+	int			vm_state;
+};
+
 void kvm__set_dir(const char *fmt, ...);
 const char *kvm__get_dir(void);
 
-struct kvm *kvm__init(const char *kvm_dev, const char *hugetlbfs_path, u64 ram_size, const char *name);
+int kvm__init(struct kvm *kvm);
+struct kvm *kvm__new(void);
 int kvm__recommended_cpus(struct kvm *kvm);
 int kvm__max_cpus(struct kvm *kvm);
 void kvm__init_ram(struct kvm *kvm);
@@ -42,8 +70,8 @@ int kvm__exit(struct kvm *kvm);
 bool kvm__load_firmware(struct kvm *kvm, const char *firmware_filename);
 bool kvm__load_kernel(struct kvm *kvm, const char *kernel_filename,
 			const char *initrd_filename, const char *kernel_cmdline, u16 vidmode);
-void kvm__start_timer(struct kvm *kvm);
-void kvm__stop_timer(struct kvm *kvm);
+int kvm_timer__init(struct kvm *kvm);
+int kvm_timer__exit(struct kvm *kvm);
 void kvm__irq_line(struct kvm *kvm, int irq, int level);
 void kvm__irq_trigger(struct kvm *kvm, int irq);
 bool kvm__emulate_io(struct kvm *kvm, u16 port, void *data, int direction, int size, u32 count);
@@ -53,8 +81,8 @@ int kvm__register_mmio(struct kvm *kvm, u64 phys_addr, u64 phys_addr_len, bool c
 			void (*mmio_fn)(u64 addr, u8 *data, u32 len, u8 is_write, void *ptr),
 			void *ptr);
 bool kvm__deregister_mmio(struct kvm *kvm, u64 phys_addr);
-void kvm__pause(void);
-void kvm__continue(void);
+void kvm__pause(struct kvm *kvm);
+void kvm__continue(struct kvm *kvm);
 void kvm__notify_paused(void);
 int kvm__get_sock_by_instance(const char *name);
 int kvm__enumerate_instances(int (*callback)(const char *name, int pid));
