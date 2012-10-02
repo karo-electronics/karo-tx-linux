@@ -138,7 +138,7 @@ static int hfsplus_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	if (err)
 		return err;
 	hfsplus_cat_build_key(sb, fd.search_key, inode->i_ino, NULL);
-	err = hfs_brec_find(&fd);
+	err = hfs_brec_find(&fd, hfs_find_rec_by_key);
 	if (err)
 		goto out;
 
@@ -508,6 +508,10 @@ const struct inode_operations hfsplus_dir_inode_operations = {
 	.symlink	= hfsplus_symlink,
 	.mknod		= hfsplus_mknod,
 	.rename		= hfsplus_rename,
+	.setxattr	= hfsplus_setxattr,
+	.getxattr	= hfsplus_getxattr,
+	.listxattr	= hfsplus_listxattr,
+	.removexattr	= hfsplus_removexattr,
 };
 
 const struct file_operations hfsplus_dir_operations = {
