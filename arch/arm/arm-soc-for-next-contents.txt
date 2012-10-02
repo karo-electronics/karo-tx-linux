@@ -1,0 +1,339 @@
+This file lists all branches that are pulled into the for-next branch
+of git://git.kernel.org/pub/scm/linux/kernel/git/arm/arm-soc.git
+and their external dependencies.
+
+It also includes a couple of directly applied patches for build breaks with subject
+The next/* branches are kept in the order in which they get applied.
+
+external dependencies:
+depends/clk-3.7	git://git.linaro.org/people/mturquette/linux.git clk-3.7
+depends/tps6589x-dt  git://git.kernel.org/pub/scm/linux/kernel/git/broonie/regulator.git tps6589x-dt
+depends/tty-omap-serial git://git.kernel.org/pub/scm/linux/kernel/git/gregkh/tty.git tty-next @ cdd86b277dc82220aa630414896505517a02a201
+depends/usb-xceiv	git://git.kernel.org/pub/scm/linux/kernel/git/balbi/usb.git xceiv-for-v3.7
+
+fixes:
+
+---
+
+This branch contains a selection of fixes that came in during the
+latter part of the 3.6 release cycle and didn't seem urgent enough to
+go in right away. Some of them are minor cleanups, etc.
+
+--
+
+
+
+next/fixes-non-critical:
+ux500/fixes-non-critical http://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-core-updates
+cleanup/of-deviceid-data git://git.pengutronix.de/git/ukl/linux ofdeviceiddata 
+				(pulled again on Sep 12)
+imx/fixes-non-critical	 git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-fixes
+msm/fixes-non-critical	 git://git.kernel.org/pub/scm/linux/kernel/git/davidb/linux-msm.git tags/msm-fix-noncrit-for-3.7
+tegra/fixes-non-critical git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-fixes
+omap/fixes-non-critical   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-fixes-noncritical-for-v3.7
+samsung/fixes-non-critical git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git v3.7-samsung-fixes-1
+pxa/fixes		git://github.com/hzhuang1/linux.git fixes
+ep93xx/fixes-non-critical	  git://github.com/RyanMallon/linux-ep93xx.git tags/ep93xx-fixes-for-3.7
+
+
+next/cleanup:
+
+---
+
+This is a large branch that contains a handful of different cleanups:
+
+* Fixing up the I/O space remapping on PCI on ARM. This is a series
+  from Rob Herring that restructures how all pci devices allocate I/O
+  space, and it's part of the work to allow multiplatform kernels.
+* A number of cleanup patches for OMAP, moving and removing some
+  headers, and in general in preparation for multiplatform.
+* Final removal of all non-DT boards for Tegra, it is now
+  device-tree-only!
+* Removal of a stale platform, nxp4008. It's an old mobile chipset
+  that is no longer in use, and was very likely never really used with
+  a mainline kernel. We have not been able to find anyone interested
+  in keeping it around in the kernel.
+* Removal of the legacy dmaengine driver on tegra
+
++ A handful of other things that I haven't described above.
+
+---
+
+cleanup/io-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci-v2
+bcmring/cleanup:  patches from Arnd
+u300/cleanup	  git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git u300-cleanup
+csr/marco-prepare git://gitorious.org/sirfprima2-kernel/sirfprima2-kernel.git marco-prepare
+			(includes two patches from clk-next that adds prima2 clocks)
+pmu/cleanup       git://git.kernel.org/pub/scm/linux/kernel/git/will/linux.git tags/arm-perf-3.7
+ks8695/timer      http://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ks8695-time-for-arm-soc
+			+ http://marc.info/?l=linux-arm-kernel&m=134734253519144
+renesas/ag5evm    git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git ag5evm
+nxp4008/removal   git://git.antcom.de/linux-2.6.git pnx4008-removal
+pxa/clk		  git://github.com/hzhuang1/linux.git clk
+imx/cleanup	  git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-cleanup
+msm/cleanup	  git://git.kernel.org/pub/scm/linux/kernel/git/davidb/linux-msm.git tags/msm-cleanup-for-3.7
+tegra/cleanup	  git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-cleanup
+tegra/board-removal git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-board-removal
+		+patch for omap platform-data headers from Arnd
+samsung/cleanup   git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/cleanup-samsung
+			depends on depends/tps6589x-dt
+omap/gpmc-cleanup   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-gpmc-fixed-for-v3.7
+omap/atag-cleanup   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/cleanup-omap-tags-for-v3.7
+omap/cleanup-sparseirq git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-cleanup-sparseirq-for-v3.7
+			depends on depends/tty-omap-serial
+omap/cleanup-makefile-sparse git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-cleanup-makefile-sparse-for-v3.7
+omap/cleanup-fixes     git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/cleanup-fixes-for-v3.7
+(email)			message-id = 1348176039-6094-1-git-send-email-swarren@wwwdotorg.org
+tegra/dmaengine-removal git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-dmaengine
+omap/cleanup-headers	git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-cleanup-local-headers-for-v3.7
+			+   git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-board-late-v3-for-v3.7
+pxa/cleanup	  git://github.com/hzhuang1/linux.git board
+
+next/maintainers:
+
+---
+Maintainers updates for KS8965 adding Greg Ungerer, and removing
+myself and Colin Cross as tegra maintainers, since Stephen Warren has
+been handling it on his own for several releases now.
+
+---
+
+
+[email]		  Entry for ks8695 from Arnd
+tegra/maintainers git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-maintainers
+
+next/soc:
+
+---
+
+Most notable here is probably the addition of basic support for the
+BCM2835, an SoC used in some of the Roku 2 players as well as the
+much-hyped Raspberry Pi, cleaned up and contributed by Stephen
+Warren. It's still early days on mainline support, with just the
+basics working. But it has to start somewhere!
+
+Beyond that there's some conversions of clock infrastructure on tegra
+to common clock, misc updates for several other platforms, and OMAP
+now has its own bus (under drivers/bus) to manage its devices through.
+
+This branch adds two new directories outside of arch/arm:
+drivers/irqchip for new irq controllers, and drivers/bus for the above
+OMAP bus. It's expected that some of the other platforms will migrate
+parts of their platforms to those directories over time as well.
+
+---
+
+ux500/asic-id:	git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git ux500-core
+		 + http://marc.info/?l=linux-arm-kernel&m=134667789927502
+renesas/kzm9g   git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git kzm9g
+lpc32xx/core	git://git.antcom.de/linux-2.6.git lpc32xx/core
+		(pulled twice)
+renesas/soc	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git soc
+renesas/pmu	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git pmu/cleanup
+			depends on pmu/cleanup (next/cleanup)
+imx/soc		git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-soc
+tegra/common-clk git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-common-clk
+tegra/cpu-hotplug git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-cpu-hotplug
+omap/omap-device git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/devel-omap-device-for-v3.7
+omap/am33xx	git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-am33xx-for-v3.7
+			depends on omap cleanup branches
+bcm2835/soc	git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git rpi-for-3.7
+			+ Message-Id: <1348506174-28641-1-git-send-email-swarren@wwwdotorg.org>
+samsung/devel	git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/devel-samsung
+
+---
+
+Device tree conversion and enablement branch. Mostly a bunch of new
+bindings and setup for various platforms, but the Via/Winchip VT8500
+platform is also converted over from being 100% legacy to now use
+device tree for probing. More of that will come for 3.8.
+
+
+---
+next/dt:
+pxa/dt:		git://github.com/hzhuang1/linux.git dt
+renesas/soc-core git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git soc-core
+csr/pinmux-dt   git://gitorious.org/sirfprima2-kernel/sirfprima2-kernel.git pinmux-dt
+lpc32xx/dts	git://git.antcom.de/linux-2.6.git lpc32xx/dts
+		(pulled twice)
+mxs/dt		git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-dt-3.7
+depends/clk-3.7	git://git.linaro.org/people/mturquette/linux.git clk-3.7
+			-> this is a prereq for mxs/clk-dt-lookup below
+mxs/clk-dt-lookup	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-clk-dt-lookup
+imx/dt		git://git.linaro.org/people/shawnguo/linux-2.6.git tags/imx-dt-3.7
+imx/clk-dt-lookup	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/imx-clk-dt-lookup
+msm/dt		git://git.kernel.org/pub/scm/linux/kernel/git/davidb/linux-msm.git tags/msm-dt-for-3.7
+tegra/dt       git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-dt
+samsung/gpio-dt git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/gpio-samsung
+tegra/dt2	git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-dt2
+mxs/dt2		git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-dt-3.7-2
+imx/dt2		git://git.linaro.org/people/shawnguo/linux-2.6.git tags/imx-dt-3.7-2
+ux500/dt	git://git.linaro.org/people/ljones/linux-3.0-ux500.git for-arm-soc-next
+vt8500/devel	git://git.code.sf.net/p/linuxwmt/code tags/vt8500-for-next
+		+ Message-Id: <1348595239-30577-2-git-send-email-linux@prisktech.co.nz>
+pxa/dt2		git://github.com/hzhuang1/linux.git dt2
+omap/dt		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-dt-merged-for-v3.7
+		+ git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/devel-dt-arch-timer-for-v3.7
+
+next/cleanup2:
+
+---
+
+A shorter cleanup branch submitted separately due to dependencies with
+some of the previous topics.
+
+Major thing here is that the Broadcom bcmring platform is
+removed. It's an SoC that's used on some stationary VoIP platforms,
+and is in desperate need of some cleanup. Broadcom came back and
+suggested that we just deprecate the platform for now, since they
+aren't going to spend the resources needed on cleaning it up, and
+there are no users of the platform directly from mainline.
+
+---
+tegra/cleanup2	git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-cleanup2
+clps711x/cleanup patches from Alexander Shiyan <shc_work@mail.ru>
+bcmring/removal  patch from "Christian Daudt" <csd@broadcom.com>
+
+next/soc2:
+
+---
+
+This branch converts the MXS Freescale platform to use sparse IRQ, in
+preparation for DT probing and multiplatform kernels.
+
+---
+mxs/sparse-irq	git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-sparse-irq
+		 (functionally depends on mxs/dt)
+
+next/defconfig:
+
+---
+
+This might be the last time we do a standalone defconfig branch, since
+we now prefer to get them with the rest of the subarch updates
+instead. These add a handful of useful options on various platforms,
+enable new boards and SoCs, etc.
+
+---
+renesas/defconfig git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git defconfig
+lpc32xx/defconfig git://git.antcom.de/linux-2.6.git lpc32xx/defconfig
+mxs/defconfig	  git://git.linaro.org/people/shawnguo/linux-2.6.git tags/mxs-defconfig-3.7
+imx/defconfig	  git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-defconfig
+tegra/defconfig   git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-defconfig
+samsung/defconfig git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/defconfig-samsung
+
+
+
+next/drivers:
+---
+
+- A long-coming conversion of various platforms to a common LED
+  infrastructure
+- AT91 is moved over to use the newer MCI driver for MMC
+- Pincontrol conversions for samsung platforms
+- DT bindings for gscaler on samsung
+- i2c driver fixes for tegra, acked by i2c maintainer
+
+---
+devel/led-driver	git://git.kernel.org/pub/scm/linux/kernel/git/cooloney/linux-leds.git for-arm-soc
+at91/mci	git://github.com/at91linux/linux-at91 at91-for-next-soc
+drivers/ocp2scp	patches from Kishon Vijay Abraham I <kishon@ti.com>
+		+ http://marc.info/?l=linux-next&m=134574365000518&w=2
+		+ http://lkml.org/lkml/2012/9/14/135
+tegra/drivers-i2c	git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.7-drivers-i2c
+samsung/pinctrl	git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/pinctrl-samsung
+			(pulled twice, second from next/pinctrl-samsung-2)
+samsung/gscaler git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/dt-gscaler
+
+next/boards:
+
+---
+Misc board updates. Greg added a handful of boards to KS8695 (since he
+has stepped up to maintain it). Qualcomm has added DT-only board
+support for a couple of their newer SoCs, some board updates from
+Samsung and just a bit of this and that.
+---
+pxa/board	git://github.com/hzhuang1/linux.git board
+ks8695/boards	<1346995449-5436-1-git-send-email-gerg@snapgear.com> and
+		<1346996139-5692-1-git-send-email-gerg@snapgear.com>
+renesas/boards	git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git boards
+		 (pulled twice)
+pxa/boards	git://github.com/hzhuang1/linux.git board
+imx/boards	git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-boards
+msm/boards	git://git.kernel.org/pub/scm/linux/kernel/git/davidb/linux-msm.git tags/msm-board-for-3.7
+samsung/boards  git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/board-samsung
+
+next/dt2:
+---
+More device-tree updates for Samsung. Ordered after the rest due to
+dependencies.
+
+---
+samsung/dt2	git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/dt-samsung-new
+			depends on samsung/boards and samsung/pinctrl
+
+next/docs:
+---
+Documentation update for Marvell SoCs
+---
+mvebu/docs:	git://github.com/MISL-EBU-System-SW/mainline-public.git marvell-doc
+
+
+next/multiplatform:
+---
+This is a pretty significant branch. It's the introduction of the
+first multiplatform support on ARM, and with this (and the later
+branch) merged, it is now possible to build one kernel that contains
+support for highbank, vexpress, mvebu, socfpga, and picoxcell. More
+platforms will be convered over in the next few releases.
+
+Two critical last things had to be done for this to be practical and
+possible:
+* Today each platform has its own include directory under
+  mach-<mach>/include/mach/*, and traditionally that is where a lot of
+  driver/platform shared definitions have gone, such as platform data
+  structures. They now need to move out to a common location instead,
+  and this branch moves a large number of those out to
+  include/linux/platform_data.
+* Each platform used to list the device trees to compile for its
+  boards in mach-<mach>/Makefile.boot.
+
+Both of the above changes will mean that there are some merge
+conflicts to come (and some to resolve here). It's a one-time move and
+once it settles in, we should be good for quite a while. Sorry for the
+overhead.
+---
+multiplatform/devel git://sources.calxeda.com/kernel/linux.git tags/multi-platform-for-3.7
+			depends on next/cleanup next/dt and next/soc to do conflict resolution locally
+			+ local patch for more dtb moves
+			+ Message-Id: <1347893712-21819-1-git-send-email-robherring2@gmail.com>
+multiplatform/smp_ops  <local contents from testing/smp_ops>
+			+ Message-Id: <1347490900-8409-2-git-send-email-davidb@codeaurora.org>
+(patch)			Message-Id: <1348774765-9420-1-git-send-email-robherring2@gmail.com>
+
+
+
+late/kirkwood:
+
+---
+Kirkwood platforms came in right between when we were preparing to
+merge the multiplatform branches in with the rest and resolve
+conflicts, and when we were closing down our for-next branch. As a
+result, I ended up pulling them all into one branch instead of
+spreading them out across the topics.
+---
+kirkwood/boards		git://git.infradead.org/users/jcooper/linux.git kirkwood/boards
+kirkwood/defconfig	git://git.infradead.org/users/jcooper/linux.git kirkwood/defconfig
+kirkwood/dt		git://git.infradead.org/users/jcooper/linux.git kirkwood/dt
+kirkwood/cleanup	git://git.infradead.org/users/jcooper/linux.git kirkwood/cleanup
+kirkwood/addr_decode	git://git.infradead.org/users/jcooper/linux.git kirkwood/addr_decode
+kirkwood/drivers	git://git.infradead.org/users/jcooper/linux.git kirkwood/drivers
+
+late/soc:
+---
+A last series of patches for OMAP as well, that came in a bit on the
+late side but that seem uncontroversial enough to merge towards the
+end of the arm-soc branches.
+---
+omap/devel-late		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-late-for-v3.7
+
