@@ -168,6 +168,13 @@ endif
 ifeq ($(sign_key_with_hash),)
 $(error Could not determine digest type to use from kernel config)
 endif
+ifeq ($(CONFIG_64BIT),y)
+# 100 years is beyond my best-before date, anyway.
+end_of_time_days=36500
+else
+# Until 32-bit time_t wraps, with some slack.
+end_of_time_days=$(shell expr \( 2147300000 - `date -u +%s` \) / 86400 )
+endif
 
 signing_key.priv signing_key.x509: x509.genkey
 	@echo "###"
@@ -180,7 +187,8 @@ signing_key.priv signing_key.x509: x509.genkey
 	@echo "###"
 	@echo "###     rngd -r /dev/hwrandom"
 	@echo "###"
-	openssl req -new -nodes -utf8 $(sign_key_with_hash) -days 36500 -batch \
+	openssl req -new -nodes -utf8 $(sign_key_with_hash) \
+		-days $(end_of_time_days) -batch \
 		-x509 -config x509.genkey \
 		-outform DER -out signing_key.x509 \
 		-keyout signing_key.priv
