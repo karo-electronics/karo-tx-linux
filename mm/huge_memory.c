@@ -17,6 +17,7 @@
 #include <linux/khugepaged.h>
 #include <linux/freezer.h>
 #include <linux/mman.h>
+#include <linux/migrate.h>
 #include <asm/tlb.h>
 #include <asm/pgalloc.h>
 #include "internal.h"
@@ -750,6 +751,76 @@ out:
 	return handle_pte_fault(mm, vma, address, pte, pmd, flags);
 }
 
+bool pmd_prot_none(struct vm_area_struct *vma, pmd_t pmd)
+{
+	/*
+	 * See pte_prot_none().
+	 */
+	if (pmd_same(pmd, pmd_modify(pmd, vma->vm_page_prot)))
+		return false;
+
+	return pmd_same(pmd, pmd_modify(pmd, vma_prot_none(vma)));
+}
+
+void do_huge_pmd_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
+			   unsigned long address, pmd_t *pmd,
+			   unsigned int flags, pmd_t entry)
+{
+	unsigned long haddr = address & HPAGE_PMD_MASK;
+	struct page *page = NULL;
+	int node;
+
+	spin_lock(&mm->page_table_lock);
+	if (unlikely(!pmd_same(*pmd, entry)))
+		goto out_unlock;
+
+	if (unlikely(pmd_trans_splitting(entry))) {
+		spin_unlock(&mm->page_table_lock);
+		wait_split_huge_page(vma->anon_vma, pmd);
+		return;
+	}
+
+#ifdef CONFIG_NUMA
+	page = pmd_page(entry);
+	VM_BUG_ON(!PageCompound(page) || !PageHead(page));
+
+	get_page(page);
+	spin_unlock(&mm->page_table_lock);
+
+	/*
+	 * XXX should we serialize against split_huge_page ?
+	 */
+
+	node = mpol_misplaced(page, vma, haddr, mm->numa_big);
+	if (node == -1)
+		goto do_fixup;
+
+	/*
+	 * Due to lacking code to migrate thp pages, we'll split
+	 * (which preserves the special PROT_NONE) and re-take the
+	 * fault on the normal pages.
+	 */
+	split_huge_page(page);
+	put_page(page);
+	return;
+
+do_fixup:
+	spin_lock(&mm->page_table_lock);
+	if (unlikely(!pmd_same(*pmd, entry)))
+		goto out_unlock;
+#endif
+
+	/* change back to regular protection */
+	entry = pmd_modify(entry, vma->vm_page_prot);
+	if (pmdp_set_access_flags(vma, haddr, pmd, entry, 1))
+		update_mmu_cache(vma, address, entry);
+
+out_unlock:
+	spin_unlock(&mm->page_table_lock);
+	if (page)
+		put_page(page);
+}
+
 int copy_huge_pmd(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		  pmd_t *dst_pmd, pmd_t *src_pmd, unsigned long addr,
 		  struct vm_area_struct *vma)
@@ -1306,6 +1377,7 @@ static void __split_huge_page_refcount(struct page *page)
 		page_tail->mapping = page->mapping;
 
 		page_tail->index = page->index + i;
+		page_xchg_last_nid(page, page_last_nid(page_tail));
 
 		BUG_ON(!PageAnon(page_tail));
 		BUG_ON(!PageUptodate(page_tail));
@@ -1353,64 +1425,60 @@ static int __split_huge_page_map(struct page *page,
 	int ret = 0, i;
 	pgtable_t pgtable;
 	unsigned long haddr;
+	pgprot_t prot;
 
 	spin_lock(&mm->page_table_lock);
 	pmd = page_check_address_pmd(page, mm, address,
 				     PAGE_CHECK_ADDRESS_PMD_SPLITTING_FLAG);
-	if (pmd) {
-		pgtable = get_pmd_huge_pte(mm);
-		pmd_populate(mm, &_pmd, pgtable);
+	if (!pmd)
+		goto unlock;
 
-		for (i = 0, haddr = address; i < HPAGE_PMD_NR;
-		     i++, haddr += PAGE_SIZE) {
-			pte_t *pte, entry;
-			BUG_ON(PageCompound(page+i));
-			entry = mk_pte(page + i, vma->vm_page_prot);
-			entry = maybe_mkwrite(pte_mkdirty(entry), vma);
-			if (!pmd_write(*pmd))
-				entry = pte_wrprotect(entry);
-			else
-				BUG_ON(page_mapcount(page) != 1);
-			if (!pmd_young(*pmd))
-				entry = pte_mkold(entry);
-			pte = pte_offset_map(&_pmd, haddr);
-			BUG_ON(!pte_none(*pte));
-			set_pte_at(mm, haddr, pte, entry);
-			pte_unmap(pte);
-		}
+	prot = pmd_pgprot(*pmd);
+	pgtable = get_pmd_huge_pte(mm);
+	pmd_populate(mm, &_pmd, pgtable);
 
-		smp_wmb(); /* make pte visible before pmd */
-		/*
-		 * Up to this point the pmd is present and huge and
-		 * userland has the whole access to the hugepage
-		 * during the split (which happens in place). If we
-		 * overwrite the pmd with the not-huge version
-		 * pointing to the pte here (which of course we could
-		 * if all CPUs were bug free), userland could trigger
-		 * a small page size TLB miss on the small sized TLB
-		 * while the hugepage TLB entry is still established
-		 * in the huge TLB. Some CPU doesn't like that. See
-		 * http://support.amd.com/us/Processor_TechDocs/41322.pdf,
-		 * Erratum 383 on page 93. Intel should be safe but is
-		 * also warns that it's only safe if the permission
-		 * and cache attributes of the two entries loaded in
-		 * the two TLB is identical (which should be the case
-		 * here). But it is generally safer to never allow
-		 * small and huge TLB entries for the same virtual
-		 * address to be loaded simultaneously. So instead of
-		 * doing "pmd_populate(); flush_tlb_range();" we first
-		 * mark the current pmd notpresent (atomically because
-		 * here the pmd_trans_huge and pmd_trans_splitting
-		 * must remain set at all times on the pmd until the
-		 * split is complete for this pmd), then we flush the
-		 * SMP TLB and finally we write the non-huge version
-		 * of the pmd entry with pmd_populate.
-		 */
-		set_pmd_at(mm, address, pmd, pmd_mknotpresent(*pmd));
-		flush_tlb_range(vma, address, address + HPAGE_PMD_SIZE);
-		pmd_populate(mm, pmd, pgtable);
-		ret = 1;
+	for (i = 0, haddr = address; i < HPAGE_PMD_NR; i++, haddr += PAGE_SIZE) {
+		pte_t *pte, entry;
+
+		BUG_ON(PageCompound(page+i));
+		entry = mk_pte(page + i, prot);
+		entry = pte_mkdirty(entry);
+		if (!pmd_young(*pmd))
+			entry = pte_mkold(entry);
+		pte = pte_offset_map(&_pmd, haddr);
+		BUG_ON(!pte_none(*pte));
+		set_pte_at(mm, haddr, pte, entry);
+		pte_unmap(pte);
 	}
+
+	smp_wmb(); /* make ptes visible before pmd, see __pte_alloc */
+	/*
+	 * Up to this point the pmd is present and huge.
+	 *
+	 * If we overwrite the pmd with the not-huge version, we could trigger
+	 * a small page size TLB miss on the small sized TLB while the hugepage
+	 * TLB entry is still established in the huge TLB.
+	 *
+	 * Some CPUs don't like that. See
+	 * http://support.amd.com/us/Processor_TechDocs/41322.pdf, Erratum 383
+	 * on page 93.
+	 *
+	 * Thus it is generally safer to never allow small and huge TLB entries
+	 * for overlapping virtual addresses to be loaded. So we first mark the
+	 * current pmd not present, then we flush the TLB and finally we write
+	 * the non-huge version of the pmd entry with pmd_populate.
+	 *
+	 * The above needs to be done under the ptl because pmd_trans_huge and
+	 * pmd_trans_splitting must remain set on the pmd until the split is
+	 * complete. The ptl also protects against concurrent faults due to
+	 * making the pmd not-present.
+	 */
+	set_pmd_at(mm, address, pmd, pmd_mknotpresent(*pmd));
+	flush_tlb_range(vma, address, address + HPAGE_PMD_SIZE);
+	pmd_populate(mm, pmd, pgtable);
+	ret = 1;
+
+unlock:
 	spin_unlock(&mm->page_table_lock);
 
 	return ret;
@@ -2240,9 +2308,7 @@ static int khugepaged_wait_event(void)
 static void khugepaged_do_scan(struct page **hpage)
 {
 	unsigned int progress = 0, pass_through_head = 0;
-	unsigned int pages = khugepaged_pages_to_scan;
-
-	barrier(); /* write khugepaged_pages_to_scan to local stack */
+	unsigned int pages = ACCESS_ONCE(khugepaged_pages_to_scan);
 
 	while (progress < pages) {
 		cond_resched();
