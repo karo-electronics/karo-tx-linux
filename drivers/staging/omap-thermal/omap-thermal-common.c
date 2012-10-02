@@ -126,7 +126,9 @@ static int omap_thermal_bind(struct thermal_zone_device *thermal,
 
 	/* TODO: bind with min and max states */
 	/* Simple thing, two trips, one passive another critical */
-	return thermal_zone_bind_cooling_device(thermal, 0, cdev);
+	return thermal_zone_bind_cooling_device(thermal, 0, cdev,
+						THERMAL_NO_LIMIT,
+						THERMAL_NO_LIMIT);
 }
 
 /* Unbind callback functions for thermal zone */
@@ -268,9 +270,7 @@ int omap_thermal_expose_sensor(struct omap_bandgap *bg_ptr, int id,
 	/* Create thermal zone */
 	data->omap_thermal = thermal_zone_device_register(domain,
 				OMAP_TRIP_NUMBER, 0, data, &omap_thermal_ops,
-				1, 2, /*TODO: remove this when FW allows */
-				FAST_TEMP_MONITORING_RATE,
-				FAST_TEMP_MONITORING_RATE);
+				NULL, FAST_TEMP_MONITORING_RATE, 0);
 	if (IS_ERR_OR_NULL(data->omap_thermal)) {
 		dev_err(bg_ptr->dev, "thermal zone device is NULL\n");
 		return PTR_ERR(data->omap_thermal);
