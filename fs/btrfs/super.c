@@ -248,7 +248,13 @@ void __btrfs_abort_transaction(struct btrfs_trans_handle *trans,
 	/* Nothing used. The other threads that have joined this
 	 * transaction may be able to continue. */
 	if (!trans->blocks_used) {
-		btrfs_printk(root->fs_info, "Aborting unused transaction.\n");
+		char nbuf[16];
+		const char *errstr;
+
+		errstr = btrfs_decode_error(root->fs_info, errno, nbuf);
+		btrfs_printk(root->fs_info,
+			     "%s:%d: Aborting unused transaction(%s).\n",
+			     function, line, errstr);
 		return;
 	}
 	trans->transaction->aborted = errno;
@@ -846,18 +852,15 @@ int btrfs_sync_fs(struct super_block *sb, int wait)
 		return 0;
 	}
 
-	btrfs_wait_ordered_extents(root, 0, 0);
+	btrfs_wait_ordered_extents(root, 0);
 
-	spin_lock(&fs_info->trans_lock);
-	if (!fs_info->running_transaction) {
-		spin_unlock(&fs_info->trans_lock);
-		return 0;
-	}
-	spin_unlock(&fs_info->trans_lock);
-
-	trans = btrfs_join_transaction(root);
-	if (IS_ERR(trans))
+	trans = btrfs_attach_transaction(root);
+	if (IS_ERR(trans)) {
+		/* no transaction, don't bother */
+		if (PTR_ERR(trans) == -ENOENT)
+			return 0;
 		return PTR_ERR(trans);
+	}
 	return btrfs_commit_transaction(trans, root);
 }
 
@@ -1508,17 +1511,21 @@ static long btrfs_control_ioctl(struct file *file, unsigned int cmd,
 
 static int btrfs_freeze(struct super_block *sb)
 {
-	struct btrfs_fs_info *fs_info = btrfs_sb(sb);
-	mutex_lock(&fs_info->transaction_kthread_mutex);
-	mutex_lock(&fs_info->cleaner_mutex);
-	return 0;
+	struct btrfs_trans_handle *trans;
+	struct btrfs_root *root = btrfs_sb(sb)->tree_root;
+
+	trans = btrfs_attach_transaction(root);
+	if (IS_ERR(trans)) {
+		/* no transaction, don't bother */
+		if (PTR_ERR(trans) == -ENOENT)
+			return 0;
+		return PTR_ERR(trans);
+	}
+	return btrfs_commit_transaction(trans, root);
 }
 
 static int btrfs_unfreeze(struct super_block *sb)
 {
-	struct btrfs_fs_info *fs_info = btrfs_sb(sb);
-	mutex_unlock(&fs_info->cleaner_mutex);
-	mutex_unlock(&fs_info->transaction_kthread_mutex);
 	return 0;
 }
 
@@ -1620,9 +1627,13 @@ static int __init init_btrfs_fs(void)
 	if (err)
 		goto free_extent_io;
 
-	err = btrfs_delayed_inode_init();
+	err = ordered_data_init();
 	if (err)
 		goto free_extent_map;
+
+	err = btrfs_delayed_inode_init();
+	if (err)
+		goto free_ordered_data;
 
 	err = btrfs_interface_init();
 	if (err)
@@ -1641,6 +1652,8 @@ unregister_ioctl:
 	btrfs_interface_exit();
 free_delayed_inode:
 	btrfs_delayed_inode_exit();
+free_ordered_data:
+	ordered_data_exit();
 free_extent_map:
 	extent_map_exit();
 free_extent_io:
@@ -1657,6 +1670,7 @@ static void __exit exit_btrfs_fs(void)
 {
 	btrfs_destroy_cachep();
 	btrfs_delayed_inode_exit();
+	ordered_data_exit();
 	extent_map_exit();
 	extent_io_exit();
 	btrfs_interface_exit();

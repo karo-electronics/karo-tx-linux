@@ -25,7 +25,6 @@
 #include <linux/capability.h>
 #include <linux/ratelimit.h>
 #include <linux/kthread.h>
-#include <asm/div64.h>
 #include "compat.h"
 #include "ctree.h"
 #include "extent_map.h"
@@ -36,6 +35,7 @@
 #include "async-thread.h"
 #include "check-integrity.h"
 #include "rcu-string.h"
+#include "math.h"
 
 static int init_first_rw_device(struct btrfs_trans_handle *trans,
 				struct btrfs_root *root,
@@ -1775,15 +1775,21 @@ int btrfs_init_new_device(struct btrfs_root *root, char *device_path)
 
 	if (seeding_dev) {
 		ret = init_first_rw_device(trans, root, device);
-		if (ret)
+		if (ret) {
+			btrfs_abort_transaction(trans, root, ret);
 			goto error_trans;
+		}
 		ret = btrfs_finish_sprout(trans, root);
-		if (ret)
+		if (ret) {
+			btrfs_abort_transaction(trans, root, ret);
 			goto error_trans;
+		}
 	} else {
 		ret = btrfs_add_device(trans, root, device);
-		if (ret)
+		if (ret) {
+			btrfs_abort_transaction(trans, root, ret);
 			goto error_trans;
+		}
 	}
 
 	/*
@@ -1814,7 +1820,6 @@ int btrfs_init_new_device(struct btrfs_root *root, char *device_path)
 
 error_trans:
 	unlock_chunks(root);
-	btrfs_abort_transaction(trans, root, ret);
 	btrfs_end_transaction(trans, root);
 	rcu_string_free(device->name);
 	kfree(device);
@@ -2321,18 +2326,6 @@ static int chunk_profiles_filter(u64 chunk_type,
 	return 1;
 }
 
-static u64 div_factor_fine(u64 num, int factor)
-{
-	if (factor <= 0)
-		return 0;
-	if (factor >= 100)
-		return num;
-
-	num *= factor;
-	do_div(num, 100);
-	return num;
-}
-
 static int chunk_usage_filter(struct btrfs_fs_info *fs_info, u64 chunk_offset,
 			      struct btrfs_balance_args *bargs)
 {
@@ -2495,15 +2488,6 @@ static int should_balance_chunk(struct btrfs_root *root,
 	}
 
 	return 1;
-}
-
-static u64 div_factor(u64 num, int factor)
-{
-	if (factor == 10)
-		return num;
-	num *= factor;
-	do_div(num, 10);
-	return num;
 }
 
 static int __btrfs_balance(struct btrfs_fs_info *fs_info)
@@ -3608,12 +3592,16 @@ static noinline int init_first_rw_device(struct btrfs_trans_handle *trans,
 	ret = __btrfs_alloc_chunk(trans, extent_root, &sys_map,
 				  &sys_chunk_size, &sys_stripe_size,
 				  sys_chunk_offset, alloc_profile);
-	if (ret)
-		goto abort;
+	if (ret) {
+		btrfs_abort_transaction(trans, root, ret);
+		goto out;
+	}
 
 	ret = btrfs_add_device(trans, fs_info->chunk_root, device);
-	if (ret)
-		goto abort;
+	if (ret) {
+		btrfs_abort_transaction(trans, root, ret);
+		goto out;
+	}
 
 	/*
 	 * Modifying chunk tree needs allocating new blocks from both
@@ -3623,19 +3611,19 @@ static noinline int init_first_rw_device(struct btrfs_trans_handle *trans,
 	 */
 	ret = __finish_chunk_alloc(trans, extent_root, map, chunk_offset,
 				   chunk_size, stripe_size);
-	if (ret)
-		goto abort;
+	if (ret) {
+		btrfs_abort_transaction(trans, root, ret);
+		goto out;
+	}
 
 	ret = __finish_chunk_alloc(trans, extent_root, sys_map,
 				   sys_chunk_offset, sys_chunk_size,
 				   sys_stripe_size);
 	if (ret)
-		goto abort;
+		btrfs_abort_transaction(trans, root, ret);
 
-	return 0;
+out:
 
-abort:
-	btrfs_abort_transaction(trans, root, ret);
 	return ret;
 }
 
