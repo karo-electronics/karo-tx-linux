@@ -427,7 +427,7 @@ int iscsit_reset_np_thread(
 	return 0;
 }
 
-int iscsit_del_np_comm(struct iscsi_np *np)
+static int iscsit_del_np_comm(struct iscsi_np *np)
 {
 	if (np->np_socket)
 		sock_release(np->np_socket);
@@ -869,10 +869,10 @@ done:
 				buf, conn);
 	}
 
-	if (payload_length > conn->conn_ops->MaxRecvDataSegmentLength) {
+	if (payload_length > conn->conn_ops->MaxXmitDataSegmentLength) {
 		pr_err("DataSegmentLength: %u is greater than"
-			" MaxRecvDataSegmentLength: %u, protocol error.\n",
-			payload_length, conn->conn_ops->MaxRecvDataSegmentLength);
+			" MaxXmitDataSegmentLength: %u, protocol error.\n",
+			payload_length, conn->conn_ops->MaxXmitDataSegmentLength);
 		return iscsit_add_reject(ISCSI_REASON_PROTOCOL_ERROR, 1,
 				buf, conn);
 	}
@@ -953,7 +953,7 @@ done:
 	 */
 	transport_init_se_cmd(&cmd->se_cmd, &lio_target_fabric_configfs->tf_ops,
 			conn->sess->se_sess, hdr->data_length, cmd->data_direction,
-			sam_task_attr, &cmd->sense_buffer[0]);
+			sam_task_attr, cmd->sense_buffer + 2);
 
 	pr_debug("Got SCSI Command, ITT: 0x%08x, CmdSN: 0x%08x,"
 		" ExpXferLen: %u, Length: %u, CID: %hu\n", hdr->itt,
@@ -1216,10 +1216,10 @@ static int iscsit_handle_data_out(struct iscsi_conn *conn, unsigned char *buf)
 	}
 	spin_unlock_bh(&conn->sess->session_stats_lock);
 
-	if (payload_length > conn->conn_ops->MaxRecvDataSegmentLength) {
+	if (payload_length > conn->conn_ops->MaxXmitDataSegmentLength) {
 		pr_err("DataSegmentLength: %u is greater than"
-			" MaxRecvDataSegmentLength: %u\n", payload_length,
-			conn->conn_ops->MaxRecvDataSegmentLength);
+			" MaxXmitDataSegmentLength: %u\n", payload_length,
+			conn->conn_ops->MaxXmitDataSegmentLength);
 		return iscsit_add_reject(ISCSI_REASON_PROTOCOL_ERROR, 1,
 					buf, conn);
 	}
@@ -1437,11 +1437,11 @@ static int iscsit_handle_nop_out(
 					buf, conn);
 	}
 
-	if (payload_length > conn->conn_ops->MaxRecvDataSegmentLength) {
+	if (payload_length > conn->conn_ops->MaxXmitDataSegmentLength) {
 		pr_err("NOPOUT Ping Data DataSegmentLength: %u is"
-			" greater than MaxRecvDataSegmentLength: %u, protocol"
+			" greater than MaxXmitDataSegmentLength: %u, protocol"
 			" error.\n", payload_length,
-			conn->conn_ops->MaxRecvDataSegmentLength);
+			conn->conn_ops->MaxXmitDataSegmentLength);
 		return iscsit_add_reject(ISCSI_REASON_PROTOCOL_ERROR, 1,
 					buf, conn);
 	}
@@ -1700,7 +1700,7 @@ static int iscsit_handle_task_mgt_cmd(
 		transport_init_se_cmd(&cmd->se_cmd,
 				      &lio_target_fabric_configfs->tf_ops,
 				      conn->sess->se_sess, 0, DMA_NONE,
-				      MSG_SIMPLE_TAG, &cmd->sense_buffer[0]);
+				      MSG_SIMPLE_TAG, cmd->sense_buffer + 2);
 
 		switch (function) {
 		case ISCSI_TM_FUNC_ABORT_TASK:
@@ -1874,10 +1874,10 @@ static int iscsit_handle_text_cmd(
 	hdr->cmdsn		= be32_to_cpu(hdr->cmdsn);
 	hdr->exp_statsn		= be32_to_cpu(hdr->exp_statsn);
 
-	if (payload_length > conn->conn_ops->MaxRecvDataSegmentLength) {
+	if (payload_length > conn->conn_ops->MaxXmitDataSegmentLength) {
 		pr_err("Unable to accept text parameter length: %u"
-			"greater than MaxRecvDataSegmentLength %u.\n",
-		       payload_length, conn->conn_ops->MaxRecvDataSegmentLength);
+			"greater than MaxXmitDataSegmentLength %u.\n",
+		       payload_length, conn->conn_ops->MaxXmitDataSegmentLength);
 		return iscsit_add_reject(ISCSI_REASON_PROTOCOL_ERROR, 1,
 					buf, conn);
 	}
@@ -3092,15 +3092,18 @@ static int iscsit_send_status(
 	if (cmd->se_cmd.sense_buffer &&
 	   ((cmd->se_cmd.se_cmd_flags & SCF_TRANSPORT_TASK_SENSE) ||
 	    (cmd->se_cmd.se_cmd_flags & SCF_EMULATED_TASK_SENSE))) {
+		put_unaligned_be16(cmd->se_cmd.scsi_sense_length, cmd->sense_buffer);
+		cmd->se_cmd.scsi_sense_length += sizeof (__be16);
+
 		padding		= -(cmd->se_cmd.scsi_sense_length) & 3;
 		hton24(hdr->dlength, cmd->se_cmd.scsi_sense_length);
-		iov[iov_count].iov_base	= cmd->se_cmd.sense_buffer;
+		iov[iov_count].iov_base	= cmd->sense_buffer;
 		iov[iov_count++].iov_len =
 				(cmd->se_cmd.scsi_sense_length + padding);
 		tx_size += cmd->se_cmd.scsi_sense_length;
 
 		if (padding) {
-			memset(cmd->se_cmd.sense_buffer +
+			memset(cmd->sense_buffer +
 				cmd->se_cmd.scsi_sense_length, 0, padding);
 			tx_size += padding;
 			pr_debug("Adding %u bytes of padding to"
@@ -3109,7 +3112,7 @@ static int iscsit_send_status(
 
 		if (conn->conn_ops->DataDigest) {
 			iscsit_do_crypto_hash_buf(&conn->conn_tx_hash,
-				cmd->se_cmd.sense_buffer,
+				cmd->sense_buffer,
 				(cmd->se_cmd.scsi_sense_length + padding),
 				0, NULL, (u8 *)&cmd->data_crc);
 
@@ -3236,7 +3239,7 @@ static bool iscsit_check_inaddr_any(struct iscsi_np *np)
 		struct sockaddr_in * sock_in =
 			(struct sockaddr_in *)&np->np_sockaddr;
 
-		if (sock_in->sin_addr.s_addr == INADDR_ANY)
+		if (sock_in->sin_addr.s_addr == htonl(INADDR_ANY))
 			ret = true;
 	}
 
@@ -3271,7 +3274,6 @@ static int iscsit_build_sendtargets_response(struct iscsi_cmd *cmd)
 		len += 1;
 
 		if ((len + payload_len) > buffer_len) {
-			spin_unlock(&tiqn->tiqn_tpg_lock);
 			end_of_buf = 1;
 			goto eob;
 		}
@@ -3424,6 +3426,7 @@ static int iscsit_send_reject(
 	hdr->opcode		= ISCSI_OP_REJECT;
 	hdr->flags		|= ISCSI_FLAG_CMD_FINAL;
 	hton24(hdr->dlength, ISCSI_HDR_LEN);
+	hdr->ffffffff		= 0xffffffff;
 	cmd->stat_sn		= conn->stat_sn++;
 	hdr->statsn		= cpu_to_be32(cmd->stat_sn);
 	hdr->exp_cmdsn	= cpu_to_be32(conn->sess->exp_cmd_sn);

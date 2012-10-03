@@ -44,7 +44,7 @@ void convert_null_to_semi(char *buf, int len)
 			buf[i] = ';';
 }
 
-int strlen_semi(char *buf)
+static int strlen_semi(char *buf)
 {
 	int i = 0;
 
@@ -550,7 +550,7 @@ static int iscsi_target_handle_csg_zero(
 			SENDER_INITIATOR|SENDER_RECEIVER,
 			login->req_buf,
 			payload_length,
-			conn->param_list);
+			conn);
 	if (ret < 0)
 		return -1;
 
@@ -627,7 +627,7 @@ static int iscsi_target_handle_csg_one(struct iscsi_conn *conn, struct iscsi_log
 			SENDER_INITIATOR|SENDER_RECEIVER,
 			login->req_buf,
 			payload_length,
-			conn->param_list);
+			conn);
 	if (ret < 0)
 		return -1;
 
@@ -1000,7 +1000,6 @@ struct iscsi_login *iscsi_target_init_negotiation(
 	 *	Locates Target Portal from NP -> Target IQN
 	 */
 	if (iscsi_target_locate_portal(np, conn, login) < 0) {
-		pr_err("iSCSI Login negotiation failed.\n");
 		goto out;
 	}
 

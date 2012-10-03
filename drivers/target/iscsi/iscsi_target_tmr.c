@@ -146,12 +146,19 @@ u8 iscsit_tmr_task_reassign(
 	}
 	/*
 	 * Temporary check to prevent connection recovery for
-	 * connections with a differing MaxRecvDataSegmentLength.
+	 * connections with a differing Max*DataSegmentLength.
 	 */
 	if (cr->maxrecvdatasegmentlength !=
 	    conn->conn_ops->MaxRecvDataSegmentLength) {
 		pr_err("Unable to perform connection recovery for"
 			" differing MaxRecvDataSegmentLength, rejecting"
+			" TMR TASK_REASSIGN.\n");
+		return ISCSI_TMF_RSP_REJECTED;
+	}
+	if (cr->maxxmitdatasegmentlength !=
+	    conn->conn_ops->MaxXmitDataSegmentLength) {
+		pr_err("Unable to perform connection recovery for"
+			" differing MaxXmitDataSegmentLength, rejecting"
 			" TMR TASK_REASSIGN.\n");
 		return ISCSI_TMF_RSP_REJECTED;
 	}
@@ -455,7 +462,7 @@ static int iscsit_task_reassign_complete(
  *	Right now the only one that its really needed for is
  *	connection recovery releated TASK_REASSIGN.
  */
-extern int iscsit_tmr_post_handler(struct iscsi_cmd *cmd, struct iscsi_conn *conn)
+int iscsit_tmr_post_handler(struct iscsi_cmd *cmd, struct iscsi_conn *conn)
 {
 	struct iscsi_tmr_req *tmr_req = cmd->tmr_req;
 	struct se_tmr_req *se_tmr = cmd->se_cmd.se_tmr_req;
@@ -470,7 +477,7 @@ extern int iscsit_tmr_post_handler(struct iscsi_cmd *cmd, struct iscsi_conn *con
 /*
  *	Nothing to do here, but leave it for good measure. :-)
  */
-int iscsit_task_reassign_prepare_read(
+static int iscsit_task_reassign_prepare_read(
 	struct iscsi_tmr_req *tmr_req,
 	struct iscsi_conn *conn)
 {
@@ -545,7 +552,7 @@ static void iscsit_task_reassign_prepare_unsolicited_dataout(
 	}
 }
 
-int iscsit_task_reassign_prepare_write(
+static int iscsit_task_reassign_prepare_write(
 	struct iscsi_tmr_req *tmr_req,
 	struct iscsi_conn *conn)
 {
