@@ -508,6 +508,8 @@ struct l2cap_chan {
 	__u32		remote_acc_lat;
 	__u32		remote_flush_to;
 
+	__u8		ctrl_id;
+
 	struct delayed_work	chan_timer;
 	struct delayed_work	retrans_timer;
 	struct delayed_work	monitor_timer;
@@ -767,6 +769,8 @@ int l2cap_chan_check_security(struct l2cap_chan *chan);
 void l2cap_chan_set_defaults(struct l2cap_chan *chan);
 int l2cap_ertm_init(struct l2cap_chan *chan);
 void l2cap_chan_add(struct l2cap_conn *conn, struct l2cap_chan *chan);
+void __l2cap_chan_add(struct l2cap_conn *conn, struct l2cap_chan *chan);
 void l2cap_chan_del(struct l2cap_chan *chan, int err);
+void l2cap_send_conn_req(struct l2cap_chan *chan);
 
 #endif /* __L2CAP_H */
