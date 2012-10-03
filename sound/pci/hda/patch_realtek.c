@@ -174,7 +174,7 @@ struct alc_spec {
 
 	/* hooks */
 	void (*init_hook)(struct hda_codec *codec);
-#ifdef CONFIG_SND_HDA_POWER_SAVE
+#ifdef CONFIG_PM
 	void (*power_hook)(struct hda_codec *codec);
 #endif
 	void (*shutup)(struct hda_codec *codec);
@@ -215,7 +215,7 @@ struct alc_spec {
 	/* for virtual master */
 	hda_nid_t vmaster_nid;
 	struct hda_vmaster_mute_hook vmaster_mute;
-#ifdef CONFIG_SND_HDA_POWER_SAVE
+#ifdef CONFIG_PM
 	struct hda_loopback_check loopback;
 	int num_loopbacks;
 	struct hda_amp_list loopback_list[8];
@@ -2053,13 +2053,11 @@ static int alc_init(struct hda_codec *codec)
 
 	alc_apply_fixup(codec, ALC_FIXUP_ACT_INIT);
 
-	snd_hda_jack_report_sync(codec);
-
 	hda_call_check_power_status(codec, 0x01);
 	return 0;
 }
 
-#ifdef CONFIG_SND_HDA_POWER_SAVE
+#ifdef CONFIG_PM
 static int alc_check_power_status(struct hda_codec *codec, hda_nid_t nid)
 {
 	struct alc_spec *spec = codec->spec;
@@ -2289,6 +2287,8 @@ static int alc_build_pcms(struct hda_codec *codec)
 			p = &alc_pcm_analog_playback;
 		info->stream[SNDRV_PCM_STREAM_PLAYBACK] = *p;
 		info->stream[SNDRV_PCM_STREAM_PLAYBACK].nid = spec->multiout.dac_nids[0];
+		info->stream[SNDRV_PCM_STREAM_PLAYBACK].channels_max =
+			spec->multiout.max_channels;
 	}
 	if (spec->adc_nids) {
 		p = spec->stream_analog_capture;
@@ -2437,7 +2437,7 @@ static void alc_free(struct hda_codec *codec)
 	snd_hda_detach_beep_device(codec);
 }
 
-#ifdef CONFIG_SND_HDA_POWER_SAVE
+#ifdef CONFIG_PM
 static void alc_power_eapd(struct hda_codec *codec)
 {
 	alc_auto_setup_eapd(codec, false);
@@ -2477,7 +2477,7 @@ static const struct hda_codec_ops alc_patch_ops = {
 #ifdef CONFIG_PM
 	.resume = alc_resume,
 #endif
-#ifdef CONFIG_SND_HDA_POWER_SAVE
+#ifdef CONFIG_PM
 	.suspend = alc_suspend,
 	.check_power_status = alc_check_power_status,
 #endif
@@ -2633,7 +2633,7 @@ static const char *alc_get_line_out_pfx(struct alc_spec *spec, int ch,
 	return channel_name[ch];
 }
 
-#ifdef CONFIG_SND_HDA_POWER_SAVE
+#ifdef CONFIG_PM
 /* add the powersave loopback-list entry */
 static void add_loopback_list(struct alc_spec *spec, hda_nid_t mix, int idx)
 {
@@ -6189,6 +6189,7 @@ static const struct snd_pci_quirk alc269_fixup_tbl[] = {
 	SND_PCI_QUIRK(0x1025, 0x0349, "Acer AOD260", ALC269_FIXUP_INV_DMIC),
 	SND_PCI_QUIRK(0x103c, 0x1586, "HP", ALC269_FIXUP_MIC2_MUTE_LED),
 	SND_PCI_QUIRK(0x1043, 0x1427, "Asus Zenbook UX31E", ALC269VB_FIXUP_DMIC),
+	SND_PCI_QUIRK(0x1043, 0x1517, "Asus Zenbook UX31A", ALC269VB_FIXUP_DMIC),
 	SND_PCI_QUIRK(0x1043, 0x1a13, "Asus G73Jw", ALC269_FIXUP_ASUS_G73JW),
 	SND_PCI_QUIRK(0x1043, 0x1b13, "Asus U41SV", ALC269_FIXUP_INV_DMIC),
 	SND_PCI_QUIRK(0x1043, 0x16e3, "ASUS UX50", ALC269_FIXUP_STEREO_DMIC),
@@ -6503,7 +6504,7 @@ static int patch_alc861(struct hda_codec *codec)
 	}
 
 	codec->patch_ops = alc_patch_ops;
-#ifdef CONFIG_SND_HDA_POWER_SAVE
+#ifdef CONFIG_PM
 	spec->power_hook = alc_power_eapd;
 #endif
 
