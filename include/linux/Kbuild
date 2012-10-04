@@ -20,21 +20,16 @@ header-y += netfilter_ipv6/
 header-y += usb/
 header-y += wimax/
 
-objhdr-y += version.h
-
 ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/include/asm/a.out.h \
-		  $(srctree)/include/asm-$(SRCARCH)/a.out.h \
-		  $(INSTALL_HDR_PATH)/include/asm-*/a.out.h),)
+		  $(srctree)/arch/$(SRCARCH)/include/uapi/asm/a.out.h),)
 header-y += a.out.h
 endif
 ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/include/asm/kvm.h \
-		  $(srctree)/include/asm-$(SRCARCH)/kvm.h \
-		  $(INSTALL_HDR_PATH)/include/asm-*/kvm.h),)
+		  $(srctree)/arch/$(SRCARCH)/include/uapi/asm/kvm.h),)
 header-y += kvm.h
 endif
 ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/include/asm/kvm_para.h \
-		  $(srctree)/include/asm-$(SRCARCH)/kvm_para.h \
-		  $(INSTALL_HDR_PATH)/include/asm-*/kvm_para.h),)
+		  $(srctree)/arch/$(SRCARCH)/include/uapi/asm/kvm_para.h),)
 header-y += kvm_para.h
 endif
 
@@ -192,6 +187,7 @@ header-y += in_route.h
 header-y += sock_diag.h
 header-y += inet_diag.h
 header-y += unix_diag.h
+header-y += packet_diag.h
 header-y += inotify.h
 header-y += input.h
 header-y += ioctl.h
@@ -359,6 +355,7 @@ header-y += sysctl.h
 header-y += sysinfo.h
 header-y += taskstats.h
 header-y += tcp.h
+header-y += tcp_metrics.h
 header-y += telephony.h
 header-y += termios.h
 header-y += time.h

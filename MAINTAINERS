@@ -1650,7 +1650,6 @@ F:	drivers/bcma/
 F:	include/linux/bcma/
 
 BROCADE BFA FC SCSI DRIVER
-M:	Jing Huang <huangj@brocade.com>
 M:	Krishna C Gudipati <kgudipat@brocade.com>
 L:	linux-scsi@vger.kernel.org
 S:	Supported
@@ -2632,6 +2631,18 @@ T:	git git://git.alsa-project.org/alsa-kernel.git
 S:	Maintained
 F:	sound/usb/misc/ua101.c
 
+EXTENSIBLE FIRMWARE INTERFACE (EFI)
+M:	Matt Fleming <matt.fleming@intel.com>
+L:	linux-efi@vger.kernel.org
+S:	Maintained
+F:	Documentation/x86/efi-stub.txt
+F:	arch/ia64/kernel/efi.c
+F:	arch/x86/boot/compressed/eboot.[ch]
+F:	arch/x86/include/asm/efi.h
+F:	arch/x86/platform/efi/*
+F:	drivers/firmware/efivars.c
+F:	include/linux/efi*.h
+
 EFIFB FRAMEBUFFER DRIVER
 L:	linux-fbdev@vger.kernel.org
 M:	Peter Jones <pjones@redhat.com>
@@ -3437,6 +3448,13 @@ M:	Santiago Leon <santil@linux.vnet.ibm.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 F:	drivers/net/ethernet/ibm/ibmveth.*
+
+IBM Power Virtual SCSI/FC Device Drivers
+M:	Robert Jennings <rcj@linux.vnet.ibm.com>
+L:	linux-scsi@vger.kernel.org
+S:	Supported
+F:	drivers/scsi/ibmvscsi/
+X:	drivers/scsi/ibmvscsi/ibmvstgt.c
 
 IBM ServeRAID RAID DRIVER
 P:	Jack Hammer
@@ -4806,6 +4824,7 @@ M:	Lauro Ramos Venancio <lauro.venancio@openbossa.org>
 M:	Aloisio Almeida Jr <aloisio.almeida@openbossa.org>
 M:	Samuel Ortiz <sameo@linux.intel.com>
 L:	linux-wireless@vger.kernel.org
+L:	linux-nfc@lists.01.org (moderated for non-subscribers)
 S:	Maintained
 F:	net/nfc/
 F:	include/linux/nfc.h
@@ -5048,6 +5067,7 @@ S:	Maintained
 F:	Documentation/devicetree
 F:	drivers/of
 F:	include/linux/of*.h
+F:	scripts/dtc
 K:	of_get_property
 K:	of_match_table
 
