@@ -101,11 +101,11 @@ struct nfs_client_initdata {
  */
 struct nfs_parsed_mount_data {
 	int			flags;
-	int			rsize, wsize;
-	int			timeo, retrans;
-	int			acregmin, acregmax,
+	unsigned int		rsize, wsize;
+	unsigned int		timeo, retrans;
+	unsigned int		acregmin, acregmax,
 				acdirmin, acdirmax;
-	int			namlen;
+	unsigned int		namlen;
 	unsigned int		options;
 	unsigned int		bsize;
 	unsigned int		auth_flavor_len;
@@ -483,6 +483,12 @@ extern int _nfs4_call_sync_session(struct rpc_clnt *clnt,
 				   struct nfs4_sequence_args *args,
 				   struct nfs4_sequence_res *res,
 				   int cache_reply);
+extern int nfs40_walk_client_list(struct nfs_client *clp,
+				struct nfs_client **result,
+				struct rpc_cred *cred);
+extern int nfs41_walk_client_list(struct nfs_client *clp,
+				struct nfs_client **result,
+				struct rpc_cred *cred);
 
 /*
  * Determine the device name as a string
