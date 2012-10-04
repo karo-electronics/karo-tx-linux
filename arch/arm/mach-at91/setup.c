@@ -87,12 +87,14 @@ void __init at91_init_sram(int bank, unsigned long base, unsigned int length)
 	iotable_init(desc, 1);
 }
 
+#ifdef CONFIG_MMU
 static struct map_desc at91_io_desc __initdata = {
 	.virtual	= (unsigned long)AT91_VA_BASE_SYS,
 	.pfn		= __phys_to_pfn(AT91_BASE_SYS),
 	.length		= SZ_16K,
 	.type		= MT_DEVICE,
 };
+#endif
 
 static void __init soc_detect(u32 dbgu_base)
 {
