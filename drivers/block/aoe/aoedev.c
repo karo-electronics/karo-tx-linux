@@ -1,4 +1,4 @@
-/* Copyright (c) 2007 Coraid, Inc.  See COPYING for GPL terms. */
+/* Copyright (c) 2012 Coraid, Inc.  See COPYING for GPL terms. */
 /*
  * aoedev.c
  * AoE device utility functions; maintains device list.
@@ -19,6 +19,17 @@ static void skbpoolfree(struct aoedev *d);
 static struct aoedev *devlist;
 static DEFINE_SPINLOCK(devlist_lock);
 
+/*
+ * Users who grab a pointer to the device with aoedev_by_aoeaddr or
+ * aoedev_by_sysminor_m automatically get a reference count and must
+ * be responsible for performing a aoedev_put.  With the addition of
+ * async kthread processing I'm no longer confident that we can
+ * guarantee consistency in the face of device flushes.
+ *
+ * For the time being, we only bother to add extra references for
+ * frames sitting on the iocq.  When the kthreads finish processing
+ * these frames, they will aoedev_put the device.
+ */
 struct aoedev *
 aoedev_by_aoeaddr(int maj, int min)
 {
@@ -28,11 +39,23 @@ aoedev_by_aoeaddr(int maj, int min)
 	spin_lock_irqsave(&devlist_lock, flags);
 
 	for (d=devlist; d; d=d->next)
-		if (d->aoemajor == maj && d->aoeminor == min)
+		if (d->aoemajor == maj && d->aoeminor == min) {
+			d->ref++;
 			break;
+		}
 
 	spin_unlock_irqrestore(&devlist_lock, flags);
 	return d;
+}
+
+void
+aoedev_put(struct aoedev *d)
+{
+	ulong flags;
+
+	spin_lock_irqsave(&devlist_lock, flags);
+	d->ref--;
+	spin_unlock_irqrestore(&devlist_lock, flags);
 }
 
 static void
@@ -47,54 +70,74 @@ dummy_timer(ulong vp)
 	add_timer(&d->timer);
 }
 
+static void
+aoe_failip(struct aoedev *d)
+{
+	struct request *rq;
+	struct bio *bio;
+	unsigned long n;
+
+	aoe_failbuf(d, d->ip.buf);
+
+	rq = d->ip.rq;
+	if (rq == NULL)
+		return;
+	while ((bio = d->ip.nxbio)) {
+		clear_bit(BIO_UPTODATE, &bio->bi_flags);
+		d->ip.nxbio = bio->bi_next;
+		n = (unsigned long) rq->special;
+		rq->special = (void *) --n;
+	}
+	if ((unsigned long) rq->special == 0)
+		aoe_end_request(d, rq, 0);
+}
+
 void
 aoedev_downdev(struct aoedev *d)
 {
-	struct aoetgt **t, **te;
-	struct frame *f, *e;
-	struct buf *buf;
-	struct bio *bio;
+	struct aoetgt *t, **tt, **te;
+	struct frame *f;
+	struct list_head *head, *pos, *nx;
+	struct request *rq;
+	int i;
 
-	t = d->targets;
-	te = t + NTARGETS;
-	for (; t < te && *t; t++) {
-		f = (*t)->frames;
-		e = f + (*t)->nframes;
-		for (; f < e; f->tag = FREETAG, f->buf = NULL, f++) {
-			if (f->tag == FREETAG || f->buf == NULL)
-				continue;
-			buf = f->buf;
-			bio = buf->bio;
-			if (--buf->nframesout == 0
-			&& buf != d->inprocess) {
-				mempool_free(buf, d->bufpool);
-				bio_endio(bio, -EIO);
+	d->flags &= ~DEVFL_UP;
+
+	/* clean out active buffers */
+	for (i = 0; i < NFACTIVE; i++) {
+		head = &d->factive[i];
+		list_for_each_safe(pos, nx, head) {
+			f = list_entry(pos, struct frame, head);
+			list_del(pos);
+			if (f->buf) {
+				f->buf->nframesout--;
+				aoe_failbuf(d, f->buf);
 			}
+			aoe_freetframe(f);
 		}
-		(*t)->maxout = (*t)->nframes;
-		(*t)->nout = 0;
 	}
-	buf = d->inprocess;
-	if (buf) {
-		bio = buf->bio;
-		mempool_free(buf, d->bufpool);
-		bio_endio(bio, -EIO);
+	/* reset window dressings */
+	tt = d->targets;
+	te = tt + NTARGETS;
+	for (; tt < te && (t = *tt); tt++) {
+		t->maxout = t->nframes;
+		t->nout = 0;
 	}
-	d->inprocess = NULL;
+
+	/* clean out the in-process request (if any) */
+	aoe_failip(d);
 	d->htgt = NULL;
 
-	while (!list_empty(&d->bufq)) {
-		buf = container_of(d->bufq.next, struct buf, bufs);
-		list_del(d->bufq.next);
-		bio = buf->bio;
-		mempool_free(buf, d->bufpool);
-		bio_endio(bio, -EIO);
+	/* fast fail all pending I/O */
+	if (d->blkq) {
+		while ((rq = blk_peek_request(d->blkq))) {
+			blk_start_request(rq);
+			aoe_end_request(d, rq, 1);
+		}
 	}
 
 	if (d->gd)
 		set_capacity(d->gd, 0);
-
-	d->flags &= ~DEVFL_UP;
 }
 
 static void
@@ -107,6 +150,7 @@ aoedev_freedev(struct aoedev *d)
 		aoedisk_rm_sysfs(d);
 		del_gendisk(d->gd);
 		put_disk(d->gd);
+		blk_cleanup_queue(d->blkq);
 	}
 	t = d->targets;
 	e = t + NTARGETS;
@@ -115,7 +159,6 @@ aoedev_freedev(struct aoedev *d)
 	if (d->bufpool)
 		mempool_destroy(d->bufpool);
 	skbpoolfree(d);
-	blk_cleanup_queue(d->blkq);
 	kfree(d);
 }
 
@@ -142,7 +185,8 @@ aoedev_flush(const char __user *str, size_t cnt)
 		spin_lock(&d->lock);
 		if ((!all && (d->flags & DEVFL_UP))
 		|| (d->flags & (DEVFL_GDALLOC|DEVFL_NEWSIZE))
-		|| d->nopen) {
+		|| d->nopen
+		|| d->ref) {
 			spin_unlock(&d->lock);
 			dd = &d->next;
 			continue;
@@ -163,12 +207,15 @@ aoedev_flush(const char __user *str, size_t cnt)
 	return 0;
 }
 
-/* I'm not really sure that this is a realistic problem, but if the
-network driver goes gonzo let's just leak memory after complaining. */
+/* This has been confirmed to occur once with Tms=3*1000 due to the
+ * driver changing link and not processing its transmit ring.  The
+ * problem is hard enough to solve by returning an error that I'm
+ * still punting on "solving" this.
+ */
 static void
 skbfree(struct sk_buff *skb)
 {
-	enum { Sms = 100, Tms = 3*1000};
+	enum { Sms = 250, Tms = 30 * 1000};
 	int i = Tms / Sms;
 
 	if (skb == NULL)
@@ -182,6 +229,7 @@ skbfree(struct sk_buff *skb)
 			"cannot free skb -- memory leaked.");
 		return;
 	}
+	skb->truesize -= skb->data_len;
 	skb_shinfo(skb)->nr_frags = skb->data_len = 0;
 	skb_trim(skb, 0);
 	dev_kfree_skb(skb);
@@ -203,13 +251,16 @@ struct aoedev *
 aoedev_by_sysminor_m(ulong sysminor)
 {
 	struct aoedev *d;
+	int i;
 	ulong flags;
 
 	spin_lock_irqsave(&devlist_lock, flags);
 
 	for (d=devlist; d; d=d->next)
-		if (d->sysminor == sysminor)
+		if (d->sysminor == sysminor) {
+			d->ref++;
 			break;
+		}
 	if (d)
 		goto out;
 	d = kcalloc(1, sizeof *d, GFP_ATOMIC);
@@ -217,7 +268,6 @@ aoedev_by_sysminor_m(ulong sysminor)
 		goto out;
 	INIT_WORK(&d->work, aoecmd_sleepwork);
 	spin_lock_init(&d->lock);
-	skb_queue_head_init(&d->sendq);
 	skb_queue_head_init(&d->skbpool);
 	init_timer(&d->timer);
 	d->timer.data = (ulong) d;
@@ -226,7 +276,9 @@ aoedev_by_sysminor_m(ulong sysminor)
 	add_timer(&d->timer);
 	d->bufpool = NULL;	/* defer to aoeblk_gdalloc */
 	d->tgt = d->targets;
-	INIT_LIST_HEAD(&d->bufq);
+	d->ref = 1;
+	for (i = 0; i < NFACTIVE; i++)
+		INIT_LIST_HEAD(&d->factive[i]);
 	d->sysminor = sysminor;
 	d->aoemajor = AOEMAJOR(sysminor);
 	d->aoeminor = AOEMINOR(sysminor);
@@ -241,13 +293,23 @@ aoedev_by_sysminor_m(ulong sysminor)
 static void
 freetgt(struct aoedev *d, struct aoetgt *t)
 {
-	struct frame *f, *e;
+	struct frame *f;
+	struct list_head *pos, *nx, *head;
+	struct aoeif *ifp;
 
-	f = t->frames;
-	e = f + t->nframes;
-	for (; f < e; f++)
+	for (ifp = t->ifs; ifp < &t->ifs[NAOEIFS]; ++ifp) {
+		if (!ifp->nd)
+			break;
+		dev_put(ifp->nd);
+	}
+
+	head = &t->ffree;
+	list_for_each_safe(pos, nx, head) {
+		list_del(pos);
+		f = list_entry(pos, struct frame, head);
 		skbfree(f->skb);
-	kfree(t->frames);
+		kfree(f);
+	}
 	kfree(t);
 }
 
@@ -257,6 +319,7 @@ aoedev_exit(void)
 	struct aoedev *d;
 	ulong flags;
 
+	aoe_flush_iocq();
 	while ((d = devlist)) {
 		devlist = d->next;
 
