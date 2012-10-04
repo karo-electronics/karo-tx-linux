@@ -41,7 +41,8 @@ static __init int module_verify_init(void)
 	pr_notice("Initialise module verification\n");
 
 	modsign_keyring = key_alloc(&key_type_keyring, ".module_sign",
-				    0, 0, current_cred(),
+				    KUIDT_INIT(0), KGIDT_INIT(0),
+				    current_cred(),
 				    (KEY_POS_ALL & ~KEY_POS_SETATTR) |
 				    KEY_USR_VIEW | KEY_USR_READ,
 				    KEY_ALLOC_NOT_IN_QUOTA);
