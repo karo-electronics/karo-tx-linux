@@ -36,4 +36,5 @@ header-y += ucontext.h
 header-y += unistd.h
 header-y += epapr_hcalls.h
 
+generic-y += clkdev.h
 generic-y += rwsem.h

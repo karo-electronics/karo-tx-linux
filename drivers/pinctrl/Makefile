@@ -38,5 +38,10 @@ obj-$(CONFIG_PINCTRL_XWAY)	+= pinctrl-xway.o
 obj-$(CONFIG_PINCTRL_LANTIQ)	+= pinctrl-lantiq.o
 obj-$(CONFIG_PINCTRL_SAMSUNG)	+= pinctrl-samsung.o
 obj-$(CONFIG_PINCTRL_EXYNOS4)	+= pinctrl-exynos.o
+obj-$(CONFIG_PINCTRL_MVEBU)	+= pinctrl-mvebu.o
+obj-$(CONFIG_PINCTRL_DOVE)	+= pinctrl-dove.o
+obj-$(CONFIG_PINCTRL_KIRKWOOD)	+= pinctrl-kirkwood.o
+obj-$(CONFIG_PINCTRL_ARMADA_370) += pinctrl-armada-370.o
+obj-$(CONFIG_PINCTRL_ARMADA_XP)  += pinctrl-armada-xp.o
 
 obj-$(CONFIG_PLAT_SPEAR)	+= spear/
