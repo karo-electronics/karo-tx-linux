@@ -1,0 +1,41 @@
+Importing i2c based on 612a9aab56a93533e76e3ad91642db7033e03b69
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 612a9aab56a93533e76e3ad91642db7033e03b69
+HEAD is now at 612a9aa Merge branch 'drm-next' of git://people.freedesktop.org/~airlied/linux
+$ git am ../quilt/i2c/i2c-mux-support-class.patch
+Applying: i2c-mux: Add support for device auto-detection
+$ git am ../quilt/i2c/i2c-smbus-convert-kzalloc-to-devm_kzalloc.patch
+Applying: i2c-smbus: Convert kzalloc to devm_kzalloc
+$ git am ../quilt/i2c/i2c-convert-struct-i2c_msg-initialization-to-c99-format.patch
+Applying: i2c: Convert struct i2c_msg initialization to C99 format
+$ git am ../quilt/i2c/i2c-make-I2C-available-on-UML.patch
+Applying: i2c: Make I2C available on UML
+$ git am ../quilt/i2c/i2c-scx200-replace-printks-with-pr_levels.patch
+Applying: i2c/scx200_*: Replace printks with pr_<level>s
+$ git am ../quilt/i2c/i2c-designware-i2c_dw_xfer_msg-can-be-static.patch
+Applying: i2c-designware: i2c_dw_xfer_msg can be static
+$ git am ../quilt/i2c/i2c-parport-i2c_parport_irq-can-be-static.patch
+Applying: i2c-parport: i2c_parport_irq can be static
+$ git am ../quilt/i2c/i2c-viapro-add-VX900-device-ID.patch
+Applying: i2c-viapro: Add VIA VX900 device ID
+$ git am ../quilt/i2c/i2c-i801-asus-multiplexing-2.patch
+Applying: i2c-i801: Support SMBus multiplexing on Asus Z8 series
+$ git am ../quilt/i2c/i2c-mux-gpio-use-devm_kzalloc-instead-of-kzalloc.patch
+Applying: i2c-mux-gpio: Use devm_kzalloc instead of kzalloc
+$ git am ../quilt/i2c/i2c-mux-gpio-find-gpio-pins.patch
+Applying: i2c-mux-gpio: Add support for dynamically allocated GPIO pins
+$ git am ../quilt/i2c/i2c-mux-gpio-document-device-id.patch
+Applying: i2c-mux-gpio: Update documentation
+$ git am ../quilt/i2c/i2c-i801-let-i2c-mux-gpio-find-chip.patch
+Applying: i2c-i801: Let i2c-mux-gpio find the GPIO chip
+$ git am ../quilt/i2c/i2c-correct-struct-i2c_driver-doc-about-detection.patch
+Applying: i2c: Correct struct i2c_driver doc about detection
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 3a6a1bc...f7c7e6a master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 56d92aa5cf7c96c70f81d0350c94faf46a9fb76d
+Unchanged quilt series jdelvare-hwmon
+Importing device-mapper based on block/for-next
+Unchanged quilt series device-mapper
