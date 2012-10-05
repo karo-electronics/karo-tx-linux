@@ -615,6 +615,13 @@ ENTRY(ret_from_fork)
 	b	ret_to_user
 ENDPROC(ret_from_fork)
 
+ENTRY(ret_from_kernel_thread)
+	bl	schedule_tail
+	mov	x0, x20
+	adr	lr, do_exit			// kernel threads should not exit
+	br	x19
+ENDPROC(ret_from_kernel_thread)
+
 /*
  * SVC handler.
  */
