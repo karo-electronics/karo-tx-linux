@@ -1471,6 +1471,25 @@ int zap_vma_ptes(struct vm_area_struct *vma, unsigned long address,
 }
 EXPORT_SYMBOL_GPL(zap_vma_ptes);
 
+static bool pte_prot_none(struct vm_area_struct *vma, pte_t pte)
+{
+	/*
+	 * If we have the normal vma->vm_page_prot protections we're not a
+	 * 'special' PROT_NONE page.
+	 *
+	 * This means we cannot get 'special' PROT_NONE faults from genuine
+	 * PROT_NONE maps, nor from PROT_WRITE file maps that do dirty
+	 * tracking.
+	 *
+	 * Neither case is really interesting for our current use though so we
+	 * don't care.
+	 */
+	if (pte_same(pte, pte_modify(pte, vma->vm_page_prot)))
+		return false;
+
+	return pte_same(pte, pte_modify(pte, vma_prot_none(vma)));
+}
+
 /**
  * follow_page - look up a page descriptor from a user-virtual address
  * @vma: vm_area_struct mapping @address
@@ -1524,6 +1543,8 @@ struct page *follow_page(struct vm_area_struct *vma, unsigned long address,
 		page = follow_huge_pmd(mm, address, pmd, flags & FOLL_WRITE);
 		goto out;
 	}
+	if ((flags & FOLL_NUMA) && pmd_prot_none(vma, *pmd))
+		goto no_page_table;
 	if (pmd_trans_huge(*pmd)) {
 		if (flags & FOLL_SPLIT) {
 			split_huge_page_pmd(mm, pmd);
@@ -1552,6 +1573,8 @@ split_fallthrough:
 
 	pte = *ptep;
 	if (!pte_present(pte))
+		goto no_page;
+	if ((flags & FOLL_NUMA) && pte_prot_none(vma, pte))
 		goto no_page;
 	if ((flags & FOLL_WRITE) && !pte_write(pte))
 		goto unlock;
@@ -1704,6 +1727,19 @@ int __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 			(VM_WRITE | VM_MAYWRITE) : (VM_READ | VM_MAYREAD);
 	vm_flags &= (gup_flags & FOLL_FORCE) ?
 			(VM_MAYREAD | VM_MAYWRITE) : (VM_READ | VM_WRITE);
+
+	/*
+	 * If FOLL_FORCE and FOLL_NUMA are both set, handle_mm_fault
+	 * would be called on PROT_NONE ranges. We must never invoke
+	 * handle_mm_fault on PROT_NONE ranges or the NUMA hinting
+	 * page faults would unprotect the PROT_NONE ranges if
+	 * _PAGE_NUMA and _PAGE_PROTNONE are sharing the same pte/pmd
+	 * bitflag. So to avoid that, don't set FOLL_NUMA if
+	 * FOLL_FORCE is set.
+	 */
+	if (!(gup_flags & FOLL_FORCE))
+		gup_flags |= FOLL_NUMA;
+
 	i = 0;
 
 	do {
@@ -3438,25 +3474,6 @@ static int do_nonlinear_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 
 	pgoff = pte_to_pgoff(orig_pte);
 	return __do_fault(mm, vma, address, pmd, pgoff, flags, orig_pte);
-}
-
-static bool pte_prot_none(struct vm_area_struct *vma, pte_t pte)
-{
-	/*
-	 * If we have the normal vma->vm_page_prot protections we're not a
-	 * 'special' PROT_NONE page.
-	 *
-	 * This means we cannot get 'special' PROT_NONE faults from genuine
-	 * PROT_NONE maps, nor from PROT_WRITE file maps that do dirty
-	 * tracking.
-	 *
-	 * Neither case is really interesting for our current use though so we
-	 * don't care.
-	 */
-	if (pte_same(pte, pte_modify(pte, vma->vm_page_prot)))
-		return false;
-
-	return pte_same(pte, pte_modify(pte, vma_prot_none(vma)));
 }
 
 static int do_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
