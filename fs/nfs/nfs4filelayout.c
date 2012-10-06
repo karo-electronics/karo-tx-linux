@@ -131,7 +131,6 @@ static int filelayout_async_handle_error(struct rpc_task *task,
 	struct nfs_server *mds_server = NFS_SERVER(inode);
 	struct nfs4_deviceid_node *devid = FILELAYOUT_DEVID_NODE(lseg);
 	struct nfs_client *mds_client = mds_server->nfs_client;
-	struct nfs4_slot_table *tbl = &clp->cl_session->fc_slot_table;
 
 	if (task->tk_status >= 0)
 		return 0;
@@ -191,7 +190,6 @@ static int filelayout_async_handle_error(struct rpc_task *task,
 		 * layout is destroyed and a new valid layout is obtained.
 		 */
 		pnfs_destroy_layout(NFS_I(inode));
-		rpc_wake_up(&tbl->slot_tbl_waitq);
 		goto reset;
 	/* RPC connection errors */
 	case -ECONNREFUSED:
@@ -206,7 +204,6 @@ static int filelayout_async_handle_error(struct rpc_task *task,
 		nfs4_mark_deviceid_unavailable(devid);
 		clear_bit(NFS_INO_LAYOUTCOMMIT, &NFS_I(inode)->flags);
 		_pnfs_return_layout(inode);
-		rpc_wake_up(&tbl->slot_tbl_waitq);
 		nfs4_ds_disconnect(clp);
 		/* fall through */
 	default:
