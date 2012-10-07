@@ -49,10 +49,10 @@
 
 #define ACPI_CA_VERSION                 0x20120913
 
-#include "acconfig.h"
-#include "actypes.h"
-#include "actbl.h"
-#include "acbuffer.h"
+#include <acpi/acconfig.h>
+#include <acpi/actypes.h>
+#include <acpi/actbl.h>
+#include <acbuffer.h">
 
 extern u8 acpi_gbl_permanent_mmap;
 
