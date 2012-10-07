@@ -906,7 +906,7 @@ static int spc_emulate_request_sense(struct se_cmd *cmd)
 	return 0;
 }
 
-static int spc_emulate_report_luns(struct se_cmd *cmd)
+int spc_emulate_report_luns(struct se_cmd *cmd)
 {
 	struct se_dev_entry *deve;
 	struct se_session *sess = cmd->se_sess;
@@ -968,6 +968,7 @@ done:
 	target_complete_cmd(cmd, GOOD);
 	return 0;
 }
+EXPORT_SYMBOL(spc_emulate_report_luns);
 
 static int spc_emulate_testunitready(struct se_cmd *cmd)
 {
