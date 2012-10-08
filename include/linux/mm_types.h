@@ -13,6 +13,7 @@
 #include <linux/cpumask.h>
 #include <linux/page-debug-flags.h>
 #include <linux/uprobes.h>
+#include <linux/page-flags-layout.h>
 #include <asm/page.h>
 #include <asm/mmu.h>
 
@@ -175,6 +176,10 @@ struct page {
 	 * is a pointer to such a status block. NULL if not tracked.
 	 */
 	void *shadow;
+#endif
+
+#ifdef LAST_NID_NOT_IN_PAGE_FLAGS
+	int _last_nid;
 #endif
 }
 /*
@@ -404,8 +409,37 @@ struct mm_struct {
 #ifdef CONFIG_CPUMASK_OFFSTACK
 	struct cpumask cpumask_allocation;
 #endif
+#ifdef CONFIG_SCHED_NUMA
+	unsigned int  numa_big;
+	unsigned long numa_next_scan;
+	unsigned int  numa_migrate_success;
+	unsigned int  numa_migrate_failed;
+#endif
 	struct uprobes_state uprobes_state;
 };
+
+#ifdef CONFIG_SCHED_NUMA
+static __always_inline void mm_inc_numa_migrate(struct mm_struct *mm, bool success)
+{
+	if (success)
+		mm->numa_migrate_success++;
+	else
+		mm->numa_migrate_failed++;
+}
+#else
+static inline void mm_inc_numa_migrate(struct mm_struct *mm, bool success)
+{
+}
+#endif /* CONFNIG_SCHED_NUMA */
+
+static inline bool mm_numa_big(struct mm_struct *mm)
+{
+#ifdef CONFIG_SCHED_NUMA
+	return mm->numa_big;
+#else
+	return false;
+#endif
+}
 
 static inline void mm_init_cpumask(struct mm_struct *mm)
 {
