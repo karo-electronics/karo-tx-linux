@@ -47,8 +47,6 @@
  * Symbols in this file are called "nmk_gpio" for "nomadik gpio"
  */
 
-#define NMK_GPIO_PER_CHIP	32
-
 struct nmk_gpio_chip {
 	struct gpio_chip chip;
 	struct irq_domain *domain;
