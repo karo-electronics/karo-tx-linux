@@ -1,1 +1,2 @@
 generic-y += clkdev.h
+generic-y += exec.h
