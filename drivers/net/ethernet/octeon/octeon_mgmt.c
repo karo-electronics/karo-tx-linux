@@ -973,7 +973,7 @@ static int octeon_mgmt_init_phy(struct net_device *netdev)
 				   octeon_mgmt_adjust_link, 0,
 				   PHY_INTERFACE_MODE_MII);
 
-	if (p->phydev == NULL)
+	if (!p->phydev)
 		return -ENODEV;
 
 	return 0;
