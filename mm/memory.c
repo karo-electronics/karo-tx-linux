@@ -57,6 +57,7 @@
 #include <linux/swapops.h>
 #include <linux/elf.h>
 #include <linux/gfp.h>
+#include <linux/migrate.h>
 
 #include <asm/io.h>
 #include <asm/pgalloc.h>
@@ -66,6 +67,10 @@
 #include <asm/pgtable.h>
 
 #include "internal.h"
+
+#ifdef LAST_NID_NOT_IN_PAGE_FLAGS
+#warning Unfortunate NUMA config, growing page-frame for last_nid.
+#endif
 
 #ifndef CONFIG_NEED_MULTIPLE_NODES
 /* use the per-pgdat data instead for discontigmem - mbligh */
@@ -3418,6 +3423,85 @@ static int do_nonlinear_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	return __do_fault(mm, vma, address, pmd, pgoff, flags, orig_pte);
 }
 
+static bool pte_prot_none(struct vm_area_struct *vma, pte_t pte)
+{
+	/*
+	 * If we have the normal vma->vm_page_prot protections we're not a
+	 * 'special' PROT_NONE page.
+	 *
+	 * This means we cannot get 'special' PROT_NONE faults from genuine
+	 * PROT_NONE maps, nor from PROT_WRITE file maps that do dirty
+	 * tracking.
+	 *
+	 * Neither case is really interesting for our current use though so we
+	 * don't care.
+	 */
+	if (pte_same(pte, pte_modify(pte, vma->vm_page_prot)))
+		return false;
+
+	return pte_same(pte, pte_modify(pte, vma_prot_none(vma)));
+}
+
+#ifdef CONFIG_NUMA
+static void do_prot_none_numa(struct mm_struct *mm, struct vm_area_struct *vma,
+			      unsigned long address, struct page *page)
+{
+	int node, ret;
+
+	/*
+	 * For NUMA systems we use the special PROT_NONE maps to drive
+	 * lazy page migration, see MPOL_MF_LAZY and related.
+	 */
+	node = mpol_misplaced(page, vma, address, mm_numa_big(mm));
+	if (node != -1) {
+		ret = migrate_misplaced_page(mm, page, node);
+		if (!ret)
+			mm_inc_numa_migrate(mm, true);
+		else if (ret == -ENOMEM || ret == -EBUSY)
+			mm_inc_numa_migrate(mm, false);
+	} else
+		mm_inc_numa_migrate(mm, true);
+}
+#else
+static void do_prot_none_numa(struct mm_struct *mm, struct vm_area_struct *vma,
+			      unsigned long address, struct page *page)
+{
+}
+#endif /* CONFIG_NUMA */
+
+static int do_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
+			unsigned long address, pte_t *ptep, pmd_t *pmd,
+			unsigned int flags, pte_t entry)
+{
+	struct page *page = NULL;
+	spinlock_t *ptl;
+
+	ptl = pte_lockptr(mm, pmd);
+	spin_lock(ptl);
+	if (unlikely(!pte_same(*ptep, entry)))
+		goto unlock;
+
+	flush_cache_page(vma, address, pte_pfn(entry));
+
+	ptep_modify_prot_start(mm, address, ptep);
+	entry = pte_modify(entry, vma->vm_page_prot);
+	ptep_modify_prot_commit(mm, address, ptep, entry);
+
+	update_mmu_cache(vma, address, ptep);
+
+	page = vm_normal_page(vma, address, entry);
+	if (page)
+		get_page(page);
+
+unlock:
+	pte_unmap_unlock(ptep, ptl);
+	if (page) {
+		do_prot_none_numa(mm, vma, address, page);
+		put_page(page);
+	}
+	return 0;
+}
+
 /*
  * These routines also need to handle stuff like marking pages dirty
  * and/or accessed for architectures that don't do it in hardware (most
@@ -3455,6 +3539,9 @@ int handle_pte_fault(struct mm_struct *mm,
 		return do_swap_page(mm, vma, address,
 					pte, pmd, flags, entry);
 	}
+
+	if (pte_prot_none(vma, entry))
+		return do_prot_none(mm, vma, address, pte, pmd, flags, entry);
 
 	ptl = pte_lockptr(mm, pmd);
 	spin_lock(ptl);
@@ -3520,13 +3607,16 @@ retry:
 							  pmd, flags);
 	} else {
 		pmd_t orig_pmd = *pmd;
-		int ret;
+		int ret = 0;
 
 		barrier();
-		if (pmd_trans_huge(orig_pmd)) {
-			if (flags & FAULT_FLAG_WRITE &&
-			    !pmd_write(orig_pmd) &&
-			    !pmd_trans_splitting(orig_pmd)) {
+		if (pmd_trans_huge(orig_pmd) && !pmd_trans_splitting(orig_pmd)) {
+			if (pmd_prot_none(vma, orig_pmd)) {
+				do_huge_pmd_prot_none(mm, vma, address, pmd,
+						      flags, orig_pmd);
+			}
+
+			if ((flags & FAULT_FLAG_WRITE) && !pmd_write(orig_pmd)) {
 				ret = do_huge_pmd_wp_page(mm, vma, address, pmd,
 							  orig_pmd);
 				/*
@@ -3536,11 +3626,12 @@ retry:
 				 */
 				if (unlikely(ret & VM_FAULT_OOM))
 					goto retry;
-				return ret;
 			}
-			return 0;
+
+			return ret;
 		}
 	}
+
 
 	/*
 	 * Use __pte_alloc instead of pte_alloc_map, because we can't
