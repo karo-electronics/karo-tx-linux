@@ -27,6 +27,8 @@
 #include <linux/profile.h>
 #include <linux/interrupt.h>
 #include <linux/random.h>
+#include <linux/mempolicy.h>
+#include <linux/task_work.h>
 
 #include <trace/events/sched.h>
 
@@ -775,6 +777,21 @@ update_stats_curr_start(struct cfs_rq *cfs_rq, struct sched_entity *se)
 
 /**************************************************
  * Scheduling class numa methods.
+ *
+ * The purpose of the NUMA bits are to maintain compute (task) and data
+ * (memory) locality. We try and achieve this by making tasks stick to
+ * a particular node (their home node) but if fairness mandates they run
+ * elsewhere for long enough, we let the memory follow them.
+ *
+ * Tasks start out with their home-node unset (-1) this effectively means
+ * they act !NUMA until we've established the task is busy enough to bother
+ * with placement.
+ *
+ * We keep a home-node per task and use periodic fault scans to try and
+ * estalish a task<->page relation. This assumes the task<->page relation is a
+ * compute<->data relation, this is false for things like virt. and n:m
+ * threading solutions but its the best we can do given the information we
+ * have.
  */
 
 #ifdef CONFIG_SMP
@@ -805,6 +822,169 @@ static void account_numa_dequeue(struct rq *rq, struct task_struct *p)
 	} else
 		rq->onnode_running--;
 }
+
+/*
+ * numa task sample period in ms: 5s
+ */
+unsigned int sysctl_sched_numa_scan_period_min = 5000;
+unsigned int sysctl_sched_numa_scan_period_max = 5000*16;
+
+/*
+ * Wait for the 2-sample stuff to settle before migrating again
+ */
+unsigned int sysctl_sched_numa_settle_count = 2;
+
+static void task_numa_placement(struct task_struct *p)
+{
+	unsigned long faults, max_faults = 0;
+	int node, max_node = -1;
+	int seq = ACCESS_ONCE(p->mm->numa_scan_seq);
+
+	if (p->numa_scan_seq == seq)
+		return;
+
+	p->numa_scan_seq = seq;
+
+	for (node = 0; node < nr_node_ids; node++) {
+		faults = p->numa_faults[node];
+
+		if (faults > max_faults) {
+			max_faults = faults;
+			max_node = node;
+		}
+
+		p->numa_faults[node] /= 2;
+	}
+
+	if (max_node == -1)
+		return;
+
+	if (p->node != max_node) {
+		p->numa_scan_period = sysctl_sched_numa_scan_period_min;
+		if (sched_feat(NUMA_SETTLE) &&
+		    (seq - p->numa_migrate_seq) <= (int)sysctl_sched_numa_settle_count)
+			return;
+		p->numa_migrate_seq = seq;
+		sched_setnode(p, max_node);
+	} else {
+		p->numa_scan_period = min(sysctl_sched_numa_scan_period_max,
+				p->numa_scan_period * 2);
+	}
+}
+
+/*
+ * Got a PROT_NONE fault for a page on @node.
+ */
+void task_numa_fault(int node, int pages)
+{
+	struct task_struct *p = current;
+
+	if (unlikely(!p->numa_faults)) {
+		int size = sizeof(unsigned long) * nr_node_ids;
+
+		p->numa_faults = kzalloc(size, GFP_KERNEL);
+		if (!p->numa_faults)
+			return;
+	}
+
+	task_numa_placement(p);
+
+	p->numa_faults[node] += pages;
+}
+
+/*
+ * The expensive part of numa migration is done from task_work context.
+ * Triggered from task_tick_numa().
+ */
+void task_numa_work(struct callback_head *work)
+{
+	unsigned long migrate, next_scan, now = jiffies;
+	struct task_struct *p = current;
+	struct mm_struct *mm = p->mm;
+
+	WARN_ON_ONCE(p != container_of(work, struct task_struct, numa_work));
+
+	work->next = work; /* protect against double add */
+	/*
+	 * Who cares about NUMA placement when they're dying.
+	 *
+	 * NOTE: make sure not to dereference p->mm before this check,
+	 * exit_task_work() happens _after_ exit_mm() so we could be called
+	 * without p->mm even though we still had it when we enqueued this
+	 * work.
+	 */
+	if (p->flags & PF_EXITING)
+		return;
+
+	/*
+	 * Enforce maximal scan/migration frequency..
+	 */
+	migrate = mm->numa_next_scan;
+	if (time_before(now, migrate))
+		return;
+
+	next_scan = now + 2*msecs_to_jiffies(sysctl_sched_numa_scan_period_min);
+	if (cmpxchg(&mm->numa_next_scan, migrate, next_scan) != migrate)
+		return;
+
+	ACCESS_ONCE(mm->numa_scan_seq)++;
+	{
+		struct vm_area_struct *vma;
+
+		down_write(&mm->mmap_sem);
+		for (vma = mm->mmap; vma; vma = vma->vm_next) {
+			if (!vma_migratable(vma))
+				continue;
+			change_protection(vma, vma->vm_start, vma->vm_end, vma_prot_none(vma), 0);
+		}
+		up_write(&mm->mmap_sem);
+	}
+}
+
+/*
+ * Drive the periodic memory faults..
+ */
+void task_tick_numa(struct rq *rq, struct task_struct *curr)
+{
+	struct callback_head *work = &curr->numa_work;
+	u64 period, now;
+
+	/*
+	 * We don't care about NUMA placement if we don't have memory.
+	 */
+	if (!curr->mm || (curr->flags & PF_EXITING) || work->next != work)
+		return;
+
+	/*
+	 * Using runtime rather than walltime has the dual advantage that
+	 * we (mostly) drive the selection from busy threads and that the
+	 * task needs to have done some actual work before we bother with
+	 * NUMA placement.
+	 */
+	now = curr->se.sum_exec_runtime;
+	period = (u64)curr->numa_scan_period * NSEC_PER_MSEC;
+
+	if (now - curr->node_stamp > period) {
+		curr->node_stamp = now;
+
+		/*
+		 * We are comparing runtime to wall clock time here, which
+		 * puts a maximum scan frequency limit on the task work.
+		 *
+		 * This, together with the limits in task_numa_work() filters
+		 * us from over-sampling if there are many threads: if all
+		 * threads happen to come in at the same time we don't create a
+		 * spike in overhead.
+		 *
+		 * We also avoid multiple threads scanning at once in parallel to
+		 * each other.
+		 */
+		if (!time_before(jiffies, curr->mm->numa_next_scan)) {
+			init_task_work(work, task_numa_work); /* TODO: move this into sched_fork() */
+			task_work_add(curr, work, true);
+		}
+	}
+}
 #else
 #ifdef CONFIG_SMP
 static struct list_head *account_numa_enqueue(struct rq *rq, struct task_struct *p)
@@ -814,6 +994,10 @@ static struct list_head *account_numa_enqueue(struct rq *rq, struct task_struct 
 #endif
 
 static void account_numa_dequeue(struct rq *rq, struct task_struct *p)
+{
+}
+
+static void task_tick_numa(struct rq *rq, struct task_struct *curr)
 {
 }
 #endif /* CONFIG_SCHED_NUMA */
@@ -5265,6 +5449,9 @@ static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
 		cfs_rq = cfs_rq_of(se);
 		entity_tick(cfs_rq, se, queued);
 	}
+
+	if (sched_feat_numa(NUMA))
+		task_tick_numa(rq, curr);
 }
 
 /*

@@ -3512,8 +3512,10 @@ out_pte_upgrade_unlock:
 out_unlock:
 	pte_unmap_unlock(ptep, ptl);
 out:
-	if (page)
+	if (page) {
+		task_numa_fault(page_nid, 1);
 		put_page(page);
+	}
 
 	return 0;
 

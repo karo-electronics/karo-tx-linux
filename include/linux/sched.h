@@ -1481,9 +1481,16 @@ struct task_struct {
 	short pref_node_fork;
 #endif
 #ifdef CONFIG_SCHED_NUMA
-	int node;
+	int node;			/* task home node   */
+	int numa_scan_seq;
+	int numa_migrate_seq;
+	unsigned int numa_scan_period;
+	u64 node_stamp;			/* migration stamp  */
 	unsigned long numa_contrib;
-#endif
+	unsigned long *numa_faults;
+	struct callback_head numa_work;
+#endif /* CONFIG_SCHED_NUMA */
+
 	struct rcu_head rcu;
 
 	/*
@@ -1558,14 +1565,23 @@ struct task_struct {
 /* Future-safe accessor for struct task_struct's cpus_allowed. */
 #define tsk_cpus_allowed(tsk) (&(tsk)->cpus_allowed)
 
+#ifdef CONFIG_SCHED_NUMA
 static inline int tsk_home_node(struct task_struct *p)
 {
-#ifdef CONFIG_SCHED_NUMA
 	return p->node;
-#else
-	return -1;
-#endif
 }
+
+extern void task_numa_fault(int node, int pages);
+#else
+static inline int tsk_home_node(struct task_struct *p)
+{
+	return -1;
+}
+
+static inline void task_numa_fault(int node, int pages)
+{
+}
+#endif /* CONFIG_SCHED_NUMA */
 
 /*
  * Priority of a process goes from 0..MAX_PRIO-1, valid RT
@@ -2004,6 +2020,10 @@ enum sched_tunable_scaling {
 };
 extern enum sched_tunable_scaling sysctl_sched_tunable_scaling;
 
+extern unsigned int sysctl_sched_numa_scan_period_min;
+extern unsigned int sysctl_sched_numa_scan_period_max;
+extern unsigned int sysctl_sched_numa_settle_count;
+
 #ifdef CONFIG_SCHED_DEBUG
 extern unsigned int sysctl_sched_migration_cost;
 extern unsigned int sysctl_sched_nr_migrate;
@@ -2014,18 +2034,17 @@ extern unsigned int sysctl_sched_shares_window;
 int sched_proc_update_handler(struct ctl_table *table, int write,
 		void __user *buffer, size_t *length,
 		loff_t *ppos);
-#endif
-#ifdef CONFIG_SCHED_DEBUG
+
 static inline unsigned int get_sysctl_timer_migration(void)
 {
 	return sysctl_timer_migration;
 }
-#else
+#else /* CONFIG_SCHED_DEBUG */
 static inline unsigned int get_sysctl_timer_migration(void)
 {
 	return 1;
 }
-#endif
+#endif /* CONFIG_SCHED_DEBUG */
 extern unsigned int sysctl_sched_rt_period;
 extern int sysctl_sched_rt_runtime;
 

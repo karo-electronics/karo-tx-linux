@@ -774,9 +774,10 @@ fixup:
 
 unlock:
 	spin_unlock(&mm->page_table_lock);
-	if (page)
+	if (page) {
+		task_numa_fault(page_to_nid(page), HPAGE_PMD_NR);
 		put_page(page);
-
+	}
 	return;
 
 migrate:
@@ -844,6 +845,8 @@ migrate:
 	spin_unlock(&mm->page_table_lock);
 
 	put_page(page);			/* Drop the rmap reference */
+
+	task_numa_fault(node, HPAGE_PMD_NR);
 
 	if (lru)
 		put_page(page);		/* drop the LRU isolation reference */
