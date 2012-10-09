@@ -1,0 +1,46 @@
+Importing i2c based on d43b7167d4c74137f9a6c61fdcead127d60357f9
+	quilt series is empty
+$ git branch -f quilt/i2c d43b7167d4c74137f9a6c61fdcead127d60357f9
+Importing jdelvare-hwmon based on 56d92aa5cf7c96c70f81d0350c94faf46a9fb76d
+Unchanged quilt series jdelvare-hwmon
+Importing device-mapper based on block/for-next
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 454832b8eeb292d0efea792d4620912ab0e114ef
+HEAD is now at 454832b Merge branch 'for-3.7/drivers' into for-next
+$ git am ../quilt/device-mapper/dm-thin-do-not-set-discard_zeroes_data.patch
+Applying: The dm thin pool target claims to support the zeroing of discarded
+$ git am ../quilt/device-mapper/dm-mpath-only-retry-ioctl-when-no-paths-if-queue_if_no_path-set.patch
+Applying: When there are no paths and multipath receives an ioctl, it waits until
+$ git am ../quilt/device-mapper/dm-handle-requests-beyond-end-of-device-instead-of-using-BUG_ON.patch
+Applying: The access beyond the end of device BUG_ON that was introduced to
+$ git am ../quilt/device-mapper/dm-table-clear-add_random-unless-all-devices-have-it-set.patch
+Applying: Always clear QUEUE_FLAG_ADD_RANDOM if any underlying device does not
+$ git am ../quilt/device-mapper/dm-retain-table-limits-when-swapping-to-new-table-with-no-devices.patch
+Applying: Add a safety net that will re-use the DM device's existing limits in the
+$ git am ../quilt/device-mapper/dm-thin-tidy-discard-support.patch
+Applying: A little thin discard code refactoring to make the next patch (dm thin:
+$ git am ../quilt/device-mapper/dm-thin-fix-discard-support-for-data-devices.patch
+Applying: The discard limits that get established for a thin-pool or thin device
+$ git am ../quilt/device-mapper/dm-verity-fix-overflow-check.patch
+Applying: This patch fixes sector_t overflow checking in dm-verity.
+$ git am ../quilt/device-mapper/dm-mpath-fix-check-for-null-mpio-in-end_io-fn.patch
+Applying: The mpio dereference should be moved below the BUG_ON NULL test
+$ git am ../quilt/device-mapper/dm-bufio-use-list_move.patch
+Applying: Use list_move() instead of list_del() + list_add().
+$ git am ../quilt/device-mapper/dm-use-ACCESS_ONCE-for-sysfs-values.patch
+Applying: Use the ACCESS_ONCE macro in dm-bufio and dm-verity where a variable
+$ git am ../quilt/device-mapper/dm-persistent-data-convert-to-use-le32_add_cpu.patch
+Applying: Convert cpu_to_le32(le32_to_cpu(E1) + E2) to use le32_add_cpu().
+$ git am ../quilt/device-mapper/dm-thin-support-discard-with-non-power-of-two-block-size.patch
+Applying: Support discards when the pool's block size is not a power of 2.
+$ git am ../quilt/device-mapper/dm-thin-prepare-to-separate-bio_prison-code.patch
+Applying: The bio prison code will be useful for a new DM targets.
+$ git am ../quilt/device-mapper/dm-thin-move-bio_prison-code-to-separate-module.patch
+Applying: The bio prison code will be useful to other future DM targets so
+$ git am ../quilt/device-mapper/dm-store-dm_target_io-in-bio-front_pad.patch
+Applying: Use the recently-added bio front_pad field to allocate struct dm_target_io.
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 1ca30da...00ccb5e master     -> quilt/device-mapper  (forced update)
