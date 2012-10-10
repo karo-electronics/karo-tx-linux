@@ -813,7 +813,8 @@ static void account_offnode_dequeue(struct rq *rq, struct task_struct *p)
 /*
  * numa task sample period in ms: 5s
  */
-unsigned int sysctl_sched_numa_task_period = 5000;
+unsigned int sysctl_sched_numa_task_period_min = 5000;
+unsigned int sysctl_sched_numa_task_period_max = 5000*16;
 
 /*
  * Wait for the 2-sample stuff to settle before migrating again
@@ -863,12 +864,19 @@ void task_numa_placement(void)
 		p->numa_faults[node] /= 2;
 	}
 
-	if (max_node != -1 && p->node != max_node) {
+	if (max_node == -1)
+		return;
+
+	if (p->node != max_node) {
+		p->numa_task_period = sysctl_sched_numa_task_period_min;
 		if (sched_feat(NUMA_SETTLE) &&
 		    (seq - p->numa_migrate_seq) <= (int)sysctl_sched_numa_settle_count)
 			return;
 		p->numa_migrate_seq = seq;
 		sched_setnode(p, max_node);
+	} else {
+		p->numa_task_period = min(sysctl_sched_numa_task_period_max,
+				p->numa_task_period * 2);
 	}
 }
 
@@ -902,7 +910,7 @@ void task_numa_work(struct callback_head *work)
 	if (time_before(now, migrate))
 		return;
 
-	next_scan = now + 2*msecs_to_jiffies(sysctl_sched_numa_task_period);
+	next_scan = now + 2*msecs_to_jiffies(sysctl_sched_numa_task_period_min);
 	if (cmpxchg(&mm->numa_next_scan, migrate, next_scan) != migrate)
 		return;
 
@@ -930,7 +938,7 @@ void task_tick_numa(struct rq *rq, struct task_struct *curr)
 	 * NUMA placement.
 	 */
 	now = curr->se.sum_exec_runtime;
-	period = (u64)sysctl_sched_numa_task_period * NSEC_PER_MSEC;
+	period = (u64)curr->numa_task_period * NSEC_PER_MSEC;
 
 	if (now - curr->node_stamp > period) {
 		curr->node_stamp = now;

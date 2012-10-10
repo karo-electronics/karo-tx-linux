@@ -1525,6 +1525,7 @@ struct task_struct {
 	int node;			/* task home node   */
 	int numa_scan_seq;
 	int numa_migrate_seq;
+	unsigned int numa_task_period;
 	u64 node_stamp;			/* migration stamp  */
 	unsigned long numa_contrib;
 	unsigned long *numa_faults;
@@ -2061,14 +2062,16 @@ enum sched_tunable_scaling {
 };
 extern enum sched_tunable_scaling sysctl_sched_tunable_scaling;
 
+extern unsigned int sysctl_sched_numa_task_period_min;
+extern unsigned int sysctl_sched_numa_task_period_max;
+extern unsigned int sysctl_sched_numa_settle_count;
+
 #ifdef CONFIG_SCHED_DEBUG
 extern unsigned int sysctl_sched_migration_cost;
 extern unsigned int sysctl_sched_nr_migrate;
 extern unsigned int sysctl_sched_time_avg;
 extern unsigned int sysctl_timer_migration;
 extern unsigned int sysctl_sched_shares_window;
-extern unsigned int sysctl_sched_numa_task_period;
-extern unsigned int sysctl_sched_numa_settle_count;
 
 int sched_proc_update_handler(struct ctl_table *table, int write,
 		void __user *buffer, size_t *length,
