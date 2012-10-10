@@ -479,19 +479,19 @@ C_ENTRY(sys_fork_wrapper):
    saved context).  */
 C_ENTRY(ret_from_fork):
 	bralid	r15, schedule_tail; /* ...which is schedule_tail's arg */
-	add	r3, r5, r0;	/* switch_thread returns the prev task */
+	add	r5, r3, r0;	/* switch_thread returns the prev task */
 				/* ( in the delay slot ) */
 	brid	ret_from_trap;	/* Do normal trap return */
 	add	r3, r0, r0;	/* Child's fork call should return 0. */
 
 C_ENTRY(ret_from_kernel_thread):
 	bralid	r15, schedule_tail; /* ...which is schedule_tail's arg */
-	add	r3, r5, r0;	/* switch_thread returns the prev task */
+	add	r5, r3, r0;	/* switch_thread returns the prev task */
 				/* ( in the delay slot ) */
 	brald	r15, r20	/* fn was left in r20 */
 	addk	r5, r0, r19	/* ... and argument - in r19 */
-	brid	sys_exit	/* won't be returning... */
-	addk	r5, r0, r0
+	brid	ret_from_trap
+	add	r3, r0, r0
 
 C_ENTRY(sys_vfork):
 	brid	microblaze_vfork	/* Do real work (tail-call) */
