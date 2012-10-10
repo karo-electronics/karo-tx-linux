@@ -823,17 +823,16 @@ unsigned int sysctl_sched_numa_settle_count = 2;
 /*
  * Got a PROT_NONE fault for a page on @node.
  */
-void __task_numa_fault(int node)
+void task_numa_fault(int node)
 {
 	struct task_struct *p = current;
 
-	if (!p->numa_faults) {
+	if (unlikely(!p->numa_faults)) {
 		p->numa_faults = kzalloc(sizeof(unsigned long) * nr_node_ids,
 					 GFP_KERNEL);
+		if (!p->numa_faults)
+			return;
 	}
-
-	if (!p->numa_faults)
-		return;
 
 	p->numa_faults[node]++;
 }

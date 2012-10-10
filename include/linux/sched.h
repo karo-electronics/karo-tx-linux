@@ -1608,16 +1608,7 @@ static inline int tsk_home_node(struct task_struct *p)
 }
 
 extern void task_numa_placement(void);
-extern void __task_numa_fault(int node);
-static inline void task_numa_fault(int node)
-{
-	struct task_struct *p = current;
-
-	if (likely(p->numa_faults))
-		p->numa_faults[node]++;
-	else
-		__task_numa_fault(node);
-}
+extern void task_numa_fault(int node);
 #else
 static inline int tsk_home_node(struct task_struct *p)
 {
