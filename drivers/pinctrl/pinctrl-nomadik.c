@@ -31,11 +31,11 @@
 /* Since we request GPIOs from ourself */
 #include <linux/pinctrl/consumer.h>
 #include <linux/mfd/dbx500-prcmu.h>
+#include <linux/platform_data/pinctrl-nomadik.h>
 
 #include <asm/mach/irq.h>
 
 #include <plat/pincfg.h>
-#include <plat/gpio-nomadik.h>
 
 #include "pinctrl-nomadik.h"
 
