@@ -5618,7 +5618,7 @@ S:	Maintained
 F:	drivers/pinctrl/spear/
 
 PKTCDVD DRIVER
-M:	Peter Osterlund <petero2@telia.com>
+M:	Jiri Kosina <jkosina@suse.cz>
 S:	Maintained
 F:	drivers/block/pktcdvd.c
 F:	include/linux/pktcdvd.h
@@ -6701,6 +6701,11 @@ M:	Alex Dubov <oakad@yahoo.com>
 W:	http://tifmxx.berlios.de/
 S:	Maintained
 F:	drivers/memstick/host/tifm_ms.c
+
+SONY MEMORYSTICK STANDARD SUPPORT
+M:	Maxim Levitsky <maximlevitsky@gmail.com>
+S:	Maintained
+F:	drivers/memstick/core/ms_block.*
 
 SOUND
 M:	Jaroslav Kysela <perex@perex.cz>
