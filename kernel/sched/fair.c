@@ -797,17 +797,28 @@ update_stats_curr_start(struct cfs_rq *cfs_rq, struct sched_entity *se)
 static unsigned long task_h_load(struct task_struct *p);
 
 #ifdef CONFIG_SCHED_NUMA
-static void account_offnode_enqueue(struct rq *rq, struct task_struct *p)
+static struct list_head *account_numa_enqueue(struct rq *rq, struct task_struct *p)
 {
-	p->numa_contrib = task_h_load(p);
-	rq->offnode_weight += p->numa_contrib;
-	rq->offnode_running++;
+	struct list_head *tasks = &rq->cfs_tasks;
+
+	if (tsk_home_node(p) != cpu_to_node(task_cpu(p))) {
+		p->numa_contrib = task_h_load(p);
+		rq->offnode_weight += p->numa_contrib;
+		rq->offnode_running++;
+		tasks = &rq->offnode_tasks;
+	} else
+		rq->onnode_running++;
+
+	return tasks;
 }
 
-static void account_offnode_dequeue(struct rq *rq, struct task_struct *p)
+static void account_numa_dequeue(struct rq *rq, struct task_struct *p)
 {
-	rq->offnode_weight -= p->numa_contrib;
-	rq->offnode_running--;
+	if (tsk_home_node(p) != cpu_to_node(task_cpu(p))) {
+		rq->offnode_weight -= p->numa_contrib;
+		rq->offnode_running--;
+	} else
+		rq->onnode_running--;
 }
 
 /*
@@ -956,11 +967,11 @@ void task_tick_numa(struct rq *rq, struct task_struct *curr)
 	}
 }
 #else
-static void account_offnode_enqueue(struct rq *rq, struct task_struct *p)
+static struct list_head *account_numa_enqueue(struct rq *rq, struct task_struct *p)
 {
 }
 
-static void account_offnode_dequeue(struct rq *rq, struct task_struct *p)
+static void account_numa_dequeue(struct rq *rq, struct task_struct *p)
 {
 }
 
@@ -985,10 +996,8 @@ account_entity_enqueue(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		struct task_struct *p = task_of(se);
 		struct list_head *tasks = &rq->cfs_tasks;
 
-		if (offnode_task(p)) {
-			account_offnode_enqueue(rq, p);
-			tasks = offnode_tasks(rq);
-		}
+		if (tsk_home_node(p) != -1)
+			tasks = account_numa_enqueue(rq, p);
 
 		list_add(&se->group_node, tasks);
 	}
@@ -1007,8 +1016,8 @@ account_entity_dequeue(struct cfs_rq *cfs_rq, struct sched_entity *se)
 
 		list_del_init(&se->group_node);
 
-		if (offnode_task(p))
-			account_offnode_dequeue(rq_of(cfs_rq), p);
+		if (tsk_home_node(p) != -1)
+			account_numa_dequeue(rq_of(cfs_rq), p);
 	}
 	cfs_rq->nr_running--;
 }
@@ -3762,6 +3771,9 @@ struct sd_lb_stats {
 	struct sched_group *numa_group; /* group which has offnode_tasks */
 	unsigned long numa_group_weight;
 	unsigned long numa_group_running;
+
+	unsigned long this_offnode_running;
+	unsigned long this_onnode_running;
 #endif
 };
 
@@ -3779,8 +3791,9 @@ struct sg_lb_stats {
 	int group_imb; /* Is there an imbalance in the group ? */
 	int group_has_capacity; /* Is there extra capacity in the group? */
 #ifdef CONFIG_SCHED_NUMA
-	unsigned long numa_weight;
-	unsigned long numa_running;
+	unsigned long numa_offnode_weight;
+	unsigned long numa_offnode_running;
+	unsigned long numa_onnode_running;
 #endif
 };
 
@@ -3813,8 +3826,9 @@ static inline int get_sd_load_idx(struct sched_domain *sd,
 #ifdef CONFIG_SCHED_NUMA
 static inline void update_sg_numa_stats(struct sg_lb_stats *sgs, struct rq *rq)
 {
-	sgs->numa_weight += rq->offnode_weight;
-	sgs->numa_running += rq->offnode_running;
+	sgs->numa_offnode_weight += rq->offnode_weight;
+	sgs->numa_offnode_running += rq->offnode_running;
+	sgs->numa_onnode_running += rq->onnode_running;
 }
 
 /*
@@ -3832,16 +3846,19 @@ static inline void update_sd_numa_stats(struct sched_domain *sd,
 	if (!(sd->flags & SD_NUMA))
 		return;
 
-	if (local_group)
+	if (local_group) {
+		sds->this_offnode_running = sgs->numa_offnode_running;
+		sds->this_onnode_running  = sgs->numa_onnode_running;
 		return;
+	}
 
-	if (!sgs->numa_running)
+	if (!sgs->numa_offnode_running)
 		return;
 
 	if (!sds->numa_group || pick_numa_rand(sd->span_weight / group->group_weight)) {
 		sds->numa_group = group;
-		sds->numa_group_weight = sgs->numa_weight;
-		sds->numa_group_running = sgs->numa_running;
+		sds->numa_group_weight = sgs->numa_offnode_weight;
+		sds->numa_group_running = sgs->numa_offnode_running;
 	}
 }
 
@@ -3876,6 +3893,13 @@ static inline int check_numa_busiest_group(struct lb_env *env, struct sd_lb_stat
 		return 0;
 
 	if (!sds->numa_group)
+		return 0;
+
+	/*
+	 * Only pull an offnode task home if we've got offnode or !numa tasks to trade for it.
+	 */
+	if (!sds->this_offnode_running &&
+	    !(sds->this_nr_running - sds->this_onnode_running - sds->this_offnode_running))
 		return 0;
 
 	env->imbalance = sds->numa_group_weight / sds->numa_group_running;

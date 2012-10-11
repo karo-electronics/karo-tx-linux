@@ -420,6 +420,7 @@ struct rq {
 	struct list_head cfs_tasks;
 
 #ifdef CONFIG_SCHED_NUMA
+	unsigned long    onnode_running;
 	unsigned long    offnode_running;
 	unsigned long	 offnode_weight;
 	struct list_head offnode_tasks;
@@ -494,11 +495,6 @@ DECLARE_PER_CPU(struct rq, runqueues);
 #define raw_rq()		(&__raw_get_cpu_var(runqueues))
 
 #ifdef CONFIG_SCHED_NUMA
-static inline bool offnode_task(struct task_struct *t)
-{
-	return t->node != -1 && t->node != cpu_to_node(task_cpu(t));
-}
-
 static inline struct list_head *offnode_tasks(struct rq *rq)
 {
 	return &rq->offnode_tasks;
@@ -509,11 +505,6 @@ static inline void task_numa_free(struct task_struct *p)
 	kfree(p->numa_faults);
 }
 #else /* CONFIG_SCHED_NUMA */
-static inline bool offnode_task(struct task_struct *t)
-{
-	return false;
-}
-
 static inline struct list_head *offnode_tasks(struct rq *rq)
 {
 	return NULL;

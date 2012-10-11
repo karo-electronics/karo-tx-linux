@@ -6930,6 +6930,7 @@ void __init sched_init(void)
 		INIT_LIST_HEAD(&rq->cfs_tasks);
 #ifdef CONFIG_SCHED_NUMA
 		INIT_LIST_HEAD(&rq->offnode_tasks);
+		rq->onnode_running = 0;
 		rq->offnode_running = 0;
 		rq->offnode_weight = 0;
 #endif
