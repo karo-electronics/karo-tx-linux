@@ -1,0 +1,34 @@
+Importing i2c based on 42859eea96ba6beabfb0369a1eeffa3c7d2bd9cb
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 42859eea96ba6beabfb0369a1eeffa3c7d2bd9cb
+HEAD is now at 42859ee Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/viro/signal
+$ git am ../quilt/i2c/i2c-move-i2c-stub.patch
+Applying: i2c-stub: Move to drivers/i2c
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:456: new blank line at EOF.
++
+warning: 1 line adds whitespace errors.
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+   d43b716..91746da  master     -> quilt/i2c
+Importing jdelvare-hwmon based on 42859eea96ba6beabfb0369a1eeffa3c7d2bd9cb
+$ cd ../quilt-tmp
+$ git reset --hard 42859eea96ba6beabfb0369a1eeffa3c7d2bd9cb
+HEAD is now at 42859ee Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/viro/signal
+$ git am ../quilt/jdelvare-hwmon/hwmon-update-Alexey-Fisher-s-name.patch
+Applying: hwmon: Update Alexey Fisher's name
+$ git am ../quilt/jdelvare-hwmon/hwmon-fix-spelling-of-Celsius.patch
+Applying: hwmon: Fix spelling of Celsius
+$ git am ../quilt/jdelvare-hwmon/hwmon-add-missing-includes-of-linux-jiffies-h.patch
+Applying: hwmon: Add missing inclusions of <linux/jiffies.h>
+$ git am ../quilt/jdelvare-hwmon/hwmon-add-missing-includes-of-linux-err-h.patch
+Applying: hwmon: Add missing inclusions of <linux/err.h>
+$ git am ../quilt/jdelvare-hwmon/hwmon-drop-needless-includes-of-linux-delay-h.patch
+Applying: hwmon: Drop needless includes of <linux/delay.h>
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + e086be6...fbcafd2 master     -> quilt/jdelvare-hwmon  (forced update)
+Importing device-mapper based on block/for-next
+Unchanged quilt series device-mapper
