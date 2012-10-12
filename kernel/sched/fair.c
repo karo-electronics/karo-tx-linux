@@ -835,7 +835,7 @@ unsigned int sysctl_sched_numa_settle_count = 2;
 /*
  * Got a PROT_NONE fault for a page on @node.
  */
-void task_numa_fault(int node)
+void task_numa_fault(int node, int pages)
 {
 	struct task_struct *p = current;
 
@@ -846,7 +846,7 @@ void task_numa_fault(int node)
 			return;
 	}
 
-	p->numa_faults[node]++;
+	p->numa_faults[node] += pages;
 }
 
 void task_numa_placement(void)

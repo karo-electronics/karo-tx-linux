@@ -1609,7 +1609,7 @@ static inline int tsk_home_node(struct task_struct *p)
 }
 
 extern void task_numa_placement(void);
-extern void task_numa_fault(int node);
+extern void task_numa_fault(int node, int pages);
 #else
 static inline int tsk_home_node(struct task_struct *p)
 {
@@ -1620,7 +1620,7 @@ static inline void task_numa_placement(void)
 {
 }
 
-static inline void task_numa_fault(int node)
+static inline void task_numa_fault(int node, int pages)
 {
 }
 #endif /* CONFIG_SCHED_NUMA */
