@@ -300,8 +300,6 @@ long compat_sys_sync_file_range2(int fd, unsigned int flags,
 long compat_sys_fallocate(int fd, int mode,
 			  u32 offset_lo, u32 offset_hi,
 			  u32 len_lo, u32 len_hi);
-long compat_sys_sched_rr_get_interval(compat_pid_t pid,
-				      struct compat_timespec __user *interval);
 
 /* These are the intvec_64.S trampolines. */
 long _compat_sys_execve(const char __user *path,
