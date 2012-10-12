@@ -152,7 +152,7 @@ void put_pid_ns(struct pid_namespace *ns)
 		ns = parent;
 	}
 }
-EXPORT_SYMBOL_GPL(free_pid_ns);
+EXPORT_SYMBOL_GPL(put_pid_ns);
 
 void zap_pid_ns_processes(struct pid_namespace *pid_ns)
 {
