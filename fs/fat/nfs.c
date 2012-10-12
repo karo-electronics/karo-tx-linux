@@ -14,6 +14,14 @@
 #include <linux/exportfs.h>
 #include "fat.h"
 
+struct fat_fid {
+	u32 ino;
+	u32 gen;
+	u64 i_pos;
+	u32 parent_ino;
+	u32 parent_gen;
+} __packed;
+
 /**
  * Look up a directory inode given its starting cluster.
  */
@@ -40,7 +48,7 @@ static struct inode *fat_dget(struct super_block *sb, int i_logstart)
 }
 
 static struct inode *fat_nfs_get_inode(struct super_block *sb,
-				       u64 ino, u32 generation)
+				       u64 ino, u32 generation, loff_t i_pos)
 {
 	struct inode *inode;
 
@@ -52,30 +60,109 @@ static struct inode *fat_nfs_get_inode(struct super_block *sb,
 		iput(inode);
 		inode = NULL;
 	}
+	if (inode == NULL && MSDOS_SB(sb)->options.nfs == FAT_NFS_NOSTALE_RO) {
+		struct buffer_head *bh = NULL;
+		struct msdos_dir_entry *de ;
+		loff_t blocknr;
+		int offset;
+		fat_get_blknr_offset(MSDOS_SB(sb), i_pos, &blocknr, &offset);
+		bh = sb_bread(sb, blocknr);
+		if (!bh) {
+			fat_msg(sb, KERN_ERR,
+				"unable to read block(%llu) for building NFS inode",
+				(llu)blocknr);
+			return inode;
+		}
+		de = (struct msdos_dir_entry *)bh->b_data;
+		/* If a file is deleted on server and client is not updated
+		 * yet, we must not build the inode upon a lookup call.
+		 */
+		if (IS_FREE(de[offset].name))
+			inode = NULL;
+		else
+			inode = fat_build_inode(sb, &de[offset], i_pos);
+		brelse(bh);
+	}
 
 	return inode;
+}
+
+
+int
+fat_encode_fh(struct inode *inode, __u32 *fh, int *lenp, struct inode *parent)
+{
+	int len = *lenp;
+	struct msdos_sb_info *sbi = MSDOS_SB(inode->i_sb);
+	struct fat_fid *fid = (struct fat_fid *) fh;
+	loff_t i_pos;
+	int type = FILEID_INO32_GEN;
+
+	if (parent && (len < 5)) {
+		*lenp = 5;
+		return 255;
+	} else if (len < 3) {
+		*lenp = 3;
+		return 255;
+	}
+
+	i_pos = fat_i_pos_read(sbi, inode);
+	*lenp = 3;
+	fid->ino = inode->i_ino;
+	fid->gen = inode->i_generation;
+	fid->i_pos = i_pos;
+	if (parent) {
+		fid->parent_ino = parent->i_ino;
+		fid->parent_gen = parent->i_generation;
+		type = FILEID_INO32_GEN_PARENT;
+		*lenp = 5;
+	}
+
+	return type;
 }
 
 /**
  * Map a NFS file handle to a corresponding dentry.
  * The dentry may or may not be connected to the filesystem root.
  */
-struct dentry *fat_fh_to_dentry(struct super_block *sb, struct fid *fid,
+struct dentry *fat_fh_to_dentry(struct super_block *sb, struct fid *fh,
 				int fh_len, int fh_type)
 {
-	return generic_fh_to_dentry(sb, fid, fh_len, fh_type,
-				    fat_nfs_get_inode);
+	struct inode *inode = NULL;
+	struct fat_fid *fid = (struct fat_fid *)fh;
+	if (fh_len < 3)
+		return NULL;
+
+	switch (fh_type) {
+	case FILEID_INO32_GEN:
+	case FILEID_INO32_GEN_PARENT:
+		inode = fat_nfs_get_inode(sb, fid->ino, fid->gen, fid->i_pos);
+
+		break;
+	}
+
+	return d_obtain_alias(inode);
 }
 
 /*
  * Find the parent for a file specified by NFS handle.
  * This requires that the handle contain the i_ino of the parent.
  */
-struct dentry *fat_fh_to_parent(struct super_block *sb, struct fid *fid,
+struct dentry *fat_fh_to_parent(struct super_block *sb, struct fid *fh,
 				int fh_len, int fh_type)
 {
-	return generic_fh_to_parent(sb, fid, fh_len, fh_type,
-				    fat_nfs_get_inode);
+	struct inode *inode = NULL;
+	struct fat_fid *fid = (struct fat_fid *)fh;
+	if (fh_len < 5)
+		return NULL;
+
+	switch (fh_type) {
+	case FILEID_INO32_GEN_PARENT:
+		inode = fat_nfs_get_inode(sb, fid->parent_ino, fid->parent_gen,
+						fid->i_pos);
+		break;
+	}
+
+	return d_obtain_alias(inode);
 }
 
 /*
