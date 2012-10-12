@@ -1983,9 +1983,9 @@ static int msb_disk_release(struct gendisk *disk)
 			msb->usage_count--;
 
 		if (!msb->usage_count) {
-			kfree(msb);
 			disk->private_data = NULL;
 			idr_remove(&msb_disk_idr, msb->disk_id);
+			kfree(msb);
 			put_disk(disk);
 		}
 	}
