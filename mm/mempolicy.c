@@ -581,12 +581,6 @@ static inline int check_pgd_range(struct vm_area_struct *vma,
 	return 0;
 }
 
-static void
-change_prot_none(struct vm_area_struct *vma, unsigned long start, unsigned long end)
-{
-	change_protection(vma, start, end, vma_prot_none(vma), 0);
-}
-
 /*
  * Check if all pages in a range are on a set of nodes.
  * If pagelist != NULL then isolate pages from the LRU and
@@ -1257,24 +1251,6 @@ static long do_mbind(unsigned long start, unsigned long len,
  mpol_out:
 	mpol_put(new);
 	return err;
-}
-
-static void lazy_migrate_vma(struct vm_area_struct *vma)
-{
-	if (!vma_migratable(vma))
-		return;
-
-	change_prot_none(vma, vma->vm_start, vma->vm_end);
-}
-
-void lazy_migrate_process(struct mm_struct *mm)
-{
-	struct vm_area_struct *vma;
-
-	down_read(&mm->mmap_sem);
-	for (vma = mm->mmap; vma; vma = vma->vm_next)
-		lazy_migrate_vma(vma);
-	up_read(&mm->mmap_sem);
 }
 
 /*

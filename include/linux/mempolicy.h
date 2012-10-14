@@ -199,8 +199,6 @@ static inline int vma_migratable(struct vm_area_struct *vma)
 
 extern int mpol_misplaced(struct page *, struct vm_area_struct *, unsigned long);
 
-extern void lazy_migrate_process(struct mm_struct *mm);
-
 #else /* CONFIG_NUMA */
 
 struct mempolicy {};
