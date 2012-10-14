@@ -1608,16 +1608,11 @@ static inline int tsk_home_node(struct task_struct *p)
 	return p->node;
 }
 
-extern void task_numa_placement(void);
 extern void task_numa_fault(int node, int pages);
 #else
 static inline int tsk_home_node(struct task_struct *p)
 {
 	return -1;
-}
-
-static inline void task_numa_placement(void)
-{
 }
 
 static inline void task_numa_fault(int node, int pages)

@@ -800,7 +800,6 @@ fixup:
 unlock:
 	spin_unlock(&mm->page_table_lock);
 	if (page) {
-		task_numa_placement();
 		task_numa_fault(page_to_nid(page), HPAGE_PMD_NR);
 		put_page(page);
 	}
@@ -822,8 +821,6 @@ migrate:
 		return;
 	}
 	spin_unlock(&mm->page_table_lock);
-
-	task_numa_placement();
 
 	new_page = alloc_pages_node(node,
 	    (GFP_TRANSHUGE | GFP_THISNODE) & ~(__GFP_NO_KSWAPD | __GFP_WAIT),
@@ -895,7 +892,6 @@ alloc_fail:
 	if (new_page)
 		put_page(new_page);
 
-	task_numa_fault(page_to_nid(page), HPAGE_PMD_NR);
 	unlock_page(page);
 
 	spin_lock(&mm->page_table_lock);

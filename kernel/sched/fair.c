@@ -832,27 +832,9 @@ unsigned int sysctl_sched_numa_task_period_max = 5000*16;
  */
 unsigned int sysctl_sched_numa_settle_count = 2;
 
-/*
- * Got a PROT_NONE fault for a page on @node.
- */
-void task_numa_fault(int node, int pages)
-{
-	struct task_struct *p = current;
-
-	if (unlikely(!p->numa_faults)) {
-		p->numa_faults = kzalloc(sizeof(unsigned long) * nr_node_ids,
-					 GFP_KERNEL);
-		if (!p->numa_faults)
-			return;
-	}
-
-	p->numa_faults[node] += pages;
-}
-
-void task_numa_placement(void)
+static void task_numa_placement(struct task_struct *p)
 {
 	unsigned long faults, max_faults = 0;
-	struct task_struct *p = current;
 	int node, max_node = -1;
 	int seq = ACCESS_ONCE(p->mm->numa_scan_seq);
 
@@ -860,9 +842,6 @@ void task_numa_placement(void)
 		return;
 
 	p->numa_scan_seq = seq;
-
-	if (unlikely(!p->numa_faults))
-		return;
 
 	for (node = 0; node < nr_node_ids; node++) {
 		faults = p->numa_faults[node];
@@ -889,6 +868,26 @@ void task_numa_placement(void)
 		p->numa_task_period = min(sysctl_sched_numa_task_period_max,
 				p->numa_task_period * 2);
 	}
+}
+
+/*
+ * Got a PROT_NONE fault for a page on @node.
+ */
+void task_numa_fault(int node, int pages)
+{
+	struct task_struct *p = current;
+
+	if (unlikely(!p->numa_faults)) {
+		int size = sizeof(unsigned long) * nr_node_ids;
+
+		p->numa_faults = kzalloc(size, GFP_KERNEL);
+		if (!p->numa_faults)
+			return;
+	}
+
+	task_numa_placement(p);
+
+	p->numa_faults[node] += pages;
 }
 
 /*
