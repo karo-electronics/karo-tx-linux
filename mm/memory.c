@@ -3486,7 +3486,7 @@ out:
 migrate:
 	pte_unmap_unlock(ptep, ptl);
 
-	if (!migrate_misplaced_page(mm, page, node)) {
+	if (!migrate_misplaced_page(page, node)) {
 		page_nid = node;
 		goto out;
 	}
