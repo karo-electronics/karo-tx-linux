@@ -1529,6 +1529,7 @@ struct task_struct {
 	u64 node_stamp;			/* migration stamp  */
 	unsigned long numa_contrib;
 	unsigned long *numa_faults;
+	struct callback_head numa_work;
 #endif /* CONFIG_SCHED_NUMA */
 
 	struct rcu_head rcu;
