@@ -19,6 +19,7 @@
 struct module;
 struct device;
 struct i2c_client;
+struct irq_domain;
 struct spi_device;
 struct regmap;
 struct regmap_range_cfg;
@@ -133,7 +134,7 @@ struct regmap_config {
 	enum regmap_endian val_format_endian;
 
 	const struct regmap_range_cfg *ranges;
-	unsigned int n_ranges;
+	unsigned int num_ranges;
 };
 
 /**
@@ -141,6 +142,8 @@ struct regmap_config {
  * Registers, mapped to this virtual range, are accessed in two steps:
  *     1. page selector register update;
  *     2. access through data window registers.
+ *
+ * @name: Descriptive name for diagnostics
  *
  * @range_min: Address of the lowest register address in virtual range.
  * @range_max: Address of the highest register in virtual range.
@@ -153,6 +156,8 @@ struct regmap_config {
  * @window_len: Number of registers in data window.
  */
 struct regmap_range_cfg {
+	const char *name;
+
 	/* Registers of virtual address range */
 	unsigned int range_min;
 	unsigned int range_max;
@@ -317,6 +322,7 @@ int regmap_add_irq_chip(struct regmap *map, int irq, int irq_flags,
 void regmap_del_irq_chip(int irq, struct regmap_irq_chip_data *data);
 int regmap_irq_chip_get_base(struct regmap_irq_chip_data *data);
 int regmap_irq_get_virq(struct regmap_irq_chip_data *data, int irq);
+struct irq_domain *regmap_irq_get_domain(struct regmap_irq_chip_data *data);
 
 #else
 
