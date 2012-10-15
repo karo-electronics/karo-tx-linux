@@ -179,7 +179,8 @@ struct omap_hsmmc_host {
 
 static int omap_hsmmc_card_detect(struct device *dev, int slot)
 {
-	struct omap_mmc_platform_data *mmc = dev->platform_data;
+	struct omap_hsmmc_host *host = dev_get_drvdata(dev);
+	struct omap_mmc_platform_data *mmc = host->pdata;
 
 	/* NOTE: assumes card detect signal is active-low */
 	return !gpio_get_value_cansleep(mmc->slots[0].switch_pin);
@@ -187,7 +188,8 @@ static int omap_hsmmc_card_detect(struct device *dev, int slot)
 
 static int omap_hsmmc_get_wp(struct device *dev, int slot)
 {
-	struct omap_mmc_platform_data *mmc = dev->platform_data;
+	struct omap_hsmmc_host *host = dev_get_drvdata(dev);
+	struct omap_mmc_platform_data *mmc = host->pdata;
 
 	/* NOTE: assumes write protect signal is active-high */
 	return gpio_get_value_cansleep(mmc->slots[0].gpio_wp);
@@ -195,7 +197,8 @@ static int omap_hsmmc_get_wp(struct device *dev, int slot)
 
 static int omap_hsmmc_get_cover_state(struct device *dev, int slot)
 {
-	struct omap_mmc_platform_data *mmc = dev->platform_data;
+	struct omap_hsmmc_host *host = dev_get_drvdata(dev);
+	struct omap_mmc_platform_data *mmc = host->pdata;
 
 	/* NOTE: assumes card detect signal is active-low */
 	return !gpio_get_value_cansleep(mmc->slots[0].switch_pin);
@@ -205,7 +208,8 @@ static int omap_hsmmc_get_cover_state(struct device *dev, int slot)
 
 static int omap_hsmmc_suspend_cdirq(struct device *dev, int slot)
 {
-	struct omap_mmc_platform_data *mmc = dev->platform_data;
+	struct omap_hsmmc_host *host = dev_get_drvdata(dev);
+	struct omap_mmc_platform_data *mmc = host->pdata;
 
 	disable_irq(mmc->slots[0].card_detect_irq);
 	return 0;
@@ -213,7 +217,8 @@ static int omap_hsmmc_suspend_cdirq(struct device *dev, int slot)
 
 static int omap_hsmmc_resume_cdirq(struct device *dev, int slot)
 {
-	struct omap_mmc_platform_data *mmc = dev->platform_data;
+	struct omap_hsmmc_host *host = dev_get_drvdata(dev);
+	struct omap_mmc_platform_data *mmc = host->pdata;
 
 	enable_irq(mmc->slots[0].card_detect_irq);
 	return 0;
@@ -2019,9 +2024,9 @@ static int __devexit omap_hsmmc_remove(struct platform_device *pdev)
 		clk_put(host->dbclk);
 	}
 
+	omap_hsmmc_gpio_free(host->pdata);
 	iounmap(host->base);
 	mmc_free_host(host->mmc);
-	omap_hsmmc_gpio_free(pdev->dev.platform_data);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (res)
