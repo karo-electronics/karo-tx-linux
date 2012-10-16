@@ -30,12 +30,23 @@
 #include <linux/pinctrl/pinconf.h>
 /* Since we request GPIOs from ourself */
 #include <linux/pinctrl/consumer.h>
+/*
+ * For the U8500 archs, use the PRCMU register interface, for the older
+ * Nomadik, provide some stubs. The functions using these will only be
+ * called on the U8500 series.
+ */
+#ifdef CONFIG_ARCH_U8500
 #include <linux/mfd/dbx500-prcmu.h>
+#else
+static inline u32 prcmu_read(unsigned int reg) {
+	return 0;
+}
+static inline void prcmu_write(unsigned int reg, u32 value) {}
+static inline void prcmu_write_masked(unsigned int reg, u32 mask, u32 value) {}
+#endif
+#include <linux/platform_data/pinctrl-nomadik.h>
 
 #include <asm/mach/irq.h>
-
-#include <plat/pincfg.h>
-#include <plat/gpio-nomadik.h>
 
 #include "pinctrl-nomadik.h"
 
@@ -46,8 +57,6 @@
  *
  * Symbols in this file are called "nmk_gpio" for "nomadik gpio"
  */
-
-#define NMK_GPIO_PER_CHIP	32
 
 struct nmk_gpio_chip {
 	struct gpio_chip chip;
@@ -523,7 +532,7 @@ static int __nmk_config_pins(pin_cfg_t *cfgs, int num, bool sleep)
  * and its sleep mode based on the specified configuration.  The @cfg is
  * usually one of the SoC specific macros defined in mach/<soc>-pins.h.  These
  * are constructed using, and can be further enhanced with, the macros in
- * plat/pincfg.h.
+ * <linux/platform_data/pinctrl-nomadik.h>
  *
  * If a pin's mode is set to GPIO, it is configured as an input to avoid
  * side-effects.  The gpio can be manipulated later using standard GPIO API
@@ -1268,6 +1277,7 @@ static int __devinit nmk_gpio_probe(struct platform_device *dev)
 	struct clk *clk;
 	int secondary_irq;
 	void __iomem *base;
+	int irq_start = -1;
 	int irq;
 	int ret;
 
@@ -1371,19 +1381,11 @@ static int __devinit nmk_gpio_probe(struct platform_device *dev)
 
 	platform_set_drvdata(dev, nmk_chip);
 
-	if (np) {
-		/* The DT case will just grab a set of IRQ numbers */
-		nmk_chip->domain = irq_domain_add_linear(np, NMK_GPIO_PER_CHIP,
-				&nmk_gpio_irq_simple_ops, nmk_chip);
-	} else {
-		/* Non-DT legacy mode, use hardwired IRQ numbers */
-		int irq_start;
-
+	if (!np)
 		irq_start = NOMADIK_GPIO_TO_IRQ(pdata->first_gpio);
-		nmk_chip->domain = irq_domain_add_simple(NULL,
+	nmk_chip->domain = irq_domain_add_simple(NULL,
 				NMK_GPIO_PER_CHIP, irq_start,
 				&nmk_gpio_irq_simple_ops, nmk_chip);
-	}
 	if (!nmk_chip->domain) {
 		dev_err(&dev->dev, "failed to create irqdomain\n");
 		ret = -ENOSYS;
@@ -1839,11 +1841,11 @@ static int __devinit nmk_pinctrl_probe(struct platform_device *pdev)
 	 * need this to proceed.
 	 */
 	for (i = 0; i < npct->soc->gpio_num_ranges; i++) {
-		if (!nmk_gpio_chips[i]) {
+		if (!nmk_gpio_chips[npct->soc->gpio_ranges[i].id]) {
 			dev_warn(&pdev->dev, "GPIO chip %d not registered yet\n", i);
 			return -EPROBE_DEFER;
 		}
-		npct->soc->gpio_ranges[i].gc = &nmk_gpio_chips[i]->chip;
+		npct->soc->gpio_ranges[i].gc = &nmk_gpio_chips[npct->soc->gpio_ranges[i].id]->chip;
 	}
 
 	nmk_pinctrl_desc.pins = npct->soc->pins;
