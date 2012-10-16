@@ -20,6 +20,7 @@
 #include <linux/sh_dma.h>
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <linux/workqueue.h>
 #include <sound/soc.h>
 #include <sound/sh_fsi.h>
 
@@ -223,7 +224,7 @@ struct fsi_stream {
 	 */
 	struct dma_chan		*chan;
 	struct sh_dmae_slave	slave; /* see fsi_handler_init() */
-	struct tasklet_struct	tasklet;
+	struct work_struct	work;
 	dma_addr_t		dma;
 };
 
@@ -1085,9 +1086,9 @@ static void fsi_dma_complete(void *data)
 	snd_pcm_period_elapsed(io->substream);
 }
 
-static void fsi_dma_do_tasklet(unsigned long data)
+static void fsi_dma_do_work(struct work_struct *work)
 {
-	struct fsi_stream *io = (struct fsi_stream *)data;
+	struct fsi_stream *io = container_of(work, struct fsi_stream, work);
 	struct fsi_priv *fsi = fsi_stream_to_priv(io);
 	struct snd_soc_dai *dai;
 	struct dma_async_tx_descriptor *desc;
@@ -1129,7 +1130,7 @@ static void fsi_dma_do_tasklet(unsigned long data)
 	 * FIXME
 	 *
 	 * In DMAEngine case, codec and FSI cannot be started simultaneously
-	 * since FSI is using tasklet.
+	 * since FSI is using the scheduler work queue.
 	 * Therefore, in capture case, probably FSI FIFO will have got
 	 * overflow error in this point.
 	 * in that case, DMA cannot start transfer until error was cleared.
@@ -1153,7 +1154,7 @@ static bool fsi_dma_filter(struct dma_chan *chan, void *param)
 
 static int fsi_dma_transfer(struct fsi_priv *fsi, struct fsi_stream *io)
 {
-	tasklet_schedule(&io->tasklet);
+	schedule_work(&io->work);
 
 	return 0;
 }
@@ -1195,14 +1196,14 @@ static int fsi_dma_probe(struct fsi_priv *fsi, struct fsi_stream *io, struct dev
 		return fsi_stream_probe(fsi, dev);
 	}
 
-	tasklet_init(&io->tasklet, fsi_dma_do_tasklet, (unsigned long)io);
+	INIT_WORK(&io->work, fsi_dma_do_work);
 
 	return 0;
 }
 
 static int fsi_dma_remove(struct fsi_priv *fsi, struct fsi_stream *io)
 {
-	tasklet_kill(&io->tasklet);
+	cancel_work_sync(&io->work);
 
 	fsi_stream_stop(fsi, io);
 
@@ -1497,7 +1498,7 @@ static struct snd_pcm_hardware fsi_pcm_hardware = {
 	.rates			= FSI_RATES,
 	.rate_min		= 8000,
 	.rate_max		= 192000,
-	.channels_min		= 1,
+	.channels_min		= 2,
 	.channels_max		= 2,
 	.buffer_bytes_max	= 64 * 1024,
 	.period_bytes_min	= 32,
@@ -1585,14 +1586,14 @@ static struct snd_soc_dai_driver fsi_soc_dai[] = {
 		.playback = {
 			.rates		= FSI_RATES,
 			.formats	= FSI_FMTS,
-			.channels_min	= 1,
-			.channels_max	= 8,
+			.channels_min	= 2,
+			.channels_max	= 2,
 		},
 		.capture = {
 			.rates		= FSI_RATES,
 			.formats	= FSI_FMTS,
-			.channels_min	= 1,
-			.channels_max	= 8,
+			.channels_min	= 2,
+			.channels_max	= 2,
 		},
 		.ops = &fsi_dai_ops,
 	},
@@ -1601,14 +1602,14 @@ static struct snd_soc_dai_driver fsi_soc_dai[] = {
 		.playback = {
 			.rates		= FSI_RATES,
 			.formats	= FSI_FMTS,
-			.channels_min	= 1,
-			.channels_max	= 8,
+			.channels_min	= 2,
+			.channels_max	= 2,
 		},
 		.capture = {
 			.rates		= FSI_RATES,
 			.formats	= FSI_FMTS,
-			.channels_min	= 1,
-			.channels_max	= 8,
+			.channels_min	= 2,
+			.channels_max	= 2,
 		},
 		.ops = &fsi_dai_ops,
 	},
@@ -1701,7 +1702,7 @@ static int fsi_probe(struct platform_device *pdev)
 	pm_runtime_enable(&pdev->dev);
 	dev_set_drvdata(&pdev->dev, master);
 
-	ret = request_irq(irq, &fsi_interrupt, 0,
+	ret = devm_request_irq(&pdev->dev, irq, &fsi_interrupt, 0,
 			  id_entry->name, master);
 	if (ret) {
 		dev_err(&pdev->dev, "irq request err\n");
@@ -1711,7 +1712,7 @@ static int fsi_probe(struct platform_device *pdev)
 	ret = snd_soc_register_platform(&pdev->dev, &fsi_soc_platform);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "cannot snd soc register\n");
-		goto exit_free_irq;
+		goto exit_fsib;
 	}
 
 	ret = snd_soc_register_dais(&pdev->dev, fsi_soc_dai,
@@ -1725,8 +1726,6 @@ static int fsi_probe(struct platform_device *pdev)
 
 exit_snd_soc:
 	snd_soc_unregister_platform(&pdev->dev);
-exit_free_irq:
-	free_irq(irq, master);
 exit_fsib:
 	pm_runtime_disable(&pdev->dev);
 	fsi_stream_remove(&master->fsib);
@@ -1742,7 +1741,6 @@ static int fsi_remove(struct platform_device *pdev)
 
 	master = dev_get_drvdata(&pdev->dev);
 
-	free_irq(master->irq, master);
 	pm_runtime_disable(&pdev->dev);
 
 	snd_soc_unregister_dais(&pdev->dev, ARRAY_SIZE(fsi_soc_dai));
