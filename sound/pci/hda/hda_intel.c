@@ -68,6 +68,7 @@ static int position_fix[SNDRV_CARDS] = {[0 ... (SNDRV_CARDS-1)] = -1};
 static int bdl_pos_adj[SNDRV_CARDS] = {[0 ... (SNDRV_CARDS-1)] = -1};
 static int probe_mask[SNDRV_CARDS] = {[0 ... (SNDRV_CARDS-1)] = -1};
 static int probe_only[SNDRV_CARDS];
+static int jackpoll_ms[SNDRV_CARDS];
 static bool single_cmd;
 static int enable_msi = -1;
 #ifdef CONFIG_SND_HDA_PATCH_LOADER
@@ -95,6 +96,8 @@ module_param_array(probe_mask, int, NULL, 0444);
 MODULE_PARM_DESC(probe_mask, "Bitmask to probe codecs (default = -1).");
 module_param_array(probe_only, int, NULL, 0444);
 MODULE_PARM_DESC(probe_only, "Only probing and no codec initialization.");
+module_param_array(jackpoll_ms, int, NULL, 0444);
+MODULE_PARM_DESC(jackpoll_ms, "Ms between polling for jack events (default = 0, using unsol events only)");
 module_param(single_cmd, bool, 0444);
 MODULE_PARM_DESC(single_cmd, "Use single command to communicate with codecs "
 		 "(for debugging only).");
@@ -501,6 +504,7 @@ struct azx {
 
 	/* VGA-switcheroo setup */
 	unsigned int use_vga_switcheroo:1;
+	unsigned int vga_switcheroo_registered:1;
 	unsigned int init_failed:1; /* delayed init failed */
 	unsigned int disabled:1; /* disabled by VGA-switcher */
 
@@ -1581,6 +1585,22 @@ static void azx_bus_reset(struct hda_bus *bus)
 	bus->in_reset = 0;
 }
 
+static int get_jackpoll_interval(struct azx *chip)
+{
+	int i = jackpoll_ms[chip->dev_index];
+	unsigned int j;
+	if (i == 0)
+		return 0;
+	if (i < 50 || i > 60000)
+		j = 0;
+	else
+		j = msecs_to_jiffies(i);
+	if (j == 0)
+		snd_printk(KERN_WARNING SFX
+			   "jackpoll_ms value out of range: %d\n", i);
+	return j;
+}
+
 /*
  * Codec initialization
  */
@@ -1665,6 +1685,7 @@ static int DELAYED_INIT_MARK azx_codec_create(struct azx *chip, const char *mode
 			err = snd_hda_codec_new(chip->bus, c, &codec);
 			if (err < 0)
 				continue;
+			codec->jackpoll_interval = get_jackpoll_interval(chip);
 			codec->beep_mode = chip->beep_mode;
 			codecs++;
 		}
@@ -2640,7 +2661,9 @@ static void azx_vs_set_state(struct pci_dev *pci,
 		if (disabled) {
 			azx_suspend(&pci->dev);
 			chip->disabled = true;
-			snd_hda_lock_devices(chip->bus);
+			if (snd_hda_lock_devices(chip->bus))
+				snd_printk(KERN_WARNING SFX
+					   "Cannot lock devices!\n");
 		} else {
 			snd_hda_unlock_devices(chip->bus);
 			chip->disabled = false;
@@ -2683,14 +2706,20 @@ static const struct vga_switcheroo_client_ops azx_vs_ops = {
 
 static int __devinit register_vga_switcheroo(struct azx *chip)
 {
+	int err;
+
 	if (!chip->use_vga_switcheroo)
 		return 0;
 	/* FIXME: currently only handling DIS controller
 	 * is there any machine with two switchable HDMI audio controllers?
 	 */
-	return vga_switcheroo_register_audio_client(chip->pci, &azx_vs_ops,
+	err = vga_switcheroo_register_audio_client(chip->pci, &azx_vs_ops,
 						    VGA_SWITCHEROO_DIS,
 						    chip->bus != NULL);
+	if (err < 0)
+		return err;
+	chip->vga_switcheroo_registered = 1;
+	return 0;
 }
 #else
 #define init_vga_switcheroo(chip)		/* NOP */
@@ -2712,7 +2741,8 @@ static int azx_free(struct azx *chip)
 	if (use_vga_switcheroo(chip)) {
 		if (chip->disabled && chip->bus)
 			snd_hda_unlock_devices(chip->bus);
-		vga_switcheroo_unregister_client(chip->pci);
+		if (chip->vga_switcheroo_registered)
+			vga_switcheroo_unregister_client(chip->pci);
 	}
 
 	if (chip->initialized) {
@@ -2813,8 +2843,6 @@ static struct snd_pci_quirk position_fix_list[] __devinitdata = {
 	SND_PCI_QUIRK(0x1043, 0x813d, "ASUS P5AD2", POS_FIX_LPIB),
 	SND_PCI_QUIRK(0x1043, 0x81b3, "ASUS", POS_FIX_LPIB),
 	SND_PCI_QUIRK(0x1043, 0x81e7, "ASUS M2V", POS_FIX_LPIB),
-	SND_PCI_QUIRK(0x1043, 0x1ac3, "ASUS X53S", POS_FIX_POSBUF),
-	SND_PCI_QUIRK(0x1043, 0x1b43, "ASUS K53E", POS_FIX_POSBUF),
 	SND_PCI_QUIRK(0x104d, 0x9069, "Sony VPCS11V9E", POS_FIX_LPIB),
 	SND_PCI_QUIRK(0x10de, 0xcb89, "Macbook Pro 7,1", POS_FIX_LPIB),
 	SND_PCI_QUIRK(0x1297, 0x3166, "Shuttle", POS_FIX_LPIB),
@@ -3062,14 +3090,6 @@ static int __devinit azx_create(struct snd_card *card, struct pci_dev *pci,
 	}
 
  ok:
-	err = register_vga_switcheroo(chip);
-	if (err < 0) {
-		snd_printk(KERN_ERR SFX
-			   "Error registering VGA-switcheroo client\n");
-		azx_free(chip);
-		return err;
-	}
-
 	err = snd_device_new(card, SNDRV_DEV_LOWLEVEL, chip, &ops);
 	if (err < 0) {
 		snd_printk(KERN_ERR SFX "Error creating device [card]!\n");
@@ -3339,6 +3359,13 @@ static int __devinit azx_probe(struct pci_dev *pci,
 
 	if (pci_dev_run_wake(pci))
 		pm_runtime_put_noidle(&pci->dev);
+
+	err = register_vga_switcheroo(chip);
+	if (err < 0) {
+		snd_printk(KERN_ERR SFX
+			   "Error registering VGA-switcheroo client\n");
+		goto out_free;
+	}
 
 	dev++;
 	return 0;
