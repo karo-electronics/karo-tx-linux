@@ -9,6 +9,7 @@
 #ifndef _ASM_PGTABLE_64_H
 #define _ASM_PGTABLE_64_H
 
+#include <linux/compiler.h>
 #include <linux/linkage.h>
 
 #include <asm/addrspace.h>
