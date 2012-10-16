@@ -9,6 +9,7 @@
 #ifndef _ASM_PGTABLE_64_H
 #define _ASM_PGTABLE_64_H
 
+#include <linux/compiler.h>
 #include <linux/linkage.h>
 
 #include <asm/addrspace.h>
@@ -174,7 +175,7 @@ static inline int pmd_none(pmd_t pmd)
 
 static inline int pmd_bad(pmd_t pmd)
 {
-#if defined(CONFIG_HUGETLBFS) || defined(CONFIG_TRANSPARENT_HUGEPAGE)
+#ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
 	/* pmd_huge(pmd) but inline */
 	if (unlikely(pmd_val(pmd) & _PAGE_HUGE))
 		return 0;
