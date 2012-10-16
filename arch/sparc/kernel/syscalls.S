@@ -2,15 +2,19 @@
 	 * environment settings are the same as the calling processes.
 	 */
 sys64_execve:
-	ba,pt	%xcc,sys_execve
-	 flushw
+	flushw
+	mov	%o7, %l5
+	call	sys_execve
+	 mov	%l5, %o7
 
 #ifdef CONFIG_COMPAT
 sunos_execv:
 	mov	%g0, %o2
 sys32_execve:
-	ba,pt	%xcc,compat_sys_execve
-	 flushw
+	flushw
+	mov	%o7, %l5
+	call	compat_sys_execve
+	 mov	%l5, %o7
 #endif
 
 	.align	32
