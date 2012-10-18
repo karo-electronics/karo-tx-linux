@@ -726,7 +726,7 @@ out:
 	return handle_pte_fault(mm, vma, address, pte, pmd, flags);
 }
 
-bool pmd_prot_none(struct vm_area_struct *vma, pmd_t pmd)
+bool pmd_numa(struct vm_area_struct *vma, pmd_t pmd)
 {
 	/*
 	 * See pte_prot_none().
@@ -737,7 +737,7 @@ bool pmd_prot_none(struct vm_area_struct *vma, pmd_t pmd)
 	return pmd_same(pmd, pmd_modify(pmd, vma_prot_none(vma)));
 }
 
-void do_huge_pmd_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
+void do_huge_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 			   unsigned long address, pmd_t *pmd,
 			   unsigned int flags, pmd_t entry)
 {
