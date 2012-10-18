@@ -203,8 +203,7 @@ static void aureon_pca9554_write(struct snd_ice1712 *ice, unsigned char reg,
 static int aureon_universe_inmux_info(struct snd_kcontrol *kcontrol,
 				      struct snd_ctl_elem_info *uinfo)
 {
-	static const char * const texts[3] =
-		{"Internal Aux", "Wavetable", "Rear Line-In"};
+	char *texts[3] = {"Internal Aux", "Wavetable", "Rear Line-In"};
 
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
 	uinfo->count = 1;

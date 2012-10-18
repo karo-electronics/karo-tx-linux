@@ -187,7 +187,7 @@ enum snd_wm8776_ctl_id {
 #define WM8776_FLAG_ALC		(1 << 4)
 
 struct snd_wm8776_ctl {
-	const char *name;
+	char *name;
 	snd_ctl_elem_type_t type;
 	const char *const enum_names[WM8776_ENUM_MAX];
 	const unsigned int *tlv;
