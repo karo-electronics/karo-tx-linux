@@ -900,8 +900,9 @@ void task_numa_work(struct callback_head *work)
 	struct task_struct *p = current;
 	struct mm_struct *mm = p->mm;
 
-	WARN_ON_ONCE(p != container_of(work, struct task_struct, rcu));
+	WARN_ON_ONCE(p != container_of(work, struct task_struct, numa_work));
 
+	work->next = work; /* protect against double add */
 	/*
 	 * Who cares about NUMA placement when they're dying.
 	 *
@@ -933,12 +934,13 @@ void task_numa_work(struct callback_head *work)
  */
 void task_tick_numa(struct rq *rq, struct task_struct *curr)
 {
+	struct callback_head *work = &curr->numa_work;
 	u64 period, now;
 
 	/*
 	 * We don't care about NUMA placement if we don't have memory.
 	 */
-	if (!curr->mm)
+	if (!curr->mm || (curr->flags & PF_EXITING) || work->next != work)
 		return;
 
 	/*
@@ -954,14 +956,8 @@ void task_tick_numa(struct rq *rq, struct task_struct *curr)
 		curr->node_stamp = now;
 
 		if (!time_before(jiffies, curr->mm->numa_next_scan)) {
-			/*
-			 * We can re-use curr->rcu because we checked curr->mm
-			 * != NULL so release_task()->call_rcu() was not called
-			 * yet and exit_task_work() is called before
-			 * exit_notify().
-			 */
-			init_task_work(&curr->rcu, task_numa_work);
-			task_work_add(curr, &curr->rcu, true);
+			init_task_work(work, task_numa_work); /* TODO: move this into sched_fork() */
+			task_work_add(curr, work, true);
 		}
 	}
 }
