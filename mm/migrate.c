@@ -417,7 +417,7 @@ int migrate_huge_page_move_mapping(struct address_space *mapping,
  */
 void migrate_page_copy(struct page *newpage, struct page *page)
 {
-	if (PageHuge(page))
+	if (PageHuge(page) || PageTransHuge(page))
 		copy_huge_page(newpage, page);
 	else
 		copy_highpage(newpage, page);
@@ -1418,7 +1418,7 @@ int migrate_vmas(struct mm_struct *mm, const nodemask_t *to,
  * Attempt to migrate a misplaced page to the specified destination
  * node.
  */
-int migrate_misplaced_page(struct mm_struct *mm, struct page *page, int node)
+int migrate_misplaced_page(struct page *page, int node)
 {
 	struct address_space *mapping = page_mapping(page);
 	int page_lru = page_is_file_cache(page);

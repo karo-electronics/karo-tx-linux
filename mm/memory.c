@@ -3442,38 +3442,12 @@ static bool pte_prot_none(struct vm_area_struct *vma, pte_t pte)
 	return pte_same(pte, pte_modify(pte, vma_prot_none(vma)));
 }
 
-#ifdef CONFIG_NUMA
-
-
-static void do_prot_none_numa(struct mm_struct *mm, struct vm_area_struct *vma,
-			      unsigned long address, struct page *page)
-{
-	int node, page_nid = page_to_nid(page);
-
-	task_numa_placement();
-
-	/*
-	 * For NUMA systems we use the special PROT_NONE maps to drive
-	 * lazy page migration, see MPOL_MF_LAZY and related.
-	 */
-	node = mpol_misplaced(page, vma, address);
-	if (node != -1 && !migrate_misplaced_page(mm, page, node))
-		page_nid = node;
-
-	task_numa_fault(page_nid);
-}
-#else
-static void do_prot_none_numa(struct mm_struct *mm, struct vm_area_struct *vma,
-			      unsigned long address, struct page *page)
-{
-}
-#endif /* CONFIG_NUMA */
-
 static int do_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
 			unsigned long address, pte_t *ptep, pmd_t *pmd,
 			unsigned int flags, pte_t entry)
 {
 	struct page *page = NULL;
+	int node, page_nid = -1;
 	spinlock_t *ptl;
 
 	ptl = pte_lockptr(mm, pmd);
@@ -3481,6 +3455,16 @@ static int do_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
 	if (unlikely(!pte_same(*ptep, entry)))
 		goto unlock;
 
+	page = vm_normal_page(vma, address, entry);
+	if (page) {
+		get_page(page);
+		page_nid = page_to_nid(page);
+		node = mpol_misplaced(page, vma, address);
+		if (node != -1)
+			goto migrate;
+	}
+
+fixup:
 	flush_cache_page(vma, address, pte_pfn(entry));
 
 	ptep_modify_prot_start(mm, address, ptep);
@@ -3489,17 +3473,32 @@ static int do_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
 
 	update_mmu_cache(vma, address, ptep);
 
-	page = vm_normal_page(vma, address, entry);
-	if (page)
-		get_page(page);
-
 unlock:
 	pte_unmap_unlock(ptep, ptl);
+out:
 	if (page) {
-		do_prot_none_numa(mm, vma, address, page);
+		task_numa_fault(page_nid, 1);
 		put_page(page);
 	}
+
 	return 0;
+
+migrate:
+	pte_unmap_unlock(ptep, ptl);
+
+	if (!migrate_misplaced_page(page, node)) {
+		page_nid = node;
+		goto out;
+	}
+
+	ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
+	if (!pte_same(*ptep, entry)) {
+		put_page(page);
+		page = NULL;
+		goto unlock;
+	}
+
+	goto fixup;
 }
 
 /*

@@ -797,51 +797,44 @@ update_stats_curr_start(struct cfs_rq *cfs_rq, struct sched_entity *se)
 static unsigned long task_h_load(struct task_struct *p);
 
 #ifdef CONFIG_SCHED_NUMA
-static void account_offnode_enqueue(struct rq *rq, struct task_struct *p)
+static struct list_head *account_numa_enqueue(struct rq *rq, struct task_struct *p)
 {
-	p->numa_contrib = task_h_load(p);
-	rq->offnode_weight += p->numa_contrib;
-	rq->offnode_running++;
+	struct list_head *tasks = &rq->cfs_tasks;
+
+	if (tsk_home_node(p) != cpu_to_node(task_cpu(p))) {
+		p->numa_contrib = task_h_load(p);
+		rq->offnode_weight += p->numa_contrib;
+		rq->offnode_running++;
+		tasks = &rq->offnode_tasks;
+	} else
+		rq->onnode_running++;
+
+	return tasks;
 }
 
-static void account_offnode_dequeue(struct rq *rq, struct task_struct *p)
+static void account_numa_dequeue(struct rq *rq, struct task_struct *p)
 {
-	rq->offnode_weight -= p->numa_contrib;
-	rq->offnode_running--;
+	if (tsk_home_node(p) != cpu_to_node(task_cpu(p))) {
+		rq->offnode_weight -= p->numa_contrib;
+		rq->offnode_running--;
+	} else
+		rq->onnode_running--;
 }
 
 /*
  * numa task sample period in ms: 5s
  */
-unsigned int sysctl_sched_numa_task_period = 5000;
+unsigned int sysctl_sched_numa_task_period_min = 5000;
+unsigned int sysctl_sched_numa_task_period_max = 5000*16;
 
 /*
  * Wait for the 2-sample stuff to settle before migrating again
  */
 unsigned int sysctl_sched_numa_settle_count = 2;
 
-/*
- * Got a PROT_NONE fault for a page on @node.
- */
-void __task_numa_fault(int node)
-{
-	struct task_struct *p = current;
-
-	if (!p->numa_faults) {
-		p->numa_faults = kzalloc(sizeof(unsigned long) * nr_node_ids,
-					 GFP_KERNEL);
-	}
-
-	if (!p->numa_faults)
-		return;
-
-	p->numa_faults[node]++;
-}
-
-void task_numa_placement(void)
+static void task_numa_placement(struct task_struct *p)
 {
 	unsigned long faults, max_faults = 0;
-	struct task_struct *p = current;
 	int node, max_node = -1;
 	int seq = ACCESS_ONCE(p->mm->numa_scan_seq);
 
@@ -849,9 +842,6 @@ void task_numa_placement(void)
 		return;
 
 	p->numa_scan_seq = seq;
-
-	if (unlikely(!p->numa_faults))
-		return;
 
 	for (node = 0; node < nr_node_ids; node++) {
 		faults = p->numa_faults[node];
@@ -864,13 +854,40 @@ void task_numa_placement(void)
 		p->numa_faults[node] /= 2;
 	}
 
-	if (max_node != -1 && p->node != max_node) {
+	if (max_node == -1)
+		return;
+
+	if (p->node != max_node) {
+		p->numa_task_period = sysctl_sched_numa_task_period_min;
 		if (sched_feat(NUMA_SETTLE) &&
 		    (seq - p->numa_migrate_seq) <= (int)sysctl_sched_numa_settle_count)
 			return;
 		p->numa_migrate_seq = seq;
 		sched_setnode(p, max_node);
+	} else {
+		p->numa_task_period = min(sysctl_sched_numa_task_period_max,
+				p->numa_task_period * 2);
 	}
+}
+
+/*
+ * Got a PROT_NONE fault for a page on @node.
+ */
+void task_numa_fault(int node, int pages)
+{
+	struct task_struct *p = current;
+
+	if (unlikely(!p->numa_faults)) {
+		int size = sizeof(unsigned long) * nr_node_ids;
+
+		p->numa_faults = kzalloc(size, GFP_KERNEL);
+		if (!p->numa_faults)
+			return;
+	}
+
+	task_numa_placement(p);
+
+	p->numa_faults[node] += pages;
 }
 
 /*
@@ -903,7 +920,7 @@ void task_numa_work(struct callback_head *work)
 	if (time_before(now, migrate))
 		return;
 
-	next_scan = now + 2*msecs_to_jiffies(sysctl_sched_numa_task_period);
+	next_scan = now + 2*msecs_to_jiffies(sysctl_sched_numa_task_period_min);
 	if (cmpxchg(&mm->numa_next_scan, migrate, next_scan) != migrate)
 		return;
 
@@ -931,7 +948,7 @@ void task_tick_numa(struct rq *rq, struct task_struct *curr)
 	 * NUMA placement.
 	 */
 	now = curr->se.sum_exec_runtime;
-	period = (u64)sysctl_sched_numa_task_period * NSEC_PER_MSEC;
+	period = (u64)curr->numa_task_period * NSEC_PER_MSEC;
 
 	if (now - curr->node_stamp > period) {
 		curr->node_stamp = now;
@@ -949,11 +966,11 @@ void task_tick_numa(struct rq *rq, struct task_struct *curr)
 	}
 }
 #else
-static void account_offnode_enqueue(struct rq *rq, struct task_struct *p)
+static struct list_head *account_numa_enqueue(struct rq *rq, struct task_struct *p)
 {
 }
 
-static void account_offnode_dequeue(struct rq *rq, struct task_struct *p)
+static void account_numa_dequeue(struct rq *rq, struct task_struct *p)
 {
 }
 
@@ -978,10 +995,8 @@ account_entity_enqueue(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		struct task_struct *p = task_of(se);
 		struct list_head *tasks = &rq->cfs_tasks;
 
-		if (offnode_task(p)) {
-			account_offnode_enqueue(rq, p);
-			tasks = offnode_tasks(rq);
-		}
+		if (tsk_home_node(p) != -1)
+			tasks = account_numa_enqueue(rq, p);
 
 		list_add(&se->group_node, tasks);
 	}
@@ -1000,8 +1015,8 @@ account_entity_dequeue(struct cfs_rq *cfs_rq, struct sched_entity *se)
 
 		list_del_init(&se->group_node);
 
-		if (offnode_task(p))
-			account_offnode_dequeue(rq_of(cfs_rq), p);
+		if (tsk_home_node(p) != -1)
+			account_numa_dequeue(rq_of(cfs_rq), p);
 	}
 	cfs_rq->nr_running--;
 }
@@ -3755,6 +3770,9 @@ struct sd_lb_stats {
 	struct sched_group *numa_group; /* group which has offnode_tasks */
 	unsigned long numa_group_weight;
 	unsigned long numa_group_running;
+
+	unsigned long this_offnode_running;
+	unsigned long this_onnode_running;
 #endif
 };
 
@@ -3772,8 +3790,9 @@ struct sg_lb_stats {
 	int group_imb; /* Is there an imbalance in the group ? */
 	int group_has_capacity; /* Is there extra capacity in the group? */
 #ifdef CONFIG_SCHED_NUMA
-	unsigned long numa_weight;
-	unsigned long numa_running;
+	unsigned long numa_offnode_weight;
+	unsigned long numa_offnode_running;
+	unsigned long numa_onnode_running;
 #endif
 };
 
@@ -3806,8 +3825,9 @@ static inline int get_sd_load_idx(struct sched_domain *sd,
 #ifdef CONFIG_SCHED_NUMA
 static inline void update_sg_numa_stats(struct sg_lb_stats *sgs, struct rq *rq)
 {
-	sgs->numa_weight += rq->offnode_weight;
-	sgs->numa_running += rq->offnode_running;
+	sgs->numa_offnode_weight += rq->offnode_weight;
+	sgs->numa_offnode_running += rq->offnode_running;
+	sgs->numa_onnode_running += rq->onnode_running;
 }
 
 /*
@@ -3825,16 +3845,19 @@ static inline void update_sd_numa_stats(struct sched_domain *sd,
 	if (!(sd->flags & SD_NUMA))
 		return;
 
-	if (local_group)
+	if (local_group) {
+		sds->this_offnode_running = sgs->numa_offnode_running;
+		sds->this_onnode_running  = sgs->numa_onnode_running;
 		return;
+	}
 
-	if (!sgs->numa_running)
+	if (!sgs->numa_offnode_running)
 		return;
 
 	if (!sds->numa_group || pick_numa_rand(sd->span_weight / group->group_weight)) {
 		sds->numa_group = group;
-		sds->numa_group_weight = sgs->numa_weight;
-		sds->numa_group_running = sgs->numa_running;
+		sds->numa_group_weight = sgs->numa_offnode_weight;
+		sds->numa_group_running = sgs->numa_offnode_running;
 	}
 }
 
@@ -3869,6 +3892,13 @@ static inline int check_numa_busiest_group(struct lb_env *env, struct sd_lb_stat
 		return 0;
 
 	if (!sds->numa_group)
+		return 0;
+
+	/*
+	 * Only pull an offnode task home if we've got offnode or !numa tasks to trade for it.
+	 */
+	if (!sds->this_offnode_running &&
+	    !(sds->this_nr_running - sds->this_onnode_running - sds->this_offnode_running))
 		return 0;
 
 	env->imbalance = sds->numa_group_weight / sds->numa_group_running;
