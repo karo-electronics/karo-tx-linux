@@ -8,6 +8,9 @@
  * Copyright (C) 2001 - 2005 Tensilica Inc.
  */
 
+#ifndef _UAPI_XTENSA_UNISTD_H
+#define _UAPI_XTENSA_UNISTD_H
+
 #ifndef __SYSCALL
 # define __SYSCALL(nr,func,nargs)
 #endif
@@ -755,3 +758,5 @@ __SYSCALL(331, sys_kcmp, 5)
 #define SYS_XTENSA_ATOMIC_CMP_SWP         4     /* compare and swap */
 
 #define SYS_XTENSA_COUNT                  5     /* count */
+
+#endif /* _UAPI_XTENSA_UNISTD_H */
