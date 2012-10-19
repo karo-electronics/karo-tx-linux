@@ -534,6 +534,8 @@ static inline pmd_t pmd_modify(pmd_t pmd, pgprot_t newprot)
 	return pmd;
 }
 
+#define pmd_pgprot(x) __pgprot(pmd_val(x) & ~_PAGE_CHG_MASK)
+
 static inline pmd_t pmd_mknotpresent(pmd_t pmd)
 {
 	pmd_val(pmd) &= ~(_PAGE_PRESENT | _PAGE_VALID | _PAGE_DIRTY);
