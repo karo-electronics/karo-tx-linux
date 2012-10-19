@@ -27,7 +27,6 @@ int pinmux_gpio_direction(struct pinctrl_dev *pctldev,
 
 int pinmux_map_to_setting(struct pinctrl_map const *map,
 			  struct pinctrl_setting *setting);
-void pinmux_free_setting(struct pinctrl_setting const *setting);
 int pinmux_enable_setting(struct pinctrl_setting const *setting);
 void pinmux_disable_setting(struct pinctrl_setting const *setting);
 
@@ -67,10 +66,6 @@ static inline int pinmux_map_to_setting(struct pinctrl_map const *map,
 			  struct pinctrl_setting *setting)
 {
 	return 0;
-}
-
-static inline void pinmux_free_setting(struct pinctrl_setting const *setting)
-{
 }
 
 static inline int pinmux_enable_setting(struct pinctrl_setting const *setting)
