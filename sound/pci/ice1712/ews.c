@@ -22,7 +22,6 @@
  *
  */      
 
-#include <asm/io.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/init.h>
@@ -576,7 +575,7 @@ static int __devinit snd_ice1712_ews_init(struct snd_ice1712 *ice)
 /* i/o sensitivity - this callback is shared among other devices, too */
 static int snd_ice1712_ewx_io_sense_info(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_info *uinfo){
 
-	static char *texts[2] = {
+	static const char * const texts[2] = {
 		"+4dBu", "-10dBV",
 	};
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
@@ -899,7 +898,7 @@ static int snd_ice1712_6fire_control_put(struct snd_kcontrol *kcontrol, struct s
 
 static int snd_ice1712_6fire_select_input_info(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_info *uinfo)
 {
-	static char *texts[4] = {
+	static const char * const texts[4] = {
 		"Internal", "Front Input", "Rear Input", "Wave Table"
 	};
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
