@@ -937,7 +937,7 @@ void task_numa_work(struct callback_head *work)
 	length = sysctl_sched_numa_scan_size;
 	length <<= 20;
 
-	down_read(&mm->mmap_sem);
+	down_write(&mm->mmap_sem);
 	vma = find_vma(mm, offset);
 again:
 	if (!vma) {
@@ -964,7 +964,7 @@ again:
 		goto again;
 	}
 	mm->numa_scan_offset = offset;
-	up_read(&mm->mmap_sem);
+	up_write(&mm->mmap_sem);
 
 }
 

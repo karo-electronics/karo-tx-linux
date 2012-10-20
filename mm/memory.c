@@ -3489,7 +3489,7 @@ static int do_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	ptl = pte_lockptr(mm, pmd);
 	spin_lock(ptl);
 	if (unlikely(!pte_same(*ptep, entry)))
-		goto unlock;
+		goto out_unlock;
 
 	page = vm_normal_page(vma, address, entry);
 	if (page) {
@@ -3500,16 +3500,18 @@ static int do_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 			goto migrate;
 	}
 
-fixup:
+out_pte_upgrade_unlock:
 	flush_cache_page(vma, address, pte_pfn(entry));
 
 	ptep_modify_prot_start(mm, address, ptep);
 	entry = pte_modify(entry, vma->vm_page_prot);
 	ptep_modify_prot_commit(mm, address, ptep, entry);
 
+	/* No TLB flush needed because we upgraded the PTE */
+
 	update_mmu_cache(vma, address, ptep);
 
-unlock:
+out_unlock:
 	pte_unmap_unlock(ptep, ptl);
 out:
 	if (page) {
@@ -3531,10 +3533,10 @@ migrate:
 	if (!pte_same(*ptep, entry)) {
 		put_page(page);
 		page = NULL;
-		goto unlock;
+		goto out_unlock;
 	}
 
-	goto fixup;
+	goto out_pte_upgrade_unlock;
 }
 
 /*
