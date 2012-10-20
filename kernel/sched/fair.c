@@ -967,6 +967,7 @@ void task_tick_numa(struct rq *rq, struct task_struct *curr)
 #else
 static struct list_head *account_numa_enqueue(struct rq *rq, struct task_struct *p)
 {
+	return NULL;
 }
 
 static void account_numa_dequeue(struct rq *rq, struct task_struct *p)
