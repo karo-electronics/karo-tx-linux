@@ -719,6 +719,17 @@ endif # INSTALL_MOD_STRIP
 export mod_strip_cmd
 
 
+ifeq ($(CONFIG_MODULE_SIG),y)
+MODSECKEY = ./signing_key.priv
+MODPUBKEY = ./signing_key.x509
+export MODPUBKEY
+mod_sign_cmd = perl $(srctree)/scripts/sign-file $(MODSECKEY) $(MODPUBKEY)
+else
+mod_sign_cmd = true
+endif
+export mod_sign_cmd
+
+
 ifeq ($(KBUILD_EXTMOD),)
 core-y		+= kernel/ mm/ fs/ ipc/ security/ crypto/ block/
 
