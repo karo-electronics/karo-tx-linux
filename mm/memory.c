@@ -3483,11 +3483,13 @@ static int do_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
 	struct page *page = NULL;
 	int node, page_nid = -1;
 	spinlock_t *ptl;
+	int account = 1;
+	int locked = 0;
 
 	ptl = pte_lockptr(mm, pmd);
 	spin_lock(ptl);
 	if (unlikely(!pte_same(*ptep, entry)))
-		goto unlock;
+		goto out_unlock;
 
 	page = vm_normal_page(vma, address, entry);
 	if (page) {
@@ -3498,20 +3500,25 @@ static int do_prot_none(struct mm_struct *mm, struct vm_area_struct *vma,
 			goto migrate;
 	}
 
-fixup:
+out_pte_upgrade_unlock:
 	flush_cache_page(vma, address, pte_pfn(entry));
 
 	ptep_modify_prot_start(mm, address, ptep);
 	entry = pte_modify(entry, vma->vm_page_prot);
 	ptep_modify_prot_commit(mm, address, ptep, entry);
 
+	/* No TLB flush needed because we upgraded the PTE */
+
 	update_mmu_cache(vma, address, ptep);
 
-unlock:
+out_unlock:
 	pte_unmap_unlock(ptep, ptl);
 out:
 	if (page) {
-		task_numa_fault(page_nid, 1);
+		if (locked)
+			unlock_page(page);
+		if (account)
+			task_numa_fault(page_nid, 1);
 		put_page(page);
 	}
 
@@ -3520,19 +3527,40 @@ out:
 migrate:
 	pte_unmap_unlock(ptep, ptl);
 
+	locked = 1;
+	lock_page(page);
+
+	/*
+	 * We have to do this again, to make sure
+	 * we have not raced with a pte update
+	 * during the lock_page():
+	 */
+	ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
+	if (!pte_same(*ptep, entry)) {
+		account = 0;
+		goto out_unlock;
+	}
+	pte_unmap_unlock(ptep, ptl);
+
 	if (!migrate_misplaced_page(page, node)) {
+		/*
+		 * Successful migration - account the fault.
+		 * Note, we don't fix up the pte, that will
+		 * happen on the next fault.
+		 */
 		page_nid = node;
+		put_page(page);
+
 		goto out;
 	}
 
 	ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
 	if (!pte_same(*ptep, entry)) {
-		put_page(page);
-		page = NULL;
-		goto unlock;
+		account = 0;
+		goto out_unlock;
 	}
 
-	goto fixup;
+	goto out_pte_upgrade_unlock;
 }
 
 /*
