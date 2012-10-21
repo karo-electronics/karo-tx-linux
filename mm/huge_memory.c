@@ -782,10 +782,6 @@ unlock:
 	return;
 
 migrate:
-	WARN_ON(!(((unsigned long)page->mapping & PAGE_MAPPING_ANON)));
-	WARN_ON((((unsigned long)page->mapping & PAGE_MAPPING_KSM)));
-	BUG_ON(PageSwapCache(page));
-
 	spin_unlock(&mm->page_table_lock);
 
 	lock_page(page);
@@ -801,8 +797,6 @@ migrate:
 	new_page = alloc_pages_node(node,
 	    (GFP_TRANSHUGE | GFP_THISNODE) & ~__GFP_WAIT,
 	    HPAGE_PMD_ORDER);
-
-	WARN_ON(PageLRU(new_page));
 
 	if (!new_page)
 		goto alloc_fail;
