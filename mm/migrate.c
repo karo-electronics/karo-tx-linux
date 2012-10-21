@@ -1449,20 +1449,22 @@ int migrate_misplaced_page(struct page *page, int node)
 	}
 
 	if (isolate_lru_page(page)) {
-		ret = -EBUSY;
-		goto put_new;
+		put_page(newpage);
+		return -EBUSY;
 	}
 
 	inc_zone_page_state(page, NR_ISOLATED_ANON + page_lru);
 	ret = __unmap_and_move(page, newpage, 0, 0, MIGRATE_FAULT);
-	/*
-	 * A page that has been migrated has all references removed and will be
-	 * freed. A page that has not been migrated will have kepts its
-	 * references and be restored.
-	 */
-	dec_zone_page_state(page, NR_ISOLATED_ANON + page_lru);
-	putback_lru_page(page);
-put_new:
+
+	if (ret != -EAGAIN) {
+		/*
+		 * A page that has been migrated has all references removed and will be
+		 * freed. A page that has not been migrated will have kepts its
+		 * references and be restored.
+		 */
+		dec_zone_page_state(page, NR_ISOLATED_ANON + page_lru);
+		putback_lru_page(page);
+	}
 	/*
 	 * Move the new page to the LRU. If migration was not successful
 	 * then this will free the page.
