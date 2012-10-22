@@ -933,40 +933,31 @@ void task_numa_work(struct callback_head *work)
 	if (cmpxchg(&mm->numa_next_scan, migrate, next_scan) != migrate)
 		return;
 
-
 	offset = mm->numa_scan_offset;
 	length = sysctl_sched_numa_scan_size;
 	length <<= 20;
 
 	down_write(&mm->mmap_sem);
 	vma = find_vma(mm, offset);
-again:
 	if (!vma) {
 		ACCESS_ONCE(mm->numa_scan_seq)++;
 		offset = 0;
 		vma = mm->mmap;
 	}
-	while (vma && !vma_migratable(vma)) {
-		vma = vma->vm_next;
-		if (!vma)
-			goto again;
-	}
+	for (; vma && length > 0; vma = vma->vm_next) {
+		if (!vma_migratable(vma))
+			continue;
 
-	offset = max(offset, vma->vm_start);
-	end = min(ALIGN(offset + length, HPAGE_SIZE), vma->vm_end);
-	length -= end - offset;
+		offset = max(offset, vma->vm_start);
+		end = min(ALIGN(offset + length, HPAGE_SIZE), vma->vm_end);
+		length -= end - offset;
 
-	change_prot_none(vma, offset, end);
+		change_prot_none(vma, offset, end);
 
-	offset = end;
-
-	if (length > 0) {
-		vma = vma->vm_next;
-		goto again;
+		offset = end;
 	}
 	mm->numa_scan_offset = offset;
 	up_write(&mm->mmap_sem);
-
 }
 
 /*
