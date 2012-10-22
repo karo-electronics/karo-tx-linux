@@ -1,0 +1,24 @@
+Importing i2c based on 3.7-rc2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 6f0c0580b70c89094b3422ba81118c7b959c7556
+HEAD is now at 6f0c058 Linux 3.7-rc2
+$ git am ../quilt/i2c/i2c-move-i2c-stub.patch
+Applying: i2c-stub: Move to drivers/i2c
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:456: new blank line at EOF.
++
+warning: 1 line adds whitespace errors.
+$ git am ../quilt/i2c/i2c-i801-01-add-device-tree-support.patch
+Applying: i2c-i801: Add device tree support
+$ git am ../quilt/i2c/i2c-i801-02-fix-gpiolib-dependency.patch
+Applying: i2c-i801: Simplify dependency towards GPIOLIB
+$ git am ../quilt/i2c/i2c-i801-03-fix-comment.patch
+Applying: i2c-i801: Fix comment
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + a17e9c1...13a2e9c master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 12250d843e8489ee00b5b7726da855e51694e792
+Unchanged quilt series jdelvare-hwmon
+Importing device-mapper based on v3.7-rc1
+Unchanged quilt series device-mapper
