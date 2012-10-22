@@ -202,6 +202,23 @@ struct rpc_wait_queue {
 };
 
 /*
+ * rpc_fence_lock is essentially a lightweight device to allow for fencing off
+ * of RPC calls.
+ * The assumption is that fencing is a _very_ rare event, that we can
+ * afford to make a relatively slow process. On the other hand, ordinary
+ * traffic needs to pass through as unimpeded as possible, with little
+ * or no serialisation.
+ * You can consider this to be a read/write lock that is optimised to make
+ * the read lock path as lightweight as possible.
+ */
+#define RPC_FENCE_LOCK_BIT	0
+#define RPC_FENCE_DRAIN_BIT	1
+struct rpc_fence_lock {
+	atomic_t		count;
+	unsigned long		flags;
+};
+
+/*
  * This is the # requests to send consecutively
  * from a single cookie.  The aim is to improve
  * performance of NFS operations such as read/write.
@@ -240,6 +257,17 @@ struct rpc_task *rpc_wake_up_first(struct rpc_wait_queue *,
 					bool (*)(struct rpc_task *, void *),
 					void *);
 void		rpc_wake_up_status(struct rpc_wait_queue *, int);
+
+void		rpc_fence_lock_init(struct rpc_fence_lock *);
+void		rpc_fence_lock_exclusive(struct rpc_fence_lock *);
+void		rpc_fence_unlock_exclusive(struct rpc_fence_lock *);
+void		rpc_fence_lock_wait_for_drain(struct rpc_fence_lock *);
+bool		rpc_fence_lock_shared(struct rpc_fence_lock *,
+					struct rpc_task *,
+					struct rpc_wait_queue *);
+void		rpc_fence_unlock_shared(struct rpc_fence_lock *,
+					struct rpc_task *);
+
 int		rpc_queue_empty(struct rpc_wait_queue *);
 void		rpc_delay(struct rpc_task *, unsigned long);
 void *		rpc_malloc(struct rpc_task *, size_t);

@@ -229,12 +229,17 @@ void rpc_destroy_wait_queue(struct rpc_wait_queue *queue)
 }
 EXPORT_SYMBOL_GPL(rpc_destroy_wait_queue);
 
+static int rpc_wait_bit(void *word)
+{
+	freezable_schedule();
+	return 0;
+}
+
 static int rpc_wait_bit_killable(void *word)
 {
 	if (fatal_signal_pending(current))
 		return -ERESTARTSYS;
-	freezable_schedule();
-	return 0;
+	return rpc_wait_bit(word);
 }
 
 #ifdef RPC_DEBUG
@@ -623,6 +628,119 @@ void rpc_delay(struct rpc_task *task, unsigned long delay)
 	rpc_sleep_on(&delay_queue, task, __rpc_atrun);
 }
 EXPORT_SYMBOL_GPL(rpc_delay);
+
+/**
+ * rpc_fence_lock_init - initialise a rpc_fence_lock
+ * @fence: pointer to struct rpc_fence_lock
+ */
+void rpc_fence_lock_init(struct rpc_fence_lock *fence)
+{
+	fence->flags = 0;
+	atomic_set(&fence->count, 0);
+}
+EXPORT_SYMBOL_GPL(rpc_fence_lock_init);
+
+/**
+ * rpc_fence_lock_exclusive - fence off RPC calls
+ * @fence: pointer to struct rpc_fence_lock
+ *
+ * Note the use of synchronize_rcu() to prevent races with
+ * rpc_fence_lock_shared(). It ensures that all callers that
+ * might have raced with our set_bit(RPC_GATE_LOCK_BIT) have
+ * left the rcu_read_lock() critical section, and so it is
+ * safe for something like rpc_fence_lock_wait_for_drain()
+ * to assume that fence->count can no longer increase.
+ */
+void rpc_fence_lock_exclusive(struct rpc_fence_lock *fence)
+{
+	might_sleep();
+
+	set_bit(RPC_FENCE_LOCK_BIT, &fence->flags);
+	synchronize_rcu();
+}
+EXPORT_SYMBOL_GPL(rpc_fence_lock_exclusive);
+
+/**
+ * rpc_fence_unlock_exclusive - stop fencing off RPC calls
+ * @fence: pointer to struct rpc_fence_lock
+ *
+ * Again note the use of synchronize_rcu() to protect against
+ * races with rpc_fence_lock_shared(). Once we exit this 
+ * function, it is safe to call rpc_wake_up() because any
+ * caller that did not see our clear_bit() has left the
+ * rcu_read_lock() critical section.
+ */
+void rpc_fence_unlock_exclusive(struct rpc_fence_lock *fence)
+{
+	might_sleep();
+
+	clear_bit(RPC_FENCE_LOCK_BIT, &fence->flags);
+	smp_mb__after_clear_bit();
+	synchronize_rcu();
+}
+EXPORT_SYMBOL_GPL(rpc_fence_unlock_exclusive);
+
+/**
+ * rpc_fence_lock_wait_for_drain - wait for RPC calls to complete
+ * @fence: pointer to struct rpc_fence_lock
+ *
+ * MUST be called with RPC_GATE_LOCK_BIT set.
+ */
+void rpc_fence_lock_wait_for_drain(struct rpc_fence_lock *fence)
+{
+	might_sleep();
+
+	if (atomic_read(&fence->count) == 0)
+		return;
+	set_bit(RPC_FENCE_DRAIN_BIT, &fence->flags);
+	if (atomic_read(&fence->count) == 0) {
+		clear_bit(RPC_FENCE_DRAIN_BIT, &fence->flags);
+		smp_mb__after_clear_bit();
+		return;
+	}
+	wait_on_bit(&fence->flags, RPC_FENCE_DRAIN_BIT,
+			rpc_wait_bit, TASK_UNINTERRUPTIBLE);
+}
+EXPORT_SYMBOL(rpc_fence_lock_wait_for_drain);
+
+/**
+ * rpc_fence_lock_shared - 'read lock' the rpc_fence_lock
+ * @fence: pointer to struct rpc_fence_lock
+ * @task: pointer to struct rpc_task
+ * @queue: pointer to struct rpc_wait_queue
+ *
+ * This function allows @task to try to 'read lock' @fence
+ * If the attempt fails, then @task is put to sleep on the
+ * rpc_wait_queue @queue.
+ *
+ * Returns true if the lock attempt succeeded, or false
+ * if @task was put to sleep.
+ */
+bool rpc_fence_lock_shared(struct rpc_fence_lock *fence,
+		struct rpc_task *task,
+		struct rpc_wait_queue *queue)
+{
+	bool ret = true;
+
+	rcu_read_lock();
+	if (test_bit(RPC_FENCE_LOCK_BIT, &fence->flags)) {
+		rpc_sleep_on(queue, task, NULL);
+		ret = false;
+	} else
+		atomic_inc(&fence->count);
+	rcu_read_unlock();
+	return ret;
+}
+EXPORT_SYMBOL_GPL(rpc_fence_lock_shared);
+
+void rpc_fence_unlock_shared(struct rpc_fence_lock *fence, struct rpc_task *task)
+{
+	if (atomic_dec_and_test(&fence->count)) {
+		if (test_and_clear_bit(RPC_FENCE_DRAIN_BIT, &fence->flags))
+			wake_up_bit(&fence->flags, RPC_FENCE_DRAIN_BIT);
+	}
+}
+EXPORT_SYMBOL_GPL(rpc_fence_unlock_shared);
 
 /*
  * Helper to call task->tk_ops->rpc_call_prepare
