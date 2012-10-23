@@ -11,7 +11,7 @@
  * Copyright (C) 2007 Alex Dubov <oakad@yahoo.com>
  *
  */
-
+#define DRIVER_NAME "ms_block"
 #define pr_fmt(fmt) DRIVER_NAME ": " fmt
 
 #include <linux/module.h>
@@ -1408,8 +1408,10 @@ static int msb_ftl_scan(struct msb_data *msb)
 			msb_mark_block_used(msb, pba);
 			msb_erase_block(msb, pba);
 			continue;
-		} else if (error)
+		} else if (error) {
+			kfree(overwrite_flags);
 			return error;
+		}
 
 		lba = be16_to_cpu(extra.logical_address);
 		managment_flag = extra.management_flag;
@@ -1983,9 +1985,9 @@ static int msb_disk_release(struct gendisk *disk)
 			msb->usage_count--;
 
 		if (!msb->usage_count) {
-			kfree(msb);
 			disk->private_data = NULL;
 			idr_remove(&msb_disk_idr, msb->disk_id);
+			kfree(msb);
 			put_disk(disk);
 		}
 	}

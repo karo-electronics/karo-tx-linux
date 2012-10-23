@@ -1,0 +1,1515 @@
+/*
+ *  Copyright (C) 1991, 1992  Linus Torvalds
+ *
+ * Modified to make sys_syslog() more flexible: added commands to
+ * return the last 4k of kernel messages, regardless of whether
+ * they've been read or not.  Added option to suppress kernel printk's
+ * to the console.  Added hook for sending the console messages
+ * elsewhere, in preparation for a serial line console (someday).
+ * Ted Ts'o, 2/11/93.
+ * Modified for sysctl support, 1/8/97, Chris Horn.
+ * Fixed SMP synchronization, 08/08/99, Manfred Spraul
+ *     manfred@colorfullife.com
+ * Rewrote bits to get rid of console_lock
+ *	01Mar01 Andrew Morton
+ */
+
+#include <linux/kernel.h>
+#include <linux/mm.h>
+#include <linux/tty.h>
+#include <linux/tty_driver.h>
+#include <linux/console.h>
+#include <linux/init.h>
+#include <linux/jiffies.h>
+#include <linux/nmi.h>
+#include <linux/module.h>
+#include <linux/moduleparam.h>
+#include <linux/interrupt.h>			/* For in_interrupt() */
+#include <linux/delay.h>
+#include <linux/smp.h>
+#include <linux/security.h>
+#include <linux/bootmem.h>
+#include <linux/memblock.h>
+#include <linux/kexec.h>
+#include <linux/kdb.h>
+#include <linux/ratelimit.h>
+#include <linux/cpu.h>
+#include <linux/notifier.h>
+#include <linux/rculist.h>
+#include <linux/poll.h>
+
+#include <asm/uaccess.h>
+
+#define CREATE_TRACE_POINTS
+#include <trace/events/printk.h>
+
+#include "console_cmdline.h"
+#include "braille.h"
+#include "printk_log.h"
+#include "printk_syslog.h"
+
+/*
+ * Architectures can override it:
+ */
+void asmlinkage __attribute__((weak)) early_printk(const char *fmt, ...)
+{
+}
+
+/* printk's without a loglevel use this.. */
+#define DEFAULT_MESSAGE_LOGLEVEL CONFIG_DEFAULT_MESSAGE_LOGLEVEL
+
+/* We show everything that is MORE important than this.. */
+#define MINIMUM_CONSOLE_LOGLEVEL 1 /* Minimum loglevel we let people use */
+#define DEFAULT_CONSOLE_LOGLEVEL 7 /* anything MORE serious than KERN_DEBUG */
+
+DECLARE_WAIT_QUEUE_HEAD(printk_log_wait);
+
+int console_printk[4] = {
+	DEFAULT_CONSOLE_LOGLEVEL,	/* console_loglevel */
+	DEFAULT_MESSAGE_LOGLEVEL,	/* default_message_loglevel */
+	MINIMUM_CONSOLE_LOGLEVEL,	/* minimum_console_loglevel */
+	DEFAULT_CONSOLE_LOGLEVEL,	/* default_console_loglevel */
+};
+
+/*
+ * Low level drivers may need that to know if they can schedule in
+ * their unblank() callback or not. So let's export it.
+ */
+int oops_in_progress;
+EXPORT_SYMBOL(oops_in_progress);
+
+/*
+ * console_sem protects the console_drivers list, and also
+ * provides serialisation for access to the entire console
+ * driver system.
+ */
+static DEFINE_SEMAPHORE(console_sem);
+struct console *console_drivers;
+EXPORT_SYMBOL_GPL(console_drivers);
+
+/*
+ * This is used for debugging the mess that is the VT code by
+ * keeping track if we have the console semaphore held. It's
+ * definitely not the perfect debug tool (we don't know if _WE_
+ * hold it are racing, but it helps tracking those weird code
+ * path in the console code where we end up in places I want
+ * locked without the console sempahore held
+ */
+static int console_locked, console_suspended;
+
+/*
+ * If exclusive_console is non-NULL then only this console is to be printed to.
+ */
+static struct console *exclusive_console;
+
+
+/*
+ *	Array of consoles built from command line options (console=)
+ */
+
+#define MAX_CMDLINECONSOLES 8
+
+static struct console_cmdline console_cmdline[MAX_CMDLINECONSOLES];
+
+static int selected_console = -1;
+static int preferred_console = -1;
+int console_set_on_cmdline;
+EXPORT_SYMBOL(console_set_on_cmdline);
+
+/* Flag: console code may call schedule() */
+static int console_may_schedule;
+
+#ifdef CONFIG_PRINTK
+
+/* the next printk record to write to the console */
+static u64 console_seq;
+static u32 console_idx;
+static enum printk_log_flags console_prev;
+
+/* cpu currently holding printk_logbuf_lock */
+static volatile unsigned int logbuf_cpu = UINT_MAX;
+
+#ifdef CONFIG_KEXEC
+/*
+ * This appends the listed symbols to /proc/vmcoreinfo
+ *
+ * /proc/vmcoreinfo is used by various utiilties, like crash and makedumpfile to
+ * obtain access to symbols that are otherwise very difficult to locate.  These
+ * symbols are specifically used so that utilities can access and extract the
+ * dmesg log from a vmcore file after a crash.
+ */
+void log_buf_kexec_setup(void)
+{
+	VMCOREINFO_SYMBOL(printk_log_buf);
+	VMCOREINFO_SYMBOL(printk_log_buf_len);
+	VMCOREINFO_SYMBOL(printk_log_first_idx);
+	VMCOREINFO_SYMBOL(printk_log_next_idx);
+	/*
+	 * Export struct printk_log size and field offsets. User space tools can
+	 * parse it and detect any changes to structure down the line.
+	 */
+	VMCOREINFO_STRUCT_SIZE(printk_log);
+	VMCOREINFO_OFFSET(printk_log, ts_nsec);
+	VMCOREINFO_OFFSET(printk_log, len);
+	VMCOREINFO_OFFSET(printk_log, text_len);
+	VMCOREINFO_OFFSET(printk_log, dict_len);
+}
+#endif
+
+/* requested printk_log_buf_len from kernel cmdline */
+static unsigned long __initdata new_printk_log_buf_len;
+
+/* save requested printk_log_buf_len since it's too early to process it */
+static int __init printk_log_buf_len_setup(char *str)
+{
+	unsigned size = memparse(str, &str);
+
+	if (size)
+		size = roundup_pow_of_two(size);
+	if (size > printk_log_buf_len)
+		new_printk_log_buf_len = size;
+
+	return 0;
+}
+early_param("log_buf_len", printk_log_buf_len_setup);
+
+void __init setup_log_buf(int early)
+{
+	unsigned long flags;
+	char *new_printk_log_buf;
+	int free;
+
+	if (!new_printk_log_buf_len)
+		return;
+
+	if (early) {
+		unsigned long mem;
+
+		mem = memblock_alloc(new_printk_log_buf_len, PAGE_SIZE);
+		if (!mem)
+			return;
+		new_printk_log_buf = __va(mem);
+	} else {
+		new_printk_log_buf = alloc_bootmem_nopanic(new_printk_log_buf_len);
+	}
+
+	if (unlikely(!new_printk_log_buf)) {
+		pr_err("printk_log_buf_len: %ld bytes not available\n",
+			new_printk_log_buf_len);
+		return;
+	}
+
+	raw_spin_lock_irqsave(&printk_logbuf_lock, flags);
+	printk_log_buf_len = new_printk_log_buf_len;
+	printk_log_buf = new_printk_log_buf;
+	new_printk_log_buf_len = 0;
+	free = __PRINTK_LOG_BUF_LEN - printk_log_next_idx;
+	memcpy(printk_log_buf, __printk_log_buf, __PRINTK_LOG_BUF_LEN);
+	raw_spin_unlock_irqrestore(&printk_logbuf_lock, flags);
+
+	pr_info("printk_log_buf_len: %d\n", printk_log_buf_len);
+	pr_info("early log buf free: %d(%d%%)\n",
+		free, (free * 100) / __PRINTK_LOG_BUF_LEN);
+}
+
+#ifdef CONFIG_BOOT_PRINTK_DELAY
+
+static int boot_delay; /* msecs delay after each printk during bootup */
+static unsigned long long loops_per_msec;	/* based on boot_delay */
+
+static int __init boot_delay_setup(char *str)
+{
+	unsigned long lpj;
+
+	lpj = preset_lpj ? preset_lpj : 1000000;	/* some guess */
+	loops_per_msec = (unsigned long long)lpj / 1000 * HZ;
+
+	get_option(&str, &boot_delay);
+	if (boot_delay > 10 * 1000)
+		boot_delay = 0;
+
+	pr_debug("boot_delay: %u, preset_lpj: %ld, lpj: %lu, "
+		"HZ: %d, loops_per_msec: %llu\n",
+		boot_delay, preset_lpj, lpj, HZ, loops_per_msec);
+	return 1;
+}
+__setup("boot_delay=", boot_delay_setup);
+
+static void boot_delay_msec(void)
+{
+	unsigned long long k;
+	unsigned long timeout;
+
+	if (boot_delay == 0 || system_state != SYSTEM_BOOTING)
+		return;
+
+	k = (unsigned long long)loops_per_msec * boot_delay;
+
+	timeout = jiffies + msecs_to_jiffies(boot_delay);
+	while (k) {
+		k--;
+		cpu_relax();
+		/*
+		 * use (volatile) jiffies to prevent
+		 * compiler reduction; loop termination via jiffies
+		 * is secondary and may or may not happen.
+		 */
+		if (time_after(jiffies, timeout))
+			break;
+		touch_nmi_watchdog();
+	}
+}
+#else
+static inline void boot_delay_msec(void)
+{
+}
+#endif
+
+static bool __read_mostly ignore_loglevel;
+
+static int __init ignore_loglevel_setup(char *str)
+{
+	ignore_loglevel = 1;
+	printk(KERN_INFO "debug: ignoring loglevel setting.\n");
+
+	return 0;
+}
+
+early_param("ignore_loglevel", ignore_loglevel_setup);
+module_param(ignore_loglevel, bool, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(ignore_loglevel, "ignore loglevel setting, to"
+	"print all kernel messages to the console.");
+
+/*
+ * Call the console drivers, asking them to write out
+ * printk_log_buf[start] to printk_log_buf[end - 1].
+ * The console_lock must be held.
+ */
+static void call_console_drivers(int level, const char *text, size_t len)
+{
+	struct console *con;
+
+	trace_console(text, 0, len, len);
+
+	if (level >= console_loglevel && !ignore_loglevel)
+		return;
+	if (!console_drivers)
+		return;
+
+	for_each_console(con) {
+		if (exclusive_console && con != exclusive_console)
+			continue;
+		if (!(con->flags & CON_ENABLED))
+			continue;
+		if (!con->write)
+			continue;
+		if (!cpu_online(smp_processor_id()) &&
+		    !(con->flags & CON_ANYTIME))
+			continue;
+		con->write(con, text, len);
+	}
+}
+
+/*
+ * Zap console related locks when oopsing. Only zap at most once
+ * every 10 seconds, to leave time for slow consoles to print a
+ * full oops.
+ */
+static void zap_locks(void)
+{
+	static unsigned long oops_timestamp;
+
+	if (time_after_eq(jiffies, oops_timestamp) &&
+			!time_after(jiffies, oops_timestamp + 30 * HZ))
+		return;
+
+	oops_timestamp = jiffies;
+
+	debug_locks_off();
+	/* If a crash is occurring, make sure we can't deadlock */
+	raw_spin_lock_init(&printk_logbuf_lock);
+	/* And make sure that we print immediately */
+	sema_init(&console_sem, 1);
+}
+
+/* Check if we have any console registered that can be called early in boot. */
+static int have_callable_console(void)
+{
+	struct console *con;
+
+	for_each_console(con)
+		if (con->flags & CON_ANYTIME)
+			return 1;
+
+	return 0;
+}
+
+/*
+ * Can we actually use the console at this time on this cpu?
+ *
+ * Console drivers may assume that per-cpu resources have
+ * been allocated. So unless they're explicitly marked as
+ * being able to cope (CON_ANYTIME) don't call them until
+ * this CPU is officially up.
+ */
+static inline int can_use_console(unsigned int cpu)
+{
+	return cpu_online(cpu) || have_callable_console();
+}
+
+/*
+ * Try to get console ownership to actually show the kernel
+ * messages from a 'printk'. Return true (and with the
+ * console_lock held, and 'console_locked' set) if it
+ * is successful, false otherwise.
+ *
+ * This gets called with the 'printk_logbuf_lock' spinlock held and
+ * interrupts disabled. It should return with 'lockbuf_lock'
+ * released but interrupts still disabled.
+ */
+static int console_trylock_for_printk(unsigned int cpu)
+	__releases(&printk_logbuf_lock)
+{
+	int retval = 0, wake = 0;
+
+	if (console_trylock()) {
+		retval = 1;
+
+		/*
+		 * If we can't use the console, we need to release
+		 * the console semaphore by hand to avoid flushing
+		 * the buffer. We need to hold the console semaphore
+		 * in order to do this test safely.
+		 */
+		if (!can_use_console(cpu)) {
+			console_locked = 0;
+			wake = 1;
+			retval = 0;
+		}
+	}
+	logbuf_cpu = UINT_MAX;
+	if (wake)
+		up(&console_sem);
+	raw_spin_unlock(&printk_logbuf_lock);
+	return retval;
+}
+
+int printk_delay_msec __read_mostly;
+
+static inline void printk_delay(void)
+{
+	if (unlikely(printk_delay_msec)) {
+		int m = printk_delay_msec;
+
+		while (m--) {
+			mdelay(1);
+			touch_nmi_watchdog();
+		}
+	}
+}
+
+/*
+ * Continuation lines are buffered, and not committed to the record buffer
+ * until the line is complete, or a race forces it. The line fragments
+ * though, are printed immediately to the consoles to ensure everything has
+ * reached the console in case of a kernel crash.
+ */
+static struct cont {
+	char buf[PRINTK_LOG_LINE_MAX];
+	size_t len;			/* length == 0 means unused buffer */
+	size_t cons;			/* bytes written to console */
+	struct task_struct *owner;	/* task of first print*/
+	u64 ts_nsec;			/* time of first print */
+	u8 level;			/* log level of first message */
+	u8 facility;			/* log level of first message */
+	enum printk_log_flags flags;	/* prefix, newline flags */
+	bool flushed:1;			/* buffer sealed and committed */
+} cont;
+
+static void cont_flush(enum printk_log_flags flags)
+{
+	if (cont.flushed)
+		return;
+	if (cont.len == 0)
+		return;
+
+	if (cont.cons) {
+		/*
+		 * If a fragment of this line was directly flushed to the
+		 * console; wait for the console to pick up the rest of the
+		 * line. LOG_NOCONS suppresses a duplicated output.
+		 */
+		printk_log_store(cont.facility, cont.level, flags | LOG_NOCONS,
+				 cont.ts_nsec, NULL, 0, cont.buf, cont.len);
+		cont.flags = flags;
+		cont.flushed = true;
+	} else {
+		/*
+		 * If no fragment of this line ever reached the console,
+		 * just submit it to the store and free the buffer.
+		 */
+		printk_log_store(cont.facility, cont.level, flags, 0,
+				 NULL, 0, cont.buf, cont.len);
+		cont.len = 0;
+	}
+}
+
+static bool cont_add(int facility, int level, const char *text, size_t len)
+{
+	if (cont.len && cont.flushed)
+		return false;
+
+	if (cont.len + len > sizeof(cont.buf)) {
+		/* the line gets too long, split it up in separate records */
+		cont_flush(LOG_CONT);
+		return false;
+	}
+
+	if (!cont.len) {
+		cont.facility = facility;
+		cont.level = level;
+		cont.owner = current;
+		cont.ts_nsec = local_clock();
+		cont.flags = 0;
+		cont.cons = 0;
+		cont.flushed = false;
+	}
+
+	memcpy(cont.buf + cont.len, text, len);
+	cont.len += len;
+
+	if (cont.len > (sizeof(cont.buf) * 80) / 100)
+		cont_flush(LOG_CONT);
+
+	return true;
+}
+
+static size_t cont_print_text(char *text, size_t size)
+{
+	size_t textlen = 0;
+	size_t len;
+
+	if (cont.cons == 0 && (console_prev & LOG_NEWLINE)) {
+		textlen += printk_print_time(cont.ts_nsec, text);
+		size -= textlen;
+	}
+
+	len = cont.len - cont.cons;
+	if (len > 0) {
+		if (len+1 > size)
+			len = size-1;
+		memcpy(text + textlen, cont.buf + cont.cons, len);
+		textlen += len;
+		cont.cons = cont.len;
+	}
+
+	if (cont.flushed) {
+		if (cont.flags & LOG_NEWLINE)
+			text[textlen++] = '\n';
+		/* got everything, release buffer */
+		cont.len = 0;
+	}
+	return textlen;
+}
+
+asmlinkage int vprintk_emit(int facility, int level,
+			    const char *dict, size_t dictlen,
+			    const char *fmt, va_list args)
+{
+	static int recursion_bug;
+	static char textbuf[PRINTK_LOG_LINE_MAX];
+	char *text = textbuf;
+	size_t text_len;
+	enum printk_log_flags lflags = 0;
+	unsigned long flags;
+	int this_cpu;
+	int printed_len = 0;
+
+	boot_delay_msec();
+	printk_delay();
+
+	/* This stops the holder of console_sem just where we want him */
+	local_irq_save(flags);
+	this_cpu = smp_processor_id();
+
+	/*
+	 * Ouch, printk recursed into itself!
+	 */
+	if (unlikely(logbuf_cpu == this_cpu)) {
+		/*
+		 * If a crash is occurring during printk() on this CPU,
+		 * then try to get the crash message out but make sure
+		 * we can't deadlock. Otherwise just return to avoid the
+		 * recursion and return - but flag the recursion so that
+		 * it can be printed at the next appropriate moment:
+		 */
+		if (!oops_in_progress && !lockdep_recursing(current)) {
+			recursion_bug = 1;
+			goto out_restore_irqs;
+		}
+		zap_locks();
+	}
+
+	lockdep_off();
+	raw_spin_lock(&printk_logbuf_lock);
+	logbuf_cpu = this_cpu;
+
+	if (recursion_bug) {
+		static const char recursion_msg[] =
+			"BUG: recent printk recursion!";
+
+		recursion_bug = 0;
+		printed_len += strlen(recursion_msg);
+		/* emit KERN_CRIT message */
+		printk_log_store(0, 2, LOG_PREFIX|LOG_NEWLINE, 0,
+				 NULL, 0, recursion_msg, printed_len);
+	}
+
+	/*
+	 * The printf needs to come first; we need the syslog
+	 * prefix which might be passed-in as a parameter.
+	 */
+	text_len = vscnprintf(text, sizeof(textbuf), fmt, args);
+
+	/* mark and strip a trailing newline */
+	if (text_len && text[text_len-1] == '\n') {
+		text_len--;
+		lflags |= LOG_NEWLINE;
+	}
+
+	/* strip kernel syslog prefix and extract log level or control flags */
+	if (facility == 0) {
+		int kern_level = printk_get_level(text);
+
+		if (kern_level) {
+			const char *end_of_header = printk_skip_level(text);
+			switch (kern_level) {
+			case '0' ... '7':
+				if (level == -1)
+					level = kern_level - '0';
+			case 'd':	/* KERN_DEFAULT */
+				lflags |= LOG_PREFIX;
+			case 'c':	/* KERN_CONT */
+				break;
+			}
+			text_len -= end_of_header - text;
+			text = (char *)end_of_header;
+		}
+	}
+
+	if (level == -1)
+		level = default_message_loglevel;
+
+	if (dict)
+		lflags |= LOG_PREFIX|LOG_NEWLINE;
+
+	if (!(lflags & LOG_NEWLINE)) {
+		/*
+		 * Flush the conflicting buffer. An earlier newline was missing,
+		 * or another task also prints continuation lines.
+		 */
+		if (cont.len && (lflags & LOG_PREFIX || cont.owner != current))
+			cont_flush(LOG_NEWLINE);
+
+		/* buffer line if possible, otherwise store it right away */
+		if (!cont_add(facility, level, text, text_len))
+			printk_log_store(facility, level, lflags | LOG_CONT, 0,
+					 dict, dictlen, text, text_len);
+	} else {
+		bool stored = false;
+
+		/*
+		 * If an earlier newline was missing and it was the same task,
+		 * either merge it with the current buffer and flush, or if
+		 * there was a race with interrupts (prefix == true) then just
+		 * flush it out and store this line separately.
+		 */
+		if (cont.len && cont.owner == current) {
+			if (!(lflags & LOG_PREFIX))
+				stored = cont_add(facility, level, text, text_len);
+			cont_flush(LOG_NEWLINE);
+		}
+
+		if (!stored)
+			printk_log_store(facility, level, lflags, 0,
+					 dict, dictlen, text, text_len);
+	}
+	printed_len += text_len;
+
+	/*
+	 * Try to acquire and then immediately release the console semaphore.
+	 * The release will print out buffers and wake up /dev/kmsg and syslog()
+	 * users.
+	 *
+	 * The console_trylock_for_printk() function will release 'printk_logbuf_lock'
+	 * regardless of whether it actually gets the console semaphore or not.
+	 */
+	if (console_trylock_for_printk(this_cpu))
+		console_unlock();
+
+	lockdep_on();
+out_restore_irqs:
+	local_irq_restore(flags);
+
+	return printed_len;
+}
+EXPORT_SYMBOL(vprintk_emit);
+
+asmlinkage int vprintk(const char *fmt, va_list args)
+{
+	return vprintk_emit(0, -1, NULL, 0, fmt, args);
+}
+EXPORT_SYMBOL(vprintk);
+
+asmlinkage int printk_emit(int facility, int level,
+			   const char *dict, size_t dictlen,
+			   const char *fmt, ...)
+{
+	va_list args;
+	int r;
+
+	va_start(args, fmt);
+	r = vprintk_emit(facility, level, dict, dictlen, fmt, args);
+	va_end(args);
+
+	return r;
+}
+EXPORT_SYMBOL(printk_emit);
+
+/**
+ * printk - print a kernel message
+ * @fmt: format string
+ *
+ * This is printk(). It can be called from any context. We want it to work.
+ *
+ * We try to grab the console_lock. If we succeed, it's easy - we log the
+ * output and call the console drivers.  If we fail to get the semaphore, we
+ * place the output into the log buffer and return. The current holder of
+ * the console_sem will notice the new output in console_unlock(); and will
+ * send it to the consoles before releasing the lock.
+ *
+ * One effect of this deferred printing is that code which calls printk() and
+ * then changes console_loglevel may break. This is because console_loglevel
+ * is inspected when the actual printing occurs.
+ *
+ * See also:
+ * printf(3)
+ *
+ * See the vsnprintf() documentation for format string extensions over C99.
+ */
+asmlinkage int printk(const char *fmt, ...)
+{
+	va_list args;
+	int r;
+
+#ifdef CONFIG_KGDB_KDB
+	if (unlikely(kdb_trap_printk)) {
+		va_start(args, fmt);
+		r = vkdb_printf(fmt, args);
+		va_end(args);
+		return r;
+	}
+#endif
+	va_start(args, fmt);
+	r = vprintk_emit(0, -1, NULL, 0, fmt, args);
+	va_end(args);
+
+	return r;
+}
+EXPORT_SYMBOL(printk);
+
+#else /* CONFIG_PRINTK */
+
+#define PRINTK_LOG_LINE_MAX	0
+#define PRINTK_PREFIX_MAX		0
+static u64 console_seq;
+static u32 console_idx;
+u64 printk_log_first_seq;
+u32 printk_log_first_idx;
+u64 printk_log_next_seq;
+static enum printk_log_flags console_prev;
+static struct cont {
+	size_t len;
+	size_t cons;
+	u8 level;
+	bool flushed:1;
+} cont;
+struct printk_log *printk_log_from_idx(u32 idx) { return NULL; }
+u32 printk_log_next(u32 idx) { return 0; }
+static void call_console_drivers(int level, const char *text, size_t len) {}
+
+static size_t cont_print_text(char *text, size_t size) { return 0; }
+
+#endif /* CONFIG_PRINTK */
+
+static int __add_preferred_console(char *name, int idx, char *options,
+				   char *brl_options)
+{
+	struct console_cmdline *c;
+	int i;
+
+	/*
+	 *	See if this tty is not yet registered, and
+	 *	if we have a slot free.
+	 */
+	for (i = 0, c = console_cmdline;
+	     i < MAX_CMDLINECONSOLES && c->name[0];
+	     i++, c++) {
+		if (strcmp(c->name, name) == 0 && c->index == idx) {
+			if (!brl_options)
+				selected_console = i;
+			return 0;
+		}
+	}
+	if (i == MAX_CMDLINECONSOLES)
+		return -E2BIG;
+	if (!brl_options)
+		selected_console = i;
+	strlcpy(c->name, name, sizeof(c->name));
+	c->options = options;
+	braille_set_options(c, brl_options);
+
+	c->index = idx;
+	return 0;
+}
+/*
+ * Set up a list of consoles.  Called from init/main.c
+ */
+static int __init console_setup(char *str)
+{
+	char buf[sizeof(console_cmdline[0].name) + 4]; /* 4 for index */
+	char *s, *options, *brl_options = NULL;
+	int idx;
+
+	if (_braille_console_setup(&str, &brl_options))
+		return 1;
+
+	/*
+	 * Decode str into name, index, options.
+	 */
+	if (str[0] >= '0' && str[0] <= '9') {
+		strcpy(buf, "ttyS");
+		strncpy(buf + 4, str, sizeof(buf) - 5);
+	} else {
+		strncpy(buf, str, sizeof(buf) - 1);
+	}
+	buf[sizeof(buf) - 1] = 0;
+	if ((options = strchr(str, ',')) != NULL)
+		*(options++) = 0;
+#ifdef __sparc__
+	if (!strcmp(str, "ttya"))
+		strcpy(buf, "ttyS0");
+	if (!strcmp(str, "ttyb"))
+		strcpy(buf, "ttyS1");
+#endif
+	for (s = buf; *s; s++)
+		if ((*s >= '0' && *s <= '9') || *s == ',')
+			break;
+	idx = simple_strtoul(s, NULL, 10);
+	*s = 0;
+
+	__add_preferred_console(buf, idx, options, brl_options);
+	console_set_on_cmdline = 1;
+	return 1;
+}
+__setup("console=", console_setup);
+
+/**
+ * add_preferred_console - add a device to the list of preferred consoles.
+ * @name: device name
+ * @idx: device index
+ * @options: options for this console
+ *
+ * The last preferred console added will be used for kernel messages
+ * and stdin/out/err for init.  Normally this is used by console_setup
+ * above to handle user-supplied console arguments; however it can also
+ * be used by arch-specific code either to override the user or more
+ * commonly to provide a default console (ie from PROM variables) when
+ * the user has not supplied one.
+ */
+int add_preferred_console(char *name, int idx, char *options)
+{
+	return __add_preferred_console(name, idx, options, NULL);
+}
+
+int update_console_cmdline(char *name, int idx, char *name_new, int idx_new, char *options)
+{
+	struct console_cmdline *c;
+	int i;
+
+	for (i = 0, c = console_cmdline;
+	     i < MAX_CMDLINECONSOLES && c->name[0];
+	     i++, c++)
+		if (strcmp(c->name, name) == 0 && c->index == idx) {
+			strlcpy(c->name, name_new, sizeof(c->name));
+			c->name[sizeof(c->name) - 1] = 0;
+			c->options = options;
+			c->index = idx_new;
+			return i;
+		}
+	/* not found */
+	return -1;
+}
+
+bool console_suspend_enabled = 1;
+EXPORT_SYMBOL(console_suspend_enabled);
+
+static int __init console_suspend_disable(char *str)
+{
+	console_suspend_enabled = 0;
+	return 1;
+}
+__setup("no_console_suspend", console_suspend_disable);
+module_param_named(console_suspend, console_suspend_enabled,
+		bool, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(console_suspend, "suspend console during suspend"
+	" and hibernate operations");
+
+/**
+ * suspend_console - suspend the console subsystem
+ *
+ * This disables printk() while we go into suspend states
+ */
+void suspend_console(void)
+{
+	if (!console_suspend_enabled)
+		return;
+	printk("Suspending console(s) (use no_console_suspend to debug)\n");
+	console_lock();
+	console_suspended = 1;
+	up(&console_sem);
+}
+
+void resume_console(void)
+{
+	if (!console_suspend_enabled)
+		return;
+	down(&console_sem);
+	console_suspended = 0;
+	console_unlock();
+}
+
+/**
+ * console_cpu_notify - print deferred console messages after CPU hotplug
+ * @self: notifier struct
+ * @action: CPU hotplug event
+ * @hcpu: unused
+ *
+ * If printk() is called from a CPU that is not online yet, the messages
+ * will be spooled but will not show up on the console.  This function is
+ * called when a new CPU comes online (or fails to come up), and ensures
+ * that any such output gets printed.
+ */
+static int __cpuinit console_cpu_notify(struct notifier_block *self,
+	unsigned long action, void *hcpu)
+{
+	switch (action) {
+	case CPU_ONLINE:
+	case CPU_DEAD:
+	case CPU_DOWN_FAILED:
+	case CPU_UP_CANCELED:
+		console_lock();
+		console_unlock();
+	}
+	return NOTIFY_OK;
+}
+
+/**
+ * console_lock - lock the console system for exclusive use.
+ *
+ * Acquires a lock which guarantees that the caller has
+ * exclusive access to the console system and the console_drivers list.
+ *
+ * Can sleep, returns nothing.
+ */
+void console_lock(void)
+{
+	BUG_ON(in_interrupt());
+	down(&console_sem);
+	if (console_suspended)
+		return;
+	console_locked = 1;
+	console_may_schedule = 1;
+}
+EXPORT_SYMBOL(console_lock);
+
+/**
+ * console_trylock - try to lock the console system for exclusive use.
+ *
+ * Tried to acquire a lock which guarantees that the caller has
+ * exclusive access to the console system and the console_drivers list.
+ *
+ * returns 1 on success, and 0 on failure to acquire the lock.
+ */
+int console_trylock(void)
+{
+	if (down_trylock(&console_sem))
+		return 0;
+	if (console_suspended) {
+		up(&console_sem);
+		return 0;
+	}
+	console_locked = 1;
+	console_may_schedule = 0;
+	return 1;
+}
+EXPORT_SYMBOL(console_trylock);
+
+int is_console_locked(void)
+{
+	return console_locked;
+}
+
+/*
+ * Delayed printk version, for scheduler-internal messages:
+ */
+#define PRINTK_BUF_SIZE		512
+
+#define PRINTK_PENDING_WAKEUP	0x01
+#define PRINTK_PENDING_SCHED	0x02
+
+static DEFINE_PER_CPU(int, printk_pending);
+static DEFINE_PER_CPU(char [PRINTK_BUF_SIZE], printk_sched_buf);
+
+void printk_tick(void)
+{
+	if (__this_cpu_read(printk_pending)) {
+		int pending = __this_cpu_xchg(printk_pending, 0);
+		if (pending & PRINTK_PENDING_SCHED) {
+			char *buf = __get_cpu_var(printk_sched_buf);
+			printk(KERN_WARNING "[sched_delayed] %s", buf);
+		}
+		if (pending & PRINTK_PENDING_WAKEUP)
+			wake_up_interruptible(&printk_log_wait);
+	}
+}
+
+int printk_needs_cpu(int cpu)
+{
+	if (cpu_is_offline(cpu))
+		printk_tick();
+	return __this_cpu_read(printk_pending);
+}
+
+void wake_up_klogd(void)
+{
+	if (waitqueue_active(&printk_log_wait))
+		this_cpu_or(printk_pending, PRINTK_PENDING_WAKEUP);
+}
+
+static void console_cont_flush(char *text, size_t size)
+{
+	unsigned long flags;
+	size_t len;
+
+	raw_spin_lock_irqsave(&printk_logbuf_lock, flags);
+
+	if (!cont.len)
+		goto out;
+
+	/*
+	 * We still queue earlier records, likely because the console was
+	 * busy. The earlier ones need to be printed before this one, we
+	 * did not flush any fragment so far, so just let it queue up.
+	 */
+	if (console_seq < printk_log_next_seq && !cont.cons)
+		goto out;
+
+	len = cont_print_text(text, size);
+	raw_spin_unlock(&printk_logbuf_lock);
+	stop_critical_timings();
+	call_console_drivers(cont.level, text, len);
+	start_critical_timings();
+	local_irq_restore(flags);
+	return;
+out:
+	raw_spin_unlock_irqrestore(&printk_logbuf_lock, flags);
+}
+
+/**
+ * console_unlock - unlock the console system
+ *
+ * Releases the console_lock which the caller holds on the console system
+ * and the console driver list.
+ *
+ * While the console_lock was held, console output may have been buffered
+ * by printk().  If this is the case, console_unlock(); emits
+ * the output prior to releasing the lock.
+ *
+ * If there is output waiting, we wake /dev/kmsg and syslog() users.
+ *
+ * console_unlock(); may be called from any context.
+ */
+void console_unlock(void)
+{
+	static char text[PRINTK_LOG_LINE_MAX + PRINTK_PREFIX_MAX];
+	static u64 seen_seq;
+	unsigned long flags;
+	bool wake_klogd = false;
+	bool retry;
+
+	if (console_suspended) {
+		up(&console_sem);
+		return;
+	}
+
+	console_may_schedule = 0;
+
+	/* flush buffered message fragment immediately to console */
+	console_cont_flush(text, sizeof(text));
+again:
+	for (;;) {
+		struct printk_log *msg;
+		size_t len;
+		int level;
+
+		raw_spin_lock_irqsave(&printk_logbuf_lock, flags);
+		if (seen_seq != printk_log_next_seq) {
+			wake_klogd = true;
+			seen_seq = printk_log_next_seq;
+		}
+
+		if (console_seq < printk_log_first_seq) {
+			/* messages are gone, move to first one */
+			console_seq = printk_log_first_seq;
+			console_idx = printk_log_first_idx;
+			console_prev = 0;
+		}
+skip:
+		if (console_seq == printk_log_next_seq)
+			break;
+
+		msg = printk_log_from_idx(console_idx);
+		if (msg->flags & LOG_NOCONS) {
+			/*
+			 * Skip record we have buffered and already printed
+			 * directly to the console when we received it.
+			 */
+			console_idx = printk_log_next(console_idx);
+			console_seq++;
+			/*
+			 * We will get here again when we register a new
+			 * CON_PRINTBUFFER console. Clear the flag so we
+			 * will properly dump everything later.
+			 */
+			msg->flags &= ~LOG_NOCONS;
+			console_prev = msg->flags;
+			goto skip;
+		}
+
+		level = msg->level;
+		len = printk_msg_print_text(msg, console_prev, false,
+					    text, sizeof(text));
+		console_idx = printk_log_next(console_idx);
+		console_seq++;
+		console_prev = msg->flags;
+		raw_spin_unlock(&printk_logbuf_lock);
+
+		stop_critical_timings();	/* don't trace print latency */
+		call_console_drivers(level, text, len);
+		start_critical_timings();
+		local_irq_restore(flags);
+	}
+	console_locked = 0;
+
+	/* Release the exclusive_console once it is used */
+	if (unlikely(exclusive_console))
+		exclusive_console = NULL;
+
+	raw_spin_unlock(&printk_logbuf_lock);
+
+	up(&console_sem);
+
+	/*
+	 * Someone could have filled up the buffer again, so re-check if there's
+	 * something to flush. In case we cannot trylock the console_sem again,
+	 * there's a new owner and the console_unlock() from them will do the
+	 * flush, no worries.
+	 */
+	raw_spin_lock(&printk_logbuf_lock);
+	retry = console_seq != printk_log_next_seq;
+	raw_spin_unlock_irqrestore(&printk_logbuf_lock, flags);
+
+	if (retry && console_trylock())
+		goto again;
+
+	if (wake_klogd)
+		wake_up_klogd();
+}
+EXPORT_SYMBOL(console_unlock);
+
+/**
+ * console_conditional_schedule - yield the CPU if required
+ *
+ * If the console code is currently allowed to sleep, and
+ * if this CPU should yield the CPU to another task, do
+ * so here.
+ *
+ * Must be called within console_lock();.
+ */
+void __sched console_conditional_schedule(void)
+{
+	if (console_may_schedule)
+		cond_resched();
+}
+EXPORT_SYMBOL(console_conditional_schedule);
+
+void console_unblank(void)
+{
+	struct console *c;
+
+	/*
+	 * console_unblank can no longer be called in interrupt context unless
+	 * oops_in_progress is set to 1..
+	 */
+	if (oops_in_progress) {
+		if (down_trylock(&console_sem) != 0)
+			return;
+	} else
+		console_lock();
+
+	console_locked = 1;
+	console_may_schedule = 0;
+	for_each_console(c)
+		if ((c->flags & CON_ENABLED) && c->unblank)
+			c->unblank();
+	console_unlock();
+}
+
+/*
+ * Return the console tty driver structure and its associated index
+ */
+struct tty_driver *console_device(int *index)
+{
+	struct console *c;
+	struct tty_driver *driver = NULL;
+
+	console_lock();
+	for_each_console(c) {
+		if (!c->device)
+			continue;
+		driver = c->device(c, index);
+		if (driver)
+			break;
+	}
+	console_unlock();
+	return driver;
+}
+
+/*
+ * Prevent further output on the passed console device so that (for example)
+ * serial drivers can disable console output before suspending a port, and can
+ * re-enable output afterwards.
+ */
+void console_stop(struct console *console)
+{
+	console_lock();
+	console->flags &= ~CON_ENABLED;
+	console_unlock();
+}
+EXPORT_SYMBOL(console_stop);
+
+void console_start(struct console *console)
+{
+	console_lock();
+	console->flags |= CON_ENABLED;
+	console_unlock();
+}
+EXPORT_SYMBOL(console_start);
+
+static int __read_mostly keep_bootcon;
+
+static int __init keep_bootcon_setup(char *str)
+{
+	keep_bootcon = 1;
+	printk(KERN_INFO "debug: skip boot console de-registration.\n");
+
+	return 0;
+}
+
+early_param("keep_bootcon", keep_bootcon_setup);
+
+/*
+ * The console driver calls this routine during kernel initialization
+ * to register the console printing procedure with printk() and to
+ * print any messages that were printed by the kernel before the
+ * console driver was initialized.
+ *
+ * This can happen pretty early during the boot process (because of
+ * early_printk) - sometimes before setup_arch() completes - be careful
+ * of what kernel features are used - they may not be initialised yet.
+ *
+ * There are two types of consoles - bootconsoles (early_printk) and
+ * "real" consoles (everything which is not a bootconsole) which are
+ * handled differently.
+ *  - Any number of bootconsoles can be registered at any time.
+ *  - As soon as a "real" console is registered, all bootconsoles
+ *    will be unregistered automatically.
+ *  - Once a "real" console is registered, any attempt to register a
+ *    bootconsoles will be rejected
+ */
+void register_console(struct console *newcon)
+{
+	int i;
+	unsigned long flags;
+	struct console *bcon = NULL;
+	struct console_cmdline *c;
+
+	/*
+	 * before we register a new CON_BOOT console, make sure we don't
+	 * already have a valid console
+	 */
+	if (console_drivers && newcon->flags & CON_BOOT) {
+		/* find the last or real console */
+		for_each_console(bcon) {
+			if (!(bcon->flags & CON_BOOT)) {
+				printk(KERN_INFO "Too late to register bootconsole %s%d\n",
+					newcon->name, newcon->index);
+				return;
+			}
+		}
+	}
+
+	if (console_drivers && console_drivers->flags & CON_BOOT)
+		bcon = console_drivers;
+
+	if (preferred_console < 0 || bcon || !console_drivers)
+		preferred_console = selected_console;
+
+	if (newcon->early_setup)
+		newcon->early_setup();
+
+	/*
+	 *	See if we want to use this console driver. If we
+	 *	didn't select a console we take the first one
+	 *	that registers here.
+	 */
+	if (preferred_console < 0) {
+		if (newcon->index < 0)
+			newcon->index = 0;
+		if (newcon->setup == NULL ||
+		    newcon->setup(newcon, NULL) == 0) {
+			newcon->flags |= CON_ENABLED;
+			if (newcon->device) {
+				newcon->flags |= CON_CONSDEV;
+				preferred_console = 0;
+			}
+		}
+	}
+
+	/*
+	 *	See if this console matches one we selected on
+	 *	the command line.
+	 */
+	for (i = 0, c = console_cmdline;
+	     i < MAX_CMDLINECONSOLES && c->name[0];
+	     i++, c++) {
+		if (strcmp(c->name, newcon->name) != 0)
+			continue;
+		if (newcon->index >= 0 &&
+		    newcon->index != c->index)
+			continue;
+		if (newcon->index < 0)
+			newcon->index = c->index;
+
+		if (_braille_register_console(newcon, c))
+			return;
+
+		if (newcon->setup &&
+		    newcon->setup(newcon, console_cmdline[i].options) != 0)
+			break;
+		newcon->flags |= CON_ENABLED;
+		newcon->index = c->index;
+		if (i == selected_console) {
+			newcon->flags |= CON_CONSDEV;
+			preferred_console = selected_console;
+		}
+		break;
+	}
+
+	if (!(newcon->flags & CON_ENABLED))
+		return;
+
+	/*
+	 * If we have a bootconsole, and are switching to a real console,
+	 * don't print everything out again, since when the boot console, and
+	 * the real console are the same physical device, it's annoying to
+	 * see the beginning boot messages twice
+	 */
+	if (bcon && ((newcon->flags & (CON_CONSDEV | CON_BOOT)) == CON_CONSDEV))
+		newcon->flags &= ~CON_PRINTBUFFER;
+
+	/*
+	 *	Put this console in the list - keep the
+	 *	preferred driver at the head of the list.
+	 */
+	console_lock();
+	if ((newcon->flags & CON_CONSDEV) || console_drivers == NULL) {
+		newcon->next = console_drivers;
+		console_drivers = newcon;
+		if (newcon->next)
+			newcon->next->flags &= ~CON_CONSDEV;
+	} else {
+		newcon->next = console_drivers->next;
+		console_drivers->next = newcon;
+	}
+	if (newcon->flags & CON_PRINTBUFFER) {
+		/*
+		 * console_unlock(); will print out the buffered messages
+		 * for us.
+		 */
+		raw_spin_lock_irqsave(&printk_logbuf_lock, flags);
+		console_seq = printk_syslog_seq;
+		console_idx = printk_syslog_idx;
+		console_prev = printk_syslog_prev;
+		raw_spin_unlock_irqrestore(&printk_logbuf_lock, flags);
+		/*
+		 * We're about to replay the log buffer.  Only do this to the
+		 * just-registered console to avoid excessive message spam to
+		 * the already-registered consoles.
+		 */
+		exclusive_console = newcon;
+	}
+	console_unlock();
+	console_sysfs_notify();
+
+	/*
+	 * By unregistering the bootconsoles after we enable the real console
+	 * we get the "console xxx enabled" message on all the consoles -
+	 * boot consoles, real consoles, etc - this is to ensure that end
+	 * users know there might be something in the kernel's log buffer that
+	 * went to the bootconsole (that they do not see on the real console)
+	 */
+	if (bcon &&
+	    ((newcon->flags & (CON_CONSDEV | CON_BOOT)) == CON_CONSDEV) &&
+	    !keep_bootcon) {
+		/* we need to iterate through twice, to make sure we print
+		 * everything out, before we unregister the console(s)
+		 */
+		printk(KERN_INFO "console [%s%d] enabled, bootconsole disabled\n",
+			newcon->name, newcon->index);
+		for_each_console(bcon)
+			if (bcon->flags & CON_BOOT)
+				unregister_console(bcon);
+	} else {
+		printk(KERN_INFO "%sconsole [%s%d] enabled\n",
+			(newcon->flags & CON_BOOT) ? "boot" : "" ,
+			newcon->name, newcon->index);
+	}
+}
+EXPORT_SYMBOL(register_console);
+
+int unregister_console(struct console *console)
+{
+        struct console *a, *b;
+	int res;
+
+	res = _braille_unregister_console(console);
+	if (res)
+		return res;
+
+	res = 1;
+	console_lock();
+	if (console_drivers == console) {
+		console_drivers=console->next;
+		res = 0;
+	} else if (console_drivers) {
+		for (a=console_drivers->next, b=console_drivers ;
+		     a; b=a, a=b->next) {
+			if (a == console) {
+				b->next = a->next;
+				res = 0;
+				break;
+			}
+		}
+	}
+
+	/*
+	 * If this isn't the last console and it has CON_CONSDEV set, we
+	 * need to set it on the next preferred console.
+	 */
+	if (console_drivers != NULL && console->flags & CON_CONSDEV)
+		console_drivers->flags |= CON_CONSDEV;
+
+	console_unlock();
+	console_sysfs_notify();
+	return res;
+}
+EXPORT_SYMBOL(unregister_console);
+
+static int __init printk_late_init(void)
+{
+	struct console *con;
+
+	for_each_console(con) {
+		if (!keep_bootcon && con->flags & CON_BOOT) {
+			printk(KERN_INFO "turn off boot console %s%d\n",
+				con->name, con->index);
+			unregister_console(con);
+		}
+	}
+	hotcpu_notifier(console_cpu_notify, 0);
+	return 0;
+}
+late_initcall(printk_late_init);
+
+#if defined CONFIG_PRINTK
+
+int printk_sched(const char *fmt, ...)
+{
+	unsigned long flags;
+	va_list args;
+	char *buf;
+	int r;
+
+	local_irq_save(flags);
+	buf = __get_cpu_var(printk_sched_buf);
+
+	va_start(args, fmt);
+	r = vsnprintf(buf, PRINTK_BUF_SIZE, fmt, args);
+	va_end(args);
+
+	__this_cpu_or(printk_pending, PRINTK_PENDING_SCHED);
+	local_irq_restore(flags);
+
+	return r;
+}
+
+/*
+ * printk rate limiting, lifted from the networking subsystem.
+ *
+ * This enforces a rate limit: not more than 10 kernel messages
+ * every 5s to make a denial-of-service attack impossible.
+ */
+DEFINE_RATELIMIT_STATE(printk_ratelimit_state, 5 * HZ, 10);
+
+int __printk_ratelimit(const char *func)
+{
+	return ___ratelimit(&printk_ratelimit_state, func);
+}
+EXPORT_SYMBOL(__printk_ratelimit);
+
+/**
+ * printk_timed_ratelimit - caller-controlled printk ratelimiting
+ * @caller_jiffies: pointer to caller's state
+ * @interval_msecs: minimum interval between prints
+ *
+ * printk_timed_ratelimit() returns true if more than @interval_msecs
+ * milliseconds have elapsed since the last time printk_timed_ratelimit()
+ * returned true.
+ */
+bool printk_timed_ratelimit(unsigned long *caller_jiffies,
+			unsigned int interval_msecs)
+{
+	if (*caller_jiffies == 0
+			|| !time_in_range(jiffies, *caller_jiffies,
+					*caller_jiffies
+					+ msecs_to_jiffies(interval_msecs))) {
+		*caller_jiffies = jiffies;
+		return true;
+	}
+	return false;
+}
+EXPORT_SYMBOL(printk_timed_ratelimit);
+
+#endif

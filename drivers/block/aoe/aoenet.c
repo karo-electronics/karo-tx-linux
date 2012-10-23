@@ -52,13 +52,16 @@ static struct sk_buff_head skbtxq;
 
 /* enters with txlock held */
 static int
-tx(void)
+tx(void) __must_hold(&txlock)
 {
 	struct sk_buff *skb;
 
 	while ((skb = skb_dequeue(&skbtxq))) {
 		spin_unlock_irq(&txlock);
-		dev_queue_xmit(skb);
+		if (dev_queue_xmit(skb) == NET_XMIT_DROP && net_ratelimit())
+			pr_warn("aoe: packet could not be sent on %s.  %s\n",
+				skb->dev ? skb->dev->name : "netif",
+				"consider increasing tx_queue_len");
 		spin_lock_irq(&txlock);
 	}
 	return 0;
@@ -119,8 +122,8 @@ aoenet_xmit(struct sk_buff_head *queue)
 	}
 }
 
-/* 
- * (1) len doesn't include the header by default.  I want this. 
+/*
+ * (1) len doesn't include the header by default.  I want this.
  */
 static int
 aoenet_rcv(struct sk_buff *skb, struct net_device *ifp, struct packet_type *pt, struct net_device *orig_dev)

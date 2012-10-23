@@ -552,16 +552,6 @@ sthtith(struct aoedev *d)
 	return 1;
 }
 
-static inline unsigned char
-ata_scnt(unsigned char *packet) {
-	struct aoe_hdr *h;
-	struct aoe_atahdr *ah;
-
-	h = (struct aoe_hdr *) packet;
-	ah = (struct aoe_atahdr *) (h+1);
-	return ah->scnt;
-}
-
 static void
 rexmit_timer(ulong vp)
 {
@@ -988,7 +978,7 @@ ktiocomplete(struct frame *f)
 		pr_err("aoe: ata error cmd=%2.2Xh stat=%2.2Xh from e%ld.%d\n",
 			ahout->cmdstat, ahin->cmdstat,
 			d->aoemajor, d->aoeminor);
-noskb:	if (buf)
+noskb:		if (buf)
 			clear_bit(BIO_UPTODATE, &buf->bio->bi_flags);
 		goto badrsp;
 	}
@@ -1201,7 +1191,7 @@ aoecmd_cfg(ushort aoemajor, unsigned char aoeminor)
 	aoecmd_cfg_pkts(aoemajor, aoeminor, &queue);
 	aoenet_xmit(&queue);
 }
- 
+
 struct sk_buff *
 aoecmd_ata_id(struct aoedev *d)
 {
@@ -1240,7 +1230,7 @@ aoecmd_ata_id(struct aoedev *d)
 
 	return skb_clone(skb, GFP_ATOMIC);
 }
- 
+
 static struct aoetgt *
 addtgt(struct aoedev *d, char *addr, ulong nframes)
 {
@@ -1373,7 +1363,11 @@ aoecmd_cfg_rsp(struct sk_buff *skb)
 	spin_lock_irqsave(&d->lock, flags);
 
 	t = gettgt(d, h->src);
-	if (!t) {
+	if (t) {
+		t->nframes = n;
+		if (n < t->maxout)
+			t->maxout = n;
+	} else {
 		t = addtgt(d, h->src, n);
 		if (!t)
 			goto bail;
