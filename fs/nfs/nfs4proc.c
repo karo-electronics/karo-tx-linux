@@ -686,10 +686,11 @@ struct nfs41_call_sync_data {
 static void nfs41_call_sync_prepare(struct rpc_task *task, void *calldata)
 {
 	struct nfs41_call_sync_data *data = calldata;
+	struct nfs4_session *session = nfs4_get_session(data->seq_server);
 
 	dprintk("--> %s data->seq_server %p\n", __func__, data->seq_server);
 
-	if (nfs4_setup_sequence(data->seq_server, data->seq_args,
+	if (nfs41_setup_sequence(session, data->seq_args,
 				data->seq_res, task))
 		return;
 	rpc_call_start(task);
@@ -6318,6 +6319,7 @@ nfs4_layoutget_prepare(struct rpc_task *task, void *calldata)
 {
 	struct nfs4_layoutget *lgp = calldata;
 	struct nfs_server *server = NFS_SERVER(lgp->args.inode);
+	struct nfs4_session *session = nfs4_get_session(server);
 
 	dprintk("--> %s\n", __func__);
 	/* Note the is a race here, where a CB_LAYOUTRECALL can come in
@@ -6325,7 +6327,7 @@ nfs4_layoutget_prepare(struct rpc_task *task, void *calldata)
 	 * However, that is not so catastrophic, and there seems
 	 * to be no way to prevent it completely.
 	 */
-	if (nfs4_setup_sequence(server, &lgp->args.seq_args,
+	if (nfs41_setup_sequence(session, &lgp->args.seq_args,
 				&lgp->res.seq_res, task))
 		return;
 	if (pnfs_choose_layoutget_stateid(&lgp->args.stateid,
@@ -6347,7 +6349,7 @@ static void nfs4_layoutget_done(struct rpc_task *task, void *calldata)
 
 	dprintk("--> %s\n", __func__);
 
-	if (!nfs4_sequence_done(task, &lgp->res.seq_res))
+	if (!nfs41_sequence_done(task, &lgp->res.seq_res))
 		goto out;
 
 	switch (task->tk_status) {
@@ -6511,7 +6513,7 @@ static void nfs4_layoutreturn_done(struct rpc_task *task, void *calldata)
 
 	dprintk("--> %s\n", __func__);
 
-	if (!nfs4_sequence_done(task, &lrp->res.seq_res))
+	if (!nfs41_sequence_done(task, &lrp->res.seq_res))
 		return;
 
 	server = NFS_SERVER(lrp->args.inode);
@@ -6660,8 +6662,9 @@ static void nfs4_layoutcommit_prepare(struct rpc_task *task, void *calldata)
 {
 	struct nfs4_layoutcommit_data *data = calldata;
 	struct nfs_server *server = NFS_SERVER(data->args.inode);
+	struct nfs4_session *session = nfs4_get_session(server);
 
-	if (nfs4_setup_sequence(server, &data->args.seq_args,
+	if (nfs41_setup_sequence(session, &data->args.seq_args,
 				&data->res.seq_res, task))
 		return;
 	rpc_call_start(task);
@@ -6673,7 +6676,7 @@ nfs4_layoutcommit_done(struct rpc_task *task, void *calldata)
 	struct nfs4_layoutcommit_data *data = calldata;
 	struct nfs_server *server = NFS_SERVER(data->args.inode);
 
-	if (!nfs4_sequence_done(task, &data->res.seq_res))
+	if (!nfs41_sequence_done(task, &data->res.seq_res))
 		return;
 
 	switch (task->tk_status) { /* Just ignore these failures */
