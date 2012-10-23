@@ -191,7 +191,7 @@ static int ohci_platform_resume(struct device *dev)
 			return err;
 	}
 
-	ohci_resume(hcd, false);
+	ohci_finish_controller_resume(hcd);
 	return 0;
 }
 

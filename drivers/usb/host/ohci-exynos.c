@@ -252,7 +252,10 @@ static int exynos_ohci_resume(struct device *dev)
 	if (pdata && pdata->phy_init)
 		pdata->phy_init(pdev, S5P_USB_PHY_HOST);
 
-	ohci_resume(hcd, false);
+	/* Mark hardware accessible again as we are out of D3 state by now */
+	set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
+
+	ohci_finish_controller_resume(hcd);
 
 	return 0;
 }
