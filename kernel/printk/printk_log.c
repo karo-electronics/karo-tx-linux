@@ -2,6 +2,8 @@
 #include <linux/mm.h>
 #include <linux/sched.h>
 #include <linux/kexec.h>
+#include <linux/moduleparam.h>
+#include <linux/stat.h>
 
 #include "printk_log.h"
 
@@ -135,6 +137,111 @@ void printk_log_store(int facility, int level,
 	printk_log_next_seq++;
 }
 
+#if defined(CONFIG_PRINTK_TIME)
+static bool printk_time = 1;
+#else
+static bool printk_time;
+#endif
+module_param_named(time, printk_time, bool, S_IRUGO | S_IWUSR);
+
+size_t printk_print_time(u64 ts, char *buf)
+{
+	unsigned long rem_nsec;
+
+	if (!printk_time)
+		return 0;
+
+	if (!buf)
+		return 15;
+
+	rem_nsec = do_div(ts, 1000000000);
+	return sprintf(buf, "[%5lu.%06lu] ",
+		       (unsigned long)ts, rem_nsec / 1000);
+}
+
+static size_t print_prefix(const struct printk_log *msg, bool syslog, char *buf)
+{
+	size_t len = 0;
+	unsigned int prefix = (msg->facility << 3) | msg->level;
+
+	if (syslog) {
+		if (buf) {
+			len += sprintf(buf, "<%u>", prefix);
+		} else {
+			len += 3;
+			if (prefix > 999)
+				len += 3;
+			else if (prefix > 99)
+				len += 2;
+			else if (prefix > 9)
+				len++;
+		}
+	}
+
+	len += printk_print_time(msg->ts_nsec, buf ? buf + len : NULL);
+	return len;
+}
+
+size_t printk_msg_print_text(const struct printk_log *msg,
+			     enum printk_log_flags prev,
+			     bool syslog, char *buf, size_t size)
+{
+	const char *text = printk_log_text(msg);
+	size_t text_size = msg->text_len;
+	bool prefix = true;
+	bool newline = true;
+	size_t len = 0;
+
+	if ((prev & LOG_CONT) && !(msg->flags & LOG_PREFIX))
+		prefix = false;
+
+	if (msg->flags & LOG_CONT) {
+		if ((prev & LOG_CONT) && !(prev & LOG_NEWLINE))
+			prefix = false;
+
+		if (!(msg->flags & LOG_NEWLINE))
+			newline = false;
+	}
+
+	do {
+		const char *next = memchr(text, '\n', text_size);
+		size_t text_len;
+
+		if (next) {
+			text_len = next - text;
+			next++;
+			text_size -= next - text;
+		} else {
+			text_len = text_size;
+		}
+
+		if (buf) {
+			if (print_prefix(msg, syslog, NULL) +
+			    text_len + 1 >= size - len)
+				break;
+
+			if (prefix)
+				len += print_prefix(msg, syslog, buf + len);
+			memcpy(buf + len, text, text_len);
+			len += text_len;
+			if (next || newline)
+				buf[len++] = '\n';
+		} else {
+			/* SYSLOG_ACTION_* buffer size only calculation */
+			if (prefix)
+				len += print_prefix(msg, syslog, NULL);
+			len += text_len;
+			if (next || newline)
+				len++;
+		}
+
+		prefix = true;
+		text = next;
+	} while (text);
+
+	return len;
+}
+
 #else /* CONFIG_PRINTK */
 
 #define LOG_LINE_MAX		0
@@ -145,5 +252,12 @@ u32 printk_log_first_idx;
 u64 printk_log_next_seq;
 struct printk_log *printk_log_from_idx(u32 idx) { return NULL; }
 u32 printk_log_next(u32 idx) { return 0; }
+size_t printk_print_time(u64 ts, char *buf) { return 0; }
+size_t printk_msg_print_text(const struct printk_log *msg,
+			     enum printk_log_flags prev,
+			     bool syslog, char *buf, size_t size)
+{
+	return 0;
+}
 
 #endif /* CONFIG_PRINTK */
