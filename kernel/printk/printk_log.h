@@ -93,6 +93,7 @@ struct printk_log {
 #define __PRINTK_LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT)
 
 extern raw_spinlock_t printk_logbuf_lock;
+extern wait_queue_head_t printk_log_wait;
 extern u64 printk_log_first_seq;
 extern u32 printk_log_first_idx;
 extern u64 printk_log_next_seq;
