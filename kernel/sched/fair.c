@@ -827,8 +827,9 @@ static void account_numa_dequeue(struct rq *rq, struct task_struct *p)
 /*
  * numa task sample period in ms: 5s
  */
-unsigned int sysctl_sched_numa_task_period_min = 5000;
-unsigned int sysctl_sched_numa_task_period_max = 5000*16;
+unsigned int sysctl_sched_numa_task_period_min = 100;
+unsigned int sysctl_sched_numa_task_period_max = 100*16;
+unsigned int sysctl_sched_numa_scan_size = 256;   /* MB */
 
 /*
  * Wait for the 2-sample stuff to settle before migrating again
@@ -902,6 +903,9 @@ void task_numa_work(struct callback_head *work)
 	unsigned long migrate, next_scan, now = jiffies;
 	struct task_struct *p = current;
 	struct mm_struct *mm = p->mm;
+	struct vm_area_struct *vma;
+	unsigned long offset, end;
+	long length;
 
 	WARN_ON_ONCE(p != container_of(work, struct task_struct, numa_work));
 
@@ -928,8 +932,40 @@ void task_numa_work(struct callback_head *work)
 	if (cmpxchg(&mm->numa_next_scan, migrate, next_scan) != migrate)
 		return;
 
-	ACCESS_ONCE(mm->numa_scan_seq)++;
-	lazy_migrate_process(mm);
+
+	offset = mm->numa_scan_offset;
+	length = sysctl_sched_numa_scan_size;
+	length <<= 20;
+
+	down_write(&mm->mmap_sem);
+	vma = find_vma(mm, offset);
+again:
+	if (!vma) {
+		ACCESS_ONCE(mm->numa_scan_seq)++;
+		offset = 0;
+		vma = mm->mmap;
+	}
+	while (vma && !vma_migratable(vma)) {
+		vma = vma->vm_next;
+		if (!vma)
+			goto again;
+	}
+
+	offset = max(offset, vma->vm_start);
+	end = min(ALIGN(offset + length, HPAGE_SIZE), vma->vm_end);
+	length -= end - offset;
+
+	change_prot_none(vma, offset, end);
+
+	offset = end;
+
+	if (length > 0) {
+		vma = vma->vm_next;
+		goto again;
+	}
+	mm->numa_scan_offset = offset;
+	up_write(&mm->mmap_sem);
+
 }
 
 /*
