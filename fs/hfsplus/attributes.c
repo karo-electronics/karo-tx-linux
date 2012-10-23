@@ -67,10 +67,14 @@ int hfsplus_attr_build_key(struct super_block *sb, hfsplus_btree_key *key,
 		key->attr.key_name.length = 0;
 		len = 0;
 	}
-	/* The key_length (be16) doesn't summed in the lenght of whole key.
-	   But the length of the string (be16) should be included in sum.
-	   So, offsetof(hfsplus_attr_key, key_name) is a trick that give
-	   right value. */
+
+	/* The length of the key, as stored in key_len field, does not include
+	 * the size of the key_len field itself.
+	 * So, offsetof(hfsplus_attr_key, key_name) is a trick because
+	 * it takes into consideration key_len field (__be16) of
+	 * hfsplus_attr_key structure instead of length field (__be16) of
+	 * hfsplus_attr_unistr structure.
+	 */
 	key->key_len =
 		cpu_to_be16(offsetof(struct hfsplus_attr_key, key_name) +
 				2 * len);
@@ -90,10 +94,14 @@ void hfsplus_attr_build_key_uni(hfsplus_btree_key *key,
 	key->attr.key_name.length = cpu_to_be16(ustrlen);
 	ustrlen *= 2;
 	memcpy(key->attr.key_name.unicode, name->unicode, ustrlen);
-	/* The key_length (be16) doesn't summed in the lenght of whole key.
-	   But the length of the string (be16) should be included in sum.
-	   So, offsetof(hfsplus_attr_key, key_name) is a trick that give
-	   right value. */
+
+	/* The length of the key, as stored in key_len field, does not include
+	 * the size of the key_len field itself.
+	 * So, offsetof(hfsplus_attr_key, key_name) is a trick because
+	 * it takes into consideration key_len field (__be16) of
+	 * hfsplus_attr_key structure instead of length field (__be16) of
+	 * hfsplus_attr_unistr structure.
+	 */
 	key->key_len =
 		cpu_to_be16(offsetof(struct hfsplus_attr_key, key_name) +
 				ustrlen);
@@ -101,10 +109,7 @@ void hfsplus_attr_build_key_uni(hfsplus_btree_key *key,
 
 hfsplus_attr_entry *hfsplus_alloc_attr_entry(void)
 {
-	hfsplus_attr_entry *entry;
-	entry = kmem_cache_alloc(hfsplus_attr_tree_cachep, GFP_KERNEL);
-
-	return (entry) ? entry : NULL;
+	return kmem_cache_alloc(hfsplus_attr_tree_cachep, GFP_KERNEL);
 }
 
 void hfsplus_destroy_attr_entry(hfsplus_attr_entry *entry)
@@ -119,13 +124,17 @@ static int hfsplus_attr_build_record(hfsplus_attr_entry *entry, int record_type,
 				u32 cnid, const void *value, size_t size)
 {
 	if (record_type == HFSPLUS_ATTR_FORK_DATA) {
-		/* Mac OS X supports only inline data attributes.
-		   Do nothing. */
+		/*
+		 * Mac OS X supports only inline data attributes.
+		 * Do nothing
+		 */
 		memset(entry, 0, sizeof(*entry));
 		return sizeof(struct hfsplus_attr_fork_data);
 	} else if (record_type == HFSPLUS_ATTR_EXTENTS) {
-		/* Mac OS X supports only inline data attributes.
-		   Do nothing. */
+		/*
+		 * Mac OS X supports only inline data attributes.
+		 * Do nothing.
+		 */
 		memset(entry, 0, sizeof(*entry));
 		return sizeof(struct hfsplus_attr_extents);
 	} else if (record_type == HFSPLUS_ATTR_INLINE_DATA) {
@@ -139,8 +148,10 @@ static int hfsplus_attr_build_record(hfsplus_attr_entry *entry, int record_type,
 			return HFSPLUS_INVALID_ATTR_RECORD;
 		entry->inline_data.length = cpu_to_be16(len);
 		memcpy(entry->inline_data.raw_bytes, value, len);
-		/* Align len on two-byte boundary.
-		   It needs to add pad byte if we have odd len. */
+		/*
+		 * Align len on two-byte boundary.
+		 * It needs to add pad byte if we have odd len.
+		 */
 		len = round_up(len, 2);
 		return offsetof(struct hfsplus_attr_inline_data, raw_bytes) +
 					len;
