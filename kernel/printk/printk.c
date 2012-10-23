@@ -63,7 +63,7 @@ void asmlinkage __attribute__((weak)) early_printk(const char *fmt, ...)
 #define MINIMUM_CONSOLE_LOGLEVEL 1 /* Minimum loglevel we let people use */
 #define DEFAULT_CONSOLE_LOGLEVEL 7 /* anything MORE serious than KERN_DEBUG */
 
-DECLARE_WAIT_QUEUE_HEAD(log_wait);
+DECLARE_WAIT_QUEUE_HEAD(printk_log_wait);
 
 int console_printk[4] = {
 	DEFAULT_CONSOLE_LOGLEVEL,	/* console_loglevel */
@@ -447,7 +447,7 @@ static ssize_t devkmsg_read(struct file *file, char __user *buf,
 		}
 
 		raw_spin_unlock_irq(&logbuf_lock);
-		ret = wait_event_interruptible(log_wait,
+		ret = wait_event_interruptible(printk_log_wait,
 					       user->seq != printk_log_next_seq);
 		if (ret)
 			goto out;
@@ -589,7 +589,7 @@ static unsigned int devkmsg_poll(struct file *file, poll_table *wait)
 	if (!user)
 		return POLLERR|POLLNVAL;
 
-	poll_wait(file, &log_wait, wait);
+	poll_wait(file, &printk_log_wait, wait);
 
 	raw_spin_lock_irq(&logbuf_lock);
 	if (user->seq < printk_log_next_seq) {
@@ -1122,7 +1122,7 @@ int do_syslog(int type, char __user *buf, int len, bool from_file)
 			error = -EFAULT;
 			goto out;
 		}
-		error = wait_event_interruptible(log_wait,
+		error = wait_event_interruptible(printk_log_wait,
 						 syslog_seq != printk_log_next_seq);
 		if (error)
 			goto out;
@@ -1948,7 +1948,7 @@ void printk_tick(void)
 			printk(KERN_WARNING "[sched_delayed] %s", buf);
 		}
 		if (pending & PRINTK_PENDING_WAKEUP)
-			wake_up_interruptible(&log_wait);
+			wake_up_interruptible(&printk_log_wait);
 	}
 }
 
@@ -1961,7 +1961,7 @@ int printk_needs_cpu(int cpu)
 
 void wake_up_klogd(void)
 {
-	if (waitqueue_active(&log_wait))
+	if (waitqueue_active(&printk_log_wait))
 		this_cpu_or(printk_pending, PRINTK_PENDING_WAKEUP);
 }
 
