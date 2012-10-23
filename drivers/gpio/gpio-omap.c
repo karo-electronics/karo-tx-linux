@@ -187,6 +187,7 @@ static inline void _gpio_dbck_disable(struct gpio_bank *bank)
 		 * to detect events and generate interrupts at least on OMAP3.
 		 */
 		__raw_writel(0, bank->base + bank->regs->debounce_en);
+		bank->dbck_enable_mask = 0;
 
 		clk_disable(bank->dbck);
 		bank->dbck_enabled = false;
