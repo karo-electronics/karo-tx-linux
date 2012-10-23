@@ -115,5 +115,9 @@ void printk_log_store(int facility, int level,
 		      enum printk_log_flags flags, u64 ts_nsec,
 		      const char *dict, u16 dict_len,
 		      const char *text, u16 text_len);
+size_t printk_print_time(u64 ts, char *buf);
+size_t printk_msg_print_text(const struct printk_log *msg,
+			     enum printk_log_flags prev,
+			     bool syslog, char *buf, size_t size);
 
 #endif
