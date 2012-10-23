@@ -237,8 +237,8 @@ static u32 console_idx;
 static enum printk_log_flags console_prev;
 
 /* the next printk record to read after the last 'clear' command */
-static u64 clear_seq;
-static u32 clear_idx;
+static u64 printk_log_clear_seq;
+static u32 printk_log_clear_idx;
 
 #define PREFIX_MAX		32
 #define LOG_LINE_MAX		1024 - PREFIX_MAX
@@ -572,8 +572,8 @@ static loff_t devkmsg_llseek(struct file *file, loff_t offset, int whence)
 		 * like issued by 'dmesg -c'. Reading /dev/kmsg itself
 		 * changes no global state, and does not clear anything.
 		 */
-		user->idx = clear_idx;
-		user->seq = clear_seq;
+		user->idx = printk_log_clear_idx;
+		user->seq = printk_log_clear_seq;
 		break;
 	case SEEK_END:
 		/* after the last record */
@@ -1018,18 +1018,18 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
 		u32 idx;
 		enum printk_log_flags prev;
 
-		if (clear_seq < printk_log_first_seq) {
+		if (printk_log_clear_seq < printk_log_first_seq) {
 			/* messages are gone, move to first available one */
-			clear_seq = printk_log_first_seq;
-			clear_idx = printk_log_first_idx;
+			printk_log_clear_seq = printk_log_first_seq;
+			printk_log_clear_idx = printk_log_first_idx;
 		}
 
 		/*
 		 * Find first record that fits, including all following records,
 		 * into the user-provided buffer for this dump.
 		 */
-		seq = clear_seq;
-		idx = clear_idx;
+		seq = printk_log_clear_seq;
+		idx = printk_log_clear_idx;
 		prev = 0;
 		while (seq < printk_log_next_seq) {
 			struct printk_log *msg = printk_log_from_idx(idx);
@@ -1041,8 +1041,8 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
 		}
 
 		/* move first record forward until length fits into the buffer */
-		seq = clear_seq;
-		idx = clear_idx;
+		seq = printk_log_clear_seq;
+		idx = printk_log_clear_idx;
 		prev = 0;
 		while (len > size && seq < printk_log_next_seq) {
 			struct printk_log *msg = printk_log_from_idx(idx);
@@ -1089,8 +1089,8 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
 	}
 
 	if (clear) {
-		clear_seq = printk_log_next_seq;
-		clear_idx = printk_log_next_idx;
+		printk_log_clear_seq = printk_log_next_seq;
+		printk_log_clear_idx = printk_log_next_idx;
 	}
 	raw_spin_unlock_irq(&printk_logbuf_lock);
 
@@ -2575,8 +2575,8 @@ void kmsg_dump(enum kmsg_dump_reason reason)
 		dumper->active = true;
 
 		raw_spin_lock_irqsave(&printk_logbuf_lock, flags);
-		dumper->cur_seq = clear_seq;
-		dumper->cur_idx = clear_idx;
+		dumper->cur_seq = printk_log_clear_seq;
+		dumper->cur_idx = printk_log_clear_idx;
 		dumper->next_seq = printk_log_next_seq;
 		dumper->next_idx = printk_log_next_idx;
 		raw_spin_unlock_irqrestore(&printk_logbuf_lock, flags);
@@ -2783,8 +2783,8 @@ EXPORT_SYMBOL_GPL(kmsg_dump_get_buffer);
  */
 void kmsg_dump_rewind_nolock(struct kmsg_dumper *dumper)
 {
-	dumper->cur_seq = clear_seq;
-	dumper->cur_idx = clear_idx;
+	dumper->cur_seq = printk_log_clear_seq;
+	dumper->cur_idx = printk_log_clear_idx;
 	dumper->next_seq = printk_log_next_seq;
 	dumper->next_idx = printk_log_next_idx;
 }
