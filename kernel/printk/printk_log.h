@@ -92,6 +92,9 @@ struct printk_log {
 #endif
 #define __PRINTK_LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT)
 
+#define PRINTK_PREFIX_MAX	32
+#define PRINTK_LOG_LINE_MAX	(1024 - PRINTK_PREFIX_MAX)
+
 extern raw_spinlock_t printk_logbuf_lock;
 extern wait_queue_head_t printk_log_wait;
 extern u64 printk_log_first_seq;
