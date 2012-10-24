@@ -526,10 +526,9 @@ void __cpuinit xen_enable_syscall(void)
 #endif /* CONFIG_X86_64 */
 }
 
-void __init xen_arch_setup(void)
+/* Normal PV domain not running in HVM container */
+static __init void inline xen_non_pvh_arch_setup(void)
 {
-	xen_panic_handler_init();
-
 	HYPERVISOR_vm_assist(VMASST_CMD_enable, VMASST_TYPE_4gb_segments);
 	HYPERVISOR_vm_assist(VMASST_CMD_enable, VMASST_TYPE_writable_pagetables);
 
@@ -543,6 +542,14 @@ void __init xen_arch_setup(void)
 
 	xen_enable_sysenter();
 	xen_enable_syscall();
+}
+
+void __init xen_arch_setup(void)
+{
+	xen_panic_handler_init();
+
+	if (!xen_pvh_domain())
+		xen_non_pvh_arch_setup();
 
 #ifdef CONFIG_ACPI
 	if (!(xen_start_info->flags & SIF_INITDOMAIN)) {
