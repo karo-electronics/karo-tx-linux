@@ -19,6 +19,7 @@
 #include <linux/acpi.h>
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
+#include <linux/pm_qos.h>
 
 #include <asm/io.h>
 
@@ -95,6 +96,21 @@ static bool nvs_nosave;
 void __init acpi_nvs_nosave(void)
 {
 	nvs_nosave = true;
+}
+
+/*
+ * The ACPI specification wants us to save NVS memory regions during hibernation
+ * but says nothing about saving NVS during S3.  Not all versions of Windows
+ * save NVS on S3 suspend either, and it is clear that not all systems need
+ * NVS to be saved at S3 time.  To improve suspend/resume time, allow the
+ * user to disable saving NVS on S3 if their system does not require it, but
+ * continue to save/restore NVS for S4 as specified.
+ */
+static bool nvs_nosave_s3;
+
+void __init acpi_nvs_nosave_s3(void)
+{
+	nvs_nosave_s3 = true;
 }
 
 /*
@@ -243,7 +259,7 @@ static int acpi_suspend_begin(suspend_state_t pm_state)
 	u32 acpi_state = acpi_suspend_states[pm_state];
 	int error = 0;
 
-	error = nvs_nosave ? 0 : suspend_nvs_alloc();
+	error = (nvs_nosave || nvs_nosave_s3) ? 0 : suspend_nvs_alloc();
 	if (error)
 		return error;
 
@@ -683,40 +699,41 @@ int acpi_suspend(u32 acpi_state)
 
 #ifdef CONFIG_PM
 /**
- *	acpi_pm_device_sleep_state - return preferred power state of ACPI device
- *		in the system sleep state given by %acpi_target_sleep_state
- *	@dev: device to examine; its driver model wakeup flags control
- *		whether it should be able to wake up the system
- *	@d_min_p: used to store the upper limit of allowed states range
- *	@d_max_in: specify the lowest allowed states
- *	Return value: preferred power state of the device on success, -ENODEV
- *	(ie. if there's no 'struct acpi_device' for @dev) or -EINVAL on failure
+ * acpi_pm_device_sleep_state - Get preferred power state of ACPI device.
+ * @dev: Device whose preferred target power state to return.
+ * @d_min_p: Location to store the upper limit of the allowed states range.
+ * @d_max_in: Deepest low-power state to take into consideration.
+ * Return value: Preferred power state of the device on success, -ENODEV
+ * (if there's no 'struct acpi_device' for @dev) or -EINVAL on failure
  *
- *	Find the lowest power (highest number) ACPI device power state that
- *	device @dev can be in while the system is in the sleep state represented
- *	by %acpi_target_sleep_state.  If @wake is nonzero, the device should be
- *	able to wake up the system from this sleep state.  If @d_min_p is set,
- *	the highest power (lowest number) device power state of @dev allowed
- *	in this system sleep state is stored at the location pointed to by it.
+ * Find the lowest power (highest number) ACPI device power state that the
+ * device can be in while the system is in the sleep state represented
+ * by %acpi_target_sleep_state.  If @d_min_p is set, the highest power (lowest
+ * number) device power state that @dev can be in for the given system sleep
+ * state is stored at the location pointed to by it.
  *
- *	The caller must ensure that @dev is valid before using this function.
- *	The caller is also responsible for figuring out if the device is
- *	supposed to be able to wake up the system and passing this information
- *	via @wake.
+ * The caller must ensure that @dev is valid before using this function.
  */
-
 int acpi_pm_device_sleep_state(struct device *dev, int *d_min_p, int d_max_in)
 {
 	acpi_handle handle = DEVICE_ACPI_HANDLE(dev);
 	struct acpi_device *adev;
 	char acpi_method[] = "_SxD";
 	unsigned long long d_min, d_max;
+	bool wakeup = false;
 
 	if (d_max_in < ACPI_STATE_D0 || d_max_in > ACPI_STATE_D3)
 		return -EINVAL;
 	if (!handle || ACPI_FAILURE(acpi_bus_get_device(handle, &adev))) {
 		printk(KERN_DEBUG "ACPI handle has no context!\n");
 		return -ENODEV;
+	}
+	if (d_max_in > ACPI_STATE_D3_HOT) {
+		enum pm_qos_flags_status stat;
+
+		stat = dev_pm_qos_flags(dev, PM_QOS_FLAG_NO_POWER_OFF);
+		if (stat == PM_QOS_FLAGS_ALL)
+			d_max_in = ACPI_STATE_D3_HOT;
 	}
 
 	acpi_method[2] = '0' + acpi_target_sleep_state;
@@ -737,8 +754,14 @@ int acpi_pm_device_sleep_state(struct device *dev, int *d_min_p, int d_max_in)
 	 * NOTE: We rely on acpi_evaluate_integer() not clobbering the integer
 	 * provided -- that's our fault recovery, we ignore retval.
 	 */
-	if (acpi_target_sleep_state > ACPI_STATE_S0)
+	if (acpi_target_sleep_state > ACPI_STATE_S0) {
 		acpi_evaluate_integer(handle, acpi_method, NULL, &d_min);
+		wakeup = device_may_wakeup(dev) && adev->wakeup.flags.valid
+			&& adev->wakeup.sleep_state >= acpi_target_sleep_state;
+	} else if (dev_pm_qos_flags(dev, PM_QOS_FLAG_REMOTE_WAKEUP) !=
+			PM_QOS_FLAGS_NONE) {
+		wakeup = adev->wakeup.flags.valid;
+	}
 
 	/*
 	 * If _PRW says we can wake up the system from the target sleep state,
@@ -747,9 +770,7 @@ int acpi_pm_device_sleep_state(struct device *dev, int *d_min_p, int d_max_in)
 	 * (ACPI 3.x), it should return the maximum (lowest power) D-state that
 	 * can wake the system.  _S0W may be valid, too.
 	 */
-	if (acpi_target_sleep_state == ACPI_STATE_S0 ||
-	    (device_may_wakeup(dev) && adev->wakeup.flags.valid &&
-	     adev->wakeup.sleep_state >= acpi_target_sleep_state)) {
+	if (wakeup) {
 		acpi_status status;
 
 		acpi_method[3] = 'W';
@@ -784,14 +805,15 @@ int acpi_pm_device_sleep_state(struct device *dev, int *d_min_p, int d_max_in)
 EXPORT_SYMBOL(acpi_pm_device_sleep_state);
 #endif /* CONFIG_PM */
 
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_RUNTIME
 /**
- * acpi_pm_device_run_wake - Enable/disable wake-up for given device.
- * @phys_dev: Device to enable/disable the platform to wake-up the system for.
- * @enable: Whether enable or disable the wake-up functionality.
+ * acpi_pm_device_run_wake - Enable/disable remote wakeup for given device.
+ * @phys_dev: Device to enable/disable the platform to wake up.
+ * @enable: Whether to enable or disable the wakeup functionality.
  *
- * Find the ACPI device object corresponding to @pci_dev and try to
- * enable/disable the GPE associated with it.
+ * Find the ACPI device object corresponding to @phys_dev and try to
+ * enable/disable the GPE associated with it, so that it can generate
+ * wakeup signals for the device in response to external (remote) events.
  */
 int acpi_pm_device_run_wake(struct device *phys_dev, bool enable)
 {
@@ -819,12 +841,13 @@ int acpi_pm_device_run_wake(struct device *phys_dev, bool enable)
 	return 0;
 }
 EXPORT_SYMBOL(acpi_pm_device_run_wake);
+#endif /* CONFIG_PM_RUNTIME */
 
+#ifdef CONFIG_PM_SLEEP
 /**
- *	acpi_pm_device_sleep_wake - enable or disable the system wake-up
- *                                  capability of given device
- *	@dev: device to handle
- *	@enable: 'true' - enable, 'false' - disable the wake-up capability
+ * acpi_pm_device_sleep_wake - Enable or disable device to wake up the system.
+ * @dev: Device to enable/desible to wake up the system from sleep states.
+ * @enable: Whether to enable or disable @dev to wake up the system.
  */
 int acpi_pm_device_sleep_wake(struct device *dev, bool enable)
 {
