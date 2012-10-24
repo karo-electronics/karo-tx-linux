@@ -306,11 +306,26 @@ int ptep_set_access_flags(struct vm_area_struct *vma,
 			  pte_t entry, int dirty)
 {
 	int changed = !pte_same(*ptep, entry);
+	/*
+	 * If the page used to be inaccessible (_PAGE_PROTNONE), or
+	 * this call upgrades the access permissions on the same page,
+	 * it is safe to skip the remote TLB flush.
+	 */
+	bool flush_remote = false;
+	if (!pte_accessible(*ptep))
+		flush_remote = false;
+	else if (pte_pfn(*ptep) != pte_pfn(entry) ||
+			(pte_write(*ptep) && !pte_write(entry)) ||
+			(pte_exec(*ptep) && !pte_exec(entry)))
+		flush_remote = true;
 
 	if (changed && dirty) {
 		*ptep = entry;
 		pte_update_defer(vma->vm_mm, address, ptep);
-		flush_tlb_page(vma, address);
+		if (flush_remote)
+			flush_tlb_page(vma, address);
+		else
+			__flush_tlb_one(address);
 	}
 
 	return changed;
