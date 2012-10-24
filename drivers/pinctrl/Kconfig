@@ -186,9 +186,10 @@ config PINCTRL_EXYNOS4
 	bool "Pinctrl driver data for Exynos4 SoC"
 	select PINCTRL_SAMSUNG
 
+if PLAT_ORION
+
 config PINCTRL_MVEBU
 	bool
-	depends on ARCH_MVEBU
 	select PINMUX
 	select PINCONF
 
@@ -207,6 +208,8 @@ config PINCTRL_ARMADA_370
 config PINCTRL_ARMADA_XP
 	bool
 	select PINCTRL_MVEBU
+
+endif
 
 source "drivers/pinctrl/spear/Kconfig"
 
