@@ -664,7 +664,7 @@ static struct clk exynos5_init_clocks_off[] = {
 		.ctrlbit	= (1 << 25),
 	}, {
 		.name		= "mfc",
-		.devname	= "s5p-mfc",
+		.devname	= "s5p-mfc-v6",
 		.enable		= exynos5_clk_ip_mfc_ctrl,
 		.ctrlbit	= (1 << 0),
 	}, {
@@ -677,6 +677,11 @@ static struct clk exynos5_init_clocks_off[] = {
 		.devname	= "s5p-mixer",
 		.enable		= exynos5_clk_ip_disp1_ctrl,
 		.ctrlbit	= (1 << 5),
+	}, {
+		.name		= "dp",
+		.devname	= "exynos-dp",
+		.enable		= exynos5_clk_ip_disp1_ctrl,
+		.ctrlbit	= (1 << 4),
 	}, {
 		.name		= "jpeg",
 		.enable		= exynos5_clk_ip_gen_ctrl,
