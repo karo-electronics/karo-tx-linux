@@ -526,6 +526,53 @@ static int smaps_pte_range(pmd_t *pmd, unsigned long addr, unsigned long end,
 	return 0;
 }
 
+static void show_smap_vma_flags(struct seq_file *m, struct vm_area_struct *vma)
+{
+	/*
+	 * Don't forget to update Documentation/ on changes.
+	 */
+
+#define __seq_show_vmflag(_f, _s)		\
+	do {					\
+		if (vma->vm_flags & (_f))	\
+			seq_puts(m, _s);	\
+	} while (0)
+
+	seq_puts(m, "VmFlags: ");
+
+	__seq_show_vmflag(VM_READ,	"rd ");
+	__seq_show_vmflag(VM_WRITE,	"wr ");
+	__seq_show_vmflag(VM_EXEC,	"ex ");
+	__seq_show_vmflag(VM_SHARED,	"sh ");
+	__seq_show_vmflag(VM_MAYREAD,	"mr ");
+	__seq_show_vmflag(VM_MAYWRITE,	"mw ");
+	__seq_show_vmflag(VM_MAYEXEC,	"me ");
+	__seq_show_vmflag(VM_MAYSHARE,	"ms ");
+	__seq_show_vmflag(VM_GROWSDOWN,	"gd ");
+	__seq_show_vmflag(VM_PFNMAP,	"pf ");
+	__seq_show_vmflag(VM_DENYWRITE,	"dw ");
+	__seq_show_vmflag(VM_LOCKED,	"lo ");
+	__seq_show_vmflag(VM_IO,	"io ");
+	__seq_show_vmflag(VM_SEQ_READ,	"sr ");
+	__seq_show_vmflag(VM_RAND_READ,	"rr ");
+	__seq_show_vmflag(VM_DONTCOPY,	"dc ");
+	__seq_show_vmflag(VM_DONTEXPAND,"de ");
+	__seq_show_vmflag(VM_ACCOUNT,	"ac ");
+	__seq_show_vmflag(VM_NORESERVE,	"nr ");
+	__seq_show_vmflag(VM_HUGETLB,	"ht ");
+	__seq_show_vmflag(VM_NONLINEAR,	"nl ");
+	__seq_show_vmflag(VM_ARCH_1,	"ar ");
+	__seq_show_vmflag(VM_DONTDUMP,	"dd ");
+	__seq_show_vmflag(VM_MIXEDMAP,	"mm ");
+	__seq_show_vmflag(VM_HUGEPAGE,	"hg ");
+	__seq_show_vmflag(VM_NOHUGEPAGE,"nh ");
+	__seq_show_vmflag(VM_MERGEABLE,	"mg ");
+
+	seq_putc(m, '\n');
+
+#undef __seq_show_vmflag
+}
+
 static int show_smap(struct seq_file *m, void *v, int is_pid)
 {
 	struct proc_maps_private *priv = m->private;
@@ -580,6 +627,8 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
 	if (vma->vm_flags & VM_NONLINEAR)
 		seq_printf(m, "Nonlinear:      %8lu kB\n",
 				mss.nonlinear >> 10);
+
+	show_smap_vma_flags(m, vma);
 
 	if (m->count < m->size)  /* vma is copied successfully */
 		m->version = (vma != get_gate_vma(task->mm))
