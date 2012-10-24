@@ -797,7 +797,9 @@ update_stats_curr_start(struct cfs_rq *cfs_rq, struct sched_entity *se)
  * have.
  */
 
+#ifdef CONFIG_SMP
 static unsigned long task_h_load(struct task_struct *p);
+#endif
 
 #ifdef CONFIG_SCHED_NUMA
 static struct list_head *account_numa_enqueue(struct rq *rq, struct task_struct *p)
@@ -995,10 +997,12 @@ void task_tick_numa(struct rq *rq, struct task_struct *curr)
 	}
 }
 #else
+#ifdef CONFIG_SMP
 static struct list_head *account_numa_enqueue(struct rq *rq, struct task_struct *p)
 {
 	return NULL;
 }
+#endif
 
 static void account_numa_dequeue(struct rq *rq, struct task_struct *p)
 {
@@ -3760,11 +3764,12 @@ static inline void update_shares(int cpu)
 static inline void update_h_load(long cpu)
 {
 }
-
+#ifdef CONFIG_SMP
 static unsigned long task_h_load(struct task_struct *p)
 {
 	return p->se.load.weight;
 }
+#endif
 #endif
 
 /********** Helpers for find_busiest_group ************************/
