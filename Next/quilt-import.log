@@ -1,0 +1,33 @@
+Importing i2c based on 3.7-rc2
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 3.7-rc2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 6f0c0580b70c89094b3422ba81118c7b959c7556
+HEAD is now at 6f0c058 Linux 3.7-rc2
+$ git am ../quilt/jdelvare-hwmon/hwmon-fix-feature-table-headers.patch
+Applying: hwmon: Fix chip feature table headers
+$ git am ../quilt/jdelvare-hwmon/hwmon-w83627hf-restore-limits-on-resume.patch
+Applying: hwmon: (w83627hf) Add support for suspend
+$ git am ../quilt/jdelvare-hwmon/hwmon-w83627ehf-restore-limits-on-resume.patch
+Applying: hwmon: (w83627ehf) Add support for suspend
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+   12250d8..0110e1d  master     -> quilt/jdelvare-hwmon
+Importing device-mapper based on v3.7-rc1
+$ cd ../quilt-tmp
+$ git reset --hard ddffeb8c4d0331609ef2581d84de4d763607bd37
+HEAD is now at ddffeb8 Linux 3.7-rc1
+$ git am ../quilt/device-mapper/dm-persistent-data-rename-node-to-btree_node.patch
+Applying: This patch fixes a compilation failure on sparc32 by renaming struct node.
+$ git am ../quilt/device-mapper/dm-raid1-remove-impossible-mempool_alloc-error-test.patch
+Applying: mempool_alloc can't fail if __GFP_WAIT is specified, so the condition
+$ git am ../quilt/device-mapper/dm-raid-use-DM_ENDIO_INCOMPLETE.patch
+Applying: Use a defined macro DM_ENDIO_INCOMPLETE instead of a numeric constant.
+$ git am ../quilt/device-mapper/dm-snap-optimize-track_chunk.patch
+Applying: track_chunk is always called with interrupts enabled. Consequently, we
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+   ddffeb8..cee3685  master     -> quilt/device-mapper
