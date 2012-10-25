@@ -616,7 +616,8 @@ static int __fat_write_inode(struct inode *inode, int wait)
 	struct msdos_sb_info *sbi = MSDOS_SB(sb);
 	struct buffer_head *bh;
 	struct msdos_dir_entry *raw_entry;
-	loff_t i_pos, blocknr;
+	loff_t i_pos;
+	sector_t blocknr;
 	int offset, err;
 
 	if (inode->i_ino == MSDOS_ROOT_INO)
