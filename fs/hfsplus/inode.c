@@ -342,6 +342,18 @@ int hfsplus_file_fsync(struct file *file, loff_t start, loff_t end,
 			error = error2;
 	}
 
+	if (test_and_clear_bit(HFSPLUS_I_ATTR_DIRTY, &hip->flags)) {
+		if (sbi->attr_tree) {
+			error2 =
+				filemap_write_and_wait(
+					    sbi->attr_tree->inode->i_mapping);
+			if (!error)
+				error = error2;
+		} else {
+			printk(KERN_ERR "hfs: sync non-existent attributes tree\n");
+		}
+	}
+
 	if (test_and_clear_bit(HFSPLUS_I_ALLOC_DIRTY, &hip->flags)) {
 		error2 = filemap_write_and_wait(sbi->alloc_file->i_mapping);
 		if (!error)
@@ -363,6 +375,7 @@ static const struct inode_operations hfsplus_file_inode_operations = {
 	.setxattr	= hfsplus_setxattr,
 	.getxattr	= hfsplus_getxattr,
 	.listxattr	= hfsplus_listxattr,
+	.removexattr	= hfsplus_removexattr,
 };
 
 static const struct file_operations hfsplus_file_operations = {
