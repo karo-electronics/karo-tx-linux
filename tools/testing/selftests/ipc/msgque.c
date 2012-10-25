@@ -172,7 +172,7 @@ int fill_msgque(struct msgque_data *msgque)
 	return 0;
 }
 
-int main (int argc, char **argv)
+int main(int argc, char **argv)
 {
 	key_t key;
 	int msg, pid, err;
