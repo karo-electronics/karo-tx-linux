@@ -162,7 +162,6 @@ struct msb_data {
 	struct workqueue_struct		*io_queue;
 	bool				io_queue_stopped;
 	struct work_struct		io_work;
-	struct scatterlist		prealloc_sg[MS_BLOCK_MAX_SEGS+1];
 	bool				card_dead;
 
 	/* Media properties */
@@ -194,7 +193,7 @@ struct msb_data {
 
 	/* Preallocated buffers */
 	unsigned char			*block_buffer;
-	struct scatterlist		sg[MS_BLOCK_MAX_SEGS+1];
+	struct scatterlist		prealloc_sg[MS_BLOCK_MAX_SEGS+1];
 
 
 	/* handler's local data */
@@ -277,8 +276,6 @@ static int msb_reset(struct msb_data *msb, bool full);
 
 static int h_msb_default_bad(struct memstick_dev *card,
 						struct memstick_request **mrq);
-
-#define DRIVER_NAME "ms_block"
 
 #define __dbg(level, format, ...) \
 	do { \
