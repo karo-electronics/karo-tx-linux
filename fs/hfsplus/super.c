@@ -657,7 +657,7 @@ destroy_attr_tree_cache:
 destroy_inode_cache:
 	kmem_cache_destroy(hfsplus_inode_cachep);
 
- 	return err;
+	return err;
 }
 
 static void __exit exit_hfsplus_fs(void)
