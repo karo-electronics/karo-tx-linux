@@ -788,6 +788,10 @@ static void clear_hwpoisoned_pages(struct page *memmap, int nr_pages)
 		}
 	}
 }
+#else
+static inline void clear_hwpoisoned_pages(struct page *memmap, int nr_pages)
+{
+}
 #endif
 
 void sparse_remove_one_section(struct zone *zone, struct mem_section *ms)
@@ -803,10 +807,7 @@ void sparse_remove_one_section(struct zone *zone, struct mem_section *ms)
 		ms->pageblock_flags = NULL;
 	}
 
-#ifdef CONFIG_MEMORY_FAILURE
 	clear_hwpoisoned_pages(memmap, PAGES_PER_SECTION);
-#endif
-
 	free_section_usemap(memmap, usemap);
 }
 #endif
