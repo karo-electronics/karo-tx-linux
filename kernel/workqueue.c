@@ -1477,7 +1477,11 @@ bool mod_delayed_work_on(int cpu, struct workqueue_struct *wq,
 	} while (unlikely(ret == -EAGAIN));
 
 	if (likely(ret >= 0)) {
-		__queue_delayed_work(cpu, wq, dwork, delay);
+		if (!delay)
+			__queue_work(cpu, wq, &dwork->work);
+		else
+			__queue_delayed_work(cpu, wq, dwork, delay);
+
 		local_irq_restore(flags);
 	}
 
@@ -2982,7 +2986,7 @@ bool cancel_delayed_work(struct delayed_work *dwork)
 
 	set_work_cpu_and_clear_pending(&dwork->work, work_cpu(&dwork->work));
 	local_irq_restore(flags);
-	return true;
+	return ret;
 }
 EXPORT_SYMBOL(cancel_delayed_work);
 
@@ -3475,7 +3479,7 @@ unsigned int work_busy(struct work_struct *work)
 	unsigned int ret = 0;
 
 	if (!gcwq)
-		return false;
+		return 0;
 
 	spin_lock_irqsave(&gcwq->lock, flags);
 
