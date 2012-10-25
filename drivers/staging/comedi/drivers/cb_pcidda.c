@@ -656,18 +656,16 @@ static int cb_pcidda_attach_pci(struct comedi_device *dev,
 	int index;
 	int ret;
 
-	comedi_set_hw_dev(dev, &pcidev->dev);
-
 	thisboard = cb_pcidda_find_boardinfo(dev, pcidev);
 	if (!pcidev)
 		return -ENODEV;
 	dev->board_ptr = thisboard;
 	dev->board_name = thisboard->name;
 
-	ret = alloc_private(dev, sizeof(*devpriv));
-	if (ret)
-		return ret;
-	devpriv = dev->private;
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	ret = comedi_pci_enable(pcidev, dev->board_name);
 	if (ret)

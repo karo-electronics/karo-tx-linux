@@ -415,14 +415,6 @@ struct comedi_lrange {
 
 /* some silly little inline functions */
 
-static inline int alloc_private(struct comedi_device *dev, int size)
-{
-	dev->private = kzalloc(size, GFP_KERNEL);
-	if (!dev->private)
-		return -ENOMEM;
-	return 0;
-}
-
 static inline unsigned int bytes_per_sample(const struct comedi_subdevice *subd)
 {
 	if (subd->subdev_flags & SDF_LSAMPL)
@@ -436,9 +428,10 @@ into comedi's buffer */
 static inline void comedi_set_hw_dev(struct comedi_device *dev,
 				     struct device *hw_dev)
 {
+	if (dev->hw_dev == hw_dev)
+		return;
 	if (dev->hw_dev)
 		put_device(dev->hw_dev);
-
 	dev->hw_dev = hw_dev;
 	if (dev->hw_dev) {
 		dev->hw_dev = get_device(dev->hw_dev);

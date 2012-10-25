@@ -234,8 +234,6 @@ struct me_private_data {
 	int ao_readback[4];	/* Mirror of analog output data */
 };
 
-#define dev_private ((struct me_private_data *)dev->private)
-
 /*
  * ------------------------------------------------------------------
  *
@@ -260,6 +258,7 @@ static int me_dio_insn_config(struct comedi_device *dev,
 			      struct comedi_subdevice *s,
 			      struct comedi_insn *insn, unsigned int *data)
 {
+	struct me_private_data *dev_private = dev->private;
 	int bits;
 	int mask = 1 << CR_CHAN(insn->chanspec);
 
@@ -297,7 +296,9 @@ static int me_dio_insn_bits(struct comedi_device *dev,
 			    struct comedi_subdevice *s,
 			    struct comedi_insn *insn, unsigned int *data)
 {
+	struct me_private_data *dev_private = dev->private;
 	unsigned int mask = data[0];
+
 	s->state &= ~mask;
 	s->state |= (mask & data[1]);
 
@@ -334,6 +335,7 @@ static int me_ai_insn_read(struct comedi_device *dev,
 			   struct comedi_subdevice *s,
 			   struct comedi_insn *insn, unsigned int *data)
 {
+	struct me_private_data *dev_private = dev->private;
 	unsigned short value;
 	int chan = CR_CHAN((&insn->chanspec)[0]);
 	int rang = CR_RANGE((&insn->chanspec)[0]);
@@ -384,8 +386,7 @@ static int me_ai_insn_read(struct comedi_device *dev,
 		    (readw(dev_private->me_regbase +
 			   ME_READ_AD_FIFO) ^ 0x800) & 0x0FFF;
 	} else {
-		printk(KERN_ERR "comedi%d: Cannot get single value\n",
-		       dev->minor);
+		dev_err(dev->class_dev, "Cannot get single value\n");
 		return -EIO;
 	}
 
@@ -407,6 +408,8 @@ static int me_ai_insn_read(struct comedi_device *dev,
 /* Cancel analog input autoscan */
 static int me_ai_cancel(struct comedi_device *dev, struct comedi_subdevice *s)
 {
+	struct me_private_data *dev_private = dev->private;
+
 	/* disable interrupts */
 
 	/* stop any running conversion */
@@ -443,6 +446,7 @@ static int me_ao_insn_write(struct comedi_device *dev,
 			    struct comedi_subdevice *s,
 			    struct comedi_insn *insn, unsigned int *data)
 {
+	struct me_private_data *dev_private = dev->private;
 	int chan;
 	int rang;
 	int i;
@@ -494,6 +498,7 @@ static int me_ao_insn_read(struct comedi_device *dev,
 			   struct comedi_subdevice *s, struct comedi_insn *insn,
 			   unsigned int *data)
 {
+	struct me_private_data *dev_private = dev->private;
 	int i;
 
 	for (i = 0; i < insn->n; i++) {
@@ -516,6 +521,7 @@ static int me_ao_insn_read(struct comedi_device *dev,
 static int me2600_xilinx_download(struct comedi_device *dev,
 				  const u8 *data, size_t size)
 {
+	struct me_private_data *dev_private = dev->private;
 	unsigned int value;
 	unsigned int file_length;
 	unsigned int i;
@@ -566,8 +572,7 @@ static int me2600_xilinx_download(struct comedi_device *dev,
 	if (value & 0x20) {
 		/* Disable interrupt */
 		writel(0x00, dev_private->plx_regbase + PLX_INTCSR);
-		printk(KERN_ERR "comedi%d: Xilinx download failed\n",
-		       dev->minor);
+		dev_err(dev->class_dev, "Xilinx download failed\n");
 		return -EIO;
 	}
 
@@ -599,6 +604,8 @@ static int me2600_upload_firmware(struct comedi_device *dev)
 /* Reset device */
 static int me_reset(struct comedi_device *dev)
 {
+	struct me_private_data *dev_private = dev->private;
+
 	/* Reset board */
 	writew(0x00, dev_private->me_regbase + ME_CONTROL_1);
 	writew(0x00, dev_private->me_regbase + ME_CONTROL_2);
@@ -630,6 +637,7 @@ static const void *me_find_boardinfo(struct comedi_device *dev,
 static int me_attach_pci(struct comedi_device *dev, struct pci_dev *pcidev)
 {
 	const struct me_board *board;
+	struct me_private_data *dev_private;
 	struct comedi_subdevice *s;
 	resource_size_t plx_regbase_tmp;
 	unsigned long plx_regbase_size_tmp;
@@ -640,22 +648,21 @@ static int me_attach_pci(struct comedi_device *dev, struct pci_dev *pcidev)
 	resource_size_t regbase_tmp;
 	int result, error;
 
-	comedi_set_hw_dev(dev, &pcidev->dev);
-
 	board = me_find_boardinfo(dev, pcidev);
 	if (!board)
 		return -ENODEV;
 	dev->board_ptr = board;
 	dev->board_name = board->name;
 
-	/* Allocate private memory */
-	if (alloc_private(dev, sizeof(struct me_private_data)) < 0)
+	dev_private = kzalloc(sizeof(*dev_private), GFP_KERNEL);
+	if (!dev_private)
 		return -ENOMEM;
+	dev->private = dev_private;
 
 	/* Enable PCI device and request PCI regions */
 	if (comedi_pci_enable(pcidev, dev->board_name) < 0) {
-		printk(KERN_ERR "comedi%d: Failed to enable PCI device and "
-		       "request regions\n", dev->minor);
+		dev_err(dev->class_dev,
+			"Failed to enable PCI device and request regions\n");
 		return -EIO;
 	}
 
@@ -666,7 +673,7 @@ static int me_attach_pci(struct comedi_device *dev, struct pci_dev *pcidev)
 	    ioremap(plx_regbase_tmp, plx_regbase_size_tmp);
 	dev_private->plx_regbase_size = plx_regbase_size_tmp;
 	if (!dev_private->plx_regbase) {
-		printk("comedi%d: Failed to remap I/O memory\n", dev->minor);
+		dev_err(dev->class_dev, "Failed to remap I/O memory\n");
 		return -ENOMEM;
 	}
 
@@ -676,11 +683,11 @@ static int me_attach_pci(struct comedi_device *dev, struct pci_dev *pcidev)
 	swap_regbase_size_tmp = pci_resource_len(pcidev, 5);
 
 	if (!swap_regbase_tmp)
-		printk(KERN_ERR "comedi%d: Swap not present\n", dev->minor);
+		dev_err(dev->class_dev, "Swap not present\n");
 
 	/*---------------------------------------------- Workaround start ---*/
 	if (plx_regbase_tmp & 0x0080) {
-		printk(KERN_ERR "comedi%d: PLX-Bug detected\n", dev->minor);
+		dev_err(dev->class_dev, "PLX-Bug detected\n");
 
 		if (swap_regbase_tmp) {
 			regbase_tmp = plx_regbase_tmp;
@@ -716,8 +723,7 @@ static int me_attach_pci(struct comedi_device *dev, struct pci_dev *pcidev)
 	dev_private->me_regbase_size = me_regbase_size_tmp;
 	dev_private->me_regbase = ioremap(me_regbase_tmp, me_regbase_size_tmp);
 	if (!dev_private->me_regbase) {
-		printk(KERN_ERR "comedi%d: Failed to remap I/O memory\n",
-		       dev->minor);
+		dev_err(dev->class_dev, "Failed to remap I/O memory\n");
 		return -ENOMEM;
 	}
 
@@ -775,6 +781,7 @@ static int me_attach_pci(struct comedi_device *dev, struct pci_dev *pcidev)
 static void me_detach(struct comedi_device *dev)
 {
 	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
+	struct me_private_data *dev_private = dev->private;
 
 	if (dev_private) {
 		if (dev_private->me_regbase) {

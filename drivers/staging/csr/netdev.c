@@ -47,7 +47,6 @@
 #include <linux/etherdevice.h>
 #include <linux/mutex.h>
 #include <linux/semaphore.h>
-#include <linux/version.h>
 #include <linux/vmalloc.h>
 #include "csr_wifi_hip_unifi.h"
 #include "csr_wifi_hip_conversions.h"
@@ -3247,8 +3246,8 @@ static void check_ba_frame_age_timeout( unifi_priv_t *priv,
                                         netInterface_priv_t *interfacePriv,
                                         ba_session_rx_struct *ba_session)
 {
-    CsrTime now;
-    CsrTime age;
+    u32 now;
+    u32 age;
     u8 i, j;
     u16 sn_temp;
 
@@ -3283,11 +3282,11 @@ static void check_ba_frame_age_timeout( unifi_priv_t *priv,
                 if (ba_session->buffer[i].recv_time > now)
                 {
                     /* timer wrap */
-                    age = CsrTimeAdd((CsrTime)CsrTimeSub(CSR_SCHED_TIME_MAX, ba_session->buffer[i].recv_time), now);
+                    age = CsrTimeAdd((u32)CsrTimeSub(CSR_SCHED_TIME_MAX, ba_session->buffer[i].recv_time), now);
                 }
                 else
                 {
-                    age = (CsrTime)CsrTimeSub(now, ba_session->buffer[i].recv_time);
+                    age = (u32)CsrTimeSub(now, ba_session->buffer[i].recv_time);
                 }
 
                 if (age >= CSR_WIFI_BA_MPDU_FRAME_AGE_TIMEOUT)
