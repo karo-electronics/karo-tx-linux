@@ -1408,8 +1408,10 @@ static int msb_ftl_scan(struct msb_data *msb)
 			msb_mark_block_used(msb, pba);
 			msb_erase_block(msb, pba);
 			continue;
-		} else if (error)
+		} else if (error) {
+			kfree(overwrite_flags);
 			return error;
+		}
 
 		lba = be16_to_cpu(extra.logical_address);
 		managment_flag = extra.management_flag;
