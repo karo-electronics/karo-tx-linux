@@ -1230,7 +1230,7 @@ static const u16 db8500_prcm_gpiocr_regs[] = {
 	[PRCM_IDX_GPIOCR2] = 0x574,
 };
 
-static const struct nmk_pinctrl_soc_data nmk_db8500_soc = {
+static struct nmk_pinctrl_soc_data nmk_db8500_soc = {
 	.gpio_ranges = nmk_db8500_ranges,
 	.gpio_num_ranges = ARRAY_SIZE(nmk_db8500_ranges),
 	.pins = nmk_db8500_pins,
@@ -1245,7 +1245,7 @@ static const struct nmk_pinctrl_soc_data nmk_db8500_soc = {
 };
 
 void __devinit
-nmk_pinctrl_db8500_init(const struct nmk_pinctrl_soc_data **soc)
+nmk_pinctrl_db8500_init(struct nmk_pinctrl_soc_data **soc)
 {
 	*soc = &nmk_db8500_soc;
 }

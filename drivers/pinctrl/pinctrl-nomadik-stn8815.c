@@ -339,7 +339,7 @@ static const struct nmk_function nmk_stn8815_functions[] = {
 	FUNCTION(i2cusb),
 };
 
-static const struct nmk_pinctrl_soc_data nmk_stn8815_soc = {
+static struct nmk_pinctrl_soc_data nmk_stn8815_soc = {
 	.gpio_ranges = nmk_stn8815_ranges,
 	.gpio_num_ranges = ARRAY_SIZE(nmk_stn8815_ranges),
 	.pins = nmk_stn8815_pins,
@@ -351,7 +351,7 @@ static const struct nmk_pinctrl_soc_data nmk_stn8815_soc = {
 };
 
 void __devinit
-nmk_pinctrl_stn8815_init(const struct nmk_pinctrl_soc_data **soc)
+nmk_pinctrl_stn8815_init(struct nmk_pinctrl_soc_data **soc)
 {
 	*soc = &nmk_stn8815_soc;
 }

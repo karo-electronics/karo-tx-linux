@@ -1240,7 +1240,7 @@ static const u16 db8540_prcm_gpiocr_regs[] = {
 	[PRCM_IDX_GPIOCR3] = 0x2bc,
 };
 
-static const struct nmk_pinctrl_soc_data nmk_db8540_soc = {
+static struct nmk_pinctrl_soc_data nmk_db8540_soc = {
 	.gpio_ranges = nmk_db8540_ranges,
 	.gpio_num_ranges = ARRAY_SIZE(nmk_db8540_ranges),
 	.pins = nmk_db8540_pins,
@@ -1255,7 +1255,7 @@ static const struct nmk_pinctrl_soc_data nmk_db8540_soc = {
 };
 
 void __devinit
-nmk_pinctrl_db8540_init(const struct nmk_pinctrl_soc_data **soc)
+nmk_pinctrl_db8540_init(struct nmk_pinctrl_soc_data **soc)
 {
 	*soc = &nmk_db8540_soc;
 }
