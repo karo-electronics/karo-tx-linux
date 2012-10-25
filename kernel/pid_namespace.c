@@ -78,11 +78,15 @@ static struct pid_namespace *create_pid_namespace(struct pid_namespace *parent_p
 {
 	struct pid_namespace *ns;
 	unsigned int level = parent_pid_ns->level + 1;
-	int i, err = -ENOMEM;
+	int i;
+	int err;
 
-	if (level > MAX_PID_NS_LEVEL)
+	if (level > MAX_PID_NS_LEVEL) {
+		err = -EINVAL;
 		goto out;
+	}
 
+	err = -ENOMEM;
 	ns = kmem_cache_zalloc(pid_ns_cachep, GFP_KERNEL);
 	if (ns == NULL)
 		goto out;
