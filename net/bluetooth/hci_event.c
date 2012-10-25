@@ -460,10 +460,10 @@ static void hci_cc_write_ssp_mode(struct hci_dev *hdev, struct sk_buff *skb)
 
 static u8 hci_get_inquiry_mode(struct hci_dev *hdev)
 {
-	if (hdev->features[6] & LMP_EXT_INQ)
+	if (lmp_ext_inq_capable(hdev))
 		return 2;
 
-	if (hdev->features[3] & LMP_RSSI_INQ)
+	if (lmp_inq_rssi_capable(hdev))
 		return 1;
 
 	if (hdev->manufacturer == 11 && hdev->hci_rev == 0x00 &&
@@ -507,28 +507,30 @@ static void hci_setup_event_mask(struct hci_dev *hdev)
 	if (hdev->hci_ver < BLUETOOTH_VER_1_2)
 		return;
 
-	events[4] |= 0x01; /* Flow Specification Complete */
-	events[4] |= 0x02; /* Inquiry Result with RSSI */
-	events[4] |= 0x04; /* Read Remote Extended Features Complete */
-	events[5] |= 0x08; /* Synchronous Connection Complete */
-	events[5] |= 0x10; /* Synchronous Connection Changed */
+	if (lmp_bredr_capable(hdev)) {
+		events[4] |= 0x01; /* Flow Specification Complete */
+		events[4] |= 0x02; /* Inquiry Result with RSSI */
+		events[4] |= 0x04; /* Read Remote Extended Features Complete */
+		events[5] |= 0x08; /* Synchronous Connection Complete */
+		events[5] |= 0x10; /* Synchronous Connection Changed */
+	}
 
-	if (hdev->features[3] & LMP_RSSI_INQ)
+	if (lmp_inq_rssi_capable(hdev))
 		events[4] |= 0x02; /* Inquiry Result with RSSI */
 
 	if (lmp_sniffsubr_capable(hdev))
 		events[5] |= 0x20; /* Sniff Subrating */
 
-	if (hdev->features[5] & LMP_PAUSE_ENC)
+	if (lmp_pause_enc_capable(hdev))
 		events[5] |= 0x80; /* Encryption Key Refresh Complete */
 
-	if (hdev->features[6] & LMP_EXT_INQ)
+	if (lmp_ext_inq_capable(hdev))
 		events[5] |= 0x40; /* Extended Inquiry Result */
 
 	if (lmp_no_flush_capable(hdev))
 		events[7] |= 0x01; /* Enhanced Flush Complete */
 
-	if (hdev->features[7] & LMP_LSTO)
+	if (lmp_lsto_capable(hdev))
 		events[6] |= 0x80; /* Link Supervision Timeout Changed */
 
 	if (lmp_ssp_capable(hdev)) {
@@ -548,12 +550,68 @@ static void hci_setup_event_mask(struct hci_dev *hdev)
 		events[7] |= 0x20;	/* LE Meta-Event */
 
 	hci_send_cmd(hdev, HCI_OP_SET_EVENT_MASK, sizeof(events), events);
+
+	if (lmp_le_capable(hdev)) {
+		memset(events, 0, sizeof(events));
+		events[0] = 0x1f;
+		hci_send_cmd(hdev, HCI_OP_LE_SET_EVENT_MASK,
+			     sizeof(events), events);
+	}
+}
+
+static void bredr_setup(struct hci_dev *hdev)
+{
+	struct hci_cp_delete_stored_link_key cp;
+	__le16 param;
+	__u8 flt_type;
+
+	/* Read Buffer Size (ACL mtu, max pkt, etc.) */
+	hci_send_cmd(hdev, HCI_OP_READ_BUFFER_SIZE, 0, NULL);
+
+	/* Read Class of Device */
+	hci_send_cmd(hdev, HCI_OP_READ_CLASS_OF_DEV, 0, NULL);
+
+	/* Read Local Name */
+	hci_send_cmd(hdev, HCI_OP_READ_LOCAL_NAME, 0, NULL);
+
+	/* Read Voice Setting */
+	hci_send_cmd(hdev, HCI_OP_READ_VOICE_SETTING, 0, NULL);
+
+	/* Clear Event Filters */
+	flt_type = HCI_FLT_CLEAR_ALL;
+	hci_send_cmd(hdev, HCI_OP_SET_EVENT_FLT, 1, &flt_type);
+
+	/* Connection accept timeout ~20 secs */
+	param = __constant_cpu_to_le16(0x7d00);
+	hci_send_cmd(hdev, HCI_OP_WRITE_CA_TIMEOUT, 2, &param);
+
+	bacpy(&cp.bdaddr, BDADDR_ANY);
+	cp.delete_all = 1;
+	hci_send_cmd(hdev, HCI_OP_DELETE_STORED_LINK_KEY, sizeof(cp), &cp);
+}
+
+static void le_setup(struct hci_dev *hdev)
+{
+	/* Read LE Buffer Size */
+	hci_send_cmd(hdev, HCI_OP_LE_READ_BUFFER_SIZE, 0, NULL);
+
+	/* Read LE Advertising Channel TX Power */
+	hci_send_cmd(hdev, HCI_OP_LE_READ_ADV_TX_POWER, 0, NULL);
 }
 
 static void hci_setup(struct hci_dev *hdev)
 {
 	if (hdev->dev_type != HCI_BREDR)
 		return;
+
+	/* Read BD Address */
+	hci_send_cmd(hdev, HCI_OP_READ_BD_ADDR, 0, NULL);
+
+	if (lmp_bredr_capable(hdev))
+		bredr_setup(hdev);
+
+	if (lmp_le_capable(hdev))
+		le_setup(hdev);
 
 	hci_setup_event_mask(hdev);
 
@@ -575,13 +633,13 @@ static void hci_setup(struct hci_dev *hdev)
 		}
 	}
 
-	if (hdev->features[3] & LMP_RSSI_INQ)
+	if (lmp_inq_rssi_capable(hdev))
 		hci_setup_inquiry_mode(hdev);
 
-	if (hdev->features[7] & LMP_INQ_TX_PWR)
+	if (lmp_inq_tx_pwr_capable(hdev))
 		hci_send_cmd(hdev, HCI_OP_READ_INQ_RSP_TX_POWER, 0, NULL);
 
-	if (hdev->features[7] & LMP_EXTFEATURES) {
+	if (lmp_ext_feat_capable(hdev)) {
 		struct hci_cp_read_local_ext_features cp;
 
 		cp.page = 0x01;
@@ -628,11 +686,11 @@ static void hci_setup_link_policy(struct hci_dev *hdev)
 
 	if (lmp_rswitch_capable(hdev))
 		link_policy |= HCI_LP_RSWITCH;
-	if (hdev->features[0] & LMP_HOLD)
+	if (lmp_hold_capable(hdev))
 		link_policy |= HCI_LP_HOLD;
 	if (lmp_sniff_capable(hdev))
 		link_policy |= HCI_LP_SNIFF;
-	if (hdev->features[1] & LMP_PARK)
+	if (lmp_park_capable(hdev))
 		link_policy |= HCI_LP_PARK;
 
 	cp.policy = cpu_to_le16(link_policy);
@@ -722,10 +780,10 @@ static void hci_set_le_support(struct hci_dev *hdev)
 
 	if (test_bit(HCI_LE_ENABLED, &hdev->dev_flags)) {
 		cp.le = 1;
-		cp.simul = !!(hdev->features[6] & LMP_SIMUL_LE_BR);
+		cp.simul = !!lmp_le_br_capable(hdev);
 	}
 
-	if (cp.le != !!(hdev->host_features[0] & LMP_HOST_LE))
+	if (cp.le != !!lmp_host_le_capable(hdev))
 		hci_send_cmd(hdev, HCI_OP_WRITE_LE_HOST_SUPPORTED, sizeof(cp),
 			     &cp);
 }
@@ -1018,6 +1076,28 @@ static void hci_cc_le_read_buffer_size(struct hci_dev *hdev,
 	hci_req_complete(hdev, HCI_OP_LE_READ_BUFFER_SIZE, rp->status);
 }
 
+static void hci_cc_le_read_adv_tx_power(struct hci_dev *hdev,
+					struct sk_buff *skb)
+{
+	struct hci_rp_le_read_adv_tx_power *rp = (void *) skb->data;
+
+	BT_DBG("%s status 0x%2.2x", hdev->name, rp->status);
+
+	if (!rp->status)
+		hdev->adv_tx_power = rp->tx_power;
+
+	hci_req_complete(hdev, HCI_OP_LE_READ_ADV_TX_POWER, rp->status);
+}
+
+static void hci_cc_le_set_event_mask(struct hci_dev *hdev, struct sk_buff *skb)
+{
+	__u8 status = *((__u8 *) skb->data);
+
+	BT_DBG("%s status 0x%2.2x", hdev->name, status);
+
+	hci_req_complete(hdev, HCI_OP_LE_SET_EVENT_MASK, status);
+}
+
 static void hci_cc_user_confirm_reply(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	struct hci_rp_user_confirm_reply *rp = (void *) skb->data;
@@ -1207,6 +1287,11 @@ static void hci_cc_write_le_host_supported(struct hci_dev *hdev,
 			hdev->host_features[0] |= LMP_HOST_LE;
 		else
 			hdev->host_features[0] &= ~LMP_HOST_LE;
+
+		if (sent->simul)
+			hdev->host_features[0] |= LMP_HOST_LE_BREDR;
+		else
+			hdev->host_features[0] &= ~LMP_HOST_LE_BREDR;
 	}
 
 	if (test_bit(HCI_MGMT, &hdev->dev_flags) &&
@@ -2439,6 +2524,14 @@ static void hci_cmd_complete_evt(struct hci_dev *hdev, struct sk_buff *skb)
 
 	case HCI_OP_LE_READ_BUFFER_SIZE:
 		hci_cc_le_read_buffer_size(hdev, skb);
+		break;
+
+	case HCI_OP_LE_READ_ADV_TX_POWER:
+		hci_cc_le_read_adv_tx_power(hdev, skb);
+		break;
+
+	case HCI_OP_LE_SET_EVENT_MASK:
+		hci_cc_le_set_event_mask(hdev, skb);
 		break;
 
 	case HCI_OP_USER_CONFIRM_REPLY:
