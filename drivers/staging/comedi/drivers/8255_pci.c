@@ -65,9 +65,6 @@ Configuration Options: not applicable, uses PCI auto config
 #define PCI_DEVICE_ID_ADLINK_PCI7248	0x7248
 #define PCI_DEVICE_ID_ADLINK_PCI7296	0x7296
 
-/* ComputerBoards is now known as Measurement Computing */
-#define PCI_VENDOR_ID_CB		0x1307
-
 #define PCI_DEVICE_ID_CB_PCIDIO48H	0x000b
 #define PCI_DEVICE_ID_CB_PCIDIO24H	0x0014
 #define PCI_DEVICE_ID_CB_PCIDIO96H	0x0017
@@ -227,18 +224,16 @@ static int pci_8255_attach_pci(struct comedi_device *dev,
 	int ret;
 	int i;
 
-	comedi_set_hw_dev(dev, &pcidev->dev);
-
 	board = pci_8255_find_boardinfo(dev, pcidev);
 	if (!board)
 		return -ENODEV;
 	dev->board_ptr = board;
 	dev->board_name = board->name;
 
-	ret = alloc_private(dev, sizeof(*devpriv));
-	if (ret < 0)
-		return ret;
-	devpriv = dev->private;
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	ret = comedi_pci_enable(pcidev, dev->board_name);
 	if (ret)

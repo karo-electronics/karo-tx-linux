@@ -65,7 +65,6 @@
 #define DO_PCI IS_ENABLED(CONFIG_COMEDI_DAS08_PCI)
 #define DO_COMEDI_DRIVER_REGISTER (DO_ISA || DO_PCI)
 
-#define PCI_VENDOR_ID_COMPUTERBOARDS 0x1307
 #define PCI_DEVICE_ID_PCIDAS08 0x29
 #define PCIDAS08_SIZE 0x54
 
@@ -778,21 +777,24 @@ das08_find_pci_board(struct pci_dev *pdev)
 static int __devinit __maybe_unused
 das08_attach_pci(struct comedi_device *dev, struct pci_dev *pdev)
 {
+	struct das08_private_struct *devpriv;
 	unsigned long iobase;
-	int ret;
 
 	if (!DO_PCI)
 		return -EINVAL;
-	ret = alloc_private(dev, sizeof(struct das08_private_struct));
-	if (ret < 0)
-		return ret;
+
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
+
 	dev_info(dev->class_dev, "attach pci %s\n", pci_name(pdev));
 	dev->board_ptr = das08_find_pci_board(pdev);
 	if (dev->board_ptr == NULL) {
 		dev_err(dev->class_dev, "BUG! cannot determine board type!\n");
 		return -EINVAL;
 	}
-	comedi_set_hw_dev(dev, &pdev->dev);
+
 	/*  enable PCI device and reserve I/O spaces */
 	if (comedi_pci_enable(pdev, dev->driver->driver_name)) {
 		dev_err(dev->class_dev,
@@ -809,13 +811,12 @@ das08_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
 	const struct das08_board_struct *thisboard = comedi_board(dev);
 	struct das08_private_struct *devpriv;
-	int ret;
 	unsigned long iobase;
 
-	ret = alloc_private(dev, sizeof(struct das08_private_struct));
-	if (ret < 0)
-		return ret;
-	devpriv = dev->private;
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	dev_info(dev->class_dev, "attach\n");
 	if (is_pci_board(thisboard)) {
@@ -876,7 +877,7 @@ static struct comedi_driver das08_driver = {
 
 #if DO_PCI
 static DEFINE_PCI_DEVICE_TABLE(das08_pci_table) = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, PCI_DEVICE_ID_PCIDAS08) },
+	{ PCI_DEVICE(PCI_VENDOR_ID_CB, PCI_DEVICE_ID_PCIDAS08) },
 	{0}
 };
 

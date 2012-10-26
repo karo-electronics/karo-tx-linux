@@ -183,18 +183,16 @@ static int pci6208_attach_pci(struct comedi_device *dev,
 	unsigned int val;
 	int ret;
 
-	comedi_set_hw_dev(dev, &pcidev->dev);
-
 	boardinfo = pci6208_find_boardinfo(dev, pcidev);
 	if (!boardinfo)
 		return -ENODEV;
 	dev->board_ptr = boardinfo;
 	dev->board_name = boardinfo->name;
 
-	ret = alloc_private(dev, sizeof(*devpriv));
-	if (ret < 0)
-		return ret;
-	devpriv = dev->private;
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	ret = comedi_pci_enable(pcidev, dev->board_name);
 	if (ret)
