@@ -206,6 +206,8 @@ int snd_hda_jack_detect_enable_callback(struct hda_codec *codec, hda_nid_t nid,
 		jack->action = action;
 	if (cb)
 		jack->callback = cb;
+	if (codec->jackpoll_interval > 0)
+		return 0; /* No unsol if we're polling instead */
 	return snd_hda_codec_write_cache(codec, nid, 0,
 					 AC_VERB_SET_UNSOLICITED_ENABLE,
 					 AC_USRSP_EN | jack->tag);
@@ -438,4 +440,26 @@ void snd_hda_jack_unsol_event(struct hda_codec *codec, unsigned int res)
 	snd_hda_jack_report_sync(codec);
 }
 EXPORT_SYMBOL_HDA(snd_hda_jack_unsol_event);
+
+void snd_hda_jack_poll_all(struct hda_codec *codec)
+{
+	struct hda_jack_tbl *jack = codec->jacktbl.list;
+	int i, changes = 0;
+
+	for (i = 0; i < codec->jacktbl.used; i++, jack++) {
+		unsigned int old_sense;
+		if (!jack->nid || !jack->jack_dirty || jack->phantom_jack)
+			continue;
+		old_sense = get_jack_plug_state(jack->pin_sense);
+		jack_detect_update(codec, jack);
+		if (old_sense == get_jack_plug_state(jack->pin_sense))
+			continue;
+		changes = 1;
+		if (jack->callback)
+			jack->callback(codec, jack);
+	}
+	if (changes)
+		snd_hda_jack_report_sync(codec);
+}
+EXPORT_SYMBOL_HDA(snd_hda_jack_poll_all);
 
