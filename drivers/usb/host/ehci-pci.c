@@ -103,7 +103,6 @@ static int ehci_pci_setup(struct usb_hcd *hcd)
 		}
 		break;
 	case PCI_VENDOR_ID_INTEL:
-		ehci->fs_i_thresh = 1;
 		if (pdev->device == PCI_DEVICE_ID_INTEL_CE4100_USB)
 			hcd->has_tt = 1;
 		break;
@@ -379,22 +378,6 @@ static int ehci_pci_resume(struct usb_hcd *hcd, bool hibernated)
 	return 0;
 }
 #endif
-
-static int ehci_update_device(struct usb_hcd *hcd, struct usb_device *udev)
-{
-	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
-	int rc = 0;
-
-	if (!udev->parent) /* udev is root hub itself, impossible */
-		rc = -1;
-	/* we only support lpm device connected to root hub yet */
-	if (ehci->has_lpm && !udev->parent->parent) {
-		rc = ehci_lpm_set_da(ehci, udev->devnum, udev->portnum);
-		if (!rc)
-			rc = ehci_lpm_check(ehci, udev->portnum);
-	}
-	return rc;
-}
 
 static const struct hc_driver ehci_pci_hc_driver = {
 	.description =		hcd_name,
