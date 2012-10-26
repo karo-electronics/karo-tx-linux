@@ -89,7 +89,7 @@ struct exception_table_entry {
 	({							\
 		int _err = 0;					\
 		typeof(*(p)) _x = (x);				\
-		typeof(*(p)) *_p = (p);				\
+		typeof(*(p)) __user *_p = (p);				\
 		if (!access_ok(VERIFY_WRITE, _p, sizeof(*(_p)))) {\
 			_err = -EFAULT;				\
 		}						\
@@ -108,8 +108,8 @@ struct exception_table_entry {
 			long _xl, _xh;				\
 			_xl = ((long *)&_x)[0];			\
 			_xh = ((long *)&_x)[1];			\
-			__put_user_asm(_xl, ((long *)_p)+0, );	\
-			__put_user_asm(_xh, ((long *)_p)+1, );	\
+			__put_user_asm(_xl, ((long __user *)_p)+0, );	\
+			__put_user_asm(_xh, ((long __user *)_p)+1, );	\
 		} break;					\
 		default:					\
 			_err = __put_user_bad();		\
@@ -136,7 +136,7 @@ static inline int bad_user_access_length(void)
  * aliasing issues.
  */
 
-#define __ptr(x) ((unsigned long *)(x))
+#define __ptr(x) ((unsigned long __force *)(x))
 
 #define __put_user_asm(x,p,bhw)				\
 	__asm__ (#bhw"[%1] = %0;\n\t"			\
@@ -216,12 +216,12 @@ copy_to_user(void __user *to, const void *from, unsigned long n)
  */
 
 static inline long __must_check
-strncpy_from_user(char *dst, const char *src, long count)
+strncpy_from_user(char *dst, const char __user *src, long count)
 {
 	char *tmp;
 	if (!access_ok(VERIFY_READ, src, 1))
 		return -EFAULT;
-	strncpy(dst, src, count);
+	strncpy(dst, (const char __force *)src, count);
 	for (tmp = dst; *tmp && count > 0; tmp++, count--) ;
 	return (tmp - dst);
 }
@@ -237,18 +237,18 @@ strncpy_from_user(char *dst, const char *src, long count)
  * On exception, returns 0.
  * If the string is too long, returns a value greater than n.
  */
-static inline long __must_check strnlen_user(const char *src, long n)
+static inline long __must_check strnlen_user(const char __user *src, long n)
 {
 	if (!access_ok(VERIFY_READ, src, 1))
 		return 0;
-	return strnlen(src, n) + 1;
+	return strnlen((const char __force *)src, n) + 1;
 }
 
-static inline long __must_check strlen_user(const char *src)
+static inline long __must_check strlen_user(const char __user *src)
 {
 	if (!access_ok(VERIFY_READ, src, 1))
 		return 0;
-	return strlen(src) + 1;
+	return strlen((const char __force *)src) + 1;
 }
 
 /*
@@ -256,11 +256,11 @@ static inline long __must_check strlen_user(const char *src)
  */
 
 static inline unsigned long __must_check
-__clear_user(void *to, unsigned long n)
+__clear_user(void __user *to, unsigned long n)
 {
 	if (!access_ok(VERIFY_WRITE, to, n))
 		return n;
-	memset(to, 0, n);
+	memset((void __force *)to, 0, n);
 	return 0;
 }
 
