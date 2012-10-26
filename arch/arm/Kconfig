@@ -367,10 +367,10 @@ config ARCH_CNS3XXX
 config ARCH_CLPS711X
 	bool "Cirrus Logic CLPS711x/EP721x/EP731x-based"
 	select ARCH_REQUIRE_GPIOLIB
-	select ARCH_USES_GETTIMEOFFSET
 	select CLKDEV_LOOKUP
 	select COMMON_CLK
 	select CPU_ARM720T
+	select GENERIC_CLOCKEVENTS
 	select NEED_MACH_MEMORY_H
 	help
 	  Support for Cirrus Logic 711x/721x/731x based boards.
@@ -435,19 +435,6 @@ config ARCH_FOOTBRIDGE
 	help
 	  Support for systems based on the DC21285 companion chip
 	  ("FootBridge"), such as the Simtec CATS and the Rebel NetWinder.
-
-config ARCH_MXC
-	bool "Freescale MXC/iMX-based"
-	select ARCH_REQUIRE_GPIOLIB
-	select CLKDEV_LOOKUP
-	select CLKSRC_MMIO
-	select GENERIC_CLOCKEVENTS
-	select GENERIC_IRQ_CHIP
-	select MULTI_IRQ_HANDLER
-	select SPARSE_IRQ
-	select USE_OF
-	help
-	  Support for Freescale MXC/iMX-based family of processors
 
 config ARCH_MXS
 	bool "Freescale MXS-based"
@@ -1061,7 +1048,7 @@ source "arch/arm/mach-msm/Kconfig"
 
 source "arch/arm/mach-mv78xx0/Kconfig"
 
-source "arch/arm/plat-mxc/Kconfig"
+source "arch/arm/mach-imx/Kconfig"
 
 source "arch/arm/mach-mxs/Kconfig"
 

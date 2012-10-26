@@ -6,9 +6,9 @@
 #include <linux/clk-provider.h>
 #include <linux/of.h>
 
-#include <mach/common.h>
-#include <mach/hardware.h>
 #include "clk.h"
+#include "common.h"
+#include "hardware.h"
 
 #define IO_ADDR_CCM(off)	(MX27_IO_ADDRESS(MX27_CCM_BASE_ADDR + (off)))
 
@@ -109,7 +109,7 @@ int __init mx27_clocks_init(unsigned long fref)
 	clk[per3_div] = imx_clk_divider("per3_div", "mpll_main2", CCM_PCDR1, 16, 6);
 	clk[per4_div] = imx_clk_divider("per4_div", "mpll_main2", CCM_PCDR1, 24, 6);
 	clk[vpu_sel] = imx_clk_mux("vpu_sel", CCM_CSCR, 21, 1, vpu_sel_clks, ARRAY_SIZE(vpu_sel_clks));
-	clk[vpu_div] = imx_clk_divider("vpu_div", "vpu_sel", CCM_PCDR0, 10, 3);
+	clk[vpu_div] = imx_clk_divider("vpu_div", "vpu_sel", CCM_PCDR0, 10, 6);
 	clk[usb_div] = imx_clk_divider("usb_div", "spll", CCM_CSCR, 28, 3);
 	clk[cpu_sel] = imx_clk_mux("cpu_sel", CCM_CSCR, 15, 1, cpu_sel_clks, ARRAY_SIZE(cpu_sel_clks));
 	clk[clko_sel] = imx_clk_mux("clko_sel", CCM_CCSR, 0, 5, clko_sel_clks, ARRAY_SIZE(clko_sel_clks));
@@ -121,7 +121,7 @@ int __init mx27_clocks_init(unsigned long fref)
 	clk[ssi1_sel] = imx_clk_mux("ssi1_sel", CCM_CSCR, 22, 1, ssi_sel_clks, ARRAY_SIZE(ssi_sel_clks));
 	clk[ssi2_sel] = imx_clk_mux("ssi2_sel", CCM_CSCR, 23, 1, ssi_sel_clks, ARRAY_SIZE(ssi_sel_clks));
 	clk[ssi1_div] = imx_clk_divider("ssi1_div", "ssi1_sel", CCM_PCDR0, 16, 6);
-	clk[ssi2_div] = imx_clk_divider("ssi2_div", "ssi2_sel", CCM_PCDR0, 26, 3);
+	clk[ssi2_div] = imx_clk_divider("ssi2_div", "ssi2_sel", CCM_PCDR0, 26, 6);
 	clk[clko_en] = imx_clk_gate("clko_en", "clko_div", CCM_PCCR0, 0);
 	clk[ssi2_ipg_gate] = imx_clk_gate("ssi2_ipg_gate", "ipg", CCM_PCCR0, 0);
 	clk[ssi1_ipg_gate] = imx_clk_gate("ssi1_ipg_gate", "ipg", CCM_PCCR0, 1);
@@ -211,19 +211,19 @@ int __init mx27_clocks_init(unsigned long fref)
 	clk_register_clkdev(clk[gpt6_ipg_gate], "ipg", "imx-gpt.5");
 	clk_register_clkdev(clk[per1_gate], "per", "imx-gpt.5");
 	clk_register_clkdev(clk[pwm_ipg_gate], NULL, "mxc_pwm.0");
-	clk_register_clkdev(clk[per2_gate], "per", "mxc-mmc.0");
-	clk_register_clkdev(clk[sdhc1_ipg_gate], "ipg", "mxc-mmc.0");
-	clk_register_clkdev(clk[per2_gate], "per", "mxc-mmc.1");
-	clk_register_clkdev(clk[sdhc2_ipg_gate], "ipg", "mxc-mmc.1");
-	clk_register_clkdev(clk[per2_gate], "per", "mxc-mmc.2");
-	clk_register_clkdev(clk[sdhc2_ipg_gate], "ipg", "mxc-mmc.2");
+	clk_register_clkdev(clk[per2_gate], "per", "imx21-mmc.0");
+	clk_register_clkdev(clk[sdhc1_ipg_gate], "ipg", "imx21-mmc.0");
+	clk_register_clkdev(clk[per2_gate], "per", "imx21-mmc.1");
+	clk_register_clkdev(clk[sdhc2_ipg_gate], "ipg", "imx21-mmc.1");
+	clk_register_clkdev(clk[per2_gate], "per", "imx21-mmc.2");
+	clk_register_clkdev(clk[sdhc2_ipg_gate], "ipg", "imx21-mmc.2");
 	clk_register_clkdev(clk[cspi1_ipg_gate], NULL, "imx27-cspi.0");
 	clk_register_clkdev(clk[cspi2_ipg_gate], NULL, "imx27-cspi.1");
 	clk_register_clkdev(clk[cspi3_ipg_gate], NULL, "imx27-cspi.2");
-	clk_register_clkdev(clk[per3_gate], "per", "imx-fb.0");
-	clk_register_clkdev(clk[lcdc_ipg_gate], "ipg", "imx-fb.0");
-	clk_register_clkdev(clk[lcdc_ahb_gate], "ahb", "imx-fb.0");
-	clk_register_clkdev(clk[csi_ahb_gate], "ahb", "mx2-camera.0");
+	clk_register_clkdev(clk[per3_gate], "per", "imx21-fb.0");
+	clk_register_clkdev(clk[lcdc_ipg_gate], "ipg", "imx21-fb.0");
+	clk_register_clkdev(clk[lcdc_ahb_gate], "ahb", "imx21-fb.0");
+	clk_register_clkdev(clk[csi_ahb_gate], "ahb", "imx27-camera.0");
 	clk_register_clkdev(clk[usb_div], "per", "fsl-usb2-udc");
 	clk_register_clkdev(clk[usb_ipg_gate], "ipg", "fsl-usb2-udc");
 	clk_register_clkdev(clk[usb_ahb_gate], "ahb", "fsl-usb2-udc");
@@ -238,27 +238,27 @@ int __init mx27_clocks_init(unsigned long fref)
 	clk_register_clkdev(clk[usb_ahb_gate], "ahb", "mxc-ehci.2");
 	clk_register_clkdev(clk[ssi1_ipg_gate], NULL, "imx-ssi.0");
 	clk_register_clkdev(clk[ssi2_ipg_gate], NULL, "imx-ssi.1");
-	clk_register_clkdev(clk[nfc_baud_gate], NULL, "mxc_nand.0");
+	clk_register_clkdev(clk[nfc_baud_gate], NULL, "imx27-nand.0");
 	clk_register_clkdev(clk[vpu_baud_gate], "per", "coda-imx27.0");
 	clk_register_clkdev(clk[vpu_ahb_gate], "ahb", "coda-imx27.0");
-	clk_register_clkdev(clk[dma_ahb_gate], "ahb", "imx-dma");
-	clk_register_clkdev(clk[dma_ipg_gate], "ipg", "imx-dma");
+	clk_register_clkdev(clk[dma_ahb_gate], "ahb", "imx27-dma");
+	clk_register_clkdev(clk[dma_ipg_gate], "ipg", "imx27-dma");
 	clk_register_clkdev(clk[fec_ipg_gate], "ipg", "imx27-fec.0");
 	clk_register_clkdev(clk[fec_ahb_gate], "ahb", "imx27-fec.0");
 	clk_register_clkdev(clk[wdog_ipg_gate], NULL, "imx2-wdt.0");
-	clk_register_clkdev(clk[i2c1_ipg_gate], NULL, "imx-i2c.0");
-	clk_register_clkdev(clk[i2c2_ipg_gate], NULL, "imx-i2c.1");
+	clk_register_clkdev(clk[i2c1_ipg_gate], NULL, "imx21-i2c.0");
+	clk_register_clkdev(clk[i2c2_ipg_gate], NULL, "imx21-i2c.1");
 	clk_register_clkdev(clk[owire_ipg_gate], NULL, "mxc_w1.0");
 	clk_register_clkdev(clk[kpp_ipg_gate], NULL, "imx-keypad");
-	clk_register_clkdev(clk[emma_ahb_gate], "emma-ahb", "mx2-camera.0");
-	clk_register_clkdev(clk[emma_ipg_gate], "emma-ipg", "mx2-camera.0");
+	clk_register_clkdev(clk[emma_ahb_gate], "emma-ahb", "imx27-camera.0");
+	clk_register_clkdev(clk[emma_ipg_gate], "emma-ipg", "imx27-camera.0");
 	clk_register_clkdev(clk[emma_ahb_gate], "ahb", "m2m-emmaprp.0");
 	clk_register_clkdev(clk[emma_ipg_gate], "ipg", "m2m-emmaprp.0");
 	clk_register_clkdev(clk[iim_ipg_gate], "iim", NULL);
 	clk_register_clkdev(clk[gpio_ipg_gate], "gpio", NULL);
 	clk_register_clkdev(clk[brom_ahb_gate], "brom", NULL);
 	clk_register_clkdev(clk[ata_ahb_gate], "ata", NULL);
-	clk_register_clkdev(clk[rtc_ipg_gate], NULL, "mxc_rtc");
+	clk_register_clkdev(clk[rtc_ipg_gate], NULL, "imx21-rtc");
 	clk_register_clkdev(clk[scc_ipg_gate], "scc", NULL);
 	clk_register_clkdev(clk[cpu_div], "cpu", NULL);
 	clk_register_clkdev(clk[emi_ahb_gate], "emi_ahb" , NULL);
