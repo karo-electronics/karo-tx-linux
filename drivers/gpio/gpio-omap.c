@@ -187,6 +187,7 @@ static inline void _gpio_dbck_disable(struct gpio_bank *bank)
 		 * to detect events and generate interrupts at least on OMAP3.
 		 */
 		__raw_writel(0, bank->base + bank->regs->debounce_en);
+		bank->dbck_enable_mask = 0;
 
 		clk_disable(bank->dbck);
 		bank->dbck_enabled = false;
@@ -1070,7 +1071,7 @@ static int __devinit omap_gpio_probe(struct platform_device *pdev)
 	if (!pdata)
 		return -EINVAL;
 
-	bank = devm_kzalloc(&pdev->dev, sizeof(struct gpio_bank), GFP_KERNEL);
+	bank = devm_kzalloc(dev, sizeof(struct gpio_bank), GFP_KERNEL);
 	if (!bank) {
 		dev_err(dev, "Memory alloc failed\n");
 		return -ENOMEM;
