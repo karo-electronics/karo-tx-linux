@@ -96,7 +96,7 @@ struct uart_omap_port {
 	unsigned char		msr_saved_flags;
 	char			name[20];
 	unsigned long		port_activity;
-	u32			context_loss_cnt;
+	int			context_loss_cnt;
 	u32			errata;
 	u8			wakeups_enabled;
 	unsigned int		irq_pending:1;
@@ -702,11 +702,7 @@ serial_omap_configure_xonxoff
 	serial_out(up, UART_MCR, up->mcr | UART_MCR_TCRTLR);
 	serial_out(up, UART_LCR, UART_LCR_CONF_MODE_B);
 	serial_out(up, UART_TI752_TCR, OMAP_UART_TCR_TRIG);
-	/* Enable special char function UARTi.EFR_REG[5] and
-	 * load the new software flow control mode IXON or IXOFF
-	 * and restore the UARTi.EFR_REG[4] ENHANCED_EN value.
-	 */
-	serial_out(up, UART_EFR, up->efr | UART_EFR_SCD);
+
 	serial_out(up, UART_LCR, UART_LCR_CONF_MODE_A);
 
 	serial_out(up, UART_MCR, up->mcr & ~UART_MCR_TCRTLR);
@@ -1081,7 +1077,7 @@ out:
 
 #ifdef CONFIG_SERIAL_OMAP_CONSOLE
 
-static struct uart_omap_port *serial_omap_console_ports[4];
+static struct uart_omap_port *serial_omap_console_ports[OMAP_MAX_HSUART_PORTS];
 
 static struct uart_driver serial_omap_reg;
 
@@ -1556,11 +1552,15 @@ static int serial_omap_runtime_resume(struct device *dev)
 {
 	struct uart_omap_port *up = dev_get_drvdata(dev);
 
-	u32 loss_cnt = serial_omap_get_context_loss_count(up);
+	int loss_cnt = serial_omap_get_context_loss_count(up);
 
-	if (up->context_loss_cnt != loss_cnt)
+	if (loss_cnt < 0) {
+		dev_err(dev, "serial_omap_get_context_loss_count failed : %d\n",
+			loss_cnt);
 		serial_omap_restore_context(up);
-
+	} else if (up->context_loss_cnt != loss_cnt) {
+		serial_omap_restore_context(up);
+	}
 	up->latency = up->calc_latency;
 	schedule_work(&up->qos_work);
 
