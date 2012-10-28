@@ -1081,7 +1081,7 @@ void print_events(const char *event_glob, bool name_only)
 		printf("  %-50s [%s]\n",
 		       "cpu/t1=v1[,t2=v2,t3 ...]/modifier",
 		       event_type_descriptors[PERF_TYPE_RAW]);
-		printf("   (see 'perf list --help' on how to encode it)\n");
+		printf("   (see 'man perf-list' on how to encode it)\n");
 		printf("\n");
 
 		printf("  %-50s [%s]\n",
@@ -1140,6 +1140,24 @@ int parse_events__term_str(struct parse_events__term **term,
 {
 	return new_term(term, PARSE_EVENTS__TERM_TYPE_STR, type_term,
 			config, str, 0);
+}
+
+int parse_events__term_sym_hw(struct parse_events__term **term,
+			      char *config, unsigned idx)
+{
+	struct event_symbol *sym;
+
+	BUG_ON(idx >= PERF_COUNT_HW_MAX);
+	sym = &event_symbols_hw[idx];
+
+	if (config)
+		return new_term(term, PARSE_EVENTS__TERM_TYPE_STR,
+				PARSE_EVENTS__TERM_TYPE_USER, config,
+				(char *) sym->symbol, 0);
+	else
+		return new_term(term, PARSE_EVENTS__TERM_TYPE_STR,
+				PARSE_EVENTS__TERM_TYPE_USER,
+				(char *) "event", (char *) sym->symbol, 0);
 }
 
 int parse_events__term_clone(struct parse_events__term **new,
