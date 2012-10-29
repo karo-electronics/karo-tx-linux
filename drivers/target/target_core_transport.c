@@ -70,7 +70,6 @@ static void transport_handle_queue_full(struct se_cmd *cmd,
 static int transport_generic_get_mem(struct se_cmd *cmd);
 static int target_get_sess_cmd(struct se_session *, struct se_cmd *, bool);
 static void transport_put_cmd(struct se_cmd *cmd);
-static int transport_set_sense_codes(struct se_cmd *cmd, u8 asc, u8 ascq);
 static void target_complete_ok_work(struct work_struct *work);
 
 int init_se_kmem_caches(void)
@@ -297,7 +296,7 @@ void transport_register_session(
 }
 EXPORT_SYMBOL(transport_register_session);
 
-void target_release_session(struct kref *kref)
+static void target_release_session(struct kref *kref)
 {
 	struct se_session *se_sess = container_of(kref,
 			struct se_session, sess_kref);
@@ -659,7 +658,7 @@ static void target_add_to_state_list(struct se_cmd *cmd)
 static void transport_write_pending_qf(struct se_cmd *cmd);
 static void transport_complete_qf(struct se_cmd *cmd);
 
-static void target_qf_do_work(struct work_struct *work)
+void target_qf_do_work(struct work_struct *work)
 {
 	struct se_device *dev = container_of(work, struct se_device,
 					qf_work_queue);
@@ -712,29 +711,15 @@ void transport_dump_dev_state(
 	int *bl)
 {
 	*bl += sprintf(b + *bl, "Status: ");
-	switch (dev->dev_status) {
-	case TRANSPORT_DEVICE_ACTIVATED:
+	if (dev->export_count)
 		*bl += sprintf(b + *bl, "ACTIVATED");
-		break;
-	case TRANSPORT_DEVICE_DEACTIVATED:
+	else
 		*bl += sprintf(b + *bl, "DEACTIVATED");
-		break;
-	case TRANSPORT_DEVICE_SHUTDOWN:
-		*bl += sprintf(b + *bl, "SHUTDOWN");
-		break;
-	case TRANSPORT_DEVICE_OFFLINE_ACTIVATED:
-	case TRANSPORT_DEVICE_OFFLINE_DEACTIVATED:
-		*bl += sprintf(b + *bl, "OFFLINE");
-		break;
-	default:
-		*bl += sprintf(b + *bl, "UNKNOWN=%d", dev->dev_status);
-		break;
-	}
 
 	*bl += sprintf(b + *bl, "  Max Queue Depth: %d", dev->queue_depth);
 	*bl += sprintf(b + *bl, "  SectorSize: %u  HwMaxSectors: %u\n",
-		dev->se_sub_dev->se_dev_attrib.block_size,
-		dev->se_sub_dev->se_dev_attrib.hw_max_sectors);
+		dev->dev_attrib.block_size,
+		dev->dev_attrib.hw_max_sectors);
 	*bl += sprintf(b + *bl, "        ");
 }
 
@@ -991,185 +976,6 @@ transport_set_vpd_ident(struct t10_vpd *vpd, unsigned char *page_83)
 }
 EXPORT_SYMBOL(transport_set_vpd_ident);
 
-static void core_setup_task_attr_emulation(struct se_device *dev)
-{
-	/*
-	 * If this device is from Target_Core_Mod/pSCSI, disable the
-	 * SAM Task Attribute emulation.
-	 *
-	 * This is currently not available in upsream Linux/SCSI Target
-	 * mode code, and is assumed to be disabled while using TCM/pSCSI.
-	 */
-	if (dev->transport->transport_type == TRANSPORT_PLUGIN_PHBA_PDEV) {
-		dev->dev_task_attr_type = SAM_TASK_ATTR_PASSTHROUGH;
-		return;
-	}
-
-	dev->dev_task_attr_type = SAM_TASK_ATTR_EMULATED;
-	pr_debug("%s: Using SAM_TASK_ATTR_EMULATED for SPC: 0x%02x"
-		" device\n", dev->transport->name,
-		dev->transport->get_device_rev(dev));
-}
-
-static void scsi_dump_inquiry(struct se_device *dev)
-{
-	struct t10_wwn *wwn = &dev->se_sub_dev->t10_wwn;
-	char buf[17];
-	int i, device_type;
-	/*
-	 * Print Linux/SCSI style INQUIRY formatting to the kernel ring buffer
-	 */
-	for (i = 0; i < 8; i++)
-		if (wwn->vendor[i] >= 0x20)
-			buf[i] = wwn->vendor[i];
-		else
-			buf[i] = ' ';
-	buf[i] = '\0';
-	pr_debug("  Vendor: %s\n", buf);
-
-	for (i = 0; i < 16; i++)
-		if (wwn->model[i] >= 0x20)
-			buf[i] = wwn->model[i];
-		else
-			buf[i] = ' ';
-	buf[i] = '\0';
-	pr_debug("  Model: %s\n", buf);
-
-	for (i = 0; i < 4; i++)
-		if (wwn->revision[i] >= 0x20)
-			buf[i] = wwn->revision[i];
-		else
-			buf[i] = ' ';
-	buf[i] = '\0';
-	pr_debug("  Revision: %s\n", buf);
-
-	device_type = dev->transport->get_device_type(dev);
-	pr_debug("  Type:   %s ", scsi_device_type(device_type));
-	pr_debug("                 ANSI SCSI revision: %02x\n",
-				dev->transport->get_device_rev(dev));
-}
-
-struct se_device *transport_add_device_to_core_hba(
-	struct se_hba *hba,
-	struct se_subsystem_api *transport,
-	struct se_subsystem_dev *se_dev,
-	u32 device_flags,
-	void *transport_dev,
-	struct se_dev_limits *dev_limits,
-	const char *inquiry_prod,
-	const char *inquiry_rev)
-{
-	int force_pt;
-	struct se_device  *dev;
-
-	dev = kzalloc(sizeof(struct se_device), GFP_KERNEL);
-	if (!dev) {
-		pr_err("Unable to allocate memory for se_dev_t\n");
-		return NULL;
-	}
-
-	dev->dev_flags		= device_flags;
-	dev->dev_status		|= TRANSPORT_DEVICE_DEACTIVATED;
-	dev->dev_ptr		= transport_dev;
-	dev->se_hba		= hba;
-	dev->se_sub_dev		= se_dev;
-	dev->transport		= transport;
-	INIT_LIST_HEAD(&dev->dev_list);
-	INIT_LIST_HEAD(&dev->dev_sep_list);
-	INIT_LIST_HEAD(&dev->dev_tmr_list);
-	INIT_LIST_HEAD(&dev->delayed_cmd_list);
-	INIT_LIST_HEAD(&dev->state_list);
-	INIT_LIST_HEAD(&dev->qf_cmd_list);
-	spin_lock_init(&dev->execute_task_lock);
-	spin_lock_init(&dev->delayed_cmd_lock);
-	spin_lock_init(&dev->dev_reservation_lock);
-	spin_lock_init(&dev->dev_status_lock);
-	spin_lock_init(&dev->se_port_lock);
-	spin_lock_init(&dev->se_tmr_lock);
-	spin_lock_init(&dev->qf_cmd_lock);
-	atomic_set(&dev->dev_ordered_id, 0);
-
-	se_dev_set_default_attribs(dev, dev_limits);
-
-	dev->dev_index = scsi_get_new_index(SCSI_DEVICE_INDEX);
-	dev->creation_time = get_jiffies_64();
-	spin_lock_init(&dev->stats_lock);
-
-	spin_lock(&hba->device_lock);
-	list_add_tail(&dev->dev_list, &hba->hba_dev_list);
-	hba->dev_count++;
-	spin_unlock(&hba->device_lock);
-	/*
-	 * Setup the SAM Task Attribute emulation for struct se_device
-	 */
-	core_setup_task_attr_emulation(dev);
-	/*
-	 * Force PR and ALUA passthrough emulation with internal object use.
-	 */
-	force_pt = (hba->hba_flags & HBA_FLAGS_INTERNAL_USE);
-	/*
-	 * Setup the Reservations infrastructure for struct se_device
-	 */
-	core_setup_reservations(dev, force_pt);
-	/*
-	 * Setup the Asymmetric Logical Unit Assignment for struct se_device
-	 */
-	if (core_setup_alua(dev, force_pt) < 0)
-		goto err_dev_list;
-
-	/*
-	 * Startup the struct se_device processing thread
-	 */
-	dev->tmr_wq = alloc_workqueue("tmr-%s", WQ_MEM_RECLAIM | WQ_UNBOUND, 1,
-				      dev->transport->name);
-	if (!dev->tmr_wq) {
-		pr_err("Unable to create tmr workqueue for %s\n",
-			dev->transport->name);
-		goto err_dev_list;
-	}
-	/*
-	 * Setup work_queue for QUEUE_FULL
-	 */
-	INIT_WORK(&dev->qf_work_queue, target_qf_do_work);
-	/*
-	 * Preload the initial INQUIRY const values if we are doing
-	 * anything virtual (IBLOCK, FILEIO, RAMDISK), but not for TCM/pSCSI
-	 * passthrough because this is being provided by the backend LLD.
-	 * This is required so that transport_get_inquiry() copies these
-	 * originals once back into DEV_T10_WWN(dev) for the virtual device
-	 * setup.
-	 */
-	if (dev->transport->transport_type != TRANSPORT_PLUGIN_PHBA_PDEV) {
-		if (!inquiry_prod || !inquiry_rev) {
-			pr_err("All non TCM/pSCSI plugins require"
-				" INQUIRY consts\n");
-			goto err_wq;
-		}
-
-		strncpy(&dev->se_sub_dev->t10_wwn.vendor[0], "LIO-ORG", 8);
-		strncpy(&dev->se_sub_dev->t10_wwn.model[0], inquiry_prod, 16);
-		strncpy(&dev->se_sub_dev->t10_wwn.revision[0], inquiry_rev, 4);
-	}
-	scsi_dump_inquiry(dev);
-
-	return dev;
-
-err_wq:
-	destroy_workqueue(dev->tmr_wq);
-err_dev_list:
-	spin_lock(&hba->device_lock);
-	list_del(&dev->dev_list);
-	hba->dev_count--;
-	spin_unlock(&hba->device_lock);
-
-	se_release_vpd_for_dev(dev);
-
-	kfree(dev);
-
-	return NULL;
-}
-EXPORT_SYMBOL(transport_add_device_to_core_hba);
-
 int target_cmd_size_check(struct se_cmd *cmd, unsigned int size)
 {
 	struct se_device *dev = cmd->se_dev;
@@ -1191,7 +997,7 @@ int target_cmd_size_check(struct se_cmd *cmd, unsigned int size)
 		 * Reject READ_* or WRITE_* with overflow/underflow for
 		 * type SCF_SCSI_DATA_CDB.
 		 */
-		if (dev->se_sub_dev->se_dev_attrib.block_size != 512)  {
+		if (dev->dev_attrib.block_size != 512)  {
 			pr_err("Failing OVERFLOW/UNDERFLOW for LBA op"
 				" CDB on non 512-byte sector setup subsystem"
 				" plugin: %s\n", dev->transport->name);
@@ -1261,11 +1067,13 @@ EXPORT_SYMBOL(transport_init_se_cmd);
 
 static int transport_check_alloc_task_attr(struct se_cmd *cmd)
 {
+	struct se_device *dev = cmd->se_dev;
+
 	/*
 	 * Check if SAM Task Attribute emulation is enabled for this
 	 * struct se_device storage object
 	 */
-	if (cmd->se_dev->dev_task_attr_type != SAM_TASK_ATTR_EMULATED)
+	if (dev->transport->transport_type == TRANSPORT_PLUGIN_PHBA_PDEV)
 		return 0;
 
 	if (cmd->sam_task_attr == MSG_ACA_TAG) {
@@ -1277,11 +1085,11 @@ static int transport_check_alloc_task_attr(struct se_cmd *cmd)
 	 * Used to determine when ORDERED commands should go from
 	 * Dormant to Active status.
 	 */
-	cmd->se_ordered_id = atomic_inc_return(&cmd->se_dev->dev_ordered_id);
+	cmd->se_ordered_id = atomic_inc_return(&dev->dev_ordered_id);
 	smp_mb__after_atomic_inc();
 	pr_debug("Allocated se_ordered_id: %u for Task Attr: 0x%02x on %s\n",
 			cmd->se_ordered_id, cmd->sam_task_attr,
-			cmd->se_dev->transport->name);
+			dev->transport->name);
 	return 0;
 }
 
@@ -1293,9 +1101,7 @@ int target_setup_cmd_from_cdb(
 	struct se_cmd *cmd,
 	unsigned char *cdb)
 {
-	struct se_subsystem_dev *su_dev = cmd->se_dev->se_sub_dev;
-	u32 pr_reg_type = 0;
-	u8 alua_ascq = 0;
+	struct se_device *dev = cmd->se_dev;
 	unsigned long flags;
 	int ret;
 
@@ -1345,49 +1151,29 @@ int target_setup_cmd_from_cdb(
 		return -EINVAL;
 	}
 
-	ret = su_dev->t10_alua.alua_state_check(cmd, cdb, &alua_ascq);
-	if (ret != 0) {
-		/*
-		 * Set SCSI additional sense code (ASC) to 'LUN Not Accessible';
-		 * The ALUA additional sense code qualifier (ASCQ) is determined
-		 * by the ALUA primary or secondary access state..
-		 */
-		if (ret > 0) {
-			pr_debug("[%s]: ALUA TG Port not available, "
-				"SenseKey: NOT_READY, ASC/ASCQ: "
-				"0x04/0x%02x\n",
-				cmd->se_tfo->get_fabric_name(), alua_ascq);
-
-			transport_set_sense_codes(cmd, 0x04, alua_ascq);
-			cmd->se_cmd_flags |= SCF_SCSI_CDB_EXCEPTION;
-			cmd->scsi_sense_reason = TCM_CHECK_CONDITION_NOT_READY;
-			return -EINVAL;
-		}
+	ret = target_alua_state_check(cmd);
+	if (ret) {
 		cmd->se_cmd_flags |= SCF_SCSI_CDB_EXCEPTION;
-		cmd->scsi_sense_reason = TCM_INVALID_CDB_FIELD;
+		if (ret > 0)
+			cmd->scsi_sense_reason = TCM_CHECK_CONDITION_NOT_READY;
+		else
+			cmd->scsi_sense_reason = TCM_INVALID_CDB_FIELD;
 		return -EINVAL;
 	}
 
 	/*
 	 * Check status for SPC-3 Persistent Reservations
 	 */
-	if (su_dev->t10_pr.pr_ops.t10_reservation_check(cmd, &pr_reg_type)) {
-		if (su_dev->t10_pr.pr_ops.t10_seq_non_holder(
-					cmd, cdb, pr_reg_type) != 0) {
-			cmd->se_cmd_flags |= SCF_SCSI_CDB_EXCEPTION;
-			cmd->se_cmd_flags |= SCF_SCSI_RESERVATION_CONFLICT;
-			cmd->scsi_status = SAM_STAT_RESERVATION_CONFLICT;
-			cmd->scsi_sense_reason = TCM_RESERVATION_CONFLICT;
-			return -EBUSY;
-		}
-		/*
-		 * This means the CDB is allowed for the SCSI Initiator port
-		 * when said port is *NOT* holding the legacy SPC-2 or
-		 * SPC-3 Persistent Reservation.
-		 */
+	ret = target_check_reservation(cmd);
+	if (ret) {
+		cmd->se_cmd_flags |= SCF_SCSI_CDB_EXCEPTION;
+		cmd->se_cmd_flags |= SCF_SCSI_RESERVATION_CONFLICT;
+		cmd->scsi_status = SAM_STAT_RESERVATION_CONFLICT;
+		cmd->scsi_sense_reason = TCM_RESERVATION_CONFLICT;
+		return ret;
 	}
 
-	ret = cmd->se_dev->transport->parse_cdb(cmd);
+	ret = dev->transport->parse_cdb(cmd);
 	if (ret < 0)
 		return ret;
 
@@ -1728,8 +1514,7 @@ void transport_generic_request_failure(struct se_cmd *cmd)
 	/*
 	 * For SAM Task Attribute emulation for failed struct se_cmd
 	 */
-	if (cmd->se_dev->dev_task_attr_type == SAM_TASK_ATTR_EMULATED)
-		transport_complete_task_attr(cmd);
+	transport_complete_task_attr(cmd);
 
 	switch (cmd->scsi_sense_reason) {
 	case TCM_NON_EXISTENT_LUN:
@@ -1760,7 +1545,7 @@ void transport_generic_request_failure(struct se_cmd *cmd)
 		 * See spc4r17, section 7.4.6 Control Mode Page, Table 349
 		 */
 		if (cmd->se_sess &&
-		    cmd->se_dev->se_sub_dev->se_dev_attrib.emulate_ua_intlck_ctrl == 2)
+		    cmd->se_dev->dev_attrib.emulate_ua_intlck_ctrl == 2)
 			core_scsi3_ua_allocate(cmd->se_sess->se_node_acl,
 				cmd->orig_fe_lun, 0x2C,
 				ASCQ_2CH_PREVIOUS_RESERVATION_CONFLICT_STATUS);
@@ -1813,10 +1598,63 @@ static void __target_execute_cmd(struct se_cmd *cmd)
 	}
 }
 
-void target_execute_cmd(struct se_cmd *cmd)
+static bool target_handle_task_attr(struct se_cmd *cmd)
 {
 	struct se_device *dev = cmd->se_dev;
 
+	if (dev->transport->transport_type == TRANSPORT_PLUGIN_PHBA_PDEV)
+		return false;
+
+	/*
+	 * Check for the existence of HEAD_OF_QUEUE, and if true return 1
+	 * to allow the passed struct se_cmd list of tasks to the front of the list.
+	 */
+	switch (cmd->sam_task_attr) {
+	case MSG_HEAD_TAG:
+		pr_debug("Added HEAD_OF_QUEUE for CDB: 0x%02x, "
+			 "se_ordered_id: %u\n",
+			 cmd->t_task_cdb[0], cmd->se_ordered_id);
+		return false;
+	case MSG_ORDERED_TAG:
+		atomic_inc(&dev->dev_ordered_sync);
+		smp_mb__after_atomic_inc();
+
+		pr_debug("Added ORDERED for CDB: 0x%02x to ordered list, "
+			 " se_ordered_id: %u\n",
+			 cmd->t_task_cdb[0], cmd->se_ordered_id);
+
+		/*
+		 * Execute an ORDERED command if no other older commands
+		 * exist that need to be completed first.
+		 */
+		if (!atomic_read(&dev->simple_cmds))
+			return false;
+		break;
+	default:
+		/*
+		 * For SIMPLE and UNTAGGED Task Attribute commands
+		 */
+		atomic_inc(&dev->simple_cmds);
+		smp_mb__after_atomic_inc();
+		break;
+	}
+
+	if (atomic_read(&dev->dev_ordered_sync) == 0)
+		return false;
+
+	spin_lock(&dev->delayed_cmd_lock);
+	list_add_tail(&cmd->se_delayed_node, &dev->delayed_cmd_list);
+	spin_unlock(&dev->delayed_cmd_lock);
+
+	pr_debug("Added CDB: 0x%02x Task Attr: 0x%02x to"
+		" delayed CMD list, se_ordered_id: %u\n",
+		cmd->t_task_cdb[0], cmd->sam_task_attr,
+		cmd->se_ordered_id);
+	return true;
+}
+
+void target_execute_cmd(struct se_cmd *cmd)
+{
 	/*
 	 * If the received CDB has aleady been aborted stop processing it here.
 	 */
@@ -1854,60 +1692,8 @@ void target_execute_cmd(struct se_cmd *cmd)
 	cmd->t_state = TRANSPORT_PROCESSING;
 	spin_unlock_irq(&cmd->t_state_lock);
 
-	if (dev->dev_task_attr_type != SAM_TASK_ATTR_EMULATED)
-		goto execute;
-
-	/*
-	 * Check for the existence of HEAD_OF_QUEUE, and if true return 1
-	 * to allow the passed struct se_cmd list of tasks to the front of the list.
-	 */
-	switch (cmd->sam_task_attr) {
-	case MSG_HEAD_TAG:
-		pr_debug("Added HEAD_OF_QUEUE for CDB: 0x%02x, "
-			 "se_ordered_id: %u\n",
-			 cmd->t_task_cdb[0], cmd->se_ordered_id);
-		goto execute;
-	case MSG_ORDERED_TAG:
-		atomic_inc(&dev->dev_ordered_sync);
-		smp_mb__after_atomic_inc();
-
-		pr_debug("Added ORDERED for CDB: 0x%02x to ordered list, "
-			 " se_ordered_id: %u\n",
-			 cmd->t_task_cdb[0], cmd->se_ordered_id);
-
-		/*
-		 * Execute an ORDERED command if no other older commands
-		 * exist that need to be completed first.
-		 */
-		if (!atomic_read(&dev->simple_cmds))
-			goto execute;
-		break;
-	default:
-		/*
-		 * For SIMPLE and UNTAGGED Task Attribute commands
-		 */
-		atomic_inc(&dev->simple_cmds);
-		smp_mb__after_atomic_inc();
-		break;
-	}
-
-	if (atomic_read(&dev->dev_ordered_sync) != 0) {
-		spin_lock(&dev->delayed_cmd_lock);
-		list_add_tail(&cmd->se_delayed_node, &dev->delayed_cmd_list);
-		spin_unlock(&dev->delayed_cmd_lock);
-
-		pr_debug("Added CDB: 0x%02x Task Attr: 0x%02x to"
-			" delayed CMD list, se_ordered_id: %u\n",
-			cmd->t_task_cdb[0], cmd->sam_task_attr,
-			cmd->se_ordered_id);
-		return;
-	}
-
-execute:
-	/*
-	 * Otherwise, no ORDERED task attributes exist..
-	 */
-	__target_execute_cmd(cmd);
+	if (!target_handle_task_attr(cmd))
+		__target_execute_cmd(cmd);
 }
 EXPORT_SYMBOL(target_execute_cmd);
 
@@ -1946,6 +1732,9 @@ static void transport_complete_task_attr(struct se_cmd *cmd)
 {
 	struct se_device *dev = cmd->se_dev;
 
+	if (dev->transport->transport_type == TRANSPORT_PLUGIN_PHBA_PDEV)
+		return;
+
 	if (cmd->sam_task_attr == MSG_SIMPLE_TAG) {
 		atomic_dec(&dev->simple_cmds);
 		smp_mb__after_atomic_dec();
@@ -1974,8 +1763,7 @@ static void transport_complete_qf(struct se_cmd *cmd)
 {
 	int ret = 0;
 
-	if (cmd->se_dev->dev_task_attr_type == SAM_TASK_ATTR_EMULATED)
-		transport_complete_task_attr(cmd);
+	transport_complete_task_attr(cmd);
 
 	if (cmd->se_cmd_flags & SCF_TRANSPORT_TASK_SENSE) {
 		ret = cmd->se_tfo->queue_status(cmd);
@@ -2033,8 +1821,8 @@ static void target_complete_ok_work(struct work_struct *work)
 	 * delayed execution list after a HEAD_OF_QUEUE or ORDERED Task
 	 * Attribute.
 	 */
-	if (cmd->se_dev->dev_task_attr_type == SAM_TASK_ATTR_EMULATED)
-		transport_complete_task_attr(cmd);
+	transport_complete_task_attr(cmd);
+
 	/*
 	 * Check to schedule QUEUE_FULL work, or execute an existing
 	 * cmd->transport_qf_callback()
@@ -2834,17 +2622,6 @@ static int transport_get_sense_codes(
 {
 	*asc = cmd->scsi_asc;
 	*ascq = cmd->scsi_ascq;
-
-	return 0;
-}
-
-static int transport_set_sense_codes(
-	struct se_cmd *cmd,
-	u8 asc,
-	u8 ascq)
-{
-	cmd->scsi_asc = asc;
-	cmd->scsi_ascq = ascq;
 
 	return 0;
 }
