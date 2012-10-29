@@ -144,12 +144,11 @@ struct acpi_device_flags {
 	u32 bus_address:1;
 	u32 removable:1;
 	u32 ejectable:1;
-	u32 lockable:1;
 	u32 suprise_removal_ok:1;
 	u32 power_manageable:1;
 	u32 performance_manageable:1;
 	u32 eject_pending:1;
-	u32 reserved:23;
+	u32 reserved:24;
 };
 
 /* File System */
@@ -426,14 +425,18 @@ static inline int acpi_pm_device_sleep_state(struct device *d, int *p, int m)
 }
 #endif
 
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_RUNTIME
 int acpi_pm_device_run_wake(struct device *, bool);
-int acpi_pm_device_sleep_wake(struct device *, bool);
 #else
 static inline int acpi_pm_device_run_wake(struct device *dev, bool enable)
 {
 	return -ENODEV;
 }
+#endif
+
+#ifdef CONFIG_PM_SLEEP
+int acpi_pm_device_sleep_wake(struct device *, bool);
+#else
 static inline int acpi_pm_device_sleep_wake(struct device *dev, bool enable)
 {
 	return -ENODEV;
