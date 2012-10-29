@@ -1979,6 +1979,11 @@ int regulator_is_supported_voltage(struct regulator *regulator,
 			return ret;
 	}
 
+	/* Any voltage within constrains range is fine? */
+	if (rdev->desc->continuous_voltage_range)
+		return min_uV >= rdev->constraints->min_uV &&
+				max_uV <= rdev->constraints->max_uV;
+
 	ret = regulator_count_voltages(regulator);
 	if (ret < 0)
 		return ret;
@@ -3444,16 +3449,19 @@ unset_supplies:
 	unset_regulator_supplies(rdev);
 
 scrub:
-	if (rdev->supply)
-		regulator_put(rdev->supply);
 	if (rdev->ena_gpio)
 		gpio_free(rdev->ena_gpio);
 	kfree(rdev->constraints);
 wash:
 	device_unregister(&rdev->dev);
+
+	mutex_unlock(&regulator_list_mutex);
+	if (rdev->supply)
+		regulator_put(rdev->supply);
+
 	/* device core frees rdev */
 	rdev = ERR_PTR(ret);
-	goto out;
+	return rdev;
 
 clean:
 	kfree(rdev);
