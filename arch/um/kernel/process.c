@@ -171,8 +171,6 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	p->thread = (struct thread_struct) INIT_THREAD;
 
 	if (!kthread) {
-	  	memcpy(&p->thread.regs.regs, &regs->regs,
-		       sizeof(p->thread.regs.regs));
 		PT_REGS_SET_SYSCALL_RETURN(&p->thread.regs, 0);
 		if (sp != 0)
 			REGS_SP(p->thread.regs.regs.gp) = sp;
