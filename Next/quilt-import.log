@@ -1,0 +1,41 @@
+Importing i2c based on e657e078d3dfa9f96976db7a2b5fd7d7c9f1f1a6
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard e657e078d3dfa9f96976db7a2b5fd7d7c9f1f1a6
+HEAD is now at e657e07 Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net
+$ git am ../quilt/i2c/i2c-move-i2c-stub.patch
+Applying: i2c-stub: Move to drivers/i2c
+$ git am ../quilt/i2c/i2c-i801-02-fix-gpiolib-dependency.patch
+Applying: i2c-i801: Simplify dependency towards GPIOLIB
+$ git am ../quilt/i2c/i2c-i801-03-fix-comment.patch
+Applying: i2c-i801: Fix comment
+$ git am ../quilt/i2c/i2c-i801-01-add-device-tree-support.patch
+Applying: i2c-i801: Add device tree support
+$ git am ../quilt/i2c/i2c-piix4-convert-dev_printk-kern_-level-to-dev_-level.patch
+Applying: i2c-piix4: Convert dev_printk(KERN_<LEVEL> to dev_<level>(
+$ git am ../quilt/i2c/i2c-mention-func-flags-in-smbus-documentation.patch
+Applying: i2c: Mention functionality flags in SMBus protocol documentation
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 13a2e9c...71af1ef master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 3.7-rc2
+$ cd ../quilt-tmp
+$ git reset --hard 6f0c0580b70c89094b3422ba81118c7b959c7556
+HEAD is now at 6f0c058 Linux 3.7-rc2
+$ git am ../quilt/jdelvare-hwmon/hwmon-w83627ehf-force-initial-bank-selection.patch
+Applying: hwmon: (w83627ehf) Force initial bank selection
+$ git am ../quilt/jdelvare-hwmon/hwmon-fix-feature-table-headers.patch
+Applying: hwmon: Fix chip feature table headers
+$ git am ../quilt/jdelvare-hwmon/hwmon-w83627hf-restore-limits-on-resume.patch
+Applying: hwmon: (w83627hf) Add support for suspend
+$ git am ../quilt/jdelvare-hwmon/hwmon-w83627ehf-restore-limits-on-resume.patch
+Applying: hwmon: (w83627ehf) Add support for suspend
+$ git am ../quilt/jdelvare-hwmon/hwmon-w83627hf-dont-touch-nonexistent-I2C-address-registers.patch
+Applying: hwmon (w83627hf) Don't touch nonexistent I2C address registers
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 0110e1d...1066e41 master     -> quilt/jdelvare-hwmon  (forced update)
+Importing device-mapper based on v3.7-rc1
+Unchanged quilt series device-mapper
