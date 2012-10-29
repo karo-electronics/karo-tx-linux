@@ -3444,15 +3444,18 @@ unset_supplies:
 	unset_regulator_supplies(rdev);
 
 scrub:
-	if (rdev->supply)
-		regulator_put(rdev->supply);
 	if (rdev->ena_gpio)
 		gpio_free(rdev->ena_gpio);
 	kfree(rdev->constraints);
 	device_unregister(&rdev->dev);
+
+	mutex_unlock(&regulator_list_mutex);
+	if (rdev->supply)
+		regulator_put(rdev->supply);
+
 	/* device core frees rdev */
 	rdev = ERR_PTR(ret);
-	goto out;
+	return rdev;
 
 clean:
 	kfree(rdev);
