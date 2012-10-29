@@ -76,7 +76,6 @@ You should also find the complete GPL in the COPYING file accompanying this sour
 /* Update-0.7.57->0.7.68MODULE_DESCRIPTION("Comedi ADDI-DATA module"); */
 /* Update-0.7.57->0.7.68MODULE_LICENSE("GPL"); */
 
-#define devpriv ((struct addi_private *)dev->private)
 #define this_board ((const struct addi_board *)dev->board_ptr)
 
 #if defined(CONFIG_APCI_1710) || defined(CONFIG_APCI_3200) || defined(CONFIG_APCI_3300)
@@ -145,46 +144,46 @@ void fpu_end(void)
 
 static DEFINE_PCI_DEVICE_TABLE(addi_apci_tbl) = {
 #ifdef CONFIG_APCI_3120
-	{PCI_DEVICE(APCI3120_BOARD_VENDOR_ID, 0x818D)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA_OLD, 0x818D)},
 #endif
 #ifdef CONFIG_APCI_1032
-	{PCI_DEVICE(APCI1032_BOARD_VENDOR_ID, 0x1003)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA, 0x1003)},
 #endif
 #ifdef CONFIG_APCI_1516
-	{PCI_DEVICE(APCI1516_BOARD_VENDOR_ID, 0x1001)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA, 0x1001)},
 #endif
 #ifdef CONFIG_APCI_2016
-	{PCI_DEVICE(APCI2016_BOARD_VENDOR_ID, 0x1002)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA, 0x1002)},
 #endif
 #ifdef CONFIG_APCI_2032
-	{PCI_DEVICE(APCI2032_BOARD_VENDOR_ID, 0x1004)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA, 0x1004)},
 #endif
 #ifdef CONFIG_APCI_2200
-	{PCI_DEVICE(APCI2200_BOARD_VENDOR_ID, 0x1005)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA, 0x1005)},
 #endif
 #ifdef CONFIG_APCI_1564
-	{PCI_DEVICE(APCI1564_BOARD_VENDOR_ID, 0x1006)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA, 0x1006)},
 #endif
 #ifdef CONFIG_APCI_1500
-	{PCI_DEVICE(APCI1500_BOARD_VENDOR_ID, 0x80fc)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA_OLD, 0x80fc)},
 #endif
 #ifdef CONFIG_APCI_3001
-	{PCI_DEVICE(APCI3120_BOARD_VENDOR_ID, 0x828D)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA_OLD, 0x828D)},
 #endif
 #ifdef CONFIG_APCI_3501
-	{PCI_DEVICE(APCI3501_BOARD_VENDOR_ID, 0x3001)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA, 0x3001)},
 #endif
 #ifdef CONFIG_APCI_035
-	{PCI_DEVICE(APCI035_BOARD_VENDOR_ID,  0x0300)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA,  0x0300)},
 #endif
 #ifdef CONFIG_APCI_3200
-	{PCI_DEVICE(APCI3200_BOARD_VENDOR_ID, 0x3000)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA, 0x3000)},
 #endif
 #ifdef CONFIG_APCI_3300
-	{PCI_DEVICE(APCI3200_BOARD_VENDOR_ID, 0x3007)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA, 0x3007)},
 #endif
 #ifdef CONFIG_APCI_1710
-	{PCI_DEVICE(APCI1710_BOARD_VENDOR_ID, APCI1710_BOARD_DEVICE_ID)},
+	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA_OLD, APCI1710_BOARD_DEVICE_ID)},
 #endif
 #ifdef CONFIG_APCI_16XX
 	{PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA, 0x1009)},
@@ -226,7 +225,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_3120
 	{
 		.pc_DriverName		= "apci3120",
-		.i_VendorId		= APCI3120_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA_OLD,
 		.i_DeviceId		= 0x818D,
 		.i_IorangeBase0		= AMCC_OP_REG_SIZE,
 		.i_IorangeBase1		= APCI3120_ADDRESS_RANGE,
@@ -269,7 +268,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_1032
 	{
 		.pc_DriverName		= "apci1032",
-		.i_VendorId		= APCI1032_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA,
 		.i_DeviceId		= 0x1003,
 		.i_IorangeBase0		= 4,
 		.i_IorangeBase1		= APCI1032_ADDRESS_RANGE,
@@ -286,7 +285,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_1516
 	{
 		.pc_DriverName		= "apci1516",
-		.i_VendorId		= APCI1516_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA,
 		.i_DeviceId		= 0x1001,
 		.i_IorangeBase0		= 128,
 		.i_IorangeBase1		= APCI1516_ADDRESS_RANGE,
@@ -310,7 +309,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_2016
 	{
 		.pc_DriverName		= "apci2016",
-		.i_VendorId		= APCI2016_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA,
 		.i_DeviceId		= 0x1002,
 		.i_IorangeBase0		= 128,
 		.i_IorangeBase1		= APCI2016_ADDRESS_RANGE,
@@ -331,7 +330,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_2032
 	{
 		.pc_DriverName		= "apci2032",
-		.i_VendorId		= APCI2032_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA,
 		.i_DeviceId		= 0x1004,
 		.i_IorangeBase0		= 4,
 		.i_IorangeBase1		= APCI2032_ADDRESS_RANGE,
@@ -354,7 +353,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_2200
 	{
 		.pc_DriverName		= "apci2200",
-		.i_VendorId		= APCI2200_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA,
 		.i_DeviceId		= 0x1005,
 		.i_IorangeBase0		= 4,
 		.i_IorangeBase1		= APCI2200_ADDRESS_RANGE,
@@ -377,7 +376,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_1564
 	{
 		.pc_DriverName		= "apci1564",
-		.i_VendorId		= APCI1564_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA,
 		.i_DeviceId		= 0x1006,
 		.i_IorangeBase0		= 128,
 		.i_IorangeBase1		= APCI1564_ADDRESS_RANGE,
@@ -404,7 +403,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_1500
 	{
 		.pc_DriverName		= "apci1500",
-		.i_VendorId		= APCI1500_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA_OLD,
 		.i_DeviceId		= 0x80fc,
 		.i_IorangeBase0		= 128,
 		.i_IorangeBase1		= APCI1500_ADDRESS_RANGE,
@@ -432,7 +431,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_3001
 	{
 		.pc_DriverName		= "apci3001",
-		.i_VendorId		= APCI3120_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA_OLD,
 		.i_DeviceId		= 0x828D,
 		.i_IorangeBase0		= AMCC_OP_REG_SIZE,
 		.i_IorangeBase1		= APCI3120_ADDRESS_RANGE,
@@ -471,7 +470,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_3501
 	{
 		.pc_DriverName		= "apci3501",
-		.i_VendorId		= APCI3501_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA,
 		.i_DeviceId		= 0x3001,
 		.i_IorangeBase0		= 64,
 		.i_IorangeBase1		= APCI3501_ADDRESS_RANGE,
@@ -499,7 +498,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_035
 	{
 		.pc_DriverName		= "apci035",
-		.i_VendorId		= APCI035_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA,
 		.i_DeviceId		= 0x0300,
 		.i_IorangeBase0		= 127,
 		.i_IorangeBase1		= APCI035_ADDRESS_RANGE,
@@ -525,7 +524,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_3200
 	{
 		.pc_DriverName		= "apci3200",
-		.i_VendorId		= APCI3200_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA,
 		.i_DeviceId		= 0x3000,
 		.i_IorangeBase0		= 128,
 		.i_IorangeBase1		= 256,
@@ -561,7 +560,7 @@ static const struct addi_board boardtypes[] = {
 	/* Begin JK	.20.10.2004 = APCI-3300 integration */
 	{
 		.pc_DriverName		= "apci3300",
-		.i_VendorId		= APCI3200_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA,
 		.i_DeviceId		= 0x3007,
 		.i_IorangeBase0		= 128,
 		.i_IorangeBase1		= 256,
@@ -595,7 +594,7 @@ static const struct addi_board boardtypes[] = {
 #ifdef CONFIG_APCI_1710
 	{
 		.pc_DriverName		= "apci1710",
-		.i_VendorId		= APCI1710_BOARD_VENDOR_ID,
+		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA_OLD,
 		.i_DeviceId		= APCI1710_BOARD_DEVICE_ID,
 		.i_IorangeBase0		= 128,
 		.i_IorangeBase1		= 8,
@@ -1472,6 +1471,7 @@ module_exit(driver_addi_cleanup_module);
 
 static int i_ADDI_Attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
+	struct addi_private *devpriv;
 	struct comedi_subdevice *s;
 	int ret, pages, i, n_subdevices;
 	unsigned int dw_Dummy;
@@ -1482,9 +1482,10 @@ static int i_ADDI_Attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	unsigned char pci_bus, pci_slot, pci_func;
 	int i_Dma = 0;
 
-	ret = alloc_private(dev, sizeof(struct addi_private));
-	if (ret < 0)
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
 		return -ENOMEM;
+	dev->private = devpriv;
 
 	if (!pci_list_builded) {
 		v_pci_card_list_init(this_board->i_VendorId, 1);	/* 1 for displaying the list.. */
@@ -1817,7 +1818,9 @@ static int i_ADDI_Attach(struct comedi_device *dev, struct comedi_devconfig *it)
 
 static void i_ADDI_Detach(struct comedi_device *dev)
 {
-	if (dev->private) {
+	struct addi_private *devpriv = dev->private;
+
+	if (devpriv) {
 		if (devpriv->b_ValidDriver)
 			i_ADDI_Reset(dev);
 		if (dev->irq)
@@ -1923,6 +1926,7 @@ static irqreturn_t v_ADDI_Interrupt(int irq, void *d)
 static int i_ADDIDATA_InsnReadEeprom(struct comedi_device *dev, struct comedi_subdevice *s,
 	struct comedi_insn *insn, unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned short w_Data;
 	unsigned short w_Address;
 	w_Address = CR_CHAN(insn->chanspec);	/*  address to be read as 0,1,2,3...255 */

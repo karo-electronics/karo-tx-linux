@@ -54,9 +54,21 @@
 	COMEDI_MINORVERSION, COMEDI_MICROVERSION)
 #define COMEDI_RELEASE VERSION
 
-#define PCI_VENDOR_ID_ADLINK		0x144a
+/*
+ * PCI Vendor IDs not in <linux/pci_ids.h>
+ */
+#define PCI_VENDOR_ID_KOLTER		0x1001
 #define PCI_VENDOR_ID_ICP		0x104c
+#define PCI_VENDOR_ID_AMCC		0x10e8
+#define PCI_VENDOR_ID_DT		0x1116
+#define PCI_VENDOR_ID_IOTECH		0x1616
 #define PCI_VENDOR_ID_CONTEC		0x1221
+#define PCI_VENDOR_ID_CB		0x1307	/* Measurement Computing */
+#define PCI_VENDOR_ID_ADVANTECH		0x13fe
+#define PCI_VENDOR_ID_MEILHAUS		0x1402
+#define PCI_VENDOR_ID_RTD		0x1435
+#define PCI_VENDOR_ID_ADLINK		0x144a
+#define PCI_VENDOR_ID_AMPLICON		0x14dc
 
 #define COMEDI_NUM_MINORS 0x100
 #define COMEDI_NUM_BOARD_MINORS 0x30
@@ -415,14 +427,6 @@ struct comedi_lrange {
 
 /* some silly little inline functions */
 
-static inline int alloc_private(struct comedi_device *dev, int size)
-{
-	dev->private = kzalloc(size, GFP_KERNEL);
-	if (!dev->private)
-		return -ENOMEM;
-	return 0;
-}
-
 static inline unsigned int bytes_per_sample(const struct comedi_subdevice *subd)
 {
 	if (subd->subdev_flags & SDF_LSAMPL)
@@ -436,9 +440,10 @@ into comedi's buffer */
 static inline void comedi_set_hw_dev(struct comedi_device *dev,
 				     struct device *hw_dev)
 {
+	if (dev->hw_dev == hw_dev)
+		return;
 	if (dev->hw_dev)
 		put_device(dev->hw_dev);
-
 	dev->hw_dev = hw_dev;
 	if (dev->hw_dev) {
 		dev->hw_dev = get_device(dev->hw_dev);

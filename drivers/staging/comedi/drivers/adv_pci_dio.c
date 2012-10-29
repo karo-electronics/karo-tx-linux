@@ -36,8 +36,6 @@ Configuration options:
 #include "8255.h"
 #include "8253.h"
 
-#define PCI_VENDOR_ID_ADVANTECH		0x13fe
-
 /* hardware types of the cards */
 enum hw_cards_id {
 	TYPE_PCI1730, TYPE_PCI1733, TYPE_PCI1734, TYPE_PCI1735, TYPE_PCI1736,
@@ -1100,18 +1098,16 @@ static int pci_dio_attach_pci(struct comedi_device *dev,
 	struct comedi_subdevice *s;
 	int ret, subdev, i, j;
 
-	comedi_set_hw_dev(dev, &pcidev->dev);
-
 	this_board = pci_dio_find_boardinfo(dev, pcidev);
 	if (!this_board)
 		return -ENODEV;
 	dev->board_ptr = this_board;
 	dev->board_name = this_board->name;
 
-	ret = alloc_private(dev, sizeof(*devpriv));
-	if (ret < 0)
-		return ret;
-	devpriv = dev->private;
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	ret = comedi_pci_enable(pcidev, dev->board_name);
 	if (ret)
