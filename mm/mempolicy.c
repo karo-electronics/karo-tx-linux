@@ -111,11 +111,29 @@ enum zone_type policy_zone = 0;
 /*
  * run-time system-wide default policy => local allocation
  */
-static struct mempolicy default_policy = {
-	.refcnt = ATOMIC_INIT(1), /* never free it */
-	.mode = MPOL_PREFERRED,
-	.flags = MPOL_F_LOCAL,
+
+static struct mempolicy default_policy_local = {
+	.refcnt		= ATOMIC_INIT(1), /* never free it */
+	.mode		= MPOL_PREFERRED,
+	.flags		= MPOL_F_LOCAL,
 };
+
+/*
+ * .v.nodes is set by numa_policy_init():
+ */
+static struct mempolicy default_policy_shared = {
+	.refcnt			= ATOMIC_INIT(1), /* never free it */
+	.mode			= MPOL_INTERLEAVE,
+	.flags			= 0,
+};
+
+static struct mempolicy *default_policy(void)
+{
+	if (task_numa_shared(current) == 1)
+		return &default_policy_shared;
+
+	return &default_policy_local;
+}
 
 static const struct mempolicy_operations {
 	int (*create)(struct mempolicy *pol, const nodemask_t *nodes);
@@ -789,7 +807,7 @@ out:
 static void get_policy_nodemask(struct mempolicy *p, nodemask_t *nodes)
 {
 	nodes_clear(*nodes);
-	if (p == &default_policy)
+	if (p == default_policy())
 		return;
 
 	switch (p->mode) {
@@ -864,7 +882,7 @@ static long do_get_mempolicy(int *policy, nodemask_t *nmask,
 		return -EINVAL;
 
 	if (!pol)
-		pol = &default_policy;	/* indicates default behavior */
+		pol = default_policy();	/* indicates default behavior */
 
 	if (flags & MPOL_F_NODE) {
 		if (flags & MPOL_F_ADDR) {
@@ -880,7 +898,7 @@ static long do_get_mempolicy(int *policy, nodemask_t *nmask,
 			goto out;
 		}
 	} else {
-		*policy = pol == &default_policy ? MPOL_DEFAULT :
+		*policy = pol == default_policy() ? MPOL_DEFAULT :
 						pol->mode;
 		/*
 		 * Internal mempolicy flags must be masked off before exposing
@@ -1568,7 +1586,7 @@ struct mempolicy *get_vma_policy(struct task_struct *task,
 		}
 	}
 	if (!pol)
-		pol = &default_policy;
+		pol = default_policy();
 	return pol;
 }
 
@@ -1974,7 +1992,7 @@ struct page *alloc_pages_current(gfp_t gfp, unsigned order)
 	unsigned int cpuset_mems_cookie;
 
 	if (!pol || in_interrupt() || (gfp & __GFP_THISNODE))
-		pol = &default_policy;
+		pol = default_policy();
 
 retry_cpuset:
 	cpuset_mems_cookie = get_mems_allowed();
@@ -2255,7 +2273,6 @@ int mpol_misplaced(struct page *page, struct vm_area_struct *vma, unsigned long 
 	int best_nid = -1, page_nid;
 	int cpu_last_access, this_cpu;
 	struct mempolicy *pol;
-	unsigned long pgoff;
 	struct zone *zone;
 
 	BUG_ON(!vma);
@@ -2271,13 +2288,22 @@ int mpol_misplaced(struct page *page, struct vm_area_struct *vma, unsigned long 
 
 	switch (pol->mode) {
 	case MPOL_INTERLEAVE:
+	{
+		int shift;
+
 		BUG_ON(addr >= vma->vm_end);
 		BUG_ON(addr < vma->vm_start);
 
-		pgoff = vma->vm_pgoff;
-		pgoff += (addr - vma->vm_start) >> PAGE_SHIFT;
-		best_nid = offset_il_node(pol, vma, pgoff);
+#ifdef CONFIG_HUGETLB_PAGE
+		if (transparent_hugepage_enabled(vma) || vma->vm_flags & VM_HUGETLB)
+			shift = HPAGE_SHIFT;
+		else
+#endif
+			shift = PAGE_SHIFT;
+
+		best_nid = interleave_nid(pol, vma, addr, shift);
 		break;
+	}
 
 	case MPOL_PREFERRED:
 		if (pol->flags & MPOL_F_LOCAL)
@@ -2491,6 +2517,8 @@ void __init numa_policy_init(void)
 	sn_cache = kmem_cache_create("shared_policy_node",
 				     sizeof(struct sp_node),
 				     0, SLAB_PANIC, NULL);
+
+	default_policy_shared.v.nodes = node_online_map;
 
 	/*
 	 * Set interleaving policy for system init. Interleaving is only
@@ -2712,7 +2740,7 @@ int mpol_to_str(char *buffer, int maxlen, struct mempolicy *pol, int no_context)
 	 */
 	VM_BUG_ON(maxlen < strlen("interleave") + strlen("relative") + 16);
 
-	if (!pol || pol == &default_policy)
+	if (!pol || pol == default_policy())
 		mode = MPOL_DEFAULT;
 	else
 		mode = pol->mode;
