@@ -42,7 +42,6 @@
  *   Digital receiver: CS8414-CS (supported in this release)
  */
 
-#include <asm/io.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/init.h>
@@ -722,7 +721,7 @@ static int phase28_deemp_put(struct snd_kcontrol *kcontrol,
 static int phase28_oversampling_info(struct snd_kcontrol *k,
 					struct snd_ctl_elem_info *uinfo)
 {
-	static char *texts[2] = { "128x", "64x"	};
+	static const char * const texts[2] = { "128x", "64x"	};
 
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
 	uinfo->count = 1;
