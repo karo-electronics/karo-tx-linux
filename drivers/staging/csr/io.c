@@ -31,7 +31,6 @@
  * ---------------------------------------------------------------------------
  */
 #include <linux/proc_fs.h>
-#include <linux/version.h>
 
 #include "csr_wifi_hip_unifi.h"
 #include "csr_wifi_hip_unifiversion.h"
@@ -86,7 +85,6 @@ static int uf_read_proc(char *page, char **start, off_t offset, int count,
 static CsrResult signal_buffer_init(unifi_priv_t * priv, int size)
 {
     int i;
-    func_enter();
 
     priv->rxSignalBuffer.writePointer =
     priv->rxSignalBuffer.readPointer = 0;
@@ -106,11 +104,9 @@ static CsrResult signal_buffer_init(unifi_priv_t * priv, int size)
                  kfree(priv->rxSignalBuffer.rx_buff[j].bufptr);
                  priv->rxSignalBuffer.rx_buff[j].bufptr = NULL;
              }
-             func_exit();
              return -1;
          }
     }
-    func_exit();
     return 0;
 }
 
@@ -265,8 +261,6 @@ register_unifi_sdio(CsrSdioFunction *sdio_dev, int bus_id, struct device *dev)
     int r = -1;
     CsrResult csrResult;
 
-    func_enter();
-
     if ((bus_id < 0) || (bus_id >= MAX_UNIFI_DEVS)) {
         unifi_error(priv, "register_unifi_sdio: invalid device %d\n",
                 bus_id);
@@ -415,7 +409,6 @@ register_unifi_sdio(CsrSdioFunction *sdio_dev, int bus_id, struct device *dev)
 
     up(&Unifi_instance_mutex);
 
-    func_exit();
     return priv;
 
 failed4:
@@ -449,7 +442,6 @@ failed0:
 
     up(&Unifi_instance_mutex);
 
-    func_exit();
     return NULL;
 } /* register_unifi_sdio() */
 
@@ -473,7 +465,6 @@ failed0:
 static void
 ask_unifi_sdio_cleanup(unifi_priv_t *priv)
 {
-    func_enter();
 
     /*
      * Now clear the flag that says the old instance is in use.
@@ -485,8 +476,6 @@ ask_unifi_sdio_cleanup(unifi_priv_t *priv)
 
     unifi_trace(NULL, UDBG5, "ask_unifi_sdio_cleanup: wake up cleanup workqueue.\n");
     wake_up(&Unifi_cleanup_wq);
-
-    func_exit();
 
 } /* ask_unifi_sdio_cleanup() */
 
@@ -510,8 +499,6 @@ cleanup_unifi_sdio(unifi_priv_t *priv)
     int priv_instance;
     int i;
     static const CsrWifiMacAddress broadcast_address = {{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}};
-
-    func_enter();
 
     /* Remove the device nodes */
     uf_destroy_device_nodes(priv);
@@ -604,8 +591,6 @@ cleanup_unifi_sdio(unifi_priv_t *priv)
 
     unifi_trace(NULL, UDBG5, "cleanup_unifi_sdio: DONE.\n");
 
-    func_exit();
-
 } /* cleanup_unifi_sdio() */
 
 
@@ -639,7 +624,6 @@ unregister_unifi_sdio(int bus_id)
     if (priv == NULL) {
         unifi_error(priv, "unregister_unifi_sdio: device %d is not registered\n",
                 bus_id);
-        func_exit();
         return;
     }
 

@@ -76,9 +76,6 @@ analog triggering on 1602 series
 #include "amcc_s5933.h"
 #include "comedi_fc.h"
 
-/* PCI vendor number of ComputerBoards/MeasurementComputing */
-#define PCI_VENDOR_ID_CB	0x1307
-
 #define TIMER_BASE		100	/* 10MHz master clock */
 #define AI_BUFFER_SIZE		1024	/* max ai fifo size */
 #define AO_BUFFER_SIZE		1024	/* max ao fifo size */
@@ -1478,18 +1475,16 @@ static int cb_pcidas_attach_pci(struct comedi_device *dev,
 	int i;
 	int ret;
 
-	comedi_set_hw_dev(dev, &pcidev->dev);
-
 	thisboard = cb_pcidas_find_boardinfo(dev, pcidev);
 	if (!thisboard)
 		return -ENODEV;
 	dev->board_ptr  = thisboard;
 	dev->board_name = thisboard->name;
 
-	ret = alloc_private(dev, sizeof(*devpriv));
-	if (ret)
-		return ret;
-	devpriv = dev->private;
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	ret = comedi_pci_enable(pcidev, dev->board_name);
 	if (ret)

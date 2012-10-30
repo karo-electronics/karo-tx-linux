@@ -117,8 +117,6 @@ Configuration options: not applicable, uses PCI auto config
 
 #define DAQBOARD2000_FIRMWARE		"daqboard2000_firmware.bin"
 
-#define PCI_VENDOR_ID_IOTECH		0x1616
-
 #define DAQBOARD2000_SUBSYSTEM_IDS2 	0x0002	/* Daqboard/2000 - 2 Dacs */
 #define DAQBOARD2000_SUBSYSTEM_IDS4 	0x0004	/* Daqboard/2000 - 4 Dacs */
 
@@ -698,18 +696,16 @@ static int daqboard2000_attach_pci(struct comedi_device *dev,
 	struct comedi_subdevice *s;
 	int result;
 
-	comedi_set_hw_dev(dev, &pcidev->dev);
-
 	board = daqboard2000_find_boardinfo(dev, pcidev);
 	if (!board)
 		return -ENODEV;
 	dev->board_ptr = board;
 	dev->board_name = board->name;
 
-	result = alloc_private(dev, sizeof(*devpriv));
-	if (result < 0)
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
 		return -ENOMEM;
-	devpriv = dev->private;
+	dev->private = devpriv;
 
 	result = comedi_pci_enable(pcidev, dev->driver->driver_name);
 	if (result < 0)
