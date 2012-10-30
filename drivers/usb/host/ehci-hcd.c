@@ -118,8 +118,33 @@ MODULE_PARM_DESC(hird, "host initiated resume duration, +1 for each 75us");
 /*-------------------------------------------------------------------------*/
 
 #include "ehci.h"
-#include "ehci-dbg.c"
 #include "pci-quirks.h"
+
+/*
+ * The MosChip MCS9990 controller updates its microframe counter
+ * a little before the frame counter, and occasionally we will read
+ * the invalid intermediate value.  Avoid problems by checking the
+ * microframe number (the low-order 3 bits); if they are 0 then
+ * re-read the register to get the correct value.
+ */
+static unsigned ehci_moschip_read_frame_index(struct ehci_hcd *ehci)
+{
+	unsigned uf;
+
+	uf = ehci_readl(ehci, &ehci->regs->frame_index);
+	if (unlikely((uf & 7) == 0))
+		uf = ehci_readl(ehci, &ehci->regs->frame_index);
+	return uf;
+}
+
+static inline unsigned ehci_read_frame_index(struct ehci_hcd *ehci)
+{
+	if (ehci->frame_index_bug)
+		return ehci_moschip_read_frame_index(ehci);
+	return ehci_readl(ehci, &ehci->regs->frame_index);
+}
+
+#include "ehci-dbg.c"
 
 /*-------------------------------------------------------------------------*/
 
@@ -503,7 +528,7 @@ static int ehci_init(struct usb_hcd *hcd)
 
 	/* controllers may cache some of the periodic schedule ... */
 	if (HCC_ISOC_CACHE(hcc_params))		// full frame cache
-		ehci->i_thresh = 2 + 8;
+		ehci->i_thresh = 0;
 	else					// N microframes cached
 		ehci->i_thresh = 2 + HCC_ISOC_THRES(hcc_params);
 
@@ -1219,11 +1244,6 @@ MODULE_LICENSE ("GPL");
 #define PLATFORM_DRIVER		ehci_hcd_sh_driver
 #endif
 
-#ifdef CONFIG_MIPS_ALCHEMY
-#include "ehci-au1xxx.c"
-#define	PLATFORM_DRIVER		ehci_hcd_au1xxx_driver
-#endif
-
 #ifdef CONFIG_USB_EHCI_HCD_OMAP
 #include "ehci-omap.c"
 #define        PLATFORM_DRIVER         ehci_hcd_omap_driver
@@ -1249,11 +1269,6 @@ MODULE_LICENSE ("GPL");
 #define	PLATFORM_DRIVER		ehci_orion_driver
 #endif
 
-#ifdef CONFIG_ARCH_IXP4XX
-#include "ehci-ixp4xx.c"
-#define	PLATFORM_DRIVER		ixp4xx_ehci_driver
-#endif
-
 #ifdef CONFIG_USB_W90X900_EHCI
 #include "ehci-w90x900.c"
 #define	PLATFORM_DRIVER		ehci_hcd_w90x900_driver
@@ -1267,11 +1282,6 @@ MODULE_LICENSE ("GPL");
 #ifdef CONFIG_USB_OCTEON_EHCI
 #include "ehci-octeon.c"
 #define PLATFORM_DRIVER		ehci_octeon_driver
-#endif
-
-#ifdef CONFIG_USB_CNS3XXX_EHCI
-#include "ehci-cns3xxx.c"
-#define PLATFORM_DRIVER		cns3xxx_ehci_driver
 #endif
 
 #ifdef CONFIG_ARCH_VT8500
@@ -1314,19 +1324,9 @@ MODULE_LICENSE ("GPL");
 #define PLATFORM_DRIVER		ehci_grlib_driver
 #endif
 
-#ifdef CONFIG_CPU_XLR
-#include "ehci-xls.c"
-#define PLATFORM_DRIVER		ehci_xls_driver
-#endif
-
 #ifdef CONFIG_USB_EHCI_MV
 #include "ehci-mv.c"
 #define        PLATFORM_DRIVER         ehci_mv_driver
-#endif
-
-#ifdef CONFIG_MACH_LOONGSON1
-#include "ehci-ls1x.c"
-#define PLATFORM_DRIVER		ehci_ls1x_driver
 #endif
 
 #ifdef CONFIG_MIPS_SEAD3
