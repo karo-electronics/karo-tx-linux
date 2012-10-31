@@ -18,6 +18,10 @@ extern enum xen_domain_type xen_domain_type;
 				 xen_domain_type == XEN_PV_DOMAIN)
 #define xen_hvm_domain()	(xen_domain() &&			\
 				 xen_domain_type == XEN_HVM_DOMAIN)
+/* xen_pv_domain check is necessary as start_info ptr is null in HVM. Also,
+ * note, xen PVH domain shares lot of HVM code */
+#define xen_pvh_domain()       (xen_pv_domain() &&                     \
+				(xen_start_info->flags & SIF_IS_PVINHVM))
 
 #ifdef CONFIG_XEN_DOM0
 #include <xen/interface/xen.h>
