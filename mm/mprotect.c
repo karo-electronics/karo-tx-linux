@@ -28,12 +28,13 @@
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 
-static void change_pte_range(struct mm_struct *mm, pmd_t *pmd,
+static unsigned long change_pte_range(struct mm_struct *mm, pmd_t *pmd,
 		unsigned long addr, unsigned long end, pgprot_t newprot,
 		int dirty_accountable)
 {
 	pte_t *pte, oldpte;
 	spinlock_t *ptl;
+	unsigned long pages = 0;
 
 	pte = pte_offset_map_lock(mm, pmd, addr, &ptl);
 	arch_enter_lazy_mmu_mode();
@@ -53,6 +54,7 @@ static void change_pte_range(struct mm_struct *mm, pmd_t *pmd,
 				ptent = pte_mkwrite(ptent);
 
 			ptep_modify_prot_commit(mm, addr, pte, ptent);
+			pages++;
 		} else if (IS_ENABLED(CONFIG_MIGRATION) && !pte_file(oldpte)) {
 			swp_entry_t entry = pte_to_swp_entry(oldpte);
 
@@ -65,18 +67,22 @@ static void change_pte_range(struct mm_struct *mm, pmd_t *pmd,
 				set_pte_at(mm, addr, pte,
 					swp_entry_to_pte(entry));
 			}
+			pages++;
 		}
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 	arch_leave_lazy_mmu_mode();
 	pte_unmap_unlock(pte - 1, ptl);
+
+	return pages;
 }
 
-static inline void change_pmd_range(struct vm_area_struct *vma, pud_t *pud,
+static inline unsigned long change_pmd_range(struct vm_area_struct *vma, pud_t *pud,
 		unsigned long addr, unsigned long end, pgprot_t newprot,
 		int dirty_accountable)
 {
 	pmd_t *pmd;
 	unsigned long next;
+	unsigned long pages = 0;
 
 	pmd = pmd_offset(pud, addr);
 	do {
@@ -84,35 +90,42 @@ static inline void change_pmd_range(struct vm_area_struct *vma, pud_t *pud,
 		if (pmd_trans_huge(*pmd)) {
 			if (next - addr != HPAGE_PMD_SIZE)
 				split_huge_page_pmd(vma->vm_mm, pmd);
-			else if (change_huge_pmd(vma, pmd, addr, newprot))
+			else if (change_huge_pmd(vma, pmd, addr, newprot)) {
+				pages += HPAGE_PMD_NR;
 				continue;
+			}
 			/* fall through */
 		}
 		if (pmd_none_or_clear_bad(pmd))
 			continue;
-		change_pte_range(vma->vm_mm, pmd, addr, next, newprot,
+		pages += change_pte_range(vma->vm_mm, pmd, addr, next, newprot,
 				 dirty_accountable);
 	} while (pmd++, addr = next, addr != end);
+
+	return pages;
 }
 
-static inline void change_pud_range(struct vm_area_struct *vma, pgd_t *pgd,
+static inline unsigned long change_pud_range(struct vm_area_struct *vma, pgd_t *pgd,
 		unsigned long addr, unsigned long end, pgprot_t newprot,
 		int dirty_accountable)
 {
 	pud_t *pud;
 	unsigned long next;
+	unsigned long pages = 0;
 
 	pud = pud_offset(pgd, addr);
 	do {
 		next = pud_addr_end(addr, end);
 		if (pud_none_or_clear_bad(pud))
 			continue;
-		change_pmd_range(vma, pud, addr, next, newprot,
+		pages += change_pmd_range(vma, pud, addr, next, newprot,
 				 dirty_accountable);
 	} while (pud++, addr = next, addr != end);
+
+	return pages;
 }
 
-static void change_protection_range(struct vm_area_struct *vma,
+static unsigned long change_protection_range(struct vm_area_struct *vma,
 		unsigned long addr, unsigned long end, pgprot_t newprot,
 		int dirty_accountable)
 {
@@ -120,6 +133,7 @@ static void change_protection_range(struct vm_area_struct *vma,
 	pgd_t *pgd;
 	unsigned long next;
 	unsigned long start = addr;
+	unsigned long pages = 0;
 
 	BUG_ON(addr >= end);
 	pgd = pgd_offset(mm, addr);
@@ -128,24 +142,29 @@ static void change_protection_range(struct vm_area_struct *vma,
 		next = pgd_addr_end(addr, end);
 		if (pgd_none_or_clear_bad(pgd))
 			continue;
-		change_pud_range(vma, pgd, addr, next, newprot,
+		pages += change_pud_range(vma, pgd, addr, next, newprot,
 				 dirty_accountable);
 	} while (pgd++, addr = next, addr != end);
 	flush_tlb_range(vma, start, end);
+
+	return pages;
 }
 
-void change_protection(struct vm_area_struct *vma, unsigned long start,
+unsigned long change_protection(struct vm_area_struct *vma, unsigned long start,
 		       unsigned long end, pgprot_t newprot,
 		       int dirty_accountable)
 {
 	struct mm_struct *mm = vma->vm_mm;
+	unsigned long pages;
 
 	mmu_notifier_invalidate_range_start(mm, start, end);
 	if (is_vm_hugetlb_page(vma))
-		hugetlb_change_protection(vma, start, end, newprot);
+		pages = hugetlb_change_protection(vma, start, end, newprot);
 	else
-		change_protection_range(vma, start, end, newprot, dirty_accountable);
+		pages = change_protection_range(vma, start, end, newprot, dirty_accountable);
 	mmu_notifier_invalidate_range_end(mm, start, end);
+
+	return pages;
 }
 
 int
