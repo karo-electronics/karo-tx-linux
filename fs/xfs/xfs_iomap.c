@@ -373,7 +373,7 @@ xfs_iomap_write_delay(
 	xfs_extlen_t	extsz;
 	int		nimaps;
 	xfs_bmbt_irec_t imap[XFS_WRITE_IMAPS];
-	int		prealloc, flushed = 0;
+	int		prealloc;
 	int		error;
 
 	ASSERT(xfs_isilocked(ip, XFS_ILOCK_EXCL));
@@ -434,26 +434,17 @@ retry:
 	}
 
 	/*
-	 * If bmapi returned us nothing, we got either ENOSPC or EDQUOT.  For
-	 * ENOSPC, * flush all other inodes with delalloc blocks to free up
-	 * some of the excess reserved metadata space. For both cases, retry
+	 * If bmapi returned us nothing, we got either ENOSPC or EDQUOT. Retry
 	 * without EOF preallocation.
 	 */
 	if (nimaps == 0) {
 		trace_xfs_delalloc_enospc(ip, offset, count);
-		if (flushed)
-			return XFS_ERROR(error ? error : ENOSPC);
-
-		if (error == ENOSPC) {
-			xfs_iunlock(ip, XFS_ILOCK_EXCL);
-			xfs_flush_inodes(ip);
-			xfs_ilock(ip, XFS_ILOCK_EXCL);
+		if (prealloc) {
+			prealloc = 0;
+			error = 0;
+			goto retry;
 		}
-
-		flushed = 1;
-		error = 0;
-		prealloc = 0;
-		goto retry;
+		return XFS_ERROR(error ? error : ENOSPC);
 	}
 
 	if (!(imap[0].br_startblock || XFS_IS_REALTIME_INODE(ip)))
@@ -584,7 +575,9 @@ xfs_iomap_write_allocate(
 			 * pointer that the caller gave to us.
 			 */
 			error = xfs_bmapi_write(tp, ip, map_start_fsb,
-						count_fsb, 0, &first_block, 1,
+						count_fsb,
+						XFS_BMAPI_STACK_SWITCH,
+						&first_block, 1,
 						imap, &nimaps, &free_list);
 			if (error)
 				goto trans_cancel;
