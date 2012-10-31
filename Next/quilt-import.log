@@ -1,0 +1,35 @@
+Importing i2c based on 35fd3dc58da675d659513384221349ef90749a01
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 35fd3dc58da675d659513384221349ef90749a01
+HEAD is now at 35fd3dc Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/sage/ceph-client
+$ git am ../quilt/i2c/i2c-i801-01-add-device-tree-support.patch
+Applying: i2c-i801: Add device tree support
+$ git am ../quilt/i2c/i2c-piix4-convert-dev_printk-kern_-level-to-dev_-level.patch
+Applying: i2c-piix4: Convert dev_printk(KERN_<LEVEL> to dev_<level>(
+$ git am ../quilt/i2c/i2c-mention-func-flags-in-smbus-documentation.patch
+Applying: i2c: Mention functionality flags in SMBus protocol documentation
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 71af1ef...76ff8bb master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 35fd3dc58da675d659513384221349ef90749a01
+$ cd ../quilt-tmp
+$ git reset --hard 35fd3dc58da675d659513384221349ef90749a01
+HEAD is now at 35fd3dc Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/sage/ceph-client
+$ git am ../quilt/jdelvare-hwmon/hwmon-w83627ehf-force-initial-bank-selection.patch
+Applying: hwmon: (w83627ehf) Force initial bank selection
+$ git am ../quilt/jdelvare-hwmon/hwmon-fix-feature-table-headers.patch
+Applying: hwmon: Fix chip feature table headers
+$ git am ../quilt/jdelvare-hwmon/hwmon-w83627hf-restore-limits-on-resume.patch
+Applying: hwmon: (w83627hf) Add support for suspend
+$ git am ../quilt/jdelvare-hwmon/hwmon-w83627ehf-restore-limits-on-resume.patch
+Applying: hwmon: (w83627ehf) Add support for suspend
+$ git am ../quilt/jdelvare-hwmon/hwmon-w83627hf-dont-touch-nonexistent-I2C-address-registers.patch
+Applying: hwmon (w83627hf) Don't touch nonexistent I2C address registers
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 1066e41...1832015 master     -> quilt/jdelvare-hwmon  (forced update)
+Importing device-mapper based on v3.7-rc1
+Unchanged quilt series device-mapper
