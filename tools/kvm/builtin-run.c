@@ -171,7 +171,12 @@ static void handle_sigalrm(int sig, siginfo_t *si, void *uc)
 
 static void *kvm_cpu_thread(void *arg)
 {
-	current_kvm_cpu		= arg;
+	char name[16];
+
+	current_kvm_cpu = arg;
+
+	sprintf(name, "kvm-vcpu-%lu", current_kvm_cpu->cpu_id);
+	kvm__set_thread_name(name);
 
 	if (kvm_cpu__start(current_kvm_cpu))
 		goto panic_kvm;
@@ -593,8 +598,16 @@ static struct kvm *kvm_cmd_run_init(int argc, const char **argv)
 	if (!kvm->cfg.script)
 		kvm->cfg.script = DEFAULT_SCRIPT;
 
-	if (!kvm->cfg.vnc && !kvm->cfg.sdl)
+	if (!kvm->cfg.vidmode)
 		kvm->cfg.vidmode = -1;
+
+	/* vidmode should be either specified or set by default */
+	if (kvm->cfg.vnc || kvm->cfg.sdl) {
+		if (kvm->cfg.vidmode == -1)
+			kvm->cfg.vidmode = 0x312;
+	} else {
+		kvm->cfg.vidmode = 0;
+	}
 
 	if (!kvm->cfg.network)
                 kvm->cfg.network = DEFAULT_NETWORK;
