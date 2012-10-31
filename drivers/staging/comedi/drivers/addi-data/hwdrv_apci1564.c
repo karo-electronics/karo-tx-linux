@@ -86,9 +86,13 @@ static unsigned int ui_InterruptData, ui_Type;
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI1564_ConfigDigitalInput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1564_ConfigDigitalInput(struct comedi_device *dev,
+					 struct comedi_subdevice *s,
+					 struct comedi_insn *insn,
+					 unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
+
 	devpriv->tsk_Current = current;
    /*******************************/
 	/* Set the digital input logic */
@@ -147,9 +151,12 @@ int i_APCI1564_ConfigDigitalInput(struct comedi_device *dev, struct comedi_subde
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI1564_Read1DigitalInput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1564_Read1DigitalInput(struct comedi_device *dev,
+					struct comedi_subdevice *s,
+					struct comedi_insn *insn,
+					unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ui_TmpValue = 0;
 	unsigned int ui_Channel;
 
@@ -189,9 +196,12 @@ int i_APCI1564_Read1DigitalInput(struct comedi_device *dev, struct comedi_subdev
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI1564_ReadMoreDigitalInput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1564_ReadMoreDigitalInput(struct comedi_device *dev,
+					   struct comedi_subdevice *s,
+					   struct comedi_insn *insn,
+					   unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ui_PortValue = data[0];
 	unsigned int ui_Mask = 0;
 	unsigned int ui_NoOfChannels;
@@ -257,9 +267,12 @@ int i_APCI1564_ReadMoreDigitalInput(struct comedi_device *dev, struct comedi_sub
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI1564_ConfigDigitalOutput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1564_ConfigDigitalOutput(struct comedi_device *dev,
+					  struct comedi_subdevice *s,
+					  struct comedi_insn *insn,
+					  unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ul_Command = 0;
 
 	if ((data[0] != 0) && (data[0] != 1)) {
@@ -314,9 +327,12 @@ int i_APCI1564_ConfigDigitalOutput(struct comedi_device *dev, struct comedi_subd
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI1564_WriteDigitalOutput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1564_WriteDigitalOutput(struct comedi_device *dev,
+					 struct comedi_subdevice *s,
+					 struct comedi_insn *insn,
+					 unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ui_Temp, ui_Temp1;
 	unsigned int ui_NoOfChannel;
 
@@ -488,9 +504,12 @@ int i_APCI1564_WriteDigitalOutput(struct comedi_device *dev, struct comedi_subde
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI1564_ReadDigitalOutput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1564_ReadDigitalOutput(struct comedi_device *dev,
+					struct comedi_subdevice *s,
+					struct comedi_insn *insn,
+					unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ui_Temp;
 	unsigned int ui_NoOfChannel;
 
@@ -566,10 +585,14 @@ int i_APCI1564_ReadDigitalOutput(struct comedi_device *dev, struct comedi_subdev
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI1564_ConfigTimerCounterWatchdog(struct comedi_device *dev,
-	struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1564_ConfigTimerCounterWatchdog(struct comedi_device *dev,
+						 struct comedi_subdevice *s,
+						 struct comedi_insn *insn,
+						 unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ul_Command1 = 0;
+
 	devpriv->tsk_Current = current;
 	if (data[0] == ADDIDATA_WATCHDOG) {
 		devpriv->b_TimerSelectMode = ADDIDATA_WATCHDOG;
@@ -720,10 +743,14 @@ int i_APCI1564_ConfigTimerCounterWatchdog(struct comedi_device *dev,
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI1564_StartStopWriteTimerCounterWatchdog(struct comedi_device *dev,
-	struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1564_StartStopWriteTimerCounterWatchdog(struct comedi_device *dev,
+							 struct comedi_subdevice *s,
+							 struct comedi_insn *insn,
+							 unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ul_Command1 = 0;
+
 	if (devpriv->b_TimerSelectMode == ADDIDATA_WATCHDOG) {
 		switch (data[1]) {
 		case 0:	/* stop the watchdog */
@@ -815,9 +842,12 @@ int i_APCI1564_StartStopWriteTimerCounterWatchdog(struct comedi_device *dev,
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI1564_ReadTimerCounterWatchdog(struct comedi_device *dev,
-	struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1564_ReadTimerCounterWatchdog(struct comedi_device *dev,
+					       struct comedi_subdevice *s,
+					       struct comedi_insn *insn,
+					       unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ul_Command1 = 0;
 
 	if (devpriv->b_TimerSelectMode == ADDIDATA_WATCHDOG) {
@@ -894,8 +924,10 @@ int i_APCI1564_ReadTimerCounterWatchdog(struct comedi_device *dev,
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI1564_ReadInterruptStatus(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1564_ReadInterruptStatus(struct comedi_device *dev,
+					  struct comedi_subdevice *s,
+					  struct comedi_insn *insn,
+					  unsigned int *data)
 {
 	*data = ui_Type;
 	return insn->n;
@@ -921,10 +953,12 @@ int i_APCI1564_ReadInterruptStatus(struct comedi_device *dev, struct comedi_subd
 static void v_APCI1564_Interrupt(int irq, void *d)
 {
 	struct comedi_device *dev = d;
+	struct addi_private *devpriv = dev->private;
 	unsigned int ui_DO, ui_DI;
 	unsigned int ui_Timer;
 	unsigned int ui_C1, ui_C2, ui_C3, ui_C4;
 	unsigned int ul_Command2 = 0;
+
 	ui_DI = inl(devpriv->i_IobaseAmcc + APCI1564_DIGITAL_IP +
 		APCI1564_DIGITAL_IP_IRQ) & 0x01;
 	ui_DO = inl(devpriv->i_IobaseAmcc + APCI1564_DIGITAL_OP +
@@ -1104,8 +1138,10 @@ static void v_APCI1564_Interrupt(int irq, void *d)
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI1564_Reset(struct comedi_device *dev)
+static int i_APCI1564_Reset(struct comedi_device *dev)
 {
+	struct addi_private *devpriv = dev->private;
+
 	outl(0x0, devpriv->i_IobaseAmcc + APCI1564_DIGITAL_IP_IRQ);	/* disable the interrupts */
 	inl(devpriv->i_IobaseAmcc + APCI1564_DIGITAL_IP_INTERRUPT_STATUS);	/* Reset the interrupt status register */
 	outl(0x0, devpriv->i_IobaseAmcc + APCI1564_DIGITAL_IP_INTERRUPT_MODE1);	/* Disable the and/or interrupt */

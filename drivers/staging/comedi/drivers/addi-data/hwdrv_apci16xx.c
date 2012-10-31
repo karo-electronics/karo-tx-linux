@@ -90,9 +90,13 @@ You should also find the complete GPL in the COPYING file accompanying this sour
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI16XX_InsnConfigInitTTLIO(struct comedi_device *dev,
-	struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data)
+static int i_APCI16XX_InsnConfigInitTTLIO(struct comedi_device *dev,
+					  struct comedi_subdevice *s,
+					  struct comedi_insn *insn,
+					  unsigned int *data)
 {
+	const struct addi_board *this_board = comedi_board(dev);
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_Command = 0;
 	unsigned char b_Cpt = 0;
@@ -283,9 +287,13 @@ int i_APCI16XX_InsnConfigInitTTLIO(struct comedi_device *dev,
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI16XX_InsnBitsReadTTLIO(struct comedi_device *dev,
-	struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data)
+static int i_APCI16XX_InsnBitsReadTTLIO(struct comedi_device *dev,
+					struct comedi_subdevice *s,
+					struct comedi_insn *insn,
+					unsigned int *data)
 {
+	const struct addi_board *this_board = comedi_board(dev);
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_Command = 0;
 	unsigned char b_NumberOfPort =
@@ -430,9 +438,13 @@ int i_APCI16XX_InsnBitsReadTTLIO(struct comedi_device *dev,
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI16XX_InsnReadTTLIOAllPortValue(struct comedi_device *dev,
-	struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data)
+static int i_APCI16XX_InsnReadTTLIOAllPortValue(struct comedi_device *dev,
+						struct comedi_subdevice *s,
+						struct comedi_insn *insn,
+						unsigned int *data)
 {
+	const struct addi_board *this_board = comedi_board(dev);
+	struct addi_private *devpriv = dev->private;
 	unsigned char b_Command = (unsigned char) CR_AREF(insn->chanspec);
 	int i_ReturnValue = insn->n;
 	unsigned char b_Cpt = 0;
@@ -570,9 +582,13 @@ int i_APCI16XX_InsnReadTTLIOAllPortValue(struct comedi_device *dev,
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI16XX_InsnBitsWriteTTLIO(struct comedi_device *dev,
-	struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data)
+static int i_APCI16XX_InsnBitsWriteTTLIO(struct comedi_device *dev,
+					 struct comedi_subdevice *s,
+					 struct comedi_insn *insn,
+					 unsigned int *data)
 {
+	const struct addi_board *this_board = comedi_board(dev);
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_Command = 0;
 	unsigned char b_NumberOfPort =
@@ -774,7 +790,7 @@ int i_APCI16XX_InsnBitsWriteTTLIO(struct comedi_device *dev,
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI16XX_Reset(struct comedi_device *dev)
+static int i_APCI16XX_Reset(struct comedi_device *dev)
 {
 	return 0;
 }

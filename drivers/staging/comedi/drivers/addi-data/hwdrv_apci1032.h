@@ -17,7 +17,6 @@
 
 /*********      Definitions for APCI-1032 card  *****/
 
-#define APCI1032_BOARD_VENDOR_ID 0x15B8
 #define APCI1032_ADDRESS_RANGE  20
 /* DIGITAL INPUT DEFINE */
 
@@ -41,24 +40,3 @@
 
 #define ADDIDATA_ENABLE                            1
 #define ADDIDATA_DISABLE                           0
-
-/* Hardware Layer  functions for Apci1032 */
-
-/*
-* DI for di read
-*/
-
-int i_APCI1032_ConfigDigitalInput(struct comedi_device *dev, struct comedi_subdevice *s,
-				  struct comedi_insn *insn, unsigned int *data);
-
-int i_APCI1032_Read1DigitalInput(struct comedi_device *dev, struct comedi_subdevice *s,
-				 struct comedi_insn *insn, unsigned int *data);
-
-int i_APCI1032_ReadMoreDigitalInput(struct comedi_device *dev, struct comedi_subdevice *s,
-				    struct comedi_insn *insn, unsigned int *data);
-
-/* Interrupt functions..... */
-
-static void v_APCI1032_Interrupt(int irq, void *d);
-/* Reset */
-int i_APCI1032_Reset(struct comedi_device *dev);
