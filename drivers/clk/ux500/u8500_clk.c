@@ -372,6 +372,7 @@ void u8500_clk_init(void)
 
 	clk = clk_reg_prcc_pclk("p6_pclk0", "per6clk", U8500_CLKRST6_BASE,
 				BIT(0), 0);
+	clk_register_clkdev(clk, "apb_pclk", "rng");
 
 	clk = clk_reg_prcc_pclk("p6_pclk1", "per6clk", U8500_CLKRST6_BASE,
 				BIT(1), 0);
@@ -515,5 +516,5 @@ void u8500_clk_init(void)
 	/* Periph6 */
 	clk = clk_reg_prcc_kclk("p3_rng_kclk", "rngclk",
 			U8500_CLKRST6_BASE, BIT(0), CLK_SET_RATE_GATE);
-
+	clk_register_clkdev(clk, NULL, "rng");
 }
