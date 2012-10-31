@@ -416,10 +416,18 @@ struct mem_ctl_info *edac_mc_alloc(unsigned mc_num,
 		dimm->cschannel = chn;
 
 		/* Increment csrow location */
-		row++;
-		if (row == tot_csrows) {
-			row = 0;
+		if (layers[0].is_virt_csrow) {
 			chn++;
+			if (chn == tot_channels) {
+				chn = 0;
+				row++;
+			}
+		} else {
+			row++;
+			if (row == tot_csrows) {
+				row = 0;
+				chn++;
+			}
 		}
 
 		/* Increment dimm location */
@@ -432,13 +440,6 @@ struct mem_ctl_info *edac_mc_alloc(unsigned mc_num,
 	}
 
 	mci->op_state = OP_ALLOC;
-
-	/* at this point, the root kobj is valid, and in order to
-	 * 'free' the object, then the function:
-	 *      edac_mc_unregister_sysfs_main_kobj() must be called
-	 * which will perform kobj unregistration and the actual free
-	 * will occur during the kobject callback operation
-	 */
 
 	return mci;
 
