@@ -635,7 +635,6 @@ int nfs41_setup_sequence(struct nfs4_session *session,
 	}
 	spin_unlock(&tbl->slot_tbl_lock);
 
-	rpc_task_set_priority(task, RPC_PRIORITY_NORMAL);
 	slot = tbl->slots + slotid;
 	args->sa_session = session;
 	args->sa_slotid = slotid;
@@ -657,8 +656,10 @@ out_success:
 out_sleep:
 	/* Privileged tasks are queued with top priority */
 	if (args->sa_privileged)
-		rpc_task_set_priority(task, RPC_PRIORITY_PRIVILEGED);
-	rpc_sleep_on(&tbl->slot_tbl_waitq, task, NULL);
+		rpc_sleep_on_priority(&tbl->slot_tbl_waitq, task,
+				NULL, RPC_PRIORITY_PRIVILEGED);
+	else
+		rpc_sleep_on(&tbl->slot_tbl_waitq, task, NULL);
 	spin_unlock(&tbl->slot_tbl_lock);
 	return -EAGAIN;
 }
