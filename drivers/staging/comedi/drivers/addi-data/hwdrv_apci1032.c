@@ -46,13 +46,30 @@ You should also find the complete GPL in the COPYING file accompanying this sour
   +----------+-----------+------------------------------------------------+
 */
 
-/*
-+----------------------------------------------------------------------------+
-|                               Included files                               |
-+----------------------------------------------------------------------------+
-*/
-#include "hwdrv_apci1032.h"
-#include <linux/delay.h>
+/*********      Definitions for APCI-1032 card  *****/
+
+#define APCI1032_ADDRESS_RANGE			20
+/* DIGITAL INPUT DEFINE */
+
+#define APCI1032_DIGITAL_IP			0
+#define APCI1032_DIGITAL_IP_INTERRUPT_MODE1	4
+#define APCI1032_DIGITAL_IP_INTERRUPT_MODE2	8
+#define APCI1032_DIGITAL_IP_IRQ			16
+
+/* Digital Input IRQ Function Selection */
+#define ADDIDATA_OR				0
+#define ADDIDATA_AND				1
+
+/* Digital Input Interrupt Status */
+#define APCI1032_DIGITAL_IP_INTERRUPT_STATUS	12
+
+/* Digital Input Interrupt Enable Disable. */
+#define APCI1032_DIGITAL_IP_INTERRUPT_ENABLE	0x4
+#define APCI1032_DIGITAL_IP_INTERRUPT_DISABLE	0xfffffffb
+
+/* ADDIDATA Enable Disable */
+#define ADDIDATA_ENABLE				1
+#define ADDIDATA_DISABLE			0
 
 static unsigned int ui_InterruptStatus;
 
@@ -84,13 +101,16 @@ static unsigned int ui_InterruptStatus;
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI1032_ConfigDigitalInput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1032_ConfigDigitalInput(struct comedi_device *dev,
+					 struct comedi_subdevice *s,
+					 struct comedi_insn *insn,
+					 unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ui_TmpValue;
-
 	unsigned int ul_Command1 = 0;
 	unsigned int ul_Command2 = 0;
+
 	devpriv->tsk_Current = current;
 
   /*******************************/
@@ -144,12 +164,16 @@ int i_APCI1032_ConfigDigitalInput(struct comedi_device *dev, struct comedi_subde
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI1032_Read1DigitalInput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1032_Read1DigitalInput(struct comedi_device *dev,
+					struct comedi_subdevice *s,
+					struct comedi_insn *insn,
+					unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ui_TmpValue = 0;
 	unsigned int ui_Channel;
 	ui_Channel = CR_CHAN(insn->chanspec);
+
 	if (ui_Channel <= 31) {
 		ui_TmpValue = (unsigned int) inl(devpriv->iobase + APCI1032_DIGITAL_IP);
 /*
@@ -185,9 +209,12 @@ int i_APCI1032_Read1DigitalInput(struct comedi_device *dev, struct comedi_subdev
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI1032_ReadMoreDigitalInput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI1032_ReadMoreDigitalInput(struct comedi_device *dev,
+					   struct comedi_subdevice *s,
+					   struct comedi_insn *insn,
+					   unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ui_PortValue = data[0];
 	unsigned int ui_Mask = 0;
 	unsigned int ui_NoOfChannels;
@@ -248,8 +275,9 @@ int i_APCI1032_ReadMoreDigitalInput(struct comedi_device *dev, struct comedi_sub
 static void v_APCI1032_Interrupt(int irq, void *d)
 {
 	struct comedi_device *dev = d;
-
+	struct addi_private *devpriv = dev->private;
 	unsigned int ui_Temp;
+
 	/* disable the interrupt */
 	ui_Temp = inl(devpriv->iobase + APCI1032_DIGITAL_IP_IRQ);
 	outl(ui_Temp & APCI1032_DIGITAL_IP_INTERRUPT_DISABLE,
@@ -277,8 +305,10 @@ static void v_APCI1032_Interrupt(int irq, void *d)
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI1032_Reset(struct comedi_device *dev)
+static int i_APCI1032_Reset(struct comedi_device *dev)
 {
+	struct addi_private *devpriv = dev->private;
+
 	outl(0x0, devpriv->iobase + APCI1032_DIGITAL_IP_IRQ);	/* disable the interrupts */
 	inl(devpriv->iobase + APCI1032_DIGITAL_IP_INTERRUPT_STATUS);	/* Reset the interrupt status register */
 	outl(0x0, devpriv->iobase + APCI1032_DIGITAL_IP_INTERRUPT_MODE1);	/* Disable the and/or interrupt */

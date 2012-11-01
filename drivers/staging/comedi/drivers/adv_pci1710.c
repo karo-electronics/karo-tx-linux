@@ -53,8 +53,6 @@ Configuration options:
 				 * correct channel number on every 12 bit
 				 * sample */
 
-#define PCI_VENDOR_ID_ADVANTECH		0x13fe
-
 /* hardware types of the cards */
 #define TYPE_PCI171X	0
 #define TYPE_PCI1713	2
@@ -1257,15 +1255,14 @@ static const void *pci1710_find_boardinfo(struct comedi_device *dev,
 	return NULL;
 }
 
-static int pci1710_attach_pci(struct comedi_device *dev,
-			      struct pci_dev *pcidev)
+static int __devinit pci1710_auto_attach(struct comedi_device *dev,
+					 unsigned long context_unused)
 {
+	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
 	const struct boardtype *this_board;
 	struct pci1710_private *devpriv;
 	struct comedi_subdevice *s;
 	int ret, subdev, n_subdevices;
-
-	comedi_set_hw_dev(dev, &pcidev->dev);
 
 	this_board = pci1710_find_boardinfo(dev, pcidev);
 	if (!this_board)
@@ -1273,10 +1270,10 @@ static int pci1710_attach_pci(struct comedi_device *dev,
 	dev->board_ptr = this_board;
 	dev->board_name = this_board->name;
 
-	ret = alloc_private(dev, sizeof(*devpriv));
-	if (ret < 0)
-		return ret;
-	devpriv = dev->private;
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	ret = comedi_pci_enable(pcidev, dev->board_name);
 	if (ret)
@@ -1417,7 +1414,7 @@ static void pci1710_detach(struct comedi_device *dev)
 static struct comedi_driver adv_pci1710_driver = {
 	.driver_name	= "adv_pci1710",
 	.module		= THIS_MODULE,
-	.attach_pci	= pci1710_attach_pci,
+	.auto_attach	= pci1710_auto_attach,
 	.detach		= pci1710_detach,
 };
 
