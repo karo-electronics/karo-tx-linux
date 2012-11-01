@@ -263,9 +263,7 @@ static void nfs4_end_drain_session(struct nfs_client *clp)
 		spin_lock(&tbl->slot_tbl_lock);
 		max_slots = tbl->max_slots;
 		while (max_slots--) {
-			if (rpc_wake_up_first(&tbl->slot_tbl_waitq,
-						nfs4_set_task_privileged,
-						NULL) == NULL)
+			if (rpc_wake_up_next(&tbl->slot_tbl_waitq) == NULL)
 				break;
 		}
 		spin_unlock(&tbl->slot_tbl_lock);
