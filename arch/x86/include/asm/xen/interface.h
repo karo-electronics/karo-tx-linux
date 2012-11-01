@@ -147,7 +147,8 @@ struct vcpu_guest_context {
     unsigned long ldt_base, ldt_ents;       /* LDT (linear address, # ents) */
     union {
 	struct {
-		/* PV: GDT (machine frames, # ents).*/
+		/* PV: GDT (machine frames, # ents).
+		 * PV in HVM: it's GDTR addr/sz */
 		unsigned long gdt_frames[16], gdt_ents;
 	} pv;
 	struct {
