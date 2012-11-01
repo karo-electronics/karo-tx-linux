@@ -103,7 +103,6 @@ static int ehci_pci_setup(struct usb_hcd *hcd)
 		}
 		break;
 	case PCI_VENDOR_ID_INTEL:
-		ehci->fs_i_thresh = 1;
 		if (pdev->device == PCI_DEVICE_ID_INTEL_CE4100_USB)
 			hcd->has_tt = 1;
 		break;
@@ -203,11 +202,6 @@ static int ehci_pci_setup(struct usb_hcd *hcd)
 		break;
 	case PCI_VENDOR_ID_INTEL:
 		ehci->need_io_watchdog = 0;
-		if (pdev->device == 0x0806 || pdev->device == 0x0811
-				|| pdev->device == 0x0829) {
-			ehci_info(ehci, "disable lpm for langwell/penwell\n");
-			ehci->has_lpm = 0;
-		}
 		break;
 	case PCI_VENDOR_ID_NVIDIA:
 		switch (pdev->device) {
@@ -217,8 +211,7 @@ static int ehci_pci_setup(struct usb_hcd *hcd)
 		 * devices with PPCD enabled.
 		 */
 		case 0x0d9d:
-			ehci_info(ehci, "disable lpm/ppcd for nvidia mcp89");
-			ehci->has_lpm = 0;
+			ehci_info(ehci, "disable ppcd for nvidia mcp89\n");
 			ehci->has_ppcd = 0;
 			ehci->command &= ~CMD_PPCEE;
 			break;
@@ -304,7 +297,6 @@ static int ehci_pci_setup(struct usb_hcd *hcd)
 		ehci_warn(ehci, "selective suspend/wakeup unavailable\n");
 #endif
 
-	ehci_port_power(ehci, 1);
 	retval = ehci_pci_reinit(ehci, pdev);
 done:
 	return retval;
@@ -380,22 +372,6 @@ static int ehci_pci_resume(struct usb_hcd *hcd, bool hibernated)
 }
 #endif
 
-static int ehci_update_device(struct usb_hcd *hcd, struct usb_device *udev)
-{
-	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
-	int rc = 0;
-
-	if (!udev->parent) /* udev is root hub itself, impossible */
-		rc = -1;
-	/* we only support lpm device connected to root hub yet */
-	if (ehci->has_lpm && !udev->parent->parent) {
-		rc = ehci_lpm_set_da(ehci, udev->devnum, udev->portnum);
-		if (!rc)
-			rc = ehci_lpm_check(ehci, udev->portnum);
-	}
-	return rc;
-}
-
 static const struct hc_driver ehci_pci_hc_driver = {
 	.description =		hcd_name,
 	.product_desc =		"EHCI Host Controller",
@@ -441,11 +417,6 @@ static const struct hc_driver ehci_pci_hc_driver = {
 	.bus_resume =		ehci_bus_resume,
 	.relinquish_port =	ehci_relinquish_port,
 	.port_handed_over =	ehci_port_handed_over,
-
-	/*
-	 * call back when device connected and addressed
-	 */
-	.update_device =	ehci_update_device,
 
 	.clear_tt_buffer_complete	= ehci_clear_tt_buffer_complete,
 };
