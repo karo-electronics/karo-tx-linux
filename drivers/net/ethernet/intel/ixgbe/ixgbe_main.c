@@ -44,6 +44,7 @@
 #include <linux/ethtool.h>
 #include <linux/if.h>
 #include <linux/if_vlan.h>
+#include <linux/if_bridge.h>
 #include <linux/prefetch.h>
 #include <scsi/fc/fc_fcoe.h>
 
@@ -355,13 +356,37 @@ static void ixgbe_dump(struct ixgbe_adapter *adapter)
 
 	/* Transmit Descriptor Formats
 	 *
-	 * Advanced Transmit Descriptor
+	 * 82598 Advanced Transmit Descriptor
 	 *   +--------------------------------------------------------------+
 	 * 0 |         Buffer Address [63:0]                                |
 	 *   +--------------------------------------------------------------+
-	 * 8 |  PAYLEN  | PORTS  | IDX | STA | DCMD  |DTYP |  RSV |  DTALEN |
+	 * 8 |  PAYLEN  | POPTS  | IDX | STA | DCMD  |DTYP |  RSV |  DTALEN |
 	 *   +--------------------------------------------------------------+
 	 *   63       46 45    40 39 36 35 32 31   24 23 20 19              0
+	 *
+	 * 82598 Advanced Transmit Descriptor (Write-Back Format)
+	 *   +--------------------------------------------------------------+
+	 * 0 |                          RSV [63:0]                          |
+	 *   +--------------------------------------------------------------+
+	 * 8 |            RSV           |  STA  |          NXTSEQ           |
+	 *   +--------------------------------------------------------------+
+	 *   63                       36 35   32 31                         0
+	 *
+	 * 82599+ Advanced Transmit Descriptor
+	 *   +--------------------------------------------------------------+
+	 * 0 |         Buffer Address [63:0]                                |
+	 *   +--------------------------------------------------------------+
+	 * 8 |PAYLEN  |POPTS|CC|IDX  |STA  |DCMD  |DTYP |MAC  |RSV  |DTALEN |
+	 *   +--------------------------------------------------------------+
+	 *   63     46 45 40 39 38 36 35 32 31  24 23 20 19 18 17 16 15     0
+	 *
+	 * 82599+ Advanced Transmit Descriptor (Write-Back Format)
+	 *   +--------------------------------------------------------------+
+	 * 0 |                          RSV [63:0]                          |
+	 *   +--------------------------------------------------------------+
+	 * 8 |            RSV           |  STA  |           RSV             |
+	 *   +--------------------------------------------------------------+
+	 *   63                       36 35   32 31                         0
 	 */
 
 	for (n = 0; n < adapter->num_tx_queues; n++) {
@@ -422,7 +447,9 @@ rx_ring_summary:
 
 	dev_info(&adapter->pdev->dev, "RX Rings Dump\n");
 
-	/* Advanced Receive Descriptor (Read) Format
+	/* Receive Descriptor Formats
+	 *
+	 * 82598 Advanced Receive Descriptor (Read) Format
 	 *    63                                           1        0
 	 *    +-----------------------------------------------------+
 	 *  0 |       Packet Buffer Address [63:1]           |A0/NSE|
@@ -431,17 +458,40 @@ rx_ring_summary:
 	 *    +-----------------------------------------------------+
 	 *
 	 *
-	 * Advanced Receive Descriptor (Write-Back) Format
+	 * 82598 Advanced Receive Descriptor (Write-Back) Format
 	 *
 	 *   63       48 47    32 31  30      21 20 16 15   4 3     0
 	 *   +------------------------------------------------------+
-	 * 0 | Packet     IP     |SPH| HDR_LEN   | RSV|Packet|  RSS |
-	 *   | Checksum   Ident  |   |           |    | Type | Type |
+	 * 0 |       RSS Hash /  |SPH| HDR_LEN  | RSV |Packet|  RSS |
+	 *   | Packet   | IP     |   |          |     | Type | Type |
+	 *   | Checksum | Ident  |   |          |     |      |      |
 	 *   +------------------------------------------------------+
 	 * 8 | VLAN Tag | Length | Extended Error | Extended Status |
 	 *   +------------------------------------------------------+
 	 *   63       48 47    32 31            20 19               0
+	 *
+	 * 82599+ Advanced Receive Descriptor (Read) Format
+	 *    63                                           1        0
+	 *    +-----------------------------------------------------+
+	 *  0 |       Packet Buffer Address [63:1]           |A0/NSE|
+	 *    +----------------------------------------------+------+
+	 *  8 |       Header Buffer Address [63:1]           |  DD  |
+	 *    +-----------------------------------------------------+
+	 *
+	 *
+	 * 82599+ Advanced Receive Descriptor (Write-Back) Format
+	 *
+	 *   63       48 47    32 31  30      21 20 17 16   4 3     0
+	 *   +------------------------------------------------------+
+	 * 0 |RSS / Frag Checksum|SPH| HDR_LEN  |RSC- |Packet|  RSS |
+	 *   |/ RTT / PCoE_PARAM |   |          | CNT | Type | Type |
+	 *   |/ Flow Dir Flt ID  |   |          |     |      |      |
+	 *   +------------------------------------------------------+
+	 * 8 | VLAN Tag | Length |Extended Error| Xtnd Status/NEXTP |
+	 *   +------------------------------------------------------+
+	 *   63       48 47    32 31          20 19                 0
 	 */
+
 	for (n = 0; n < adapter->num_rx_queues; n++) {
 		rx_ring = adapter->rx_ring[n];
 		pr_info("------------------------------------\n");
@@ -1244,6 +1294,7 @@ static unsigned int ixgbe_get_headlen(unsigned char *data,
 		struct vlan_hdr *vlan;
 		/* l3 headers */
 		struct iphdr *ipv4;
+		struct ipv6hdr *ipv6;
 	} hdr;
 	__be16 protocol;
 	u8 nexthdr = 0;	/* default to not TCP */
@@ -1284,6 +1335,13 @@ static unsigned int ixgbe_get_headlen(unsigned char *data,
 		/* record next protocol */
 		nexthdr = hdr.ipv4->protocol;
 		hdr.network += hlen;
+	} else if (protocol == __constant_htons(ETH_P_IPV6)) {
+		if ((hdr.network - data) > (max_len - sizeof(struct ipv6hdr)))
+			return max_len;
+
+		/* record next protocol */
+		nexthdr = hdr.ipv6->nexthdr;
+		hdr.network += sizeof(struct ipv6hdr);
 #ifdef IXGBE_FCOE
 	} else if (protocol == __constant_htons(ETH_P_FCOE)) {
 		if ((hdr.network - data) > (max_len - FCOE_HEADER_LEN))
@@ -1294,7 +1352,7 @@ static unsigned int ixgbe_get_headlen(unsigned char *data,
 		return hdr.network - data;
 	}
 
-	/* finally sort out TCP */
+	/* finally sort out TCP/UDP */
 	if (nexthdr == IPPROTO_TCP) {
 		if ((hdr.network - data) > (max_len - sizeof(struct tcphdr)))
 			return max_len;
@@ -1307,6 +1365,11 @@ static unsigned int ixgbe_get_headlen(unsigned char *data,
 			return hdr.network - data;
 
 		hdr.network += hlen;
+	} else if (nexthdr == IPPROTO_UDP) {
+		if ((hdr.network - data) > (max_len - sizeof(struct udphdr)))
+			return max_len;
+
+		hdr.network += sizeof(struct udphdr);
 	}
 
 	/*
@@ -1781,7 +1844,7 @@ dma_sync:
  **/
 static bool ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 			       struct ixgbe_ring *rx_ring,
-			       int budget)
+			       const int budget)
 {
 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
 #ifdef IXGBE_FCOE
@@ -1832,7 +1895,6 @@ static bool ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 
 		/* probably a little skewed due to removing CRC */
 		total_rx_bytes += skb->len;
-		total_rx_packets++;
 
 		/* populate checksum, timestamp, VLAN, and protocol */
 		ixgbe_process_skb_fields(rx_ring, rx_desc, skb);
@@ -1865,8 +1927,8 @@ static bool ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 		ixgbe_rx_skb(q_vector, skb);
 
 		/* update budget accounting */
-		budget--;
-	} while (likely(budget));
+		total_rx_packets++;
+	} while (likely(total_rx_packets < budget));
 
 	u64_stats_update_begin(&rx_ring->syncp);
 	rx_ring->stats.packets += total_rx_packets;
@@ -1878,7 +1940,7 @@ static bool ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 	if (cleaned_count)
 		ixgbe_alloc_rx_buffers(rx_ring, cleaned_count);
 
-	return !!budget;
+	return (total_rx_packets < budget);
 }
 
 /**
@@ -3211,7 +3273,6 @@ static void ixgbe_configure_virtualization(struct ixgbe_adapter *adapter)
 	IXGBE_WRITE_REG(hw, IXGBE_VFRE(reg_offset ^ 1), reg_offset - 1);
 	IXGBE_WRITE_REG(hw, IXGBE_VFTE(reg_offset), (~0) << vf_shift);
 	IXGBE_WRITE_REG(hw, IXGBE_VFTE(reg_offset ^ 1), reg_offset - 1);
-	IXGBE_WRITE_REG(hw, IXGBE_PFDTXGSWC, IXGBE_PFDTXGSWC_VT_LBEN);
 
 	/* Map PF MAC address in RAR Entry 0 to first pool following VFs */
 	hw->mac.ops.set_vmdq(hw, 0, VMDQ_P(0));
@@ -3234,8 +3295,6 @@ static void ixgbe_configure_virtualization(struct ixgbe_adapter *adapter)
 
 	IXGBE_WRITE_REG(hw, IXGBE_GCR_EXT, gcr_ext);
 
-	/* enable Tx loopback for VF/PF communication */
-	IXGBE_WRITE_REG(hw, IXGBE_PFDTXGSWC, IXGBE_PFDTXGSWC_VT_LBEN);
 
 	/* Enable MAC Anti-Spoofing */
 	hw->mac.ops.set_mac_anti_spoofing(hw, (adapter->num_vfs != 0),
@@ -3263,6 +3322,11 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 		max_frame = IXGBE_FCOE_JUMBO_FRAME_SIZE;
 
 #endif /* IXGBE_FCOE */
+
+	/* adjust max frame to be at least the size of a standard frame */
+	if (max_frame < (ETH_FRAME_LEN + ETH_FCS_LEN))
+		max_frame = (ETH_FRAME_LEN + ETH_FCS_LEN);
+
 	mhadd = IXGBE_READ_REG(hw, IXGBE_MHADD);
 	if (max_frame != (mhadd >> IXGBE_MHADD_MFS_SHIFT)) {
 		mhadd &= ~IXGBE_MHADD_MFS_MASK;
@@ -3270,9 +3334,6 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 
 		IXGBE_WRITE_REG(hw, IXGBE_MHADD, mhadd);
 	}
-
-	/* MHADD will allow an extra 4 bytes past for vlan tagged frames */
-	max_frame += VLAN_HLEN;
 
 	hlreg0 = IXGBE_READ_REG(hw, IXGBE_HLREG0);
 	/* set jumbo enable since MHADD.MFS is keeping size locked at max_frame */
@@ -4072,11 +4133,8 @@ static void ixgbe_up_complete(struct ixgbe_adapter *adapter)
 	else
 		ixgbe_configure_msi_and_legacy(adapter);
 
-	/* enable the optics for both mult-speed fiber and 82599 SFP+ fiber */
-	if (hw->mac.ops.enable_tx_laser &&
-	    ((hw->phy.multispeed_fiber) ||
-	     ((hw->mac.ops.get_media_type(hw) == ixgbe_media_type_fiber) &&
-	      (hw->mac.type == ixgbe_mac_82599EB))))
+	/* enable the optics for 82599 SFP+ fiber */
+	if (hw->mac.ops.enable_tx_laser)
 		hw->mac.ops.enable_tx_laser(hw);
 
 	clear_bit(__IXGBE_DOWN, &adapter->state);
@@ -4192,6 +4250,11 @@ void ixgbe_reset(struct ixgbe_adapter *adapter)
 	/* update SAN MAC vmdq pool selection */
 	if (hw->mac.san_mac_rar_index)
 		hw->mac.ops.set_vmdq_san_mac(hw, VMDQ_P(0));
+
+#ifdef CONFIG_IXGBE_PTP
+	if (adapter->flags2 & IXGBE_FLAG2_PTP_ENABLED)
+		ixgbe_ptp_reset(adapter);
+#endif
 }
 
 /**
@@ -4393,11 +4456,8 @@ void ixgbe_down(struct ixgbe_adapter *adapter)
 	if (!pci_channel_offline(adapter->pdev))
 		ixgbe_reset(adapter);
 
-	/* power down the optics for multispeed fiber and 82599 SFP+ fiber */
-	if (hw->mac.ops.disable_tx_laser &&
-	    ((hw->phy.multispeed_fiber) ||
-	     ((hw->mac.ops.get_media_type(hw) == ixgbe_media_type_fiber) &&
-	      (hw->mac.type == ixgbe_mac_82599EB))))
+	/* power down the optics for 82599 SFP+ fiber */
+	if (hw->mac.ops.disable_tx_laser)
 		hw->mac.ops.disable_tx_laser(hw);
 
 	ixgbe_clean_all_tx_rings(adapter);
@@ -4828,14 +4888,14 @@ static int ixgbe_change_mtu(struct net_device *netdev, int new_mtu)
 		return -EINVAL;
 
 	/*
-	 * For 82599EB we cannot allow PF to change MTU greater than 1500
-	 * in SR-IOV mode as it may cause buffer overruns in guest VFs that
-	 * don't allocate and chain buffers correctly.
+	 * For 82599EB we cannot allow legacy VFs to enable their receive
+	 * paths when MTU greater than 1500 is configured.  So display a
+	 * warning that legacy VFs will be disabled.
 	 */
 	if ((adapter->flags & IXGBE_FLAG_SRIOV_ENABLED) &&
 	    (adapter->hw.mac.type == ixgbe_mac_82599EB) &&
 	    (max_frame > MAXIMUM_ETHERNET_VLAN_SIZE))
-			return -EINVAL;
+		e_warn(probe, "Setting MTU > 1500 will disable legacy VFs\n");
 
 	e_info(probe, "changing MTU from %d to %d\n", netdev->mtu, new_mtu);
 
@@ -4901,6 +4961,10 @@ static int ixgbe_open(struct net_device *netdev)
 	if (err)
 		goto err_set_queues;
 
+#ifdef CONFIG_IXGBE_PTP
+	ixgbe_ptp_init(adapter);
+#endif /* CONFIG_IXGBE_PTP*/
+
 	ixgbe_up_complete(adapter);
 
 	return 0;
@@ -4931,6 +4995,10 @@ err_setup_tx:
 static int ixgbe_close(struct net_device *netdev)
 {
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
+
+#ifdef CONFIG_IXGBE_PTP
+	ixgbe_ptp_stop(adapter);
+#endif
 
 	ixgbe_down(adapter);
 	ixgbe_free_irq(adapter);
@@ -5022,14 +5090,8 @@ static int __ixgbe_shutdown(struct pci_dev *pdev, bool *enable_wake)
 	if (wufc) {
 		ixgbe_set_rx_mode(netdev);
 
-		/*
-		 * enable the optics for both mult-speed fiber and
-		 * 82599 SFP+ fiber as we can WoL.
-		 */
-		if (hw->mac.ops.enable_tx_laser &&
-		    (hw->phy.multispeed_fiber ||
-		    (hw->mac.ops.get_media_type(hw) == ixgbe_media_type_fiber &&
-		     hw->mac.type == ixgbe_mac_82599EB)))
+		/* enable the optics for 82599 SFP+ fiber as we can WoL */
+		if (hw->mac.ops.enable_tx_laser)
 			hw->mac.ops.enable_tx_laser(hw);
 
 		/* turn on all-multi mode if wake on multicast is enabled */
@@ -5442,6 +5504,23 @@ static void ixgbe_watchdog_update_link(struct ixgbe_adapter *adapter)
 	adapter->link_speed = link_speed;
 }
 
+static void ixgbe_update_default_up(struct ixgbe_adapter *adapter)
+{
+#ifdef CONFIG_IXGBE_DCB
+	struct net_device *netdev = adapter->netdev;
+	struct dcb_app app = {
+			      .selector = IEEE_8021QAZ_APP_SEL_ETHERTYPE,
+			      .protocol = 0,
+			     };
+	u8 up = 0;
+
+	if (adapter->dcbx_cap & DCB_CAP_DCBX_VER_IEEE)
+		up = dcb_ieee_getapp_mask(netdev, &app);
+
+	adapter->default_up = (up > 1) ? (ffs(up) - 1) : 0;
+#endif
+}
+
 /**
  * ixgbe_watchdog_link_is_up - update netif_carrier status and
  *                             print link up message
@@ -5483,7 +5562,8 @@ static void ixgbe_watchdog_link_is_up(struct ixgbe_adapter *adapter)
 	}
 
 #ifdef CONFIG_IXGBE_PTP
-	ixgbe_ptp_start_cyclecounter(adapter);
+	if (adapter->flags2 & IXGBE_FLAG2_PTP_ENABLED)
+		ixgbe_ptp_start_cyclecounter(adapter);
 #endif
 
 	e_info(drv, "NIC Link is Up %s, Flow Control: %s\n",
@@ -5500,6 +5580,9 @@ static void ixgbe_watchdog_link_is_up(struct ixgbe_adapter *adapter)
 
 	netif_carrier_on(netdev);
 	ixgbe_check_vf_rate_limit(adapter);
+
+	/* update the default user priority for VFs */
+	ixgbe_update_default_up(adapter);
 
 	/* ping all the active vfs to let them know link has changed */
 	ixgbe_ping_all_vfs(adapter);
@@ -5527,7 +5610,8 @@ static void ixgbe_watchdog_link_is_down(struct ixgbe_adapter *adapter)
 		adapter->flags2 |= IXGBE_FLAG2_SEARCH_FOR_SFP;
 
 #ifdef CONFIG_IXGBE_PTP
-	ixgbe_ptp_start_cyclecounter(adapter);
+	if (adapter->flags2 & IXGBE_FLAG2_PTP_ENABLED)
+		ixgbe_ptp_start_cyclecounter(adapter);
 #endif
 
 	e_info(drv, "NIC Link is Down\n");
@@ -6485,6 +6569,7 @@ static netdev_tx_t ixgbe_xmit_frame(struct sk_buff *skb,
 		if (skb_pad(skb, 17 - skb->len))
 			return NETDEV_TX_OK;
 		skb->len = 17;
+		skb_set_tail_pointer(skb, 17);
 	}
 
 	tx_ring = adapter->tx_ring[skb->queue_mapping];
@@ -6916,7 +7001,7 @@ static int ixgbe_ndo_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
 		return -EINVAL;
 	}
 
-	if (is_unicast_ether_addr(addr)) {
+	if (is_unicast_ether_addr(addr) || is_link_local(addr)) {
 		u32 rar_uc_entries = IXGBE_MAX_PF_MACVLANS;
 
 		if (netdev_uc_count(dev) < rar_uc_entries)
@@ -6974,6 +7059,59 @@ static int ixgbe_ndo_fdb_dump(struct sk_buff *skb,
 	return idx;
 }
 
+static int ixgbe_ndo_bridge_setlink(struct net_device *dev,
+				    struct nlmsghdr *nlh)
+{
+	struct ixgbe_adapter *adapter = netdev_priv(dev);
+	struct nlattr *attr, *br_spec;
+	int rem;
+
+	if (!(adapter->flags & IXGBE_FLAG_SRIOV_ENABLED))
+		return -EOPNOTSUPP;
+
+	br_spec = nlmsg_find_attr(nlh, sizeof(struct ifinfomsg), IFLA_AF_SPEC);
+
+	nla_for_each_nested(attr, br_spec, rem) {
+		__u16 mode;
+		u32 reg = 0;
+
+		if (nla_type(attr) != IFLA_BRIDGE_MODE)
+			continue;
+
+		mode = nla_get_u16(attr);
+		if (mode == BRIDGE_MODE_VEPA)
+			reg = 0;
+		else if (mode == BRIDGE_MODE_VEB)
+			reg = IXGBE_PFDTXGSWC_VT_LBEN;
+		else
+			return -EINVAL;
+
+		IXGBE_WRITE_REG(&adapter->hw, IXGBE_PFDTXGSWC, reg);
+
+		e_info(drv, "enabling bridge mode: %s\n",
+			mode == BRIDGE_MODE_VEPA ? "VEPA" : "VEB");
+	}
+
+	return 0;
+}
+
+static int ixgbe_ndo_bridge_getlink(struct sk_buff *skb, u32 pid, u32 seq,
+				    struct net_device *dev)
+{
+	struct ixgbe_adapter *adapter = netdev_priv(dev);
+	u16 mode;
+
+	if (!(adapter->flags & IXGBE_FLAG_SRIOV_ENABLED))
+		return 0;
+
+	if (IXGBE_READ_REG(&adapter->hw, IXGBE_PFDTXGSWC) & 1)
+		mode = BRIDGE_MODE_VEB;
+	else
+		mode = BRIDGE_MODE_VEPA;
+
+	return ndo_dflt_bridge_getlink(skb, pid, seq, dev, mode);
+}
+
 static const struct net_device_ops ixgbe_netdev_ops = {
 	.ndo_open		= ixgbe_open,
 	.ndo_stop		= ixgbe_close,
@@ -7013,6 +7151,8 @@ static const struct net_device_ops ixgbe_netdev_ops = {
 	.ndo_fdb_add		= ixgbe_ndo_fdb_add,
 	.ndo_fdb_del		= ixgbe_ndo_fdb_del,
 	.ndo_fdb_dump		= ixgbe_ndo_fdb_dump,
+	.ndo_bridge_setlink	= ixgbe_ndo_bridge_setlink,
+	.ndo_bridge_getlink	= ixgbe_ndo_bridge_getlink,
 };
 
 /**
@@ -7042,6 +7182,7 @@ int ixgbe_wol_supported(struct ixgbe_adapter *adapter, u16 device_id,
 				break;
 		case IXGBE_SUBDEV_ID_82599_SFP:
 		case IXGBE_SUBDEV_ID_82599_RNDC:
+		case IXGBE_SUBDEV_ID_82599_ECNA_DP:
 			is_wol_supported = 1;
 			break;
 		}
@@ -7364,10 +7505,6 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 
 	device_set_wakeup_enable(&adapter->pdev->dev, adapter->wol);
 
-#ifdef CONFIG_IXGBE_PTP
-	ixgbe_ptp_init(adapter);
-#endif /* CONFIG_IXGBE_PTP*/
-
 	/* save off EEPROM version number */
 	hw->eeprom.ops.read(hw, 0x2e, &adapter->eeprom_verh);
 	hw->eeprom.ops.read(hw, 0x2d, &adapter->eeprom_verl);
@@ -7420,11 +7557,8 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_register;
 
-	/* power down the optics for multispeed fiber and 82599 SFP+ fiber */
-	if (hw->mac.ops.disable_tx_laser &&
-	    ((hw->phy.multispeed_fiber) ||
-	     ((hw->mac.ops.get_media_type(hw) == ixgbe_media_type_fiber) &&
-	      (hw->mac.type == ixgbe_mac_82599EB))))
+	/* power down the optics for 82599 SFP+ fiber */
+	if (hw->mac.ops.disable_tx_laser)
 		hw->mac.ops.disable_tx_laser(hw);
 
 	/* carrier off reporting is important to ethtool even BEFORE open */
@@ -7505,9 +7639,6 @@ static void __devexit ixgbe_remove(struct pci_dev *pdev)
 	set_bit(__IXGBE_DOWN, &adapter->state);
 	cancel_work_sync(&adapter->service_task);
 
-#ifdef CONFIG_IXGBE_PTP
-	ixgbe_ptp_stop(adapter);
-#endif
 
 #ifdef CONFIG_IXGBE_DCA
 	if (adapter->flags & IXGBE_FLAG_DCA_ENABLED) {

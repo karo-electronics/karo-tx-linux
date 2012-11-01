@@ -1920,7 +1920,6 @@ static void ql_process_mac_tx_intr(struct ql3_adapter *qdev,
 {
 	struct ql_tx_buf_cb *tx_cb;
 	int i;
-	int retval = 0;
 
 	if (mac_rsp->flags & OB_MAC_IOCB_RSP_S) {
 		netdev_warn(qdev->ndev,
@@ -1935,7 +1934,6 @@ static void ql_process_mac_tx_intr(struct ql3_adapter *qdev,
 			   "Frame too short to be legal, frame not sent\n");
 
 		qdev->ndev->stats.tx_errors++;
-		retval = -EIO;
 		goto frame_not_sent;
 	}
 
@@ -1944,7 +1942,6 @@ static void ql_process_mac_tx_intr(struct ql3_adapter *qdev,
 			   mac_rsp->transaction_id);
 
 		qdev->ndev->stats.tx_errors++;
-		retval = -EIO;
 		goto invalid_seg_count;
 	}
 
@@ -3958,15 +3955,4 @@ static struct pci_driver ql3xxx_driver = {
 	.remove = __devexit_p(ql3xxx_remove),
 };
 
-static int __init ql3xxx_init_module(void)
-{
-	return pci_register_driver(&ql3xxx_driver);
-}
-
-static void __exit ql3xxx_exit(void)
-{
-	pci_unregister_driver(&ql3xxx_driver);
-}
-
-module_init(ql3xxx_init_module);
-module_exit(ql3xxx_exit);
+module_pci_driver(ql3xxx_driver);
