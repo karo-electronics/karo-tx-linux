@@ -22,7 +22,6 @@
  *
  */
 
-#include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/init.h>
@@ -54,6 +53,7 @@
 #include "wtm.h"
 #include "se.h"
 #include "quartet.h"
+#include "psc724.h"
 
 MODULE_AUTHOR("Jaroslav Kysela <perex@perex.cz>");
 MODULE_DESCRIPTION("VIA ICEnsemble ICE1724/1720 (Envy24HT/PT)");
@@ -106,7 +106,7 @@ static int PRO_RATE_LOCKED;
 static int PRO_RATE_RESET = 1;
 static unsigned int PRO_RATE_DEFAULT = 44100;
 
-static char *ext_clock_names[1] = { "IEC958 In" };
+static const char * const ext_clock_names[1] = { "IEC958 In" };
 
 /*
  *  Basic I/O
@@ -2042,7 +2042,7 @@ static struct snd_kcontrol_new snd_vt1724_pro_rate_reset __devinitdata = {
 static int snd_vt1724_pro_route_info(struct snd_kcontrol *kcontrol,
 				     struct snd_ctl_elem_info *uinfo)
 {
-	static char *texts[] = {
+	static const char * const texts[] = {
 		"PCM Out", /* 0 */
 		"H/W In 0", "H/W In 1", /* 1-2 */
 		"IEC958 In L", "IEC958 In R", /* 3-4 */
@@ -2232,7 +2232,7 @@ static unsigned char ooaoo_sq210_eeprom[] __devinitdata = {
 };
 
 
-struct snd_ice1712_card_info snd_vt1724_ooaoo_cards[] __devinitdata = {
+static struct snd_ice1712_card_info snd_vt1724_ooaoo_cards[] __devinitdata = {
 	{
 		.name = "ooAoo SQ210a",
 		.model = "sq210a",
@@ -2257,6 +2257,7 @@ static struct snd_ice1712_card_info *card_tables[] __devinitdata = {
 	snd_vt1724_se_cards,
 	snd_vt1724_qtet_cards,
 	snd_vt1724_ooaoo_cards,
+	snd_vt1724_psc724_cards,
 	NULL,
 };
 
@@ -2348,6 +2349,7 @@ static int __devinit snd_vt1724_read_eeprom(struct snd_ice1712 *ice,
 				ice->eeprom.subvendor = c->subvendor;
 			} else if (c->subvendor != ice->eeprom.subvendor)
 				continue;
+			ice->card_info = c;
 			if (!c->eeprom_size || !c->eeprom_data)
 				goto found;
 			/* if the EEPROM is given by the driver, use it */
@@ -2371,7 +2373,7 @@ static int __devinit snd_vt1724_read_eeprom(struct snd_ice1712 *ice,
 		return -EIO;
 	}
 	ice->eeprom.version = snd_vt1724_read_i2c(ice, dev, 0x05);
-	if (ice->eeprom.version != 2)
+	if (ice->eeprom.version != 1 && ice->eeprom.version != 2)
 		printk(KERN_WARNING "ice1724: Invalid EEPROM version %i\n",
 		       ice->eeprom.version);
 	size = ice->eeprom.size - 6;
@@ -2788,7 +2790,12 @@ __found:
 
 static void __devexit snd_vt1724_remove(struct pci_dev *pci)
 {
-	snd_card_free(pci_get_drvdata(pci));
+	struct snd_card *card = pci_get_drvdata(pci);
+	struct snd_ice1712 *ice = card->private_data;
+
+	if (ice->card_info && ice->card_info->chip_exit)
+		ice->card_info->chip_exit(ice);
+	snd_card_free(card);
 	pci_set_drvdata(pci, NULL);
 }
 
