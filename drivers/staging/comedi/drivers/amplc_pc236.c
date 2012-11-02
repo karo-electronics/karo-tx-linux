@@ -66,7 +66,6 @@ unused.
 #define DO_PCI	IS_ENABLED(CONFIG_COMEDI_AMPLC_PC236_PCI)
 
 /* PCI236 PCI configuration register information */
-#define PCI_VENDOR_ID_AMPLICON 0x14dc
 #define PCI_DEVICE_ID_AMPLICON_PCI236 0x0009
 #define PCI_DEVICE_ID_INVALID 0xffff
 
@@ -505,14 +504,16 @@ static int pc236_pci_common_attach(struct comedi_device *dev,
 static int pc236_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
 	const struct pc236_board *thisboard = comedi_board(dev);
+	struct pc236_private *devpriv;
 	int ret;
 
 	dev_info(dev->class_dev, PC236_DRIVER_NAME ": attach\n");
-	ret = alloc_private(dev, sizeof(struct pc236_private));
-	if (ret < 0) {
-		dev_err(dev->class_dev, "error! out of memory!\n");
-		return ret;
-	}
+
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
+
 	/* Process options according to bus type. */
 	if (is_isa_board(thisboard)) {
 		unsigned long iobase = it->options[0];
@@ -536,25 +537,27 @@ static int pc236_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 }
 
 /*
- * The attach_pci hook (if non-NULL) is called at PCI probe time in preference
- * to the "manual" attach hook.  dev->board_ptr is NULL on entry.  There should
- * be a board entry matching the supplied PCI device.
+ * The auto_attach hook is called at PCI probe time via
+ * comedi_pci_auto_config().  dev->board_ptr is NULL on entry.
+ * There should be a board entry matching the supplied PCI device.
  */
-static int __devinit pc236_attach_pci(struct comedi_device *dev,
-				      struct pci_dev *pci_dev)
+static int __devinit pc236_auto_attach(struct comedi_device *dev,
+				       unsigned long context_unused)
 {
-	int ret;
+	struct pci_dev *pci_dev = comedi_to_pci_dev(dev);
+	struct pc236_private *devpriv;
 
 	if (!DO_PCI)
 		return -EINVAL;
 
 	dev_info(dev->class_dev, PC236_DRIVER_NAME ": attach pci %s\n",
 		 pci_name(pci_dev));
-	ret = alloc_private(dev, sizeof(struct pc236_private));
-	if (ret < 0) {
-		dev_err(dev->class_dev, "error! out of memory!\n");
-		return ret;
-	}
+
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
+
 	dev->board_ptr = pc236_find_pci_board(pci_dev);
 	if (dev->board_ptr == NULL) {
 		dev_err(dev->class_dev, "BUG! cannot determine board type!\n");
@@ -605,7 +608,7 @@ static struct comedi_driver amplc_pc236_driver = {
 	.driver_name = PC236_DRIVER_NAME,
 	.module = THIS_MODULE,
 	.attach = pc236_attach,
-	.attach_pci = pc236_attach_pci,
+	.auto_attach = pc236_auto_attach,
 	.detach = pc236_detach,
 	.board_name = &pc236_boards[0].name,
 	.offset = sizeof(struct pc236_board),
