@@ -1334,14 +1334,21 @@ static int fsi_hw_startup(struct fsi_priv *fsi,
 	/* fifo init */
 	fsi_fifo_init(fsi, io, dev);
 
+	/* start master clock */
+	if (fsi_is_clk_master(fsi))
+		return fsi_set_master_clk(dev, fsi, fsi->rate, 1);
+
 	return 0;
 }
 
-static void fsi_hw_shutdown(struct fsi_priv *fsi,
+static int fsi_hw_shutdown(struct fsi_priv *fsi,
 			    struct device *dev)
 {
+	/* stop master clock */
 	if (fsi_is_clk_master(fsi))
-		fsi_set_master_clk(dev, fsi, fsi->rate, 0);
+		return fsi_set_master_clk(dev, fsi, fsi->rate, 0);
+
+	return 0;
 }
 
 static int fsi_dai_startup(struct snd_pcm_substream *substream,
@@ -1372,13 +1379,16 @@ static int fsi_dai_trigger(struct snd_pcm_substream *substream, int cmd,
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 		fsi_stream_init(fsi, io, substream);
-		fsi_hw_startup(fsi, io, dai->dev);
-		ret = fsi_stream_transfer(io);
-		if (0 == ret)
+		if (!ret)
+			ret = fsi_hw_startup(fsi, io, dai->dev);
+		if (!ret)
+			ret = fsi_stream_transfer(io);
+		if (!ret)
 			fsi_stream_start(fsi, io);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
-		fsi_hw_shutdown(fsi, dai->dev);
+		if (!ret)
+			ret = fsi_hw_shutdown(fsi, dai->dev);
 		fsi_stream_stop(fsi, io);
 		fsi_stream_quit(fsi, io);
 		break;
@@ -1462,19 +1472,11 @@ static int fsi_dai_hw_params(struct snd_pcm_substream *substream,
 			     struct snd_soc_dai *dai)
 {
 	struct fsi_priv *fsi = fsi_get_priv(substream);
-	long rate = params_rate(params);
-	int ret;
 
-	if (!fsi_is_clk_master(fsi))
-		return 0;
+	if (fsi_is_clk_master(fsi))
+		fsi->rate = params_rate(params);
 
-	ret = fsi_set_master_clk(dai->dev, fsi, rate, 1);
-	if (ret < 0)
-		return ret;
-
-	fsi->rate = rate;
-
-	return ret;
+	return 0;
 }
 
 static const struct snd_soc_dai_ops fsi_dai_ops = {
@@ -1498,7 +1500,7 @@ static struct snd_pcm_hardware fsi_pcm_hardware = {
 	.rates			= FSI_RATES,
 	.rate_min		= 8000,
 	.rate_max		= 192000,
-	.channels_min		= 1,
+	.channels_min		= 2,
 	.channels_max		= 2,
 	.buffer_bytes_max	= 64 * 1024,
 	.period_bytes_min	= 32,
@@ -1586,14 +1588,14 @@ static struct snd_soc_dai_driver fsi_soc_dai[] = {
 		.playback = {
 			.rates		= FSI_RATES,
 			.formats	= FSI_FMTS,
-			.channels_min	= 1,
-			.channels_max	= 8,
+			.channels_min	= 2,
+			.channels_max	= 2,
 		},
 		.capture = {
 			.rates		= FSI_RATES,
 			.formats	= FSI_FMTS,
-			.channels_min	= 1,
-			.channels_max	= 8,
+			.channels_min	= 2,
+			.channels_max	= 2,
 		},
 		.ops = &fsi_dai_ops,
 	},
@@ -1602,14 +1604,14 @@ static struct snd_soc_dai_driver fsi_soc_dai[] = {
 		.playback = {
 			.rates		= FSI_RATES,
 			.formats	= FSI_FMTS,
-			.channels_min	= 1,
-			.channels_max	= 8,
+			.channels_min	= 2,
+			.channels_max	= 2,
 		},
 		.capture = {
 			.rates		= FSI_RATES,
 			.formats	= FSI_FMTS,
-			.channels_min	= 1,
-			.channels_max	= 8,
+			.channels_min	= 2,
+			.channels_max	= 2,
 		},
 		.ops = &fsi_dai_ops,
 	},
@@ -1702,7 +1704,7 @@ static int fsi_probe(struct platform_device *pdev)
 	pm_runtime_enable(&pdev->dev);
 	dev_set_drvdata(&pdev->dev, master);
 
-	ret = request_irq(irq, &fsi_interrupt, 0,
+	ret = devm_request_irq(&pdev->dev, irq, &fsi_interrupt, 0,
 			  id_entry->name, master);
 	if (ret) {
 		dev_err(&pdev->dev, "irq request err\n");
@@ -1712,7 +1714,7 @@ static int fsi_probe(struct platform_device *pdev)
 	ret = snd_soc_register_platform(&pdev->dev, &fsi_soc_platform);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "cannot snd soc register\n");
-		goto exit_free_irq;
+		goto exit_fsib;
 	}
 
 	ret = snd_soc_register_dais(&pdev->dev, fsi_soc_dai,
@@ -1726,8 +1728,6 @@ static int fsi_probe(struct platform_device *pdev)
 
 exit_snd_soc:
 	snd_soc_unregister_platform(&pdev->dev);
-exit_free_irq:
-	free_irq(irq, master);
 exit_fsib:
 	pm_runtime_disable(&pdev->dev);
 	fsi_stream_remove(&master->fsib);
@@ -1743,7 +1743,6 @@ static int fsi_remove(struct platform_device *pdev)
 
 	master = dev_get_drvdata(&pdev->dev);
 
-	free_irq(master->irq, master);
 	pm_runtime_disable(&pdev->dev);
 
 	snd_soc_unregister_dais(&pdev->dev, ARRAY_SIZE(fsi_soc_dai));
@@ -1774,10 +1773,6 @@ static void __fsi_resume(struct fsi_priv *fsi,
 		return;
 
 	fsi_hw_startup(fsi, io, dev);
-
-	if (fsi_is_clk_master(fsi) && fsi->rate)
-		fsi_set_master_clk(dev, fsi, fsi->rate, 1);
-
 	fsi_stream_start(fsi, io);
 }
 
