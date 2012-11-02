@@ -115,7 +115,7 @@ static int __devinit exynos_ohci_probe(struct platform_device *pdev)
 	}
 
 	exynos_ohci->hcd = hcd;
-	exynos_ohci->clk = clk_get(&pdev->dev, "usbhost");
+	exynos_ohci->clk = devm_clk_get(&pdev->dev, "usbhost");
 
 	if (IS_ERR(exynos_ohci->clk)) {
 		dev_err(&pdev->dev, "Failed to get usbhost clock\n");
@@ -123,9 +123,9 @@ static int __devinit exynos_ohci_probe(struct platform_device *pdev)
 		goto fail_clk;
 	}
 
-	err = clk_enable(exynos_ohci->clk);
+	err = clk_prepare_enable(exynos_ohci->clk);
 	if (err)
-		goto fail_clken;
+		goto fail_clk;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -167,9 +167,7 @@ static int __devinit exynos_ohci_probe(struct platform_device *pdev)
 	return 0;
 
 fail_io:
-	clk_disable(exynos_ohci->clk);
-fail_clken:
-	clk_put(exynos_ohci->clk);
+	clk_disable_unprepare(exynos_ohci->clk);
 fail_clk:
 	usb_put_hcd(hcd);
 	return err;
@@ -186,8 +184,7 @@ static int __devexit exynos_ohci_remove(struct platform_device *pdev)
 	if (pdata && pdata->phy_exit)
 		pdata->phy_exit(pdev, S5P_USB_PHY_HOST);
 
-	clk_disable(exynos_ohci->clk);
-	clk_put(exynos_ohci->clk);
+	clk_disable_unprepare(exynos_ohci->clk);
 
 	usb_put_hcd(hcd);
 
@@ -232,7 +229,7 @@ static int exynos_ohci_suspend(struct device *dev)
 	if (pdata && pdata->phy_exit)
 		pdata->phy_exit(pdev, S5P_USB_PHY_HOST);
 
-	clk_disable(exynos_ohci->clk);
+	clk_disable_unprepare(exynos_ohci->clk);
 
 fail:
 	spin_unlock_irqrestore(&ohci->lock, flags);
@@ -247,15 +244,12 @@ static int exynos_ohci_resume(struct device *dev)
 	struct platform_device *pdev = to_platform_device(dev);
 	struct exynos4_ohci_platdata *pdata = pdev->dev.platform_data;
 
-	clk_enable(exynos_ohci->clk);
+	clk_prepare_enable(exynos_ohci->clk);
 
 	if (pdata && pdata->phy_init)
 		pdata->phy_init(pdev, S5P_USB_PHY_HOST);
 
-	/* Mark hardware accessible again as we are out of D3 state by now */
-	set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
-
-	ohci_finish_controller_resume(hcd);
+	ohci_resume(hcd, false);
 
 	return 0;
 }
