@@ -34,6 +34,7 @@
 #define TUN_ONE_QUEUE	0x0080
 #define TUN_PERSIST 	0x0100	
 #define TUN_VNET_HDR 	0x0200
+#define TUN_TAP_MQ      0x0400
 
 /* Ioctl defines */
 #define TUNSETNOCSUM  _IOW('T', 200, int) 
@@ -53,6 +54,7 @@
 #define TUNDETACHFILTER _IOW('T', 214, struct sock_fprog)
 #define TUNGETVNETHDRSZ _IOR('T', 215, int)
 #define TUNSETVNETHDRSZ _IOW('T', 216, int)
+#define TUNSETQUEUE  _IOW('T', 217, int)
 
 /* TUNSETIFF ifr flags */
 #define IFF_TUN		0x0001
@@ -61,6 +63,9 @@
 #define IFF_ONE_QUEUE	0x2000
 #define IFF_VNET_HDR	0x4000
 #define IFF_TUN_EXCL	0x8000
+#define IFF_MULTI_QUEUE 0x0100
+#define IFF_ATTACH_QUEUE 0x0200
+#define IFF_DETACH_QUEUE 0x0400
 
 /* Features for GSO (TUNSETOFFLOAD). */
 #define TUN_F_CSUM	0x01	/* You can hand me unchecksummed packets. */
