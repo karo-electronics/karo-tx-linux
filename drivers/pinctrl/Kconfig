@@ -26,6 +26,15 @@ config DEBUG_PINCTRL
 	help
 	  Say Y here to add some extra checks and diagnostics to PINCTRL calls.
 
+config PINCTRL_AT91
+	bool "AT91 pinctrl driver"
+	depends on OF
+	depends on ARCH_AT91
+	select PINMUX
+	select PINCONF
+	help
+	  Say Y here to enable the at91 pinctrl driver
+
 config PINCTRL_BCM2835
 	bool
 	select PINMUX
@@ -186,27 +195,7 @@ config PINCTRL_EXYNOS4
 	bool "Pinctrl driver data for Exynos4 SoC"
 	select PINCTRL_SAMSUNG
 
-config PINCTRL_MVEBU
-	bool
-	depends on ARCH_MVEBU
-	select PINMUX
-	select PINCONF
-
-config PINCTRL_DOVE
-	bool
-	select PINCTRL_MVEBU
-
-config PINCTRL_KIRKWOOD
-	bool
-	select PINCTRL_MVEBU
-
-config PINCTRL_ARMADA_370
-	bool
-	select PINCTRL_MVEBU
-
-config PINCTRL_ARMADA_XP
-	bool
-	select PINCTRL_MVEBU
+source "drivers/pinctrl/mvebu/Kconfig"
 
 source "drivers/pinctrl/spear/Kconfig"
 
