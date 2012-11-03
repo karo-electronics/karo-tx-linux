@@ -63,7 +63,7 @@ static struct inode *fat_nfs_get_inode(struct super_block *sb,
 	if (inode == NULL && MSDOS_SB(sb)->options.nfs == FAT_NFS_NOSTALE_RO) {
 		struct buffer_head *bh = NULL;
 		struct msdos_dir_entry *de ;
-		loff_t blocknr;
+		sector_t blocknr;
 		int offset;
 		fat_get_blknr_offset(MSDOS_SB(sb), i_pos, &blocknr, &offset);
 		bh = sb_bread(sb, blocknr);
