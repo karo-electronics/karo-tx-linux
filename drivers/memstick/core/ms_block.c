@@ -11,7 +11,7 @@
  * Copyright (C) 2007 Alex Dubov <oakad@yahoo.com>
  *
  */
-
+#define DRIVER_NAME "ms_block"
 #define pr_fmt(fmt) DRIVER_NAME ": " fmt
 
 #include <linux/module.h>
