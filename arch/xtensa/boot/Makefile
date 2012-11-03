@@ -25,6 +25,15 @@ bootdir-$(CONFIG_XTENSA_PLATFORM_ISS)	 += boot-elf
 bootdir-$(CONFIG_XTENSA_PLATFORM_XT2000) += boot-redboot boot-elf boot-uboot
 
 
+BUILTIN_DTB := $(patsubst "%",%,$(CONFIG_BUILTIN_DTB)).dtb.o
+obj-$(CONFIG_BUILTIN_DTB_BOOL) += $(BUILTIN_DTB)
+
+# Rule to build device tree blobs
+$(obj)/%.dtb: $(src)/dts/%.dts FORCE
+	$(call if_changed_dep,dtc)
+
+clean-files := *.dtb.S
+
 zImage Image: $(bootdir-y)
 
 $(bootdir-y): $(addprefix $(obj)/,$(subdir-y)) \
