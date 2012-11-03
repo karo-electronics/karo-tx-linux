@@ -277,8 +277,6 @@ static int msb_reset(struct msb_data *msb, bool full);
 static int h_msb_default_bad(struct memstick_dev *card,
 						struct memstick_request **mrq);
 
-#define DRIVER_NAME "ms_block"
-
 #define __dbg(level, format, ...) \
 	do { \
 		if (debug >= level) \
