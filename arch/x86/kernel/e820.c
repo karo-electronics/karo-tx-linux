@@ -47,6 +47,7 @@ unsigned long pci_mem_start = 0xaeedbabe;
 #ifdef CONFIG_PCI
 EXPORT_SYMBOL(pci_mem_start);
 #endif
+static u64 mem_limit = ~0ULL;
 
 /*
  * This function checks if any part of the range <start,end> is mapped
@@ -117,6 +118,20 @@ static void __init __e820_add_region(struct e820map *e820x, u64 start, u64 size,
 		       (unsigned long long) start,
 		       (unsigned long long) (start + size - 1));
 		return;
+	}
+
+	if (start >= mem_limit) {
+		printk(KERN_ERR "e820: ignoring [mem %#010llx-%#010llx]\n",
+		       (unsigned long long)start,
+		       (unsigned long long)(start + size - 1));
+		return;
+	}
+
+	if (mem_limit - start < size) {
+		printk(KERN_ERR "e820: ignoring [mem %#010llx-%#010llx]\n",
+		       (unsigned long long)mem_limit,
+		       (unsigned long long)(start + size - 1));
+		size = mem_limit - start;
 	}
 
 	e820x->map[x].addr = start;
@@ -809,7 +824,7 @@ static int userdef __initdata;
 /* "mem=nopentium" disables the 4MB page tables. */
 static int __init parse_memopt(char *p)
 {
-	u64 mem_size;
+	char *oldp;
 
 	if (!p)
 		return -EINVAL;
@@ -825,11 +840,11 @@ static int __init parse_memopt(char *p)
 	}
 
 	userdef = 1;
-	mem_size = memparse(p, &p);
+	oldp = p;
+	mem_limit = memparse(p, &p);
 	/* don't remove all of memory when handling "mem={invalid}" param */
-	if (mem_size == 0)
+	if (mem_limit == 0 || p == oldp)
 		return -EINVAL;
-	e820_remove_range(mem_size, ULLONG_MAX - mem_size, E820_RAM, 1);
 
 	return 0;
 }
@@ -881,6 +896,12 @@ early_param("memmap", parse_memmap_opt);
 
 void __init finish_e820_parsing(void)
 {
+	if (mem_limit != ~0ULL) {
+		userdef = 1;
+		e820_remove_range(mem_limit, ULLONG_MAX - mem_limit,
+				  E820_RAM, 1);
+	}
+
 	if (userdef) {
 		u32 nr = e820.nr_map;
 
