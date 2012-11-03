@@ -391,6 +391,8 @@ void fat_cache_destroy(void);
 
 /* fat/nfs.c */
 struct fid;
+extern const struct export_operations fat_export_ops;
+extern const struct export_operations fat_export_ops_nostale;
 extern int fat_encode_fh(struct inode *inode, __u32 *fh, int *lenp,
 			 struct inode *parent);
 extern struct dentry *fat_fh_to_dentry(struct super_block *sb, struct fid *fid,
