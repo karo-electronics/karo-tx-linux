@@ -312,6 +312,45 @@ static int fat_read_next_clus(struct super_block *sb, int search_clus)
 }
 
 /*
+ * Rebuild the parent for a directory that is not connected
+ * to the filesystem root
+ */
+static
+struct inode *fat_rebuild_parent(struct super_block *sb, int parent_logstart)
+{
+	int search_clus, clus_to_match;
+	struct msdos_dir_entry *de;
+	struct inode *parent;
+	struct msdos_sb_info *sbi = MSDOS_SB(sb);
+	sector_t blknr = fat_clus_to_blknr(sbi, parent_logstart);
+	struct buffer_head *parent_bh = sb_bread(sb, blknr);
+
+	if (!parent_bh) {
+		fat_msg(sb, KERN_ERR,
+			"NFS:unable to read cluster of parent directory");
+		return NULL;
+	}
+	de = (struct msdos_dir_entry *) parent_bh->b_data;
+	clus_to_match = fat_get_start(sbi, &de[0]);
+	search_clus = fat_get_start(sbi, &de[1]);
+	if (!search_clus)
+		search_clus = sbi->root_cluster;
+	brelse(parent_bh);
+	do {
+		parent =  fat_traverse_cluster(sb,
+					search_clus, clus_to_match);
+		if (IS_ERR(parent) || parent)
+			break;
+		search_clus = fat_read_next_clus(sb, search_clus);
+		if (search_clus < 0)
+			break;
+	} while (search_clus != FAT_ENT_EOF);
+
+	return parent;
+
+
+}
+/*
  * Find the parent for a directory that is not currently connected to
  * the filesystem root.
  *
@@ -320,44 +359,18 @@ static int fat_read_next_clus(struct super_block *sb, int search_clus)
 struct dentry *fat_get_parent(struct dentry *child_dir)
 {
 	struct super_block *sb = child_dir->d_sb;
-	struct buffer_head *dotdot_bh = NULL, *parent_bh = NULL;
+	struct buffer_head *dotdot_bh = NULL;
 	struct msdos_dir_entry *de;
 	struct inode *parent_inode = NULL;
 	struct msdos_sb_info *sbi = MSDOS_SB(sb);
 	int parent_logstart;
-	int search_clus, clus_to_match;
-	sector_t blknr;
 
 	if (!fat_get_dotdot_entry(child_dir->d_inode, &dotdot_bh, &de)) {
 		parent_logstart = fat_get_start(sbi, de);
 		parent_inode = fat_dget(sb, parent_logstart);
-		if (parent_inode || sbi->options.nfs != FAT_NFS_NOSTALE_RO)
-			goto out;
-		blknr = fat_clus_to_blknr(sbi, parent_logstart);
-		parent_bh = sb_bread(sb, blknr);
-		if (!parent_bh) {
-			fat_msg(sb, KERN_ERR,
-				"NFS:unable to read cluster of parent directory");
-			goto out;
-		}
-		de = (struct msdos_dir_entry *) parent_bh->b_data;
-		clus_to_match = fat_get_start(sbi, &de[0]);
-		search_clus = fat_get_start(sbi, &de[1]);
-		if (!search_clus)
-			search_clus = sbi->root_cluster;
-		brelse(parent_bh);
-		do {
-			parent_inode =  fat_traverse_cluster(sb,
-					search_clus, clus_to_match);
-			if (IS_ERR(parent_inode) || parent_inode)
-				break;
-			search_clus = fat_read_next_clus(sb,
-							search_clus);
-			if (search_clus < 0)
-				break;
-		} while (search_clus != FAT_ENT_EOF);
+		if (!parent_inode && sbi->options.nfs == FAT_NFS_NOSTALE_RO)
+			parent_inode = fat_rebuild_parent(sb, parent_logstart);
 	}
-out:
 	brelse(dotdot_bh);
 
 	return d_obtain_alias(parent_inode);
