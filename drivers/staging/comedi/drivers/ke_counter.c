@@ -36,27 +36,7 @@ Kolter Electronic PCI Counter Card.
 
 #include "../comedidev.h"
 
-#define CNT_DRIVER_NAME         "ke_counter"
-#define PCI_VENDOR_ID_KOLTER    0x1001
 #define CNT_CARD_DEVICE_ID      0x0014
-
-/*-- board specification structure ------------------------------------------*/
-
-struct cnt_board_struct {
-
-	const char *name;
-	int device_id;
-	int cnt_channel_nbr;
-	int cnt_bits;
-};
-
-static const struct cnt_board_struct cnt_boards[] = {
-	{
-	 .name = CNT_DRIVER_NAME,
-	 .device_id = CNT_CARD_DEVICE_ID,
-	 .cnt_channel_nbr = 3,
-	 .cnt_bits = 24}
-};
 
 /*-- counter write ----------------------------------------------------------*/
 
@@ -107,34 +87,14 @@ static int cnt_rinsn(struct comedi_device *dev,
 	return 1;
 }
 
-static const void *cnt_find_boardinfo(struct comedi_device *dev,
-				      struct pci_dev *pcidev)
+static int __devinit cnt_auto_attach(struct comedi_device *dev,
+				     unsigned long context_unused)
 {
-	const struct cnt_board_struct *board;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(cnt_boards); i++) {
-		board = &cnt_boards[i];
-		if (board->device_id == pcidev->device)
-			return board;
-	}
-	return NULL;
-}
-
-static int cnt_attach_pci(struct comedi_device *dev,
-			  struct pci_dev *pcidev)
-{
-	const struct cnt_board_struct *board;
+	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
 	struct comedi_subdevice *s;
 	int ret;
 
-	comedi_set_hw_dev(dev, &pcidev->dev);
-
-	board = cnt_find_boardinfo(dev, pcidev);
-	if (!board)
-		return -ENODEV;
-	dev->board_ptr = board;
-	dev->board_name = board->name;
+	dev->board_name = dev->driver->driver_name;
 
 	ret = comedi_pci_enable(pcidev, dev->board_name);
 	if (ret)
@@ -150,8 +110,8 @@ static int cnt_attach_pci(struct comedi_device *dev,
 
 	s->type = COMEDI_SUBD_COUNTER;
 	s->subdev_flags = SDF_READABLE /* | SDF_COMMON */ ;
-	s->n_chan = board->cnt_channel_nbr;
-	s->maxdata = (1 << board->cnt_bits) - 1;
+	s->n_chan = 3;
+	s->maxdata = 0x00ffffff;
 	s->insn_read = cnt_rinsn;
 	s->insn_write = cnt_winsn;
 
@@ -182,7 +142,7 @@ static void cnt_detach(struct comedi_device *dev)
 static struct comedi_driver ke_counter_driver = {
 	.driver_name	= "ke_counter",
 	.module		= THIS_MODULE,
-	.attach_pci	= cnt_attach_pci,
+	.auto_attach	= cnt_auto_attach,
 	.detach		= cnt_detach,
 };
 
