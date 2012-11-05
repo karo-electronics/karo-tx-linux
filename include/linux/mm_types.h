@@ -12,6 +12,7 @@
 #include <linux/cpumask.h>
 #include <linux/page-debug-flags.h>
 #include <linux/uprobes.h>
+#include <linux/page-flags-layout.h>
 #include <asm/page.h>
 #include <asm/mmu.h>
 
@@ -171,6 +172,10 @@ struct page {
 	 * is a pointer to such a status block. NULL if not tracked.
 	 */
 	void *shadow;
+#endif
+
+#ifdef LAST_NID_NOT_IN_PAGE_FLAGS
+	int _last_nid;
 #endif
 }
 /*
@@ -394,6 +399,11 @@ struct mm_struct {
 #endif
 #ifdef CONFIG_CPUMASK_OFFSTACK
 	struct cpumask cpumask_allocation;
+#endif
+#ifdef CONFIG_SCHED_NUMA
+	unsigned long numa_next_scan;
+	unsigned long numa_scan_offset;
+	int numa_scan_seq;
 #endif
 	struct uprobes_state uprobes_state;
 };
