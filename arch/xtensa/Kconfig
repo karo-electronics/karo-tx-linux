@@ -150,6 +150,14 @@ config XTENSA_PLATFORM_S6105
 	select SERIAL_CONSOLE
 	select NO_IOPORT
 
+config XTENSA_PLATFORM_XTAVNET
+	bool "XTAVNET"
+	select SERIAL_CONSOLE
+	select ETHOC
+	help
+	  XTAVNET is the name of Tensilica board family (LX60, LX110, LX200, ML605).
+	  This hardware is capable of running a full Linux distribution.
+
 endchoice
 
 
