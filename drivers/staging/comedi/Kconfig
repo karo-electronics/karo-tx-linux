@@ -647,22 +647,12 @@ config COMEDI_ADDI_APCI_2200
 	  To compile this driver as a module, choose M here: the module will be
 	  called addi_apci_2200.
 
-config COMEDI_ADDI_APCI_3001
-	tristate "ADDI-DATA APCI_3001 support"
-	depends on VIRT_TO_BUS
-	select COMEDI_FC
-	---help---
-	  Enable support for ADDI-DATA APCI_3001 cards
-
-	  To compile this driver as a module, choose M here: the module will be
-	  called addi_apci_3001.
-
 config COMEDI_ADDI_APCI_3120
-	tristate "ADDI-DATA APCI_3520 support"
+	tristate "ADDI-DATA APCI_3120/3001 support"
 	depends on VIRT_TO_BUS
 	select COMEDI_FC
 	---help---
-	  Enable support for ADDI-DATA APCI_3520 cards
+	  Enable support for ADDI-DATA APCI_3120/3001 cards
 
 	  To compile this driver as a module, choose M here: the module will be
 	  called addi_apci_3120.
@@ -761,10 +751,11 @@ config COMEDI_ADV_PCI_DIO
 	  called adv_pci_dio.
 
 config COMEDI_AMPLC_DIO200_PCI
-	tristate "Amplicon PCI215 and PCI272 DIO board support"
+	tristate "Amplicon PCI215/PCI272/PCIe215/PCIe236/PCIe296 DIO support"
 	select COMEDI_AMPLC_DIO200
 	---help---
-	  Enable support for Amplicon PCI215 and PCI272 DIO boards.
+	  Enable support for Amplicon PCI215, PCI272, PCIe215, PCIe236
+	  and PCIe296 DIO boards.
 
 	  To compile this driver as a module, choose M here: the module will be
 	  called amplc_dio200.
@@ -1263,7 +1254,6 @@ config COMEDI_FC
 
 config COMEDI_AMPLC_DIO200
 	tristate
-	select COMEDI_8255
 
 config COMEDI_AMPLC_PC236
 	tristate

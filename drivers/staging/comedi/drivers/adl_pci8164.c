@@ -89,9 +89,9 @@ static void adl_pci8164_insn_read(struct comedi_device *dev,
 	}
 
 	data[0] = inw(dev->iobase + axis_reg + offset);
-	printk(KERN_DEBUG "comedi: pci8164 %s read -> "
-						  "%04X:%04X on axis %s\n",
-				action, data[0], data[1], axisname);
+	dev_dbg(dev->class_dev,
+		"pci8164 %s read -> %04X:%04X on axis %s\n",
+		action, data[0], data[1], axisname);
 }
 
 static int adl_pci8164_insn_read_msts(struct comedi_device *dev,
@@ -170,9 +170,9 @@ static void adl_pci8164_insn_out(struct comedi_device *dev,
 
 	outw(data[0], dev->iobase + axis_reg + offset);
 
-	printk(KERN_DEBUG "comedi: pci8164 %s write -> "
-						"%04X:%04X on axis %s\n",
-				action, data[0], data[1], axisname);
+	dev_dbg(dev->class_dev,
+		"pci8164 %s write -> %04X:%04X on axis %s\n",
+		action, data[0], data[1], axisname);
 
 }
 
@@ -212,13 +212,12 @@ static int adl_pci8164_insn_write_buf1(struct comedi_device *dev,
 	return 2;
 }
 
-static int adl_pci8164_attach_pci(struct comedi_device *dev,
-				  struct pci_dev *pcidev)
+static int __devinit adl_pci8164_auto_attach(struct comedi_device *dev,
+					     unsigned long context_unused)
 {
+	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
 	struct comedi_subdevice *s;
 	int ret;
-
-	comedi_set_hw_dev(dev, &pcidev->dev);
 
 	dev->board_name = dev->driver->driver_name;
 
@@ -289,7 +288,7 @@ static void adl_pci8164_detach(struct comedi_device *dev)
 static struct comedi_driver adl_pci8164_driver = {
 	.driver_name	= "adl_pci8164",
 	.module		= THIS_MODULE,
-	.attach_pci	= adl_pci8164_attach_pci,
+	.auto_attach	= adl_pci8164_auto_attach,
 	.detach		= adl_pci8164_detach,
 };
 
