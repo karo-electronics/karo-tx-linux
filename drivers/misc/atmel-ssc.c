@@ -68,39 +68,57 @@ void ssc_free(struct ssc_device *ssc)
 }
 EXPORT_SYMBOL(ssc_free);
 
-static int __init ssc_probe(struct platform_device *pdev)
+static struct atmel_ssc_platform_data at91rm9200_config = {
+	.use_dma = 0,
+};
+
+static struct atmel_ssc_platform_data at91sam9g45_config = {
+	.use_dma = 1,
+};
+
+static const struct platform_device_id atmel_ssc_devtypes[] = {
+	{
+		.name = "at91rm9200_ssc",
+		.driver_data = (unsigned long) &at91rm9200_config,
+	}, {
+		.name = "at91sam9g45_ssc",
+		.driver_data = (unsigned long) &at91sam9g45_config,
+	}, {
+		/* sentinel */
+	}
+};
+
+static int ssc_probe(struct platform_device *pdev)
 {
-	int retval = 0;
 	struct resource *regs;
 	struct ssc_device *ssc;
 
-	ssc = kzalloc(sizeof(struct ssc_device), GFP_KERNEL);
+	ssc = devm_kzalloc(&pdev->dev, sizeof(struct ssc_device), GFP_KERNEL);
 	if (!ssc) {
 		dev_dbg(&pdev->dev, "out of memory\n");
-		retval = -ENOMEM;
-		goto out;
+		return -ENOMEM;
 	}
+
+	ssc->pdev = pdev;
+	ssc->pdata = (struct atmel_ssc_platform_data *)
+			platform_get_device_id(pdev)->driver_data;
 
 	regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!regs) {
 		dev_dbg(&pdev->dev, "no mmio resource defined\n");
-		retval = -ENXIO;
-		goto out_free;
+		return -ENXIO;
 	}
 
-	ssc->clk = clk_get(&pdev->dev, "pclk");
-	if (IS_ERR(ssc->clk)) {
-		dev_dbg(&pdev->dev, "no pclk clock defined\n");
-		retval = -ENXIO;
-		goto out_free;
-	}
-
-	ssc->pdev = pdev;
-	ssc->regs = ioremap(regs->start, resource_size(regs));
+	ssc->regs = devm_request_and_ioremap(&pdev->dev, regs);
 	if (!ssc->regs) {
 		dev_dbg(&pdev->dev, "ioremap failed\n");
-		retval = -EINVAL;
-		goto out_clk;
+		return -EINVAL;
+	}
+
+	ssc->clk = devm_clk_get(&pdev->dev, "pclk");
+	if (IS_ERR(ssc->clk)) {
+		dev_dbg(&pdev->dev, "no pclk clock defined\n");
+		return -ENXIO;
 	}
 
 	/* disable all interrupts */
@@ -112,8 +130,7 @@ static int __init ssc_probe(struct platform_device *pdev)
 	ssc->irq = platform_get_irq(pdev, 0);
 	if (!ssc->irq) {
 		dev_dbg(&pdev->dev, "could not get irq\n");
-		retval = -ENXIO;
-		goto out_unmap;
+		return -ENXIO;
 	}
 
 	spin_lock(&user_lock);
@@ -125,16 +142,7 @@ static int __init ssc_probe(struct platform_device *pdev)
 	dev_info(&pdev->dev, "Atmel SSC device at 0x%p (irq %d)\n",
 			ssc->regs, ssc->irq);
 
-	goto out;
-
-out_unmap:
-	iounmap(ssc->regs);
-out_clk:
-	clk_put(ssc->clk);
-out_free:
-	kfree(ssc);
-out:
-	return retval;
+	return 0;
 }
 
 static int __devexit ssc_remove(struct platform_device *pdev)
@@ -142,34 +150,22 @@ static int __devexit ssc_remove(struct platform_device *pdev)
 	struct ssc_device *ssc = platform_get_drvdata(pdev);
 
 	spin_lock(&user_lock);
-	iounmap(ssc->regs);
-	clk_put(ssc->clk);
 	list_del(&ssc->list);
-	kfree(ssc);
 	spin_unlock(&user_lock);
 
 	return 0;
 }
 
 static struct platform_driver ssc_driver = {
-	.remove		= __devexit_p(ssc_remove),
 	.driver		= {
 		.name		= "ssc",
 		.owner		= THIS_MODULE,
 	},
+	.id_table	= atmel_ssc_devtypes,
+	.probe		= ssc_probe,
+	.remove		= __devexit_p(ssc_remove),
 };
-
-static int __init ssc_init(void)
-{
-	return platform_driver_probe(&ssc_driver, ssc_probe);
-}
-module_init(ssc_init);
-
-static void __exit ssc_exit(void)
-{
-	platform_driver_unregister(&ssc_driver);
-}
-module_exit(ssc_exit);
+module_platform_driver(ssc_driver);
 
 MODULE_AUTHOR("Hans-Christian Egtvedt <hcegtvedt@atmel.com>");
 MODULE_DESCRIPTION("SSC driver for Atmel AVR32 and AT91");
