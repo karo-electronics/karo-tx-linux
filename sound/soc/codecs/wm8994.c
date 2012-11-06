@@ -862,7 +862,7 @@ static void vmid_reference(struct snd_soc_codec *codec)
 					    WM8994_BIAS_SRC |
 					    WM8994_STARTUP_BIAS_ENA |
 					    WM8994_VMID_BUF_ENA |
-					    (0x3 << WM8994_VMID_RAMP_SHIFT));
+					    (0x2 << WM8994_VMID_RAMP_SHIFT));
 
 			/* Main bias enable, VMID=2x40k */
 			snd_soc_update_bits(codec, WM8994_POWER_MANAGEMENT_1,
@@ -870,7 +870,7 @@ static void vmid_reference(struct snd_soc_codec *codec)
 					    WM8994_VMID_SEL_MASK,
 					    WM8994_BIAS_ENA | 0x2);
 
-			msleep(50);
+			msleep(300);
 
 			snd_soc_update_bits(codec, WM8994_ANTIPOP_2,
 					    WM8994_VMID_RAMP_MASK |
@@ -939,16 +939,10 @@ static void vmid_dereference(struct snd_soc_codec *codec)
 				    WM8994_BIAS_SRC |
 				    WM8994_VMID_DISCH);
 
-		switch (wm8994->vmid_mode) {
-		case WM8994_VMID_FORCE:
-			msleep(350);
-			break;
-		default:
-			break;
-		}
+		snd_soc_update_bits(codec, WM8994_POWER_MANAGEMENT_1,
+				    WM8994_VMID_SEL_MASK, 0);
 
-		snd_soc_update_bits(codec, WM8994_ADDITIONAL_CONTROL,
-				    WM8994_VROI, WM8994_VROI);
+		msleep(400);
 
 		/* Active discharge */
 		snd_soc_update_bits(codec, WM8994_ANTIPOP_1,
@@ -957,16 +951,11 @@ static void vmid_dereference(struct snd_soc_codec *codec)
 				    WM8994_LINEOUT1_DISCH |
 				    WM8994_LINEOUT2_DISCH);
 
-		msleep(150);
-
 		snd_soc_update_bits(codec, WM8994_POWER_MANAGEMENT_3,
 				    WM8994_LINEOUT1N_ENA |
 				    WM8994_LINEOUT1P_ENA |
 				    WM8994_LINEOUT2N_ENA |
 				    WM8994_LINEOUT2P_ENA, 0);
-
-		snd_soc_update_bits(codec, WM8994_ADDITIONAL_CONTROL,
-				    WM8994_VROI, 0);
 
 		/* Switch off startup biases */
 		snd_soc_update_bits(codec, WM8994_ANTIPOP_2,
@@ -976,10 +965,7 @@ static void vmid_dereference(struct snd_soc_codec *codec)
 				    WM8994_VMID_RAMP_MASK, 0);
 
 		snd_soc_update_bits(codec, WM8994_POWER_MANAGEMENT_1,
-				    WM8994_BIAS_ENA | WM8994_VMID_SEL_MASK, 0);
-
-		snd_soc_update_bits(codec, WM8994_ANTIPOP_2,
-				    WM8994_VMID_RAMP_MASK, 0);
+				    WM8994_VMID_SEL_MASK, 0);
 	}
 
 	pm_runtime_put(codec->dev);
@@ -3486,11 +3472,46 @@ static void wm8958_default_micdet(u16 status, void *data)
 	}
 }
 
+/* Deferred mic detection to allow for extra settling time */
+static void wm1811_mic_work(struct work_struct *work)
+{
+	struct wm8994_priv *wm8994 = container_of(work, struct wm8994_priv,
+						  mic_work.work);
+	struct snd_soc_codec *codec = wm8994->hubs.codec;
+
+	pm_runtime_get_sync(codec->dev);
+
+	/* If required for an external cap force MICBIAS on */
+	if (wm8994->pdata->jd_ext_cap) {
+		snd_soc_dapm_force_enable_pin(&codec->dapm,
+					      "MICBIAS2");
+		snd_soc_dapm_sync(&codec->dapm);
+	}
+
+	mutex_lock(&wm8994->accdet_lock);
+
+	dev_dbg(codec->dev, "Starting mic detection\n");
+
+	/*
+	 * Start off measument of microphone impedence to find out
+	 * what's actually there.
+	 */
+	wm8994->mic_detecting = true;
+	wm1811_jackdet_set_mode(codec, WM1811_JACKDET_MODE_MIC);
+
+	snd_soc_update_bits(codec, WM8958_MIC_DETECT_1,
+			    WM8958_MICD_ENA, WM8958_MICD_ENA);
+
+	mutex_unlock(&wm8994->accdet_lock);
+
+	pm_runtime_put(codec->dev);
+}
+
 static irqreturn_t wm1811_jackdet_irq(int irq, void *data)
 {
 	struct wm8994_priv *wm8994 = data;
 	struct snd_soc_codec *codec = wm8994->hubs.codec;
-	int reg;
+	int reg, delay;
 	bool present;
 
 	pm_runtime_get_sync(codec->dev);
@@ -3521,17 +3542,13 @@ static irqreturn_t wm1811_jackdet_irq(int irq, void *data)
 		snd_soc_update_bits(codec, WM1811_JACKDET_CTRL,
 				    WM1811_JACKDET_DB, 0);
 
-		/*
-		 * Start off measument of microphone impedence to find
-		 * out what's actually there.
-		 */
-		wm8994->mic_detecting = true;
-		wm1811_jackdet_set_mode(codec, WM1811_JACKDET_MODE_MIC);
-
-		snd_soc_update_bits(codec, WM8958_MIC_DETECT_1,
-				    WM8958_MICD_ENA, WM8958_MICD_ENA);
+		delay = wm8994->pdata->micdet_delay;
+		schedule_delayed_work(&wm8994->mic_work,
+				      msecs_to_jiffies(delay));
 	} else {
 		dev_dbg(codec->dev, "Jack not detected\n");
+
+		cancel_delayed_work_sync(&wm8994->mic_work);
 
 		snd_soc_update_bits(codec, WM8958_MICBIAS2,
 				    WM8958_MICB2_DISCH, WM8958_MICB2_DISCH);
@@ -3549,14 +3566,9 @@ static irqreturn_t wm1811_jackdet_irq(int irq, void *data)
 
 	mutex_unlock(&wm8994->accdet_lock);
 
-	/* If required for an external cap force MICBIAS on */
-	if (wm8994->pdata->jd_ext_cap) {
-		if (present)
-			snd_soc_dapm_force_enable_pin(&codec->dapm,
-						      "MICBIAS2");
-		else
-			snd_soc_dapm_disable_pin(&codec->dapm, "MICBIAS2");
-	}
+	/* Turn off MICBIAS if it was on for an external cap */
+	if (wm8994->pdata->jd_ext_cap && !present)
+		snd_soc_dapm_disable_pin(&codec->dapm, "MICBIAS2");
 
 	if (present)
 		snd_soc_jack_report(wm8994->micdet[0].jack,
@@ -3779,9 +3791,19 @@ static int wm8994_codec_probe(struct snd_soc_codec *codec)
 	snd_soc_codec_set_cache_io(codec, 16, 16, SND_SOC_REGMAP);
 
 	mutex_init(&wm8994->accdet_lock);
-	INIT_DELAYED_WORK(&wm8994->mic_work, wm8994_mic_work);
 	INIT_DELAYED_WORK(&wm8994->jackdet_bootstrap,
 			  wm1811_jackdet_bootstrap);
+
+	switch (control->type) {
+	case WM8994:
+		INIT_DELAYED_WORK(&wm8994->mic_work, wm8994_mic_work);
+		break;
+	case WM1811:
+		INIT_DELAYED_WORK(&wm8994->mic_work, wm1811_mic_work);
+		break;
+	default:
+		break;
+	}
 
 	for (i = 0; i < ARRAY_SIZE(wm8994->fll_locked); i++)
 		init_completion(&wm8994->fll_locked[i]);
