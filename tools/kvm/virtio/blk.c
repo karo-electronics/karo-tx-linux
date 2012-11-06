@@ -37,7 +37,7 @@ struct blk_dev_req {
 };
 
 struct blk_dev {
-	pthread_mutex_t			mutex;
+	struct mutex			mutex;
 
 	struct list_head		list;
 
@@ -179,6 +179,8 @@ static void *virtio_blk_thread(void *dev)
 	u64 data;
 	int r;
 
+	kvm__set_thread_name("virtio-blk-io");
+
 	while (1) {
 		r = read(bdev->io_efd, &data, sizeof(u64));
 		if (r < 0)
@@ -246,7 +248,7 @@ static int virtio_blk__init_one(struct kvm *kvm, struct disk_image *disk)
 		return -ENOMEM;
 
 	*bdev = (struct blk_dev) {
-		.mutex			= PTHREAD_MUTEX_INITIALIZER,
+		.mutex			= MUTEX_INITIALIZER,
 		.disk			= disk,
 		.blk_config		= (struct virtio_blk_config) {
 			.capacity	= disk->size / SECTOR_SIZE,
