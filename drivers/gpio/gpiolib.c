@@ -1183,6 +1183,7 @@ struct gpio_chip *gpiochip_find(void *data,
 EXPORT_SYMBOL_GPL(gpiochip_find);
 
 #ifdef CONFIG_PINCTRL
+
 void gpiochip_add_pin_range(struct gpio_chip *chip, const char *pinctl_name,
 		unsigned int pin_base, unsigned int npins)
 {
@@ -1204,6 +1205,7 @@ void gpiochip_add_pin_range(struct gpio_chip *chip, const char *pinctl_name,
 
 	list_add_tail(&pin_range->node, &chip->pin_ranges);
 }
+EXPORT_SYMBOL_GPL(gpiochip_add_pin_range);
 
 void gpiochip_remove_pin_ranges(struct gpio_chip *chip)
 {
@@ -1215,11 +1217,9 @@ void gpiochip_remove_pin_ranges(struct gpio_chip *chip)
 				&pin_range->range);
 	}
 }
-#else
-void gpiochip_add_pin_range(struct gpio_chip *chip, const char *pinctl_name,
-		unsigned int pin_base, unsigned int npins) {}
-void gpiochip_remove_pin_ranges(struct gpio_chip *chip) {}
-#endif
+EXPORT_SYMBOL_GPL(gpiochip_remove_pin_ranges);
+
+#endif /* CONFIG_PINCTRL */
 
 /* These "optional" allocation calls help prevent drivers from stomping
  * on each other, and help provide better diagnostics in debugfs.
