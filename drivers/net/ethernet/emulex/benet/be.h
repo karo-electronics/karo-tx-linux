@@ -34,7 +34,7 @@
 #include "be_hw.h"
 #include "be_roce.h"
 
-#define DRV_VER			"4.4.31.0u"
+#define DRV_VER			"4.4.161.0u"
 #define DRV_NAME		"be2net"
 #define BE_NAME			"ServerEngines BladeEngine2 10Gbps NIC"
 #define BE3_NAME		"ServerEngines BladeEngine3 10Gbps NIC"
@@ -53,6 +53,7 @@
 #define OC_DEVICE_ID3		0xe220	/* Device id for Lancer cards */
 #define OC_DEVICE_ID4           0xe228   /* Device id for VF in Lancer */
 #define OC_DEVICE_ID5		0x720	/* Device Id for Skyhawk cards */
+#define OC_DEVICE_ID6		0x728   /* Device id for VF in SkyHawk */
 #define OC_SUBSYS_DEVICE_ID1	0xE602
 #define OC_SUBSYS_DEVICE_ID2	0xE642
 #define OC_SUBSYS_DEVICE_ID3	0xE612
@@ -71,6 +72,7 @@ static inline char *nic_name(struct pci_dev *pdev)
 	case BE_DEVICE_ID2:
 		return BE3_NAME;
 	case OC_DEVICE_ID5:
+	case OC_DEVICE_ID6:
 		return OC_NAME_SH;
 	default:
 		return BE_NAME;
@@ -378,7 +380,6 @@ struct be_adapter {
 	struct be_drv_stats drv_stats;
 
 	u16 vlans_added;
-	u16 max_vlans;	/* Number of vlans supported */
 	u8 vlan_tag[VLAN_N_VID];
 	u8 vlan_prio_bmap;	/* Available Priority BitMap */
 	u16 recommended_prio;	/* Recommended Priority */
@@ -391,6 +392,7 @@ struct be_adapter {
 
 	struct delayed_work func_recovery_work;
 	u32 flags;
+	u32 cmd_privileges;
 	/* Ethtool knobs and info */
 	char fw_ver[FW_VER_LEN];
 	int if_handle;		/* Used to configure filtering */
@@ -434,10 +436,18 @@ struct be_adapter {
 	struct phy_info phy;
 	u8 wol_cap;
 	bool wol;
-	u32 max_pmac_cnt;	/* Max secondary UC MACs programmable */
 	u32 uc_macs;		/* Count of secondary UC MAC programmed */
 	u32 msg_enable;
 	int be_get_temp_freq;
+	u16 max_mcast_mac;
+	u16 max_tx_queues;
+	u16 max_rss_queues;
+	u16 max_rx_queues;
+	u16 max_pmac_cnt;
+	u16 max_vlans;
+	u16 max_event_queues;
+	u32 if_cap_flags;
+	u8 pf_number;
 };
 
 #define be_physfn(adapter)		(!adapter->virtfn)
@@ -451,13 +461,15 @@ struct be_adapter {
 /* BladeEngine Generation numbers */
 #define BE_GEN2 2
 #define BE_GEN3 3
+#define SH_HW	4
 
 #define ON				1
 #define OFF				0
 #define lancer_chip(adapter)	((adapter->pdev->device == OC_DEVICE_ID3) || \
 				 (adapter->pdev->device == OC_DEVICE_ID4))
 
-#define skyhawk_chip(adapter)	(adapter->pdev->device == OC_DEVICE_ID5)
+#define skyhawk_chip(adapter)	(adapter->pdev->device == OC_DEVICE_ID5 || \
+				 adapter->pdev->device == OC_DEVICE_ID6)
 
 
 #define be_roce_supported(adapter) ((adapter->if_type == SLI_INTF_TYPE_3 || \
