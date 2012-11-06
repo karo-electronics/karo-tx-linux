@@ -83,7 +83,8 @@ struct acpi_memory_info {
 struct acpi_memory_device {
 	struct acpi_device * device;
 	unsigned int state;	/* State of the memory device */
-	struct list_head res_list;
+	struct mutex list_lock;
+	struct list_head res_list;	/* protected by list_lock */
 };
 
 static int acpi_hotmem_initialized;
@@ -101,19 +102,23 @@ acpi_memory_get_resource(struct acpi_resource *resource, void *context)
 	    (address64.resource_type != ACPI_MEMORY_RANGE))
 		return AE_OK;
 
+	mutex_lock(&mem_device->list_lock);
 	list_for_each_entry(info, &mem_device->res_list, list) {
 		/* Can we combine the resource range information? */
 		if ((info->caching == address64.info.mem.caching) &&
 		    (info->write_protect == address64.info.mem.write_protect) &&
 		    (info->start_addr + info->length == address64.minimum)) {
 			info->length += address64.address_length;
+			mutex_unlock(&mem_device->list_lock);
 			return AE_OK;
 		}
 	}
 
 	new = kzalloc(sizeof(struct acpi_memory_info), GFP_KERNEL);
-	if (!new)
+	if (!new) {
+		mutex_unlock(&mem_device->list_lock);
 		return AE_ERROR;
+	}
 
 	INIT_LIST_HEAD(&new->list);
 	new->caching = address64.info.mem.caching;
@@ -121,6 +126,7 @@ acpi_memory_get_resource(struct acpi_resource *resource, void *context)
 	new->start_addr = address64.minimum;
 	new->length = address64.address_length;
 	list_add_tail(&new->list, &mem_device->res_list);
+	mutex_unlock(&mem_device->list_lock);
 
 	return AE_OK;
 }
@@ -138,9 +144,11 @@ acpi_memory_get_device_resources(struct acpi_memory_device *mem_device)
 	status = acpi_walk_resources(mem_device->device->handle, METHOD_NAME__CRS,
 				     acpi_memory_get_resource, mem_device);
 	if (ACPI_FAILURE(status)) {
+		mutex_lock(&mem_device->list_lock);
 		list_for_each_entry_safe(info, n, &mem_device->res_list, list)
 			kfree(info);
 		INIT_LIST_HEAD(&mem_device->res_list);
+		mutex_unlock(&mem_device->list_lock);
 		return -EINVAL;
 	}
 
@@ -236,6 +244,7 @@ static int acpi_memory_enable_device(struct acpi_memory_device *mem_device)
 	 * We don't have memory-hot-add rollback function,now.
 	 * (i.e. memory-hot-remove function)
 	 */
+	mutex_lock(&mem_device->list_lock);
 	list_for_each_entry(info, &mem_device->res_list, list) {
 		if (info->enabled) { /* just sanity check...*/
 			num_enabled++;
@@ -256,6 +265,7 @@ static int acpi_memory_enable_device(struct acpi_memory_device *mem_device)
 		info->enabled = 1;
 		num_enabled++;
 	}
+	mutex_unlock(&mem_device->list_lock);
 	if (!num_enabled) {
 		printk(KERN_ERR PREFIX "add_memory failed\n");
 		mem_device->state = MEMORY_INVALID_STATE;
@@ -306,24 +316,38 @@ static int acpi_memory_powerdown_device(struct acpi_memory_device *mem_device)
 	return 0;
 }
 
-static int acpi_memory_disable_device(struct acpi_memory_device *mem_device)
+static int acpi_memory_remove_memory(struct acpi_memory_device *mem_device)
 {
 	int result;
 	struct acpi_memory_info *info, *n;
 
-
-	/*
-	 * Ask the VM to offline this memory range.
-	 * Note: Assume that this function returns zero on success
-	 */
+	mutex_lock(&mem_device->list_lock);
 	list_for_each_entry_safe(info, n, &mem_device->res_list, list) {
 		if (info->enabled) {
 			result = remove_memory(info->start_addr, info->length);
 			if (result)
 				return result;
 		}
+
+		list_del(&info->list);
 		kfree(info);
 	}
+	mutex_unlock(&mem_device->list_lock);
+
+	return 0;
+}
+
+static int acpi_memory_disable_device(struct acpi_memory_device *mem_device)
+{
+	int result;
+
+	/*
+	 * Ask the VM to offline this memory range.
+	 * Note: Assume that this function returns zero on success
+	 */
+	result = acpi_memory_remove_memory(mem_device);
+	if (result)
+		return result;
 
 	/* Power-off and eject the device */
 	result = acpi_memory_powerdown_device(mem_device);
@@ -401,8 +425,9 @@ static void acpi_memory_device_notify(acpi_handle handle, u32 event, void *data)
 		}
 
 		/*
-		 * TBD: Invoke acpi_bus_remove to cleanup data structures
+		 * Invoke acpi_bus_trim() to remove memory device
 		 */
+		acpi_bus_trim(device, 1);
 
 		/* _EJ0 succeeded; _OST is not necessary */
 		return;
@@ -437,6 +462,7 @@ static int acpi_memory_device_add(struct acpi_device *device)
 	mem_device->device = device;
 	sprintf(acpi_device_name(device), "%s", ACPI_MEMORY_DEVICE_NAME);
 	sprintf(acpi_device_class(device), "%s", ACPI_MEMORY_DEVICE_CLASS);
+	mutex_init(&mem_device->list_lock);
 	device->driver_data = mem_device;
 
 	/* Get the range from the _CRS */
@@ -473,12 +499,17 @@ static int acpi_memory_device_add(struct acpi_device *device)
 static int acpi_memory_device_remove(struct acpi_device *device, int type)
 {
 	struct acpi_memory_device *mem_device = NULL;
-
+	int result;
 
 	if (!device || !acpi_driver_data(device))
 		return -EINVAL;
 
 	mem_device = acpi_driver_data(device);
+
+	result = acpi_memory_remove_memory(mem_device);
+	if (result)
+		return result;
+
 	kfree(mem_device);
 
 	return 0;
