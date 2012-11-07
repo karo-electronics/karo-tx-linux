@@ -20,6 +20,7 @@
 #define __ARCH_WANT_SYS_NICE
 #define __ARCH_WANT_SYS_RT_SIGACTION
 #define __ARCH_WANT_SYS_RT_SIGSUSPEND
+#define __ARCH_WANT_SYS_EXECVE
 
 /*
  * "Conditional" syscalls
