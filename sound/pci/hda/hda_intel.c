@@ -47,6 +47,9 @@
 #include <linux/reboot.h>
 #include <linux/io.h>
 #include <linux/pm_runtime.h>
+#include <linux/clocksource.h>
+#include <linux/time.h>
+
 #ifdef CONFIG_X86
 /* for snoop control */
 #include <asm/pgtable.h>
@@ -68,6 +71,7 @@ static int position_fix[SNDRV_CARDS] = {[0 ... (SNDRV_CARDS-1)] = -1};
 static int bdl_pos_adj[SNDRV_CARDS] = {[0 ... (SNDRV_CARDS-1)] = -1};
 static int probe_mask[SNDRV_CARDS] = {[0 ... (SNDRV_CARDS-1)] = -1};
 static int probe_only[SNDRV_CARDS];
+static int jackpoll_ms[SNDRV_CARDS];
 static bool single_cmd;
 static int enable_msi = -1;
 #ifdef CONFIG_SND_HDA_PATCH_LOADER
@@ -95,6 +99,8 @@ module_param_array(probe_mask, int, NULL, 0444);
 MODULE_PARM_DESC(probe_mask, "Bitmask to probe codecs (default = -1).");
 module_param_array(probe_only, int, NULL, 0444);
 MODULE_PARM_DESC(probe_only, "Only probing and no codec initialization.");
+module_param_array(jackpoll_ms, int, NULL, 0444);
+MODULE_PARM_DESC(jackpoll_ms, "Ms between polling for jack events (default = 0, using unsol events only)");
 module_param(single_cmd, bool, 0444);
 MODULE_PARM_DESC(single_cmd, "Use single command to communicate with codecs "
 		 "(for debugging only).");
@@ -416,6 +422,9 @@ struct azx_dev {
 	unsigned int insufficient :1;
 	unsigned int wc_marked:1;
 	unsigned int no_period_wakeup:1;
+
+	struct timecounter  azx_tc;
+	struct cyclecounter azx_cc;
 };
 
 /* CORB/RIRB */
@@ -517,6 +526,9 @@ struct azx {
 	/* card list (for power_save trigger) */
 	struct list_head list;
 };
+
+#define CREATE_TRACE_POINTS
+#include "hda_intel_trace.h"
 
 /* driver types */
 enum {
@@ -829,8 +841,9 @@ static void azx_update_rirb(struct azx *chip)
 			smp_wmb();
 			chip->rirb.cmds[addr]--;
 		} else
-			snd_printk(KERN_ERR SFX "spurious response %#x:%#x, "
+			snd_printk(KERN_ERR SFX "%s: spurious response %#x:%#x, "
 				   "last cmd=%#08x\n",
+				   pci_name(chip->pci),
 				   res, res_ex,
 				   chip->last_cmd[addr]);
 	}
@@ -1582,6 +1595,22 @@ static void azx_bus_reset(struct hda_bus *bus)
 	bus->in_reset = 0;
 }
 
+static int get_jackpoll_interval(struct azx *chip)
+{
+	int i = jackpoll_ms[chip->dev_index];
+	unsigned int j;
+	if (i == 0)
+		return 0;
+	if (i < 50 || i > 60000)
+		j = 0;
+	else
+		j = msecs_to_jiffies(i);
+	if (j == 0)
+		snd_printk(KERN_WARNING SFX
+			   "jackpoll_ms value out of range: %d\n", i);
+	return j;
+}
+
 /*
  * Codec initialization
  */
@@ -1666,6 +1695,7 @@ static int DELAYED_INIT_MARK azx_codec_create(struct azx *chip, const char *mode
 			err = snd_hda_codec_new(chip->bus, c, &codec);
 			if (err < 0)
 				continue;
+			codec->jackpoll_interval = get_jackpoll_interval(chip);
 			codec->beep_mode = chip->beep_mode;
 			codecs++;
 		}
@@ -1728,6 +1758,64 @@ static inline void azx_release_device(struct azx_dev *azx_dev)
 	azx_dev->opened = 0;
 }
 
+static cycle_t azx_cc_read(const struct cyclecounter *cc)
+{
+	struct azx_dev *azx_dev = container_of(cc, struct azx_dev, azx_cc);
+	struct snd_pcm_substream *substream = azx_dev->substream;
+	struct azx_pcm *apcm = snd_pcm_substream_chip(substream);
+	struct azx *chip = apcm->chip;
+
+	return azx_readl(chip, WALLCLK);
+}
+
+static void azx_timecounter_init(struct snd_pcm_substream *substream,
+				bool force, cycle_t last)
+{
+	struct azx_dev *azx_dev = get_azx_dev(substream);
+	struct timecounter *tc = &azx_dev->azx_tc;
+	struct cyclecounter *cc = &azx_dev->azx_cc;
+	u64 nsec;
+
+	cc->read = azx_cc_read;
+	cc->mask = CLOCKSOURCE_MASK(32);
+
+	/*
+	 * Converting from 24 MHz to ns means applying a 125/3 factor.
+	 * To avoid any saturation issues in intermediate operations,
+	 * the 125 factor is applied first. The division is applied
+	 * last after reading the timecounter value.
+	 * Applying the 1/3 factor as part of the multiplication
+	 * requires at least 20 bits for a decent precision, however
+	 * overflows occur after about 4 hours or less, not a option.
+	 */
+
+	cc->mult = 125; /* saturation after 195 years */
+	cc->shift = 0;
+
+	nsec = 0; /* audio time is elapsed time since trigger */
+	timecounter_init(tc, cc, nsec);
+	if (force)
+		/*
+		 * force timecounter to use predefined value,
+		 * used for synchronized starts
+		 */
+		tc->cycle_last = last;
+}
+
+static int azx_get_wallclock_tstamp(struct snd_pcm_substream *substream,
+				struct timespec *ts)
+{
+	struct azx_dev *azx_dev = get_azx_dev(substream);
+	u64 nsec;
+
+	nsec = timecounter_read(&azx_dev->azx_tc);
+	nsec = div_u64(nsec, 3); /* can be optimized */
+
+	*ts = ns_to_timespec(nsec);
+
+	return 0;
+}
+
 static struct snd_pcm_hardware azx_pcm_hw = {
 	.info =			(SNDRV_PCM_INFO_MMAP |
 				 SNDRV_PCM_INFO_INTERLEAVED |
@@ -1737,6 +1825,7 @@ static struct snd_pcm_hardware azx_pcm_hw = {
 				 /* SNDRV_PCM_INFO_RESUME |*/
 				 SNDRV_PCM_INFO_PAUSE |
 				 SNDRV_PCM_INFO_SYNC_START |
+				 SNDRV_PCM_INFO_HAS_WALL_CLOCK |
 				 SNDRV_PCM_INFO_NO_PERIOD_WAKEUP),
 	.formats =		SNDRV_PCM_FMTBIT_S16_LE,
 	.rates =		SNDRV_PCM_RATE_48000,
@@ -1776,6 +1865,12 @@ static int azx_pcm_open(struct snd_pcm_substream *substream)
 	runtime->hw.rates = hinfo->rates;
 	snd_pcm_limit_hw_rates(runtime);
 	snd_pcm_hw_constraint_integer(runtime, SNDRV_PCM_HW_PARAM_PERIODS);
+
+	/* avoid wrap-around with wall-clock */
+	snd_pcm_hw_constraint_minmax(runtime, SNDRV_PCM_HW_PARAM_BUFFER_TIME,
+				20,
+				178000000);
+
 	if (chip->align_buffer_size)
 		/* constrain buffer sizes to be multiple of 128
 		   bytes. This is more efficient in terms of memory
@@ -1815,6 +1910,12 @@ static int azx_pcm_open(struct snd_pcm_substream *substream)
 		mutex_unlock(&chip->open_mutex);
 		return -EINVAL;
 	}
+
+	/* disable WALLCLOCK timestamps for capture streams
+	   until we figure out how to handle digital inputs */
+	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+		runtime->hw.info &= ~SNDRV_PCM_INFO_HAS_WALL_CLOCK;
+
 	spin_lock_irqsave(&chip->reg_lock, flags);
 	azx_dev->substream = substream;
 	azx_dev->running = 0;
@@ -1961,6 +2062,9 @@ static int azx_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 	int rstart = 0, start, nsync = 0, sbits = 0;
 	int nwait, timeout;
 
+	azx_dev = get_azx_dev(substream);
+	trace_azx_pcm_trigger(chip, azx_dev, cmd);
+
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 		rstart = 1;
@@ -2051,6 +2155,22 @@ static int azx_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 			azx_readl(chip, OLD_SSYNC) & ~sbits);
 	else
 		azx_writel(chip, SSYNC, azx_readl(chip, SSYNC) & ~sbits);
+	if (start) {
+		azx_timecounter_init(substream, 0, 0);
+		if (nsync > 1) {
+			cycle_t cycle_last;
+
+			/* same start cycle for master and group */
+			azx_dev = get_azx_dev(substream);
+			cycle_last = azx_dev->azx_tc.cycle_last;
+
+			snd_pcm_group_for_each_entry(s, substream) {
+				if (s->pcm->card != substream->pcm->card)
+					continue;
+				azx_timecounter_init(s, 1, cycle_last);
+			}
+		}
+	}
 	spin_unlock(&chip->reg_lock);
 	return 0;
 }
@@ -2117,6 +2237,7 @@ static unsigned int azx_get_position(struct azx *chip,
 {
 	unsigned int pos;
 	int stream = azx_dev->substream->stream;
+	int delay = 0;
 
 	switch (chip->position_fix[stream]) {
 	case POS_FIX_LPIB:
@@ -2150,7 +2271,6 @@ static unsigned int azx_get_position(struct azx *chip,
 	    chip->position_fix[stream] == POS_FIX_POSBUF &&
 	    (chip->driver_caps & AZX_DCAPS_COUNT_LPIB_DELAY)) {
 		unsigned int lpib_pos = azx_sd_readl(azx_dev, SD_LPIB);
-		int delay;
 		if (stream == SNDRV_PCM_STREAM_PLAYBACK)
 			delay = pos - lpib_pos;
 		else
@@ -2168,6 +2288,7 @@ static unsigned int azx_get_position(struct azx *chip,
 		azx_dev->substream->runtime->delay =
 			bytes_to_frames(azx_dev->substream->runtime, delay);
 	}
+	trace_azx_get_position(chip, azx_dev, pos, delay);
 	return pos;
 }
 
@@ -2193,13 +2314,11 @@ static int azx_position_ok(struct azx *chip, struct azx_dev *azx_dev)
 {
 	u32 wallclk;
 	unsigned int pos;
-	int stream;
 
 	wallclk = azx_readl(chip, WALLCLK) - azx_dev->start_wallclk;
 	if (wallclk < (azx_dev->period_wallclk * 2) / 3)
 		return -1;	/* bogus (too early) interrupt */
 
-	stream = azx_dev->substream->stream;
 	pos = azx_get_position(chip, azx_dev, true);
 
 	if (WARN_ONCE(!azx_dev->period_bytes,
@@ -2290,6 +2409,7 @@ static struct snd_pcm_ops azx_pcm_ops = {
 	.prepare = azx_pcm_prepare,
 	.trigger = azx_pcm_trigger,
 	.pointer = azx_pcm_pointer,
+	.wall_clock =  azx_get_wallclock_tstamp,
 	.mmap = azx_pcm_mmap,
 	.page = snd_pcm_sgbuf_ops_page,
 };
