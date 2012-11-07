@@ -69,10 +69,13 @@ void gpiochip_remove_pin_ranges(struct gpio_chip *chip);
 
 #else
 
+struct gpio_chip;
+
 static inline int
 gpiochip_add_pin_range(struct gpio_chip *chip, const char *pinctl_name,
 		       unsigned int pin_base, unsigned int npins)
 {
+	return 0;
 }
 
 static inline void
