@@ -1611,7 +1611,7 @@ static int map_files_d_revalidate(struct dentry *dentry, unsigned int flags)
 		return -ECHILD;
 
 	if (!capable(CAP_SYS_ADMIN)) {
-		status = -EACCES;
+		status = -EPERM;
 		goto out_notask;
 	}
 
@@ -1744,7 +1744,7 @@ static struct dentry *proc_map_files_lookup(struct inode *dir,
 	struct dentry *result;
 	struct mm_struct *mm;
 
-	result = ERR_PTR(-EACCES);
+	result = ERR_PTR(-EPERM);
 	if (!capable(CAP_SYS_ADMIN))
 		goto out;
 
@@ -1770,8 +1770,9 @@ static struct dentry *proc_map_files_lookup(struct inode *dir,
 	if (!vma)
 		goto out_no_vma;
 
-	result = proc_map_files_instantiate(dir, dentry, task,
-			(void *)(unsigned long)vma->vm_file->f_mode);
+	if (vma->vm_file)
+		result = proc_map_files_instantiate(dir, dentry, task,
+				(void *)(unsigned long)vma->vm_file->f_mode);
 
 out_no_vma:
 	up_read(&mm->mmap_sem);
@@ -1799,7 +1800,7 @@ proc_map_files_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	ino_t ino;
 	int ret;
 
-	ret = -EACCES;
+	ret = -EPERM;
 	if (!capable(CAP_SYS_ADMIN))
 		goto out;
 
