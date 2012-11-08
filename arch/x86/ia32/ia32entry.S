@@ -467,7 +467,7 @@ GLOBAL(\label)
 	PTREGSCALL stub32_sigaltstack, sys32_sigaltstack, %rdx
 	PTREGSCALL stub32_execve, compat_sys_execve, %rcx
 	PTREGSCALL stub32_fork, sys_fork, %rdi
-	PTREGSCALL stub32_clone, sys32_clone, %rdx
+	PTREGSCALL stub32_clone, sys_clone, %rdx
 	PTREGSCALL stub32_vfork, sys_vfork, %rdi
 	PTREGSCALL stub32_iopl, sys_iopl, %rsi
 
