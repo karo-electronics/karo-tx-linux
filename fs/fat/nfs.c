@@ -14,6 +14,18 @@
 #include <linux/exportfs.h>
 #include "fat.h"
 
+struct fat_fid {
+	u32 i_gen;
+	u32 i_pos_low;
+	u16 i_pos_hi;
+	u16 parent_i_pos_hi;
+	u32 parent_i_pos_low;
+	u32 parent_i_gen;
+} __packed;
+
+#define FILEID_FAT_WITHOUT_PARENT (offsetof(struct fat_fid, parent_i_pos_hi)/4)
+#define FILEID_FAT_WITH_PARENT (sizeof(struct fat_fid)/4)
+
 /**
  * Look up a directory inode given its starting cluster.
  */
@@ -39,32 +51,134 @@ static struct inode *fat_dget(struct super_block *sb, int i_logstart)
 	return inode;
 }
 
-static struct inode *fat_nfs_get_inode(struct super_block *sb,
-				       u64 ino, u32 generation)
+static struct inode *fat_ilookup(struct super_block *sb, u64 ino, loff_t i_pos)
 {
-	struct inode *inode;
+	if (MSDOS_SB(sb)->options.nfs == FAT_NFS_NOSTALE_RO)
+		return fat_iget(sb, i_pos);
 
-	if ((ino < MSDOS_ROOT_INO) || (ino == MSDOS_FSINFO_INO))
-		return NULL;
+	else {
+		if ((ino < MSDOS_ROOT_INO) || (ino == MSDOS_FSINFO_INO))
+			return NULL;
+		return ilookup(sb, ino);
+	}
+}
 
-	inode = ilookup(sb, ino);
+static struct inode *fat_nfs_get_inode(struct super_block *sb,
+				       u64 ino, u32 generation, loff_t i_pos)
+{
+
+	struct inode *inode = fat_ilookup(sb, ino, i_pos);
+
 	if (inode && generation && (inode->i_generation != generation)) {
 		iput(inode);
 		inode = NULL;
 	}
+	if (inode == NULL && MSDOS_SB(sb)->options.nfs == FAT_NFS_NOSTALE_RO) {
+		struct buffer_head *bh = NULL;
+		struct msdos_dir_entry *de ;
+		sector_t blocknr;
+		int offset;
+		fat_get_blknr_offset(MSDOS_SB(sb), i_pos, &blocknr, &offset);
+		bh = sb_bread(sb, blocknr);
+		if (!bh) {
+			fat_msg(sb, KERN_ERR,
+				"unable to read block(%llu) for building NFS inode",
+				(llu)blocknr);
+			return inode;
+		}
+		de = (struct msdos_dir_entry *)bh->b_data;
+		/* If a file is deleted on server and client is not updated
+		 * yet, we must not build the inode upon a lookup call.
+		 */
+		if (IS_FREE(de[offset].name))
+			inode = NULL;
+		else
+			inode = fat_build_inode(sb, &de[offset], i_pos);
+		brelse(bh);
+	}
 
 	return inode;
+}
+
+
+int
+fat_encode_fh_nostale(struct inode *inode, __u32 *fh, int *lenp,
+					struct inode *parent)
+{
+	int len = *lenp;
+	struct msdos_sb_info *sbi = MSDOS_SB(inode->i_sb);
+	struct fat_fid *fid = (struct fat_fid *) fh;
+	loff_t i_pos;
+	int type = FILEID_INO32_GEN;
+
+	if (parent && (len < FILEID_FAT_WITH_PARENT)) {
+		*lenp = FILEID_FAT_WITH_PARENT;
+		return 255;
+	} else if (len < FILEID_FAT_WITHOUT_PARENT) {
+		*lenp = FILEID_FAT_WITHOUT_PARENT;
+		return 255;
+	}
+
+	i_pos = fat_i_pos_read(sbi, inode);
+	*lenp = FILEID_FAT_WITHOUT_PARENT;
+	fid->i_gen = inode->i_generation;
+	fid->i_pos_low = i_pos & 0xFFFFFFFF;
+	fid->i_pos_hi = (i_pos >> 32) & 0xFF;
+	if (parent) {
+		i_pos = fat_i_pos_read(sbi, parent);
+		fid->parent_i_pos_hi = (i_pos >> 32) & 0xFF;
+		fid->parent_i_pos_low = i_pos & 0xFFFFFFFF;
+		fid->parent_i_gen = parent->i_generation;
+		type = FILEID_INO32_GEN_PARENT;
+		*lenp = FILEID_FAT_WITH_PARENT;
+	}
+
+	return type;
 }
 
 /**
  * Map a NFS file handle to a corresponding dentry.
  * The dentry may or may not be connected to the filesystem root.
  */
-struct dentry *fat_fh_to_dentry(struct super_block *sb, struct fid *fid,
+struct dentry *fat_fh_to_dentry(struct super_block *sb, struct fid *fh,
 				int fh_len, int fh_type)
 {
-	return generic_fh_to_dentry(sb, fid, fh_len, fh_type,
-				    fat_nfs_get_inode);
+	struct inode *inode = NULL;
+	if (fh_len < 2)
+		return NULL;
+
+	switch (fh_type) {
+	case FILEID_INO32_GEN:
+	case FILEID_INO32_GEN_PARENT:
+		inode = fat_nfs_get_inode(sb, fh->i32.ino, fh->i32.gen, 0);
+		break;
+	}
+
+	return d_obtain_alias(inode);
+}
+struct dentry *fat_fh_to_dentry_nostale(struct super_block *sb, struct fid *fh,
+				int fh_len, int fh_type)
+{
+	struct inode *inode = NULL;
+	struct fat_fid *fid = (struct fat_fid *)fh;
+	loff_t i_pos;
+
+	switch (fh_type) {
+	case FILEID_INO32_GEN:
+		if (fh_len < FILEID_FAT_WITHOUT_PARENT)
+			return NULL;
+	case FILEID_INO32_GEN_PARENT:
+		if ((fh_len < FILEID_FAT_WITH_PARENT) &&
+			(fh_type == FILEID_INO32_GEN_PARENT))
+			return NULL;
+		i_pos = fid->i_pos_hi;
+		i_pos = (i_pos << 32) | (fid->i_pos_low);
+		inode = fat_nfs_get_inode(sb, 0, fid->i_gen, i_pos);
+
+		break;
+	}
+
+	return d_obtain_alias(inode);
 }
 
 /*
@@ -74,10 +188,168 @@ struct dentry *fat_fh_to_dentry(struct super_block *sb, struct fid *fid,
 struct dentry *fat_fh_to_parent(struct super_block *sb, struct fid *fid,
 				int fh_len, int fh_type)
 {
-	return generic_fh_to_parent(sb, fid, fh_len, fh_type,
-				    fat_nfs_get_inode);
+	struct inode *inode = NULL;
+
+	if (fh_len < 2)
+		return NULL;
+
+	switch (fh_type) {
+	case FILEID_INO32_GEN:
+	case FILEID_INO32_GEN_PARENT:
+		inode = fat_nfs_get_inode(sb, fid->i32.ino, fid->i32.gen, 0);
+		break;
+	}
+
+	return d_obtain_alias(inode);
 }
 
+struct dentry *fat_fh_to_parent_nostale(struct super_block *sb, struct fid *fh,
+				int fh_len, int fh_type)
+{
+	struct inode *inode = NULL;
+	struct fat_fid *fid = (struct fat_fid *)fh;
+	loff_t i_pos;
+
+	if (fh_len < FILEID_FAT_WITH_PARENT)
+		return NULL;
+
+	switch (fh_type) {
+	case FILEID_INO32_GEN_PARENT:
+		i_pos = fid->parent_i_pos_hi;
+		i_pos = (i_pos << 32) | (fid->parent_i_pos_low);
+		inode = fat_nfs_get_inode(sb, 0, fid->parent_i_gen, i_pos);
+		break;
+	}
+
+	return d_obtain_alias(inode);
+}
+
+/*
+ * Read the directory entries of 'search_clus' and find the entry
+ * which contains 'match_ipos' for the starting cluster.If the entry
+ * is found, rebuild its inode.
+ */
+static struct inode *fat_traverse_cluster(struct super_block *sb,
+				int search_clus, int match_ipos)
+{
+	struct msdos_sb_info *sbi = MSDOS_SB(sb);
+	struct buffer_head *bh;
+	sector_t blknr;
+	int parent_ipos, search_ipos;
+	int i;
+	struct msdos_dir_entry *de;
+	struct inode *inode = NULL;
+	int iterations = sbi->cluster_size >> sb->s_blocksize_bits;
+	blknr = fat_clus_to_blknr(sbi, search_clus);
+
+	do {
+		bh = sb_bread(sb, blknr);
+		if (!bh) {
+			fat_msg(sb, KERN_ERR,
+				"NFS:unable to read block(%llu) while traversing cluster(%d)",
+				(llu)blknr, search_clus);
+			inode = ERR_PTR(-EIO);
+			goto out;
+		}
+		de = (struct msdos_dir_entry *)bh->b_data;
+		for (i = 0; i < sbi->dir_per_block; i++) {
+			if (de[i].name[0] == FAT_ENT_FREE) {
+				/*Reached end of directory*/
+				brelse(bh);
+				inode = ERR_PTR(-ENODATA);
+				goto out;
+			}
+			if (de[i].name[0] == DELETED_FLAG)
+				continue;
+			if (de[i].attr == ATTR_EXT)
+				continue;
+			if (!(de[i].attr & ATTR_DIR))
+				continue;
+			else {
+				search_ipos = fat_get_start(sbi, &de[i]);
+				if (search_ipos == match_ipos) {
+					/*Success.Now build the inode*/
+					parent_ipos = (loff_t)i +
+					 (blknr << sbi->dir_per_block_bits);
+					inode = fat_build_inode(sb, &de[i],
+								parent_ipos);
+					brelse(bh);
+					goto out;
+				}
+			}
+		}
+		brelse(bh);
+		blknr += 1;
+	} while (--iterations > 0);
+out:
+	return inode;
+}
+
+/*
+ * Read the FAT to find the next cluster in the chain
+ * corresponding to 'search_clus'.
+ */
+static int fat_read_next_clus(struct super_block *sb, int search_clus)
+{
+	struct msdos_sb_info *sbi = MSDOS_SB(sb);
+	/*bits 31 to 7 give relative sector number*/
+	sector_t blknr = search_clus >> 7;
+	/*bits 6 to 0 give offset*/
+	unsigned int offset = search_clus & 0x7F;
+	__le32 *address;
+	unsigned int next_cluster;
+	struct buffer_head *bh = sb_bread(sb, blknr + sbi->fat_start);
+	if (!bh) {
+		fat_msg(sb, KERN_ERR,
+			"NFS:unable to read block(%llu) for finding the next cluster in FAT chain",
+			(llu)blknr);
+		return -EIO;
+	}
+	address = (__le32 *) bh->b_data;
+	next_cluster = (le32_to_cpu(address[offset])) & 0x0FFFFFFF;
+	brelse(bh);
+	return next_cluster;
+}
+
+/*
+ * Rebuild the parent for a directory that is not connected
+ * to the filesystem root
+ */
+static
+struct inode *fat_rebuild_parent(struct super_block *sb, int parent_logstart)
+{
+	int search_clus, clus_to_match;
+	struct msdos_dir_entry *de;
+	struct inode *parent;
+	struct msdos_sb_info *sbi = MSDOS_SB(sb);
+	sector_t blknr = fat_clus_to_blknr(sbi, parent_logstart);
+	struct buffer_head *parent_bh = sb_bread(sb, blknr);
+
+	if (!parent_bh) {
+		fat_msg(sb, KERN_ERR,
+			"NFS:unable to read cluster of parent directory");
+		return NULL;
+	}
+	de = (struct msdos_dir_entry *) parent_bh->b_data;
+	clus_to_match = fat_get_start(sbi, &de[0]);
+	search_clus = fat_get_start(sbi, &de[1]);
+	if (!search_clus)
+		search_clus = sbi->root_cluster;
+	brelse(parent_bh);
+	do {
+		parent =  fat_traverse_cluster(sb,
+					search_clus, clus_to_match);
+		if (IS_ERR(parent) || parent)
+			break;
+		search_clus = fat_read_next_clus(sb, search_clus);
+		if (search_clus < 0)
+			break;
+	} while (search_clus != FAT_ENT_EOF);
+
+	return parent;
+
+
+}
 /*
  * Find the parent for a directory that is not currently connected to
  * the filesystem root.
@@ -87,15 +359,31 @@ struct dentry *fat_fh_to_parent(struct super_block *sb, struct fid *fid,
 struct dentry *fat_get_parent(struct dentry *child_dir)
 {
 	struct super_block *sb = child_dir->d_sb;
-	struct buffer_head *bh = NULL;
+	struct buffer_head *dotdot_bh = NULL;
 	struct msdos_dir_entry *de;
 	struct inode *parent_inode = NULL;
+	struct msdos_sb_info *sbi = MSDOS_SB(sb);
+	int parent_logstart;
 
-	if (!fat_get_dotdot_entry(child_dir->d_inode, &bh, &de)) {
-		int parent_logstart = fat_get_start(MSDOS_SB(sb), de);
+	if (!fat_get_dotdot_entry(child_dir->d_inode, &dotdot_bh, &de)) {
+		parent_logstart = fat_get_start(sbi, de);
 		parent_inode = fat_dget(sb, parent_logstart);
+		if (!parent_inode && sbi->options.nfs == FAT_NFS_NOSTALE_RO)
+			parent_inode = fat_rebuild_parent(sb, parent_logstart);
 	}
-	brelse(bh);
+	brelse(dotdot_bh);
 
 	return d_obtain_alias(parent_inode);
 }
+
+const struct export_operations fat_export_ops = {
+	.fh_to_dentry   = fat_fh_to_dentry,
+	.fh_to_parent   = fat_fh_to_parent,
+	.get_parent     = fat_get_parent,
+};
+const struct export_operations fat_export_ops_nostale = {
+	.encode_fh      = fat_encode_fh_nostale,
+	.fh_to_dentry   = fat_fh_to_dentry_nostale,
+	.fh_to_parent   = fat_fh_to_parent_nostale,
+	.get_parent     = fat_get_parent,
+};
