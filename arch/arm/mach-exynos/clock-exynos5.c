@@ -297,7 +297,7 @@ static struct clksrc_sources exynos5_clk_src_mpll = {
 	.nr_sources	= ARRAY_SIZE(exynos5_clk_src_mpll_list),
 };
 
-struct clksrc_clk exynos5_clk_mout_mpll = {
+static struct clksrc_clk exynos5_clk_mout_mpll = {
 	.clk = {
 		.name		= "mout_mpll",
 	},
@@ -472,12 +472,12 @@ static struct clksrc_clk exynos5_clk_pclk_acp = {
 
 /* Core list of CMU_TOP side */
 
-struct clk *exynos5_clkset_aclk_top_list[] = {
+static struct clk *exynos5_clkset_aclk_top_list[] = {
 	[0] = &exynos5_clk_mout_mpll_user.clk,
 	[1] = &exynos5_clk_mout_bpll_user.clk,
 };
 
-struct clksrc_sources exynos5_clkset_aclk = {
+static struct clksrc_sources exynos5_clkset_aclk = {
 	.sources	= exynos5_clkset_aclk_top_list,
 	.nr_sources	= ARRAY_SIZE(exynos5_clkset_aclk_top_list),
 };
@@ -491,12 +491,12 @@ static struct clksrc_clk exynos5_clk_aclk_400 = {
 	.reg_div = { .reg = EXYNOS5_CLKDIV_TOP0, .shift = 24, .size = 3 },
 };
 
-struct clk *exynos5_clkset_aclk_333_166_list[] = {
+static struct clk *exynos5_clkset_aclk_333_166_list[] = {
 	[0] = &exynos5_clk_mout_cpll.clk,
 	[1] = &exynos5_clk_mout_mpll_user.clk,
 };
 
-struct clksrc_sources exynos5_clkset_aclk_333_166 = {
+static struct clksrc_sources exynos5_clkset_aclk_333_166 = {
 	.sources	= exynos5_clkset_aclk_333_166_list,
 	.nr_sources	= ARRAY_SIZE(exynos5_clkset_aclk_333_166_list),
 };
@@ -986,7 +986,7 @@ static struct clk exynos5_clk_fimd1 = {
 	.ctrlbit	= (1 << 0),
 };
 
-struct clk *exynos5_clkset_group_list[] = {
+static struct clk *exynos5_clkset_group_list[] = {
 	[0] = &clk_ext_xtal_mux,
 	[1] = NULL,
 	[2] = &exynos5_clk_sclk_hdmi24m,
@@ -999,7 +999,7 @@ struct clk *exynos5_clkset_group_list[] = {
 	[9] = &exynos5_clk_mout_cpll.clk,
 };
 
-struct clksrc_sources exynos5_clkset_group = {
+static struct clksrc_sources exynos5_clkset_group = {
 	.sources	= exynos5_clkset_group_list,
 	.nr_sources	= ARRAY_SIZE(exynos5_clkset_group_list),
 };
@@ -1215,7 +1215,7 @@ static struct clksrc_clk exynos5_clk_sclk_spi2 = {
 	.reg_div = { .reg = EXYNOS5_CLKDIV_PERIC2, .shift = 8, .size = 8 },
 };
 
-struct clksrc_clk exynos5_clk_sclk_fimd1 = {
+static struct clksrc_clk exynos5_clk_sclk_fimd1 = {
 	.clk	= {
 		.name		= "sclk_fimd",
 		.devname	= "exynos5-fb.1",
@@ -1496,7 +1496,7 @@ static void exynos5_clock_resume(void)
 #define exynos5_clock_resume NULL
 #endif
 
-struct syscore_ops exynos5_clock_syscore_ops = {
+static struct syscore_ops exynos5_clock_syscore_ops = {
 	.suspend	= exynos5_clock_suspend,
 	.resume		= exynos5_clock_resume,
 };
