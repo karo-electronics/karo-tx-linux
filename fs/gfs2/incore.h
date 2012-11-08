@@ -205,7 +205,7 @@ struct lm_lockname {
 
 
 struct gfs2_glock_operations {
-	void (*go_xmote_th) (struct gfs2_glock *gl);
+	void (*go_sync) (struct gfs2_glock *gl);
 	int (*go_xmote_bh) (struct gfs2_glock *gl, struct gfs2_holder *gh);
 	void (*go_inval) (struct gfs2_glock *gl, int flags);
 	int (*go_demote_ok) (const struct gfs2_glock *gl);
@@ -621,6 +621,7 @@ struct gfs2_sbd {
 	u32 sd_hash_bsize_shift;
 	u32 sd_hash_ptrs;	/* Number of pointers in a hash block */
 	u32 sd_qc_per_block;
+	u32 sd_blocks_per_bitmap;
 	u32 sd_max_dirres;	/* Max blocks needed to add a directory entry */
 	u32 sd_max_height;	/* Max height of a file's metadata tree */
 	u64 sd_heightsize[GFS2_MAX_META_HEIGHT + 1];
