@@ -174,16 +174,15 @@ static const void *pci6208_find_boardinfo(struct comedi_device *dev,
 	return NULL;
 }
 
-static int pci6208_attach_pci(struct comedi_device *dev,
-			      struct pci_dev *pcidev)
+static int __devinit pci6208_auto_attach(struct comedi_device *dev,
+					 unsigned long context_unused)
 {
+	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
 	const struct pci6208_board *boardinfo;
 	struct pci6208_private *devpriv;
 	struct comedi_subdevice *s;
 	unsigned int val;
 	int ret;
-
-	comedi_set_hw_dev(dev, &pcidev->dev);
 
 	boardinfo = pci6208_find_boardinfo(dev, pcidev);
 	if (!boardinfo)
@@ -191,10 +190,10 @@ static int pci6208_attach_pci(struct comedi_device *dev,
 	dev->board_ptr = boardinfo;
 	dev->board_name = boardinfo->name;
 
-	ret = alloc_private(dev, sizeof(*devpriv));
-	if (ret < 0)
-		return ret;
-	devpriv = dev->private;
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	ret = comedi_pci_enable(pcidev, dev->board_name);
 	if (ret)
@@ -261,7 +260,7 @@ static void pci6208_detach(struct comedi_device *dev)
 static struct comedi_driver adl_pci6208_driver = {
 	.driver_name	= "adl_pci6208",
 	.module		= THIS_MODULE,
-	.attach_pci	= pci6208_attach_pci,
+	.auto_attach	= pci6208_auto_attach,
 	.detach		= pci6208_detach,
 };
 
