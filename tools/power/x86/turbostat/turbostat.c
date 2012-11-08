@@ -62,6 +62,12 @@ unsigned int show_cpu;
 unsigned int show_pkg_only;
 unsigned int show_core_only;
 char *output_buffer, *outp;
+unsigned int has_rapl;
+
+#define HAS_RAPL_PKG 1
+#define HAS_RAPL_CORES 2
+#define HAS_RAPL_GFX 4
+#define HAS_RAPL_DRAM 8
 
 int aperf_mperf_unstable;
 int backwards_count;
@@ -1195,6 +1201,88 @@ int has_ivt_turbo_ratio_limit(unsigned int family, unsigned int model)
 	}
 }
 
+/*
+ * rapl_probe()
+ *
+ * sets has_rapl
+ */
+void rapl_probe(unsigned int family, unsigned int model)
+{
+	if (!genuine_intel)
+		return;
+
+	if (family != 6)
+		return;
+
+	switch (model) {
+	case 0x2A:
+	case 0x3A:
+		has_rapl = HAS_RAPL_PKG | HAS_RAPL_CORES | HAS_RAPL_GFX;
+		return;
+	case 0x2D:
+	case 0x3E:
+		has_rapl = HAS_RAPL_PKG | HAS_RAPL_CORES | HAS_RAPL_DRAM;
+		return;
+	default:
+		return;
+	}
+}
+	
+#define	RAPL_POWER_GRANULARITY	0x7FFF	/* 15 bit power granularity */
+#define	RAPL_TIME_GRANULARITY	0x3F /* 6 bit time granularity */
+
+int rapl_dump()
+{
+	unsigned long long msr;
+	double rapl_power_units, rapl_energy_units, rapl_time_units;
+
+	if (!has_rapl)
+		return 0;
+
+	if (get_msr(0, MSR_RAPL_POWER_UNIT, &msr))
+		return -1;
+
+	fprintf(stderr, "MSR_RAPL_POWER_UNIT: 0x%08llx ", msr);
+
+	rapl_power_units = 1.0 / (1 << (msr & 0xF));
+	rapl_energy_units = 1.0 / (1 << (msr >> 8 & 0x1F));
+	rapl_time_units = 1.0 / (1 << (msr >> 16 & 0xF));
+
+	fprintf(stderr, "%f Watts, %f Joules, %f Seconds\n",
+		rapl_power_units, rapl_energy_units, rapl_time_units);
+
+	if (has_rapl & HAS_RAPL_PKG) {
+		if (get_msr(0, MSR_PKG_POWER_INFO, &msr))
+                	return -5;
+
+		fprintf(stderr, "MSR_PKG_POWER_INFO: 0x%016llx\n", msr);
+		fprintf(stderr, "%.2f Thermal Spec Watts\n"
+			"%.2f Minimum RAPL Watts\n"
+			"%.2f Maximum RAPL Watts\n"
+			"%f Maximum RAPL Time Window\n",
+			((msr >>  0) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 16) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 32) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 48) & RAPL_TIME_GRANULARITY) * rapl_time_units);
+		}
+
+	if (has_rapl & HAS_RAPL_DRAM) {
+		if (get_msr(0, MSR_DRAM_POWER_INFO, &msr))
+                	return -6;
+
+		fprintf(stderr, "MSR_DRAM_POWER_INFO: 0x%016llx\n", msr);
+		fprintf(stderr, "%.2f Thermal Spec Watts\n"
+			"%.2f Minimum RAPL Watts\n"
+			"%.2f Maximum RAPL Watts\n"
+			"%f Maximum RAPL Time Window\n",
+			((msr >>  0) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 16) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 32) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 48) & RAPL_TIME_GRANULARITY) * rapl_time_units);
+	}
+	return 0;
+}
+
 
 int is_snb(unsigned int family, unsigned int model)
 {
@@ -1295,6 +1383,7 @@ void check_cpuid()
 
 	do_nehalem_turbo_ratio_limit = has_nehalem_turbo_ratio_limit(family, model);
 	do_ivt_turbo_ratio_limit = has_ivt_turbo_ratio_limit(family, model);
+	rapl_probe(family, model);
 }
 
 
@@ -1536,6 +1625,8 @@ void turbostat_init()
 
 	if (verbose)
 		print_verbose_header();
+	if (verbose)
+		rapl_dump();
 }
 
 int fork_it(char **argv)
