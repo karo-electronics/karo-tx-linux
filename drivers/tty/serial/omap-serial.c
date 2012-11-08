@@ -148,7 +148,7 @@ struct uart_omap_port {
 	unsigned char		msr_saved_flags;
 	char			name[20];
 	unsigned long		port_activity;
-	u32			context_loss_cnt;
+	int			context_loss_cnt;
 	u32			errata;
 	u8			wakeups_enabled;
 
@@ -1144,7 +1144,7 @@ out:
 
 #ifdef CONFIG_SERIAL_OMAP_CONSOLE
 
-static struct uart_omap_port *serial_omap_console_ports[4];
+static struct uart_omap_port *serial_omap_console_ports[OMAP_MAX_HSUART_PORTS];
 
 static struct uart_driver serial_omap_reg;
 
@@ -1621,11 +1621,15 @@ static int serial_omap_runtime_resume(struct device *dev)
 {
 	struct uart_omap_port *up = dev_get_drvdata(dev);
 
-	u32 loss_cnt = serial_omap_get_context_loss_count(up);
+	int loss_cnt = serial_omap_get_context_loss_count(up);
 
-	if (up->context_loss_cnt != loss_cnt)
+	if (loss_cnt < 0) {
+		dev_err(dev, "serial_omap_get_context_loss_count failed : %d\n",
+			loss_cnt);
 		serial_omap_restore_context(up);
-
+	} else if (up->context_loss_cnt != loss_cnt) {
+		serial_omap_restore_context(up);
+	}
 	up->latency = up->calc_latency;
 	schedule_work(&up->qos_work);
 
