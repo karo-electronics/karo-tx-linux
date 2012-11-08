@@ -971,11 +971,13 @@ static int do_test(int m)
 	case 3:
 		ret += tcrypt_test("ecb(des)");
 		ret += tcrypt_test("cbc(des)");
+		ret += tcrypt_test("ctr(des)");
 		break;
 
 	case 4:
 		ret += tcrypt_test("ecb(des3_ede)");
 		ret += tcrypt_test("cbc(des3_ede)");
+		ret += tcrypt_test("ctr(des3_ede)");
 		break;
 
 	case 5:
@@ -1477,6 +1479,10 @@ static int do_test(int m)
 
 	case 318:
 		test_hash_speed("ghash-generic", sec, hash_speed_template_16);
+		if (mode > 300 && mode < 400) break;
+
+	case 319:
+		test_hash_speed("crc32c", sec, generic_hash_speed_template);
 		if (mode > 300 && mode < 400) break;
 
 	case 399:
