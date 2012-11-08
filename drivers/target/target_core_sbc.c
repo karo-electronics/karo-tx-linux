@@ -235,7 +235,7 @@ static inline unsigned long long transport_lba_64_ext(unsigned char *cdb)
 	return ((unsigned long long)__v2) | (unsigned long long)__v1 << 32;
 }
 
-static int sbc_write_same_supported(struct se_device *dev,
+static int sbc_write_same_supported(struct se_cmd *cmd,
 		unsigned char *flags)
 {
 	if ((flags[0] & 0x04) || (flags[0] & 0x02)) {
@@ -244,16 +244,11 @@ static int sbc_write_same_supported(struct se_device *dev,
 			" Emulation\n");
 		return -ENOSYS;
 	}
-
 	/*
-	 * Currently for the emulated case we only accept
-	 * tpws with the UNMAP=1 bit set.
+	 * UNMAP=1 bit translantes to blkdev_issue_discard() execution
 	 */
-	if (!(flags[0] & 0x08)) {
-		pr_err("WRITE_SAME w/o UNMAP bit not"
-			" supported for Block Discard Emulation\n");
-		return -ENOSYS;
-	}
+	if (flags[0] & 0x08)
+		cmd->se_cmd_flags |= SCF_WRITE_SAME_DISCARD;
 
 	return 0;
 }
@@ -431,7 +426,7 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 			size = sbc_get_size(cmd, 1);
 			cmd->t_task_lba = get_unaligned_be64(&cdb[12]);
 
-			if (sbc_write_same_supported(dev, &cdb[10]) < 0)
+			if (sbc_write_same_supported(cmd, &cdb[10]) < 0)
 				return TCM_UNSUPPORTED_SCSI_OPCODE;
 			cmd->execute_cmd = ops->execute_write_same;
 			break;
@@ -507,7 +502,7 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		size = sbc_get_size(cmd, 1);
 		cmd->t_task_lba = get_unaligned_be64(&cdb[2]);
 
-		if (sbc_write_same_supported(dev, &cdb[1]) < 0)
+		if (sbc_write_same_supported(cmd, &cdb[1]) < 0)
 			return TCM_UNSUPPORTED_SCSI_OPCODE;
 		cmd->execute_cmd = ops->execute_write_same;
 		break;
@@ -528,7 +523,7 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		 * Follow sbcr26 with WRITE_SAME (10) and check for the existence
 		 * of byte 1 bit 3 UNMAP instead of original reserved field
 		 */
-		if (sbc_write_same_supported(dev, &cdb[1]) < 0)
+		if (sbc_write_same_supported(cmd, &cdb[1]) < 0)
 			return TCM_UNSUPPORTED_SCSI_OPCODE;
 		cmd->execute_cmd = ops->execute_write_same;
 		break;

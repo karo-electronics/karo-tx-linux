@@ -154,6 +154,7 @@ enum se_cmd_flags_table {
 	SCF_ALUA_NON_OPTIMIZED		= 0x00008000,
 	SCF_PASSTHROUGH_SG_TO_MEM_NOALLOC = 0x00020000,
 	SCF_ACK_KREF			= 0x00040000,
+	SCF_WRITE_SAME_DISCARD		= 0x00080000,
 };
 
 /* struct se_dev_entry->lun_flags and struct se_lun->lun_access */
