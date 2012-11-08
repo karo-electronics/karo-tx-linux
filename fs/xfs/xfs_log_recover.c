@@ -42,6 +42,7 @@
 #include "xfs_quota.h"
 #include "xfs_utils.h"
 #include "xfs_trace.h"
+#include "xfs_icache.h"
 
 STATIC int
 xlog_find_zeroed(
@@ -3541,7 +3542,7 @@ xlog_do_recovery_pass(
 				 *   - order is important.
 				 */
 				error = xlog_bread_offset(log, 0,
-						bblks - split_bblks, hbp,
+						bblks - split_bblks, dbp,
 						offset + BBTOB(split_bblks));
 				if (error)
 					goto bread_err2;

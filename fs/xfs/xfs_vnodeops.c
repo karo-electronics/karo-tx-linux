@@ -47,6 +47,7 @@
 #include "xfs_filestream.h"
 #include "xfs_vnodeops.h"
 #include "xfs_trace.h"
+#include "xfs_icache.h"
 
 /*
  * The maximum pathlen is 1024 bytes. Since the minimum file system
@@ -777,7 +778,7 @@ xfs_create(
 			XFS_TRANS_PERM_LOG_RES, log_count);
 	if (error == ENOSPC) {
 		/* flush outstanding delalloc blocks and retry */
-		xfs_flush_inodes(dp);
+		xfs_flush_inodes(mp);
 		error = xfs_trans_reserve(tp, resblks, log_res, 0,
 				XFS_TRANS_PERM_LOG_RES, log_count);
 	}
