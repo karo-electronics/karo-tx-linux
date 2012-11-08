@@ -90,10 +90,10 @@ static inline void _tg3_flag_clear(enum TG3_FLAGS flag, unsigned long *bits)
 
 #define DRV_MODULE_NAME		"tg3"
 #define TG3_MAJ_NUM			3
-#define TG3_MIN_NUM			125
+#define TG3_MIN_NUM			126
 #define DRV_MODULE_VERSION	\
 	__stringify(TG3_MAJ_NUM) "." __stringify(TG3_MIN_NUM)
-#define DRV_MODULE_RELDATE	"September 26, 2012"
+#define DRV_MODULE_RELDATE	"November 05, 2012"
 
 #define RESET_KIND_SHUTDOWN	0
 #define RESET_KIND_INIT		1
@@ -291,6 +291,7 @@ static DEFINE_PCI_DEVICE_TABLE(tg3_pci_tbl) = {
 	{PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, TG3PCI_DEVICE_TIGON3_57790)},
 	{PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, TG3PCI_DEVICE_TIGON3_57788)},
 	{PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, TG3PCI_DEVICE_TIGON3_5717)},
+	{PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, TG3PCI_DEVICE_TIGON3_5717_C)},
 	{PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, TG3PCI_DEVICE_TIGON3_5718)},
 	{PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, TG3PCI_DEVICE_TIGON3_57781)},
 	{PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, TG3PCI_DEVICE_TIGON3_57785)},
@@ -10429,10 +10430,8 @@ static void tg3_stop(struct tg3 *tp)
 {
 	int i;
 
-	tg3_napi_disable(tp);
 	tg3_reset_task_cancel(tp);
-
-	netif_tx_disable(tp->dev);
+	tg3_netif_stop(tp);
 
 	tg3_timer_stop(tp);
 
@@ -14026,7 +14025,8 @@ out_not_found:
 
 out_no_vpd:
 	if (GET_ASIC_REV(tp->pci_chip_rev_id) == ASIC_REV_5717) {
-		if (tp->pdev->device == TG3PCI_DEVICE_TIGON3_5717)
+		if (tp->pdev->device == TG3PCI_DEVICE_TIGON3_5717 ||
+		    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5717_C)
 			strcpy(tp->board_part_number, "BCM5717");
 		else if (tp->pdev->device == TG3PCI_DEVICE_TIGON3_5718)
 			strcpy(tp->board_part_number, "BCM5718");
@@ -14397,6 +14397,7 @@ static void __devinit tg3_detect_asic_rev(struct tg3 *tp, u32 misc_ctrl_reg)
 		tg3_flag_set(tp, CPMU_PRESENT);
 
 		if (tp->pdev->device == TG3PCI_DEVICE_TIGON3_5717 ||
+		    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5717_C ||
 		    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5718 ||
 		    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5719 ||
 		    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5720)
@@ -14423,6 +14424,9 @@ static void __devinit tg3_detect_asic_rev(struct tg3 *tp, u32 misc_ctrl_reg)
 	 */
 	if (tp->pci_chip_rev_id == CHIPREV_ID_5752_A0_HW)
 		tp->pci_chip_rev_id = CHIPREV_ID_5752_A0;
+
+	if (tp->pci_chip_rev_id == CHIPREV_ID_5717_C0)
+		tp->pci_chip_rev_id = CHIPREV_ID_5720_A0;
 
 	if (GET_ASIC_REV(tp->pci_chip_rev_id) == ASIC_REV_5717 ||
 	    GET_ASIC_REV(tp->pci_chip_rev_id) == ASIC_REV_5719 ||
@@ -16013,6 +16017,7 @@ static int __devinit tg3_init_one(struct pci_dev *pdev,
 	    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5761S ||
 	    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5761SE ||
 	    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5717 ||
+	    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5717_C ||
 	    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5718 ||
 	    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5719 ||
 	    tp->pdev->device == TG3PCI_DEVICE_TIGON3_5720) {
