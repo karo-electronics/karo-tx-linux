@@ -2280,13 +2280,21 @@ static int framebuffer_check(const struct drm_mode_fb_cmd2 *r)
 
 	for (i = 0; i < num_planes; i++) {
 		unsigned int width = r->width / (i != 0 ? hsub : 1);
+		unsigned int height = r->height / (i != 0 ? vsub : 1);
+		unsigned int cpp = drm_format_plane_cpp(r->pixel_format, i);
 
 		if (!r->handles[i]) {
 			DRM_DEBUG_KMS("no buffer object handle for plane %d\n", i);
 			return -EINVAL;
 		}
 
-		if (r->pitches[i] < drm_format_plane_cpp(r->pixel_format, i) * width) {
+		if ((uint64_t) width * cpp > UINT_MAX)
+			return -ERANGE;
+
+		if ((uint64_t) height * r->pitches[i] + r->offsets[i] > UINT_MAX)
+			return -ERANGE;
+
+		if (r->pitches[i] < width * cpp) {
 			DRM_DEBUG_KMS("bad pitch %u for plane %d\n", r->pitches[i], i);
 			return -EINVAL;
 		}
@@ -3204,6 +3212,9 @@ static bool drm_property_change_is_valid(struct drm_property *property,
 		for (i = 0; i < property->num_values; i++)
 			valid_mask |= (1ULL << property->values[i]);
 		return !(value & ~valid_mask);
+	} else if (property->flags & DRM_MODE_PROP_BLOB) {
+		/* Only the driver knows */
+		return true;
 	} else {
 		int i;
 		for (i = 0; i < property->num_values; i++)
