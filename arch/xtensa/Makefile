@@ -38,6 +38,7 @@ endif
 platform-$(CONFIG_XTENSA_PLATFORM_XT2000)	:= xt2000
 platform-$(CONFIG_XTENSA_PLATFORM_ISS)		:= iss
 platform-$(CONFIG_XTENSA_PLATFORM_S6105)	:= s6105
+platform-$(CONFIG_XTENSA_PLATFORM_XTAVNET)	:= xtavnet
 
 PLATFORM = $(platform-y)
 export PLATFORM
@@ -75,6 +76,8 @@ core-y		+= $(buildvar) $(buildplf)
 
 libs-y		+= arch/xtensa/lib/ $(LIBGCC)
 
+core-$(CONFIG_BUILTIN_DTB_BOOL) += arch/xtensa/boot/
+
 boot		:= arch/xtensa/boot
 
 all: zImage
@@ -83,6 +86,9 @@ bzImage : zImage
 
 zImage: vmlinux
 	$(Q)$(MAKE) $(build)=$(boot) $@
+
+%.dtb:
+	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
 
 define archhelp
   @echo '* zImage      - Compressed kernel image (arch/xtensa/boot/images/zImage.*)'
