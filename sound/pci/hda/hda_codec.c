@@ -1135,6 +1135,19 @@ static void restore_shutup_pins(struct hda_codec *codec)
 }
 #endif
 
+static void hda_jackpoll_work(struct work_struct *work)
+{
+	struct hda_codec *codec =
+		container_of(work, struct hda_codec, jackpoll_work.work);
+	if (!codec->jackpoll_interval)
+		return;
+
+	snd_hda_jack_set_dirty_all(codec);
+	snd_hda_jack_poll_all(codec);
+	queue_delayed_work(codec->bus->workq, &codec->jackpoll_work,
+			   codec->jackpoll_interval);
+}
+
 static void init_hda_cache(struct hda_cache_rec *cache,
 			   unsigned int record_size);
 static void free_hda_cache(struct hda_cache_rec *cache);
@@ -1190,6 +1203,7 @@ static void snd_hda_codec_free(struct hda_codec *codec)
 {
 	if (!codec)
 		return;
+	cancel_delayed_work_sync(&codec->jackpoll_work);
 	snd_hda_jack_tbl_clear(codec);
 	restore_init_pincfgs(codec);
 #ifdef CONFIG_PM
@@ -1273,6 +1287,7 @@ int /*__devinit*/ snd_hda_codec_new(struct hda_bus *bus,
 	snd_array_init(&codec->cvt_setups, sizeof(struct hda_cvt_setup), 8);
 	snd_array_init(&codec->conn_lists, sizeof(hda_nid_t), 64);
 	snd_array_init(&codec->spdif_out, sizeof(struct hda_spdif_out), 16);
+	INIT_DELAYED_WORK(&codec->jackpoll_work, hda_jackpoll_work);
 
 #ifdef CONFIG_PM
 	spin_lock_init(&codec->power_lock);
@@ -2151,12 +2166,12 @@ EXPORT_SYMBOL_HDA(snd_hda_set_vmaster_tlv);
 
 /* find a mixer control element with the given name */
 static struct snd_kcontrol *
-_snd_hda_find_mixer_ctl(struct hda_codec *codec,
-			const char *name, int idx)
+find_mixer_ctl(struct hda_codec *codec, const char *name, int dev, int idx)
 {
 	struct snd_ctl_elem_id id;
 	memset(&id, 0, sizeof(id));
 	id.iface = SNDRV_CTL_ELEM_IFACE_MIXER;
+	id.device = dev;
 	id.index = idx;
 	if (snd_BUG_ON(strlen(name) >= sizeof(id.name)))
 		return NULL;
@@ -2174,15 +2189,16 @@ _snd_hda_find_mixer_ctl(struct hda_codec *codec,
 struct snd_kcontrol *snd_hda_find_mixer_ctl(struct hda_codec *codec,
 					    const char *name)
 {
-	return _snd_hda_find_mixer_ctl(codec, name, 0);
+	return find_mixer_ctl(codec, name, 0, 0);
 }
 EXPORT_SYMBOL_HDA(snd_hda_find_mixer_ctl);
 
-static int find_empty_mixer_ctl_idx(struct hda_codec *codec, const char *name)
+static int find_empty_mixer_ctl_idx(struct hda_codec *codec, const char *name,
+				    int dev)
 {
 	int idx;
 	for (idx = 0; idx < 16; idx++) { /* 16 ctlrs should be large enough */
-		if (!_snd_hda_find_mixer_ctl(codec, name, idx))
+		if (!find_mixer_ctl(codec, name, dev, idx))
 			return idx;
 	}
 	return -EBUSY;
@@ -2349,7 +2365,7 @@ int snd_hda_codec_reset(struct hda_codec *codec)
 		return -EBUSY;
 
 	/* OK, let it free */
-
+	cancel_delayed_work_sync(&codec->jackpoll_work);
 #ifdef CONFIG_PM
 	cancel_delayed_work_sync(&codec->power_work);
 	codec->power_on = 0;
@@ -3133,26 +3149,48 @@ static struct snd_kcontrol_new dig_mixes[] = {
 };
 
 /**
- * snd_hda_create_spdif_out_ctls - create Output SPDIF-related controls
+ * snd_hda_create_dig_out_ctls - create Output SPDIF-related controls
  * @codec: the HDA codec
- * @nid: audio out widget NID
- *
- * Creates controls related with the SPDIF output.
- * Called from each patch supporting the SPDIF out.
+ * @associated_nid: NID that new ctls associated with
+ * @cvt_nid: converter NID
+ * @type: HDA_PCM_TYPE_*
+ * Creates controls related with the digital output.
+ * Called from each patch supporting the digital out.
  *
  * Returns 0 if successful, or a negative error code.
  */
-int snd_hda_create_spdif_out_ctls(struct hda_codec *codec,
-				  hda_nid_t associated_nid,
-				  hda_nid_t cvt_nid)
+int snd_hda_create_dig_out_ctls(struct hda_codec *codec,
+				hda_nid_t associated_nid,
+				hda_nid_t cvt_nid,
+				int type)
 {
 	int err;
 	struct snd_kcontrol *kctl;
 	struct snd_kcontrol_new *dig_mix;
-	int idx;
+	int idx, dev = 0;
+	const int spdif_pcm_dev = 1;
 	struct hda_spdif_out *spdif;
 
-	idx = find_empty_mixer_ctl_idx(codec, "IEC958 Playback Switch");
+	if (codec->primary_dig_out_type == HDA_PCM_TYPE_HDMI &&
+	    type == HDA_PCM_TYPE_SPDIF) {
+		dev = spdif_pcm_dev;
+	} else if (codec->primary_dig_out_type == HDA_PCM_TYPE_SPDIF &&
+		   type == HDA_PCM_TYPE_HDMI) {
+		for (idx = 0; idx < codec->spdif_out.used; idx++) {
+			spdif = snd_array_elem(&codec->spdif_out, idx);
+			for (dig_mix = dig_mixes; dig_mix->name; dig_mix++) {
+				kctl = find_mixer_ctl(codec, dig_mix->name, 0, idx);
+				if (!kctl)
+					break;
+				kctl->id.device = spdif_pcm_dev;
+			}
+		}
+		codec->primary_dig_out_type = HDA_PCM_TYPE_HDMI;
+	}
+	if (!codec->primary_dig_out_type)
+		codec->primary_dig_out_type = type;
+
+	idx = find_empty_mixer_ctl_idx(codec, "IEC958 Playback Switch", dev);
 	if (idx < 0) {
 		printk(KERN_ERR "hda_codec: too many IEC958 outputs\n");
 		return -EBUSY;
@@ -3162,6 +3200,7 @@ int snd_hda_create_spdif_out_ctls(struct hda_codec *codec,
 		kctl = snd_ctl_new1(dig_mix, codec);
 		if (!kctl)
 			return -ENOMEM;
+		kctl->id.device = dev;
 		kctl->id.index = idx;
 		kctl->private_value = codec->spdif_out.used - 1;
 		err = snd_hda_ctl_add(codec, associated_nid, kctl);
@@ -3174,7 +3213,7 @@ int snd_hda_create_spdif_out_ctls(struct hda_codec *codec,
 	spdif->status = convert_to_spdif_status(spdif->ctls);
 	return 0;
 }
-EXPORT_SYMBOL_HDA(snd_hda_create_spdif_out_ctls);
+EXPORT_SYMBOL_HDA(snd_hda_create_dig_out_ctls);
 
 /* get the hda_spdif_out entry from the given NID
  * call within spdif_mutex lock
@@ -3349,7 +3388,7 @@ int snd_hda_create_spdif_in_ctls(struct hda_codec *codec, hda_nid_t nid)
 	struct snd_kcontrol_new *dig_mix;
 	int idx;
 
-	idx = find_empty_mixer_ctl_idx(codec, "IEC958 Capture Switch");
+	idx = find_empty_mixer_ctl_idx(codec, "IEC958 Capture Switch", 0);
 	if (idx < 0) {
 		printk(KERN_ERR "hda_codec: too many IEC958 inputs\n");
 		return -EBUSY;
@@ -3646,7 +3685,6 @@ static void hda_call_codec_resume(struct hda_codec *codec)
 	restore_pincfgs(codec); /* restore all current pin configs */
 	restore_shutup_pins(codec);
 	hda_exec_init_verbs(codec);
-	snd_hda_jack_set_dirty_all(codec);
 	if (codec->patch_ops.resume)
 		codec->patch_ops.resume(codec);
 	else {
@@ -3655,7 +3693,13 @@ static void hda_call_codec_resume(struct hda_codec *codec)
 		snd_hda_codec_resume_amp(codec);
 		snd_hda_codec_resume_cache(codec);
 	}
-	snd_hda_jack_report_sync(codec);
+
+	if (codec->jackpoll_interval)
+		hda_jackpoll_work(&codec->jackpoll_work.work);
+	else {
+		snd_hda_jack_set_dirty_all(codec);
+		snd_hda_jack_report_sync(codec);
+	}
 	snd_hda_power_down(codec); /* flag down before returning */
 }
 #endif /* CONFIG_PM */
@@ -3703,13 +3747,14 @@ static int add_std_chmaps(struct hda_codec *codec)
 			struct hda_pcm_stream *hinfo =
 				&codec->pcm_info[i].stream[str];
 			struct snd_pcm_chmap *chmap;
+			const struct snd_pcm_chmap_elem *elem;
 
 			if (codec->pcm_info[i].own_chmap)
 				continue;
 			if (!pcm || !hinfo->substreams)
 				continue;
-			err = snd_pcm_add_chmap_ctls(pcm, str,
-						     snd_pcm_std_chmaps,
+			elem = hinfo->chmap ? hinfo->chmap : snd_pcm_std_chmaps;
+			err = snd_pcm_add_chmap_ctls(pcm, str, elem,
 						     hinfo->channels_max,
 						     0, &chmap);
 			if (err < 0)
@@ -3719,6 +3764,19 @@ static int add_std_chmaps(struct hda_codec *codec)
 	}
 	return 0;
 }
+
+/* default channel maps for 2.1 speakers;
+ * since HD-audio supports only stereo, odd number channels are omitted
+ */
+const struct snd_pcm_chmap_elem snd_pcm_2_1_chmaps[] = {
+	{ .channels = 2,
+	  .map = { SNDRV_CHMAP_FL, SNDRV_CHMAP_FR } },
+	{ .channels = 4,
+	  .map = { SNDRV_CHMAP_FL, SNDRV_CHMAP_FR,
+		   SNDRV_CHMAP_LFE, SNDRV_CHMAP_LFE } },
+	{ }
+};
+EXPORT_SYMBOL_GPL(snd_pcm_2_1_chmaps);
 
 int snd_hda_codec_build_controls(struct hda_codec *codec)
 {
@@ -3737,7 +3795,10 @@ int snd_hda_codec_build_controls(struct hda_codec *codec)
 	if (err < 0)
 		return err;
 
-	snd_hda_jack_report_sync(codec); /* call at the last init point */
+	if (codec->jackpoll_interval)
+		hda_jackpoll_work(&codec->jackpoll_work.work);
+	else
+		snd_hda_jack_report_sync(codec); /* call at the last init point */
 	return 0;
 }
 
@@ -4449,7 +4510,7 @@ int snd_hda_add_new_ctls(struct hda_codec *codec,
 				addr = codec->addr;
 			else if (!idx && !knew->index) {
 				idx = find_empty_mixer_ctl_idx(codec,
-							       knew->name);
+							       knew->name, 0);
 				if (idx <= 0)
 					return err;
 			} else
@@ -4769,10 +4830,20 @@ EXPORT_SYMBOL_HDA(snd_hda_input_mux_put);
 static void setup_dig_out_stream(struct hda_codec *codec, hda_nid_t nid,
 				 unsigned int stream_tag, unsigned int format)
 {
-	struct hda_spdif_out *spdif = snd_hda_spdif_out_of_nid(codec, nid);
+	struct hda_spdif_out *spdif;
+	unsigned int curr_fmt;
+	bool reset;
 
-	/* turn off SPDIF once; otherwise the IEC958 bits won't be updated */
-	if (codec->spdif_status_reset && (spdif->ctls & AC_DIG1_ENABLE))
+	spdif = snd_hda_spdif_out_of_nid(codec, nid);
+	curr_fmt = snd_hda_codec_read(codec, nid, 0,
+				      AC_VERB_GET_STREAM_FORMAT, 0);
+	reset = codec->spdif_status_reset &&
+		(spdif->ctls & AC_DIG1_ENABLE) &&
+		curr_fmt != format;
+
+	/* turn off SPDIF if needed; otherwise the IEC958 bits won't be
+	   updated */
+	if (reset)
 		set_dig_out_convert(codec, nid,
 				    spdif->ctls & ~AC_DIG1_ENABLE & 0xff,
 				    -1);
@@ -4784,7 +4855,7 @@ static void setup_dig_out_stream(struct hda_codec *codec, hda_nid_t nid,
 						   format);
 	}
 	/* turn on again (if needed) */
-	if (codec->spdif_status_reset && (spdif->ctls & AC_DIG1_ENABLE))
+	if (reset)
 		set_dig_out_convert(codec, nid,
 				    spdif->ctls & 0xff, -1);
 }
@@ -5128,6 +5199,7 @@ int snd_hda_suspend(struct hda_bus *bus)
 	struct hda_codec *codec;
 
 	list_for_each_entry(codec, &bus->codec_list, list) {
+		cancel_delayed_work_sync(&codec->jackpoll_work);
 		if (hda_codec_is_power_on(codec))
 			hda_call_codec_suspend(codec, false);
 	}

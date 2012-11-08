@@ -1836,9 +1836,10 @@ static int __alc_build_controls(struct hda_codec *codec)
 			return err;
 	}
 	if (spec->multiout.dig_out_nid) {
-		err = snd_hda_create_spdif_out_ctls(codec,
-						    spec->multiout.dig_out_nid,
-						    spec->multiout.dig_out_nid);
+		err = snd_hda_create_dig_out_ctls(codec,
+						  spec->multiout.dig_out_nid,
+						  spec->multiout.dig_out_nid,
+						  spec->pcm_rec[1].pcm_type);
 		if (err < 0)
 			return err;
 		if (!spec->no_analog) {
@@ -2259,6 +2260,10 @@ static int alc_build_pcms(struct hda_codec *codec)
 		info->stream[SNDRV_PCM_STREAM_PLAYBACK].nid = spec->multiout.dac_nids[0];
 		info->stream[SNDRV_PCM_STREAM_PLAYBACK].channels_max =
 			spec->multiout.max_channels;
+		if (spec->autocfg.line_out_type == AUTO_PIN_SPEAKER_OUT &&
+		    spec->autocfg.line_outs == 2)
+			info->stream[SNDRV_PCM_STREAM_PLAYBACK].chmap =
+				snd_pcm_2_1_chmaps;
 	}
 	if (spec->adc_nids) {
 		p = spec->stream_analog_capture;
