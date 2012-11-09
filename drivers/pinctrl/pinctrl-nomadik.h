@@ -1,7 +1,7 @@
 #ifndef PINCTRL_PINCTRL_NOMADIK_H
 #define PINCTRL_PINCTRL_NOMADIK_H
 
-#include <plat/gpio-nomadik.h>
+#include <linux/platform_data/pinctrl-nomadik.h>
 
 /* Package definitions */
 #define PINCTRL_NMK_STN8815	0
@@ -125,6 +125,7 @@ struct nmk_pingroup {
  * @altcx_pins:	The pins that support Other alternate-C function on this SoC
  * @npins_altcx: The number of Other alternate-C pins
  * @prcm_gpiocr_registers: The array of PRCM GPIOCR registers on this SoC
+ * @prcmu_base: PRCMU virtual base
  */
 struct nmk_pinctrl_soc_data {
 	struct pinctrl_gpio_range *gpio_ranges;
@@ -138,16 +139,17 @@ struct nmk_pinctrl_soc_data {
 	const struct prcm_gpiocr_altcx_pin_desc *altcx_pins;
 	unsigned npins_altcx;
 	const u16 *prcm_gpiocr_registers;
+	void __iomem *prcmu_base;
 };
 
 #ifdef CONFIG_PINCTRL_STN8815
 
-void nmk_pinctrl_stn8815_init(const struct nmk_pinctrl_soc_data **soc);
+void nmk_pinctrl_stn8815_init(struct nmk_pinctrl_soc_data **soc);
 
 #else
 
 static inline void
-nmk_pinctrl_stn8815_init(const struct nmk_pinctrl_soc_data **soc)
+nmk_pinctrl_stn8815_init(struct nmk_pinctrl_soc_data **soc)
 {
 }
 
@@ -155,12 +157,12 @@ nmk_pinctrl_stn8815_init(const struct nmk_pinctrl_soc_data **soc)
 
 #ifdef CONFIG_PINCTRL_DB8500
 
-void nmk_pinctrl_db8500_init(const struct nmk_pinctrl_soc_data **soc);
+void nmk_pinctrl_db8500_init(struct nmk_pinctrl_soc_data **soc);
 
 #else
 
 static inline void
-nmk_pinctrl_db8500_init(const struct nmk_pinctrl_soc_data **soc)
+nmk_pinctrl_db8500_init(struct nmk_pinctrl_soc_data **soc)
 {
 }
 
@@ -168,12 +170,12 @@ nmk_pinctrl_db8500_init(const struct nmk_pinctrl_soc_data **soc)
 
 #ifdef CONFIG_PINCTRL_DB8540
 
-void nmk_pinctrl_db8540_init(const struct nmk_pinctrl_soc_data **soc);
+void nmk_pinctrl_db8540_init(struct nmk_pinctrl_soc_data **soc);
 
 #else
 
 static inline void
-nmk_pinctrl_db8540_init(const struct nmk_pinctrl_soc_data **soc)
+nmk_pinctrl_db8540_init(struct nmk_pinctrl_soc_data **soc)
 {
 }
 
