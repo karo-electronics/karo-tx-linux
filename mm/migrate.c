@@ -896,6 +896,7 @@ static int unmap_and_move(new_page_t get_new_page, unsigned long private,
 				    page_is_file_cache(page));
 		put_page(page);
 		__free_page(page);
+		balloon_event_count(COMPACTBALLOONRELEASED);
 		return 0;
 	}
 out:
