@@ -417,6 +417,7 @@ void __tasklet_schedule(struct tasklet_struct *t)
 	*__this_cpu_read(tasklet_vec.tail) = t;
 	__this_cpu_write(tasklet_vec.tail, &(t->next));
 	raise_softirq_irqoff(TASKLET_SOFTIRQ);
+	clear_bit(TASKLET_STATE_HI, &t->state);
 	local_irq_restore(flags);
 }
 
@@ -431,6 +432,7 @@ void __tasklet_hi_schedule(struct tasklet_struct *t)
 	*__this_cpu_read(tasklet_hi_vec.tail) = t;
 	__this_cpu_write(tasklet_hi_vec.tail,  &(t->next));
 	raise_softirq_irqoff(HI_SOFTIRQ);
+	set_bit(TASKLET_STATE_HI, &t->state);
 	local_irq_restore(flags);
 }
 
@@ -442,6 +444,7 @@ void __tasklet_hi_schedule_first(struct tasklet_struct *t)
 
 	t->next = __this_cpu_read(tasklet_hi_vec.head);
 	__this_cpu_write(tasklet_hi_vec.head, t);
+	set_bit(TASKLET_STATE_HI, &t->state);
 	__raise_softirq_irqoff(HI_SOFTIRQ);
 }
 
@@ -467,10 +470,9 @@ static void tasklet_action(struct softirq_action *a)
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
 				t->func(t->data);
-				tasklet_unlock(t);
-				continue;
 			}
 			tasklet_unlock(t);
+			continue;
 		}
 
 		local_irq_disable();
@@ -502,10 +504,9 @@ static void tasklet_hi_action(struct softirq_action *a)
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
 				t->func(t->data);
-				tasklet_unlock(t);
-				continue;
 			}
 			tasklet_unlock(t);
+			continue;
 		}
 
 		local_irq_disable();

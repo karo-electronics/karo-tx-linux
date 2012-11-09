@@ -643,7 +643,7 @@ static void shmem_evict_inode(struct inode *inode)
 		kfree(info->symlink);
 
 	simple_xattrs_free(&info->xattrs);
-	BUG_ON(inode->i_blocks);
+	WARN_ON(inode->i_blocks);
 	shmem_free_inode(inode->i_sb);
 	clear_inode(inode);
 }
@@ -922,6 +922,7 @@ static struct page *shmem_swapin(swp_entry_t swap, gfp_t gfp,
 	pvma.vm_pgoff = index + info->vfs_inode.i_ino;
 	pvma.vm_ops = NULL;
 	pvma.vm_policy = spol;
+	pvma.anon_vma = NULL;
 	return swapin_readahead(swap, gfp, &pvma, 0);
 }
 
@@ -1145,8 +1146,22 @@ repeat:
 		if (!error) {
 			error = shmem_add_to_page_cache(page, mapping, index,
 						gfp, swp_to_radix_entry(swap));
-			/* We already confirmed swap, and make no allocation */
-			VM_BUG_ON(error);
+			/*
+			 * We already confirmed swap under page lock, and make
+			 * no memory allocation here, so usually no possibility
+			 * of error; but free_swap_and_cache() only trylocks a
+			 * page, so it is just possible that the entry has been
+			 * truncated or holepunched since swap was confirmed.
+			 * shmem_undo_range() will have done some of the
+			 * unaccounting, now delete_from_swap_cache() will do
+			 * the rest (including mem_cgroup_uncharge_swapcache).
+			 * Reset swap.val? No, leave it so "failed" goes back to
+			 * "repeat": reading a hole and writing should succeed.
+			 */
+			if (error) {
+				VM_BUG_ON(error != -ENOENT);
+				delete_from_swap_cache(page);
+			}
 		}
 		if (error)
 			goto failed;

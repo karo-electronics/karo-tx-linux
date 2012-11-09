@@ -695,8 +695,13 @@ int __ref acpi_map_lsapic(acpi_handle handle, int *pcpu)
 }
 EXPORT_SYMBOL(acpi_map_lsapic);
 
-int acpi_unmap_lsapic(int cpu)
+int __ref acpi_unmap_lsapic(int cpu)
 {
+#ifdef CONFIG_ACPI_NUMA
+	set_apicid_to_node(per_cpu(x86_cpu_to_apicid, cpu), NUMA_NO_NODE);
+	numa_clear_node(cpu);
+#endif
+
 	per_cpu(x86_cpu_to_apicid, cpu) = -1;
 	set_cpu_present(cpu, false);
 	num_processors--;
