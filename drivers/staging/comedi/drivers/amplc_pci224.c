@@ -116,7 +116,6 @@ Caveats:
 /*
  * PCI IDs.
  */
-#define PCI_VENDOR_ID_AMPLICON 0x14dc
 #define PCI_DEVICE_ID_AMPLICON_PCI224 0x0007
 #define PCI_DEVICE_ID_AMPLICON_PCI234 0x0008
 #define PCI_DEVICE_ID_INVALID 0xffff
@@ -1287,7 +1286,7 @@ static void pci224_report_attach(struct comedi_device *dev, unsigned int irq)
 }
 
 /*
- * Common part of attach and attach_pci.
+ * Common part of attach and auto_attach.
  */
 static int pci224_attach_common(struct comedi_device *dev,
 				struct pci_dev *pci_dev, int *options)
@@ -1443,16 +1442,15 @@ static int pci224_attach_common(struct comedi_device *dev,
 
 static int pci224_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
+	struct pci224_private *devpriv;
 	struct pci_dev *pci_dev;
-	int ret;
 
 	dev_info(dev->class_dev, DRIVER_NAME ": attach\n");
 
-	ret = alloc_private(dev, sizeof(struct pci224_private));
-	if (ret < 0) {
-		dev_err(dev->class_dev, "error! out of memory!\n");
-		return ret;
-	}
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	pci_dev = pci224_find_pci_dev(dev, it);
 	if (!pci_dev)
@@ -1462,18 +1460,18 @@ static int pci224_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 }
 
 static int __devinit
-pci224_attach_pci(struct comedi_device *dev, struct pci_dev *pci_dev)
+pci224_auto_attach(struct comedi_device *dev, unsigned long context_unused)
 {
-	int ret;
+	struct pci_dev *pci_dev = comedi_to_pci_dev(dev);
+	struct pci224_private *devpriv;
 
-	dev_info(dev->class_dev, DRIVER_NAME ": attach_pci %s\n",
+	dev_info(dev->class_dev, DRIVER_NAME ": attach pci %s\n",
 		 pci_name(pci_dev));
 
-	ret = alloc_private(dev, sizeof(struct pci224_private));
-	if (ret < 0) {
-		dev_err(dev->class_dev, "error! out of memory!\n");
-		return ret;
-	}
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	dev->board_ptr = pci224_find_pci_board(pci_dev);
 	if (dev->board_ptr == NULL) {
@@ -1522,7 +1520,7 @@ static struct comedi_driver amplc_pci224_driver = {
 	.module		= THIS_MODULE,
 	.attach		= pci224_attach,
 	.detach		= pci224_detach,
-	.attach_pci	= pci224_attach_pci,
+	.auto_attach	= pci224_auto_attach,
 	.board_name	= &pci224_boards[0].name,
 	.offset		= sizeof(struct pci224_board),
 	.num_names	= ARRAY_SIZE(pci224_boards),
