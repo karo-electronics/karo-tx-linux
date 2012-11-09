@@ -55,18 +55,20 @@ typedef __be16 hfsplus_unichr;
 #define HFSPLUS_MAX_STRLEN 255
 #define HFSPLUS_ATTR_MAX_STRLEN 127
 
-#define HFSPLUS_STRING(name, max_len)		\
-struct hfsplus_##name {				\
-	__be16 length;				\
-	hfsplus_unichr unicode[max_len];	\
-} __packed;					\
-
 /* A "string" as used in filenames, etc. */
-HFSPLUS_STRING(unistr, HFSPLUS_MAX_STRLEN)
+struct hfsplus_unistr {
+	__be16 length;
+	hfsplus_unichr unicode[HFSPLUS_MAX_STRLEN];
+} __packed;
 
-/* A "string" is used in attributes file
-   for name of extended attribute */
-HFSPLUS_STRING(attr_unistr, HFSPLUS_ATTR_MAX_STRLEN)
+/*
+ * A "string" is used in attributes file
+ * for name of extended attribute
+ */
+struct hfsplus_attr_unistr {
+	__be16 length;
+	hfsplus_unichr unicode[HFSPLUS_ATTR_MAX_STRLEN];
+} __packed;
 
 /* POSIX permissions */
 struct hfsplus_perm {
