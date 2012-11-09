@@ -560,10 +560,8 @@ static unsigned long randomize_stack_top(unsigned long stack_top)
 }
 
 /*
- * A wrapper of get_random_int() to generate random bytes which has lower
- * overhead than call get_random_bytes() directly.
- * create_elf_tables() call this function to generate 16 random bytes for
- * userspace PRNG seeding.
+ * Use get_random_int() to implement AT_RANDOM while avoiding depletion of
+ * the entropy pool.
  */
 static void randomize_stack_user(unsigned char *buf, size_t nbytes)
 {
