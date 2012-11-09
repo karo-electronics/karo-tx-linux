@@ -4,8 +4,9 @@
  * This file contains SPC-3 compliant persistent reservations and
  * legacy SPC-2 reservations with compatible reservation handling (CRH=1)
  *
- * Copyright (c) 2009, 2010 Rising Tide Systems
- * Copyright (c) 2009, 2010 Linux-iSCSI.org
+ * (c) Copyright 2009-2012 RisingTide Systems LLC.
+ *
+ * Licensed to the Linux Foundation under the General Public License (GPL) version 2.
  *
  * Nicholas A. Bellinger <nab@kernel.org>
  *

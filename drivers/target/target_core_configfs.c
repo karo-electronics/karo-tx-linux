@@ -3,8 +3,9 @@
  *
  * This file contains ConfigFS logic for the Generic Target Engine project.
  *
- * Copyright (c) 2008-2011 Rising Tide Systems
- * Copyright (c) 2008-2011 Linux-iSCSI.org
+ * (c) Copyright 2008-2012 RisingTide Systems LLC.
+ *
+ * Licensed to the Linux Foundation under the General Public License (GPL) version 2.
  *
  * Nicholas A. Bellinger <nab@kernel.org>
  *
