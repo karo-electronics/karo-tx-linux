@@ -63,7 +63,7 @@ static void exynos4_map_io(void);
 static void exynos5_map_io(void);
 static void exynos4_init_clocks(int xtal);
 static void exynos5_init_clocks(int xtal);
-static void exynos_init_uarts(struct s3c2410_uartcfg *cfg, int no);
+static void exynos4_init_uarts(struct s3c2410_uartcfg *cfg, int no);
 static int exynos_init(void);
 
 static struct cpu_table cpu_ids[] __initdata = {
@@ -72,7 +72,7 @@ static struct cpu_table cpu_ids[] __initdata = {
 		.idmask		= EXYNOS4_CPU_MASK,
 		.map_io		= exynos4_map_io,
 		.init_clocks	= exynos4_init_clocks,
-		.init_uarts	= exynos_init_uarts,
+		.init_uarts	= exynos4_init_uarts,
 		.init		= exynos_init,
 		.name		= name_exynos4210,
 	}, {
@@ -80,7 +80,6 @@ static struct cpu_table cpu_ids[] __initdata = {
 		.idmask		= EXYNOS4_CPU_MASK,
 		.map_io		= exynos4_map_io,
 		.init_clocks	= exynos4_init_clocks,
-		.init_uarts	= exynos_init_uarts,
 		.init		= exynos_init,
 		.name		= name_exynos4212,
 	}, {
@@ -88,7 +87,6 @@ static struct cpu_table cpu_ids[] __initdata = {
 		.idmask		= EXYNOS4_CPU_MASK,
 		.map_io		= exynos4_map_io,
 		.init_clocks	= exynos4_init_clocks,
-		.init_uarts	= exynos_init_uarts,
 		.init		= exynos_init,
 		.name		= name_exynos4412,
 	}, {
@@ -96,7 +94,6 @@ static struct cpu_table cpu_ids[] __initdata = {
 		.idmask		= EXYNOS5_SOC_MASK,
 		.map_io		= exynos5_map_io,
 		.init_clocks	= exynos5_init_clocks,
-		.init_uarts	= exynos_init_uarts,
 		.init		= exynos_init,
 		.name		= name_exynos5250,
 	},
@@ -257,24 +254,9 @@ static struct map_desc exynos5_iodesc[] __initdata = {
 		.length		= SZ_64K,
 		.type		= MT_DEVICE,
 	}, {
-		.virtual	= (unsigned long)S5P_VA_COMBINER_BASE,
-		.pfn		= __phys_to_pfn(EXYNOS5_PA_COMBINER),
-		.length		= SZ_4K,
-		.type		= MT_DEVICE,
-	}, {
 		.virtual	= (unsigned long)S3C_VA_UART,
 		.pfn		= __phys_to_pfn(EXYNOS5_PA_UART),
 		.length		= SZ_512K,
-		.type		= MT_DEVICE,
-	}, {
-		.virtual	= (unsigned long)S5P_VA_GIC_CPU,
-		.pfn		= __phys_to_pfn(EXYNOS5_PA_GIC_CPU),
-		.length		= SZ_8K,
-		.type		= MT_DEVICE,
-	}, {
-		.virtual	= (unsigned long)S5P_VA_GIC_DIST,
-		.pfn		= __phys_to_pfn(EXYNOS5_PA_GIC_DIST),
-		.length		= SZ_4K,
 		.type		= MT_DEVICE,
 	},
 };
@@ -589,7 +571,8 @@ static void __init combiner_init(void __iomem *combiner_base,
 }
 
 #ifdef CONFIG_OF
-int __init combiner_of_init(struct device_node *np, struct device_node *parent)
+static int __init combiner_of_init(struct device_node *np,
+				   struct device_node *parent)
 {
 	void __iomem *combiner_base;
 
@@ -727,7 +710,7 @@ static int __init exynos_init(void)
 
 /* uart registration process */
 
-static void __init exynos_init_uarts(struct s3c2410_uartcfg *cfg, int no)
+static void __init exynos4_init_uarts(struct s3c2410_uartcfg *cfg, int no)
 {
 	struct s3c2410_uartcfg *tcfg = cfg;
 	u32 ucnt;
@@ -735,10 +718,7 @@ static void __init exynos_init_uarts(struct s3c2410_uartcfg *cfg, int no)
 	for (ucnt = 0; ucnt < no; ucnt++, tcfg++)
 		tcfg->has_fracval = 1;
 
-	if (soc_is_exynos5250())
-		s3c24xx_init_uartdevs("exynos4210-uart", exynos5_uart_resources, cfg, no);
-	else
-		s3c24xx_init_uartdevs("exynos4210-uart", exynos4_uart_resources, cfg, no);
+	s3c24xx_init_uartdevs("exynos4210-uart", exynos4_uart_resources, cfg, no);
 }
 
 static void __iomem *exynos_eint_base;
@@ -997,11 +977,14 @@ static int __init exynos_init_irq_eint(void)
 	 * platforms switch over to using the pinctrl driver, the wakeup
 	 * interrupt support code here can be completely removed.
 	 */
+	static const struct of_device_id exynos_pinctrl_ids[] = {
+		{ .compatible = "samsung,pinctrl-exynos4210", },
+		{ .compatible = "samsung,pinctrl-exynos4x12", },
+	};
 	struct device_node *pctrl_np, *wkup_np;
-	const char *pctrl_compat = "samsung,pinctrl-exynos4210";
 	const char *wkup_compat = "samsung,exynos4210-wakeup-eint";
 
-	for_each_compatible_node(pctrl_np, NULL, pctrl_compat) {
+	for_each_matching_node(pctrl_np, exynos_pinctrl_ids) {
 		if (of_device_is_available(pctrl_np)) {
 			wkup_np = of_find_compatible_node(pctrl_np, NULL,
 							wkup_compat);
