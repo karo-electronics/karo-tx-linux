@@ -6108,7 +6108,8 @@ void reset_zone_present_pages(void)
 	for_each_node_state(nid, N_HIGH_MEMORY) {
 		for (i = 0; i < MAX_NR_ZONES; i++) {
 			z = NODE_DATA(nid)->node_zones + i;
-			z->present_pages = 0;
+			if (!is_highmem(z))
+				z->present_pages = 0;
 		}
 	}
 }
@@ -6123,10 +6124,11 @@ void fixup_zone_present_pages(int nid, unsigned long start_pfn,
 
 	for (i = 0; i < MAX_NR_ZONES; i++) {
 		z = NODE_DATA(nid)->node_zones + i;
+		if (is_highmem(z))
+			continue;
+
 		zone_start_pfn = z->zone_start_pfn;
 		zone_end_pfn = zone_start_pfn + z->spanned_pages;
-
-		/* if the two regions intersect */
 		if (!(zone_start_pfn >= end_pfn	|| zone_end_pfn <= start_pfn))
 			z->present_pages += min(end_pfn, zone_end_pfn) -
 					    max(start_pfn, zone_start_pfn);
