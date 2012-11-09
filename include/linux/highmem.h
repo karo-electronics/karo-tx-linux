@@ -32,7 +32,7 @@ static inline void invalidate_kernel_vmap_range(void *vaddr, int size)
 
 #ifdef CONFIG_HIGHMEM
 #include <asm/highmem.h>
-#define PKMAP_INDEX_INVAL (-1)
+#define PKMAP_INVALID_INDEX (LAST_PKMAP)
 
 /* declarations for linux/mm/highmem.c */
 unsigned int nr_free_highpages(void);
