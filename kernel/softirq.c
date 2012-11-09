@@ -417,6 +417,7 @@ void __tasklet_schedule(struct tasklet_struct *t)
 	*__this_cpu_read(tasklet_vec.tail) = t;
 	__this_cpu_write(tasklet_vec.tail, &(t->next));
 	raise_softirq_irqoff(TASKLET_SOFTIRQ);
+	clear_bit(TASKLET_STATE_HI, &t->state);
 	local_irq_restore(flags);
 }
 
