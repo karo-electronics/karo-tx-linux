@@ -603,9 +603,9 @@ static struct mddev * mddev_find(dev_t unit)
 	goto retry;
 }
 
-static inline int mddev_lock(struct mddev * mddev)
+int md_queue_misc_work(struct work_struct *work)
 {
-	return mutex_lock_interruptible(&mddev->reconfig_mutex);
+	return queue_work(md_misc_wq, work);
 }
 
 static inline int mddev_is_locked(struct mddev *mddev)
@@ -620,7 +620,7 @@ static inline int mddev_trylock(struct mddev * mddev)
 
 static struct attribute_group md_redundancy_group;
 
-static void mddev_unlock(struct mddev * mddev)
+void mddev_unlock(struct mddev * mddev)
 {
 	if (mddev->to_remove) {
 		/* These cannot be removed under reconfig_mutex as
@@ -1805,15 +1805,15 @@ static void super_1_sync(struct mddev *mddev, struct md_rdev *rdev)
 		md_error(mddev, rdev);
 	else {
 		struct badblocks *bb = &rdev->badblocks;
-		u64 *bbp = (u64 *)page_address(rdev->bb_page);
 		u64 *p = bb->page;
 		sb->feature_map |= cpu_to_le32(MD_FEATURE_BAD_BLOCKS);
 		if (bb->changed) {
 			unsigned seq;
+			u64 *bbp;
 
 retry:
+			bbp = (u64 *)page_address(rdev->bb_page);
 			seq = read_seqbegin(&bb->lock);
-
 			memset(bbp, 0xff, PAGE_SIZE);
 
 			for (i = 0 ; i < bb->count ; i++) {
@@ -7269,6 +7269,7 @@ EXPORT_SYMBOL_GPL(md_allow_write);
 
 #define SYNC_MARKS	10
 #define	SYNC_MARK_STEP	(3*HZ)
+#define UPDATE_FREQUENCY (5*60*HZ)
 void md_do_sync(struct md_thread *thread)
 {
 	struct mddev *mddev = thread->mddev;
@@ -7277,6 +7278,7 @@ void md_do_sync(struct md_thread *thread)
 		 window;
 	sector_t max_sectors,j, io_sectors;
 	unsigned long mark[SYNC_MARKS];
+	unsigned long update_time;
 	sector_t mark_cnt[SYNC_MARKS];
 	int last_mark,m;
 	struct list_head *tmp;
@@ -7436,6 +7438,7 @@ void md_do_sync(struct md_thread *thread)
 	mddev->curr_resync_completed = j;
 	sysfs_notify(&mddev->kobj, NULL, "sync_completed");
 	md_new_event(mddev);
+	update_time = jiffies;
 
 	blk_start_plug(&plug);
 	while (j < max_sectors) {
@@ -7447,6 +7450,7 @@ void md_do_sync(struct md_thread *thread)
 		    ((mddev->curr_resync > mddev->curr_resync_completed &&
 		      (mddev->curr_resync - mddev->curr_resync_completed)
 		      > (max_sectors >> 4)) ||
+		     time_after_eq(jiffies, update_time + UPDATE_FREQUENCY) ||
 		     (j - mddev->curr_resync_completed)*2
 		     >= mddev->resync_max - mddev->curr_resync_completed
 			    )) {
@@ -7454,6 +7458,10 @@ void md_do_sync(struct md_thread *thread)
 			wait_event(mddev->recovery_wait,
 				   atomic_read(&mddev->recovery_active) == 0);
 			mddev->curr_resync_completed = j;
+			if (test_bit(MD_RECOVERY_SYNC, &mddev->recovery) &&
+			    j > mddev->recovery_cp)
+				mddev->recovery_cp = j;
+			update_time = jiffies;
 			set_bit(MD_CHANGE_CLEAN, &mddev->flags);
 			sysfs_notify(&mddev->kobj, NULL, "sync_completed");
 		}
@@ -7936,9 +7944,9 @@ int md_is_badblock(struct badblocks *bb, sector_t s, int sectors,
 		   sector_t *first_bad, int *bad_sectors)
 {
 	int hi;
-	int lo = 0;
+	int lo;
 	u64 *p = bb->page;
-	int rv = 0;
+	int rv;
 	sector_t target = s + sectors;
 	unsigned seq;
 
@@ -7953,7 +7961,8 @@ int md_is_badblock(struct badblocks *bb, sector_t s, int sectors,
 
 retry:
 	seq = read_seqbegin(&bb->lock);
-
+	lo = 0;
+	rv = 0;
 	hi = bb->count;
 
 	/* Binary search between lo and hi for 'target'
@@ -8604,6 +8613,8 @@ EXPORT_SYMBOL(md_register_thread);
 EXPORT_SYMBOL(md_unregister_thread);
 EXPORT_SYMBOL(md_wakeup_thread);
 EXPORT_SYMBOL(md_check_recovery);
+EXPORT_SYMBOL(mddev_unlock);
+EXPORT_SYMBOL(md_queue_misc_work);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("MD RAID framework");
 MODULE_ALIAS("md");
