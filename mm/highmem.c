@@ -107,10 +107,10 @@ struct page *kmap_to_page(void *vaddr)
 }
 EXPORT_SYMBOL(kmap_to_page);
 
-static void flush_all_zero_pkmaps(void)
+static int flush_all_zero_pkmaps(void)
 {
 	int i;
-	int need_flush = 0;
+	int index = PKMAP_INDEX_INVAL;
 
 	flush_cache_kmaps();
 
@@ -142,10 +142,12 @@ static void flush_all_zero_pkmaps(void)
 			  &pkmap_page_table[i]);
 
 		set_page_address(page, NULL);
-		need_flush = 1;
+		index = i;
 	}
-	if (need_flush)
+	if (index != PKMAP_INDEX_INVAL)
 		flush_tlb_kernel_range(PKMAP_ADDR(0), PKMAP_ADDR(LAST_PKMAP));
+
+	return index;
 }
 
 /**
@@ -161,6 +163,7 @@ void kmap_flush_unused(void)
 static inline unsigned long map_new_virtual(struct page *page)
 {
 	unsigned long vaddr;
+	int index = PKMAP_INDEX_INVAL;
 	int count;
 
 start:
@@ -169,40 +172,45 @@ start:
 	for (;;) {
 		last_pkmap_nr = (last_pkmap_nr + 1) & LAST_PKMAP_MASK;
 		if (!last_pkmap_nr) {
-			flush_all_zero_pkmaps();
-			count = LAST_PKMAP;
+			index = flush_all_zero_pkmaps();
+			if (index != PKMAP_INDEX_INVAL)
+				break; /* Found a usable entry */
 		}
-		if (!pkmap_count[last_pkmap_nr])
+		if (!pkmap_count[last_pkmap_nr]) {
+			index = last_pkmap_nr;
 			break;	/* Found a usable entry */
-		if (--count)
-			continue;
-
-		/*
-		 * Sleep for somebody else to unmap their entries
-		 */
-		{
-			DECLARE_WAITQUEUE(wait, current);
-
-			__set_current_state(TASK_UNINTERRUPTIBLE);
-			add_wait_queue(&pkmap_map_wait, &wait);
-			unlock_kmap();
-			schedule();
-			remove_wait_queue(&pkmap_map_wait, &wait);
-			lock_kmap();
-
-			/* Somebody else might have mapped it while we slept */
-			if (page_address(page))
-				return (unsigned long)page_address(page);
-
-			/* Re-start */
-			goto start;
 		}
+		if (--count == 0)
+			break;
 	}
-	vaddr = PKMAP_ADDR(last_pkmap_nr);
-	set_pte_at(&init_mm, vaddr,
-		   &(pkmap_page_table[last_pkmap_nr]), mk_pte(page, kmap_prot));
 
-	pkmap_count[last_pkmap_nr] = 1;
+	/*
+	 * Sleep for somebody else to unmap their entries
+	 */
+	if (index == PKMAP_INDEX_INVAL) {
+		DECLARE_WAITQUEUE(wait, current);
+
+		__set_current_state(TASK_UNINTERRUPTIBLE);
+		add_wait_queue(&pkmap_map_wait, &wait);
+		unlock_kmap();
+		schedule();
+		remove_wait_queue(&pkmap_map_wait, &wait);
+		lock_kmap();
+
+		/* Somebody else might have mapped it while we slept */
+		vaddr = (unsigned long)page_address(page);
+		if (vaddr)
+			return vaddr;
+
+		/* Re-start */
+		goto start;
+	}
+
+	vaddr = PKMAP_ADDR(index);
+	set_pte_at(&init_mm, vaddr,
+		   &(pkmap_page_table[index]), mk_pte(page, kmap_prot));
+
+	pkmap_count[index] = 1;
 	set_page_address(page, (void *)vaddr);
 
 	return vaddr;
@@ -324,7 +332,6 @@ struct page_address_map {
 	void *virtual;
 	struct list_head list;
 };
-
 static struct page_address_map page_address_maps[LAST_PKMAP];
 
 /*
