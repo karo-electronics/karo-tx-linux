@@ -1752,7 +1752,7 @@ out:
 /* Use reclaim/compaction for costly allocs or under memory pressure */
 static bool in_reclaim_compaction(struct scan_control *sc)
 {
-	if (COMPACTION_BUILD && sc->order &&
+	if (IS_ENABLED(CONFIG_COMPACTION) && sc->order &&
 			(sc->order > PAGE_ALLOC_COSTLY_ORDER ||
 			 sc->priority < DEF_PRIORITY - 2))
 		return true;
@@ -2036,7 +2036,7 @@ static bool shrink_zones(struct zonelist *zonelist, struct scan_control *sc)
 			if (zone->all_unreclaimable &&
 					sc->priority != DEF_PRIORITY)
 				continue;	/* Let kswapd poll it */
-			if (COMPACTION_BUILD) {
+			if (IS_ENABLED(CONFIG_COMPACTION)) {
 				/*
 				 * If we already have plenty of memory free for
 				 * compaction in this zone, don't free any more.
@@ -2687,7 +2687,7 @@ loop_again:
 			 * Do not reclaim more than needed for compaction.
 			 */
 			testorder = order;
-			if (COMPACTION_BUILD && order &&
+			if (IS_ENABLED(CONFIG_COMPACTION) && order &&
 					compaction_suitable(zone, order) !=
 						COMPACT_SKIPPED)
 				testorder = 0;
@@ -2833,7 +2833,7 @@ out:
 				continue;
 
 			/* Would compaction fail due to lack of free memory? */
-			if (COMPACTION_BUILD &&
+			if (IS_ENABLED(CONFIG_COMPACTION) &&
 			    compaction_suitable(zone, order) == COMPACT_SKIPPED)
 				goto loop_again;
 
