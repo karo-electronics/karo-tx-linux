@@ -718,6 +718,13 @@ config ARCH_USES_NUMA_GENERIC_PGPROT_HUGEPAGE
 	depends on ARCH_USES_NUMA_GENERIC_PGPROT
 	depends on TRANSPARENT_HUGEPAGE
 
+#
+# For architectures that (ab)use NUMA to represent different memory regions
+# all cpu-local but of different latencies, such as SuperH.
+#
+config ARCH_WANTS_NUMA_VARIABLE_LOCALITY
+	bool
+
 menuconfig CGROUPS
 	boolean "Control Group support"
 	depends on EVENTFD
