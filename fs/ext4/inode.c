@@ -484,49 +484,6 @@ static pgoff_t ext4_num_dirty_pages(struct inode *inode, pgoff_t idx,
 }
 
 /*
- * Sets the BH_Da_Mapped bit on the buffer heads corresponding to the given map.
- */
-static void set_buffers_da_mapped(struct inode *inode,
-				   struct ext4_map_blocks *map)
-{
-	struct address_space *mapping = inode->i_mapping;
-	struct pagevec pvec;
-	int i, nr_pages;
-	pgoff_t index, end;
-
-	index = map->m_lblk >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
-	end = (map->m_lblk + map->m_len - 1) >>
-		(PAGE_CACHE_SHIFT - inode->i_blkbits);
-
-	pagevec_init(&pvec, 0);
-	while (index <= end) {
-		nr_pages = pagevec_lookup(&pvec, mapping, index,
-					  min(end - index + 1,
-					      (pgoff_t)PAGEVEC_SIZE));
-		if (nr_pages == 0)
-			break;
-		for (i = 0; i < nr_pages; i++) {
-			struct page *page = pvec.pages[i];
-			struct buffer_head *bh, *head;
-
-			if (unlikely(page->mapping != mapping) ||
-			    !PageDirty(page))
-				break;
-
-			if (page_has_buffers(page)) {
-				bh = head = page_buffers(page);
-				do {
-					set_buffer_da_mapped(bh);
-					bh = bh->b_this_page;
-				} while (bh != head);
-			}
-			index++;
-		}
-		pagevec_release(&pvec);
-	}
-}
-
-/*
  * The ext4_map_blocks() function tries to look up the requested blocks,
  * and returns if the blocks are already mapped.
  *
@@ -574,7 +531,16 @@ int ext4_map_blocks(handle_t *handle, struct inode *inode,
 		up_read((&EXT4_I(inode)->i_data_sem));
 
 	if (retval > 0 && map->m_flags & EXT4_MAP_MAPPED) {
-		int ret = check_block_validity(inode, map);
+		int ret;
+		if (flags & EXT4_GET_BLOCKS_DELALLOC_RESERVE) {
+			/* delayed alloc may be allocated by fallocate and
+			 * coverted to initialized by directIO.
+			 * we need to handle delayed extent here.
+			 */
+			down_write((&EXT4_I(inode)->i_data_sem));
+			goto delayed_mapped;
+		}
+		ret = check_block_validity(inode, map);
 		if (ret != 0)
 			return ret;
 	}
@@ -652,12 +618,15 @@ int ext4_map_blocks(handle_t *handle, struct inode *inode,
 	if (flags & EXT4_GET_BLOCKS_DELALLOC_RESERVE) {
 		ext4_clear_inode_state(inode, EXT4_STATE_DELALLOC_RESERVED);
 
-		/* If we have successfully mapped the delayed allocated blocks,
-		 * set the BH_Da_Mapped bit on them. Its important to do this
-		 * under the protection of i_data_sem.
-		 */
-		if (retval > 0 && map->m_flags & EXT4_MAP_MAPPED)
-			set_buffers_da_mapped(inode, map);
+		if (retval > 0 && map->m_flags & EXT4_MAP_MAPPED) {
+			int ret;
+delayed_mapped:
+			/* delayed allocation blocks has been allocated */
+			ret = ext4_es_remove_extent(inode, map->m_lblk,
+						    map->m_len);
+			if (ret < 0)
+				retval = ret;
+		}
 	}
 
 	up_write((&EXT4_I(inode)->i_data_sem));
@@ -683,7 +652,7 @@ static int _ext4_get_block(struct inode *inode, sector_t iblock,
 	map.m_lblk = iblock;
 	map.m_len = bh->b_size >> inode->i_blkbits;
 
-	if (flags && !handle) {
+	if (flags && !(flags & EXT4_GET_BLOCKS_NO_LOCK) && !handle) {
 		/* Direct IO write... */
 		if (map.m_len > DIO_MAX_BLOCKS)
 			map.m_len = DIO_MAX_BLOCKS;
@@ -879,6 +848,8 @@ static int do_journal_get_write_access(handle_t *handle,
 }
 
 static int ext4_get_block_write(struct inode *inode, sector_t iblock,
+		   struct buffer_head *bh_result, int create);
+static int ext4_get_block_write_nolock(struct inode *inode, sector_t iblock,
 		   struct buffer_head *bh_result, int create);
 static int ext4_write_begin(struct file *file, struct address_space *mapping,
 			    loff_t pos, unsigned len, unsigned flags,
@@ -1301,6 +1272,7 @@ static void ext4_da_page_release_reservation(struct page *page,
 	struct inode *inode = page->mapping->host;
 	struct ext4_sb_info *sbi = EXT4_SB(inode->i_sb);
 	int num_clusters;
+	ext4_fsblk_t lblk;
 
 	head = page_buffers(page);
 	bh = head;
@@ -1310,20 +1282,23 @@ static void ext4_da_page_release_reservation(struct page *page,
 		if ((offset <= curr_off) && (buffer_delay(bh))) {
 			to_release++;
 			clear_buffer_delay(bh);
-			clear_buffer_da_mapped(bh);
 		}
 		curr_off = next_off;
 	} while ((bh = bh->b_this_page) != head);
+
+	if (to_release) {
+		lblk = page->index << (PAGE_CACHE_SHIFT - inode->i_blkbits);
+		ext4_es_remove_extent(inode, lblk, to_release);
+	}
 
 	/* If we have released all the blocks belonging to a cluster, then we
 	 * need to release the reserved space for that cluster. */
 	num_clusters = EXT4_NUM_B2C(sbi, to_release);
 	while (num_clusters > 0) {
-		ext4_fsblk_t lblk;
 		lblk = (page->index << (PAGE_CACHE_SHIFT - inode->i_blkbits)) +
 			((num_clusters - 1) << sbi->s_cluster_bits);
 		if (sbi->s_cluster_ratio == 1 ||
-		    !ext4_find_delalloc_cluster(inode, lblk, 1))
+		    !ext4_find_delalloc_cluster(inode, lblk))
 			ext4_da_release_space(inode, 1);
 
 		num_clusters--;
@@ -1429,8 +1404,6 @@ static int mpage_da_submit_io(struct mpage_da_data *mpd,
 						clear_buffer_delay(bh);
 						bh->b_blocknr = pblock;
 					}
-					if (buffer_da_mapped(bh))
-						clear_buffer_da_mapped(bh);
 					if (buffer_unwritten(bh) ||
 					    buffer_mapped(bh))
 						BUG_ON(bh->b_blocknr != pblock);
@@ -1500,9 +1473,15 @@ static void ext4_da_block_invalidatepages(struct mpage_da_data *mpd)
 	struct pagevec pvec;
 	struct inode *inode = mpd->inode;
 	struct address_space *mapping = inode->i_mapping;
+	ext4_lblk_t start, last;
 
 	index = mpd->first_page;
 	end   = mpd->next_page - 1;
+
+	start = index << (PAGE_CACHE_SHIFT - inode->i_blkbits);
+	last = end << (PAGE_CACHE_SHIFT - inode->i_blkbits);
+	ext4_es_remove_extent(inode, start, last - start + 1);
+
 	while (index <= end) {
 		nr_pages = pagevec_lookup(&pvec, mapping, index, PAGEVEC_SIZE);
 		if (nr_pages == 0)
@@ -1813,6 +1792,10 @@ static int ext4_da_map_blocks(struct inode *inode, sector_t iblock,
 				/* not enough space to reserve */
 				goto out_unlock;
 		}
+
+		retval = ext4_es_insert_extent(inode, map->m_lblk, map->m_len);
+		if (retval)
+			goto out_unlock;
 
 		/* Clear EXT4_MAP_FROM_CLUSTER flag since its purpose is served
 		 * and it should not appear on the bh->b_state.
@@ -2850,29 +2833,12 @@ static int ext4_get_block_write(struct inode *inode, sector_t iblock,
 }
 
 static int ext4_get_block_write_nolock(struct inode *inode, sector_t iblock,
-		   struct buffer_head *bh_result, int flags)
+		   struct buffer_head *bh_result, int create)
 {
-	handle_t *handle = ext4_journal_current_handle();
-	struct ext4_map_blocks map;
-	int ret = 0;
-
-	ext4_debug("ext4_get_block_write_nolock: inode %lu, flag %d\n",
-		   inode->i_ino, flags);
-
-	flags = EXT4_GET_BLOCKS_NO_LOCK;
-
-	map.m_lblk = iblock;
-	map.m_len = bh_result->b_size >> inode->i_blkbits;
-
-	ret = ext4_map_blocks(handle, inode, &map, flags);
-	if (ret > 0) {
-		map_bh(bh_result, inode->i_sb, map.m_pblk);
-		bh_result->b_state = (bh_result->b_state & ~EXT4_MAP_FLAGS) |
-					map.m_flags;
-		bh_result->b_size = inode->i_sb->s_blocksize * map.m_len;
-		ret = 0;
-	}
-	return ret;
+	ext4_debug("ext4_get_block_write_nolock: inode %lu, create flag %d\n",
+		   inode->i_ino, create);
+	return _ext4_get_block(inode, iblock, bh_result,
+			       EXT4_GET_BLOCKS_NO_LOCK);
 }
 
 static void ext4_end_io_dio(struct kiocb *iocb, loff_t offset,
@@ -3003,6 +2969,8 @@ static ssize_t ext4_ext_direct_IO(int rw, struct kiocb *iocb,
 	loff_t final_size = offset + count;
 	if (rw == WRITE && final_size <= inode->i_size) {
 		int overwrite = 0;
+		get_block_t *get_block_func = NULL;
+		int dio_flags = 0;
 
 		BUG_ON(iocb->private == NULL);
 
@@ -3056,22 +3024,20 @@ static ssize_t ext4_ext_direct_IO(int rw, struct kiocb *iocb,
 			ext4_inode_aio_set(inode, io_end);
 		}
 
-		if (overwrite)
-			ret = __blockdev_direct_IO(rw, iocb, inode,
-						 inode->i_sb->s_bdev, iov,
-						 offset, nr_segs,
-						 ext4_get_block_write_nolock,
-						 ext4_end_io_dio,
-						 NULL,
-						 0);
-		else
-			ret = __blockdev_direct_IO(rw, iocb, inode,
-						 inode->i_sb->s_bdev, iov,
-						 offset, nr_segs,
-						 ext4_get_block_write,
-						 ext4_end_io_dio,
-						 NULL,
-						 DIO_LOCKING);
+		if (overwrite) {
+			get_block_func = ext4_get_block_write_nolock;
+		} else {
+			get_block_func = ext4_get_block_write;
+			dio_flags = DIO_LOCKING;
+		}
+		ret = __blockdev_direct_IO(rw, iocb, inode,
+					 inode->i_sb->s_bdev, iov,
+					 offset, nr_segs,
+					 get_block_func,
+					 ext4_end_io_dio,
+					 NULL,
+					 dio_flags);
+
 		if (iocb->private)
 			ext4_inode_aio_set(inode, NULL);
 		/*
