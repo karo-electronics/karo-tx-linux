@@ -745,6 +745,7 @@ void do_huge_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	struct page *new_page = NULL;
 	struct page *page = NULL;
 	int node, lru;
+	int last_cpu;
 
 	spin_lock(&mm->page_table_lock);
 	if (unlikely(!pmd_same(*pmd, entry)))
@@ -759,6 +760,7 @@ void do_huge_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	page = pmd_page(entry);
 	if (page) {
 		VM_BUG_ON(!PageCompound(page) || !PageHead(page));
+		last_cpu = page_last_cpu(page);
 
 		get_page(page);
 		node = mpol_misplaced(page, vma, haddr);
@@ -1440,6 +1442,7 @@ static void __split_huge_page_refcount(struct page *page)
 		page_tail->mapping = page->mapping;
 
 		page_tail->index = page->index + i;
+		page_xchg_last_cpu(page, page_last_cpu(page_tail));
 
 		BUG_ON(!PageAnon(page_tail));
 		BUG_ON(!PageUptodate(page_tail));
