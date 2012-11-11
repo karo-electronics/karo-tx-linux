@@ -1108,7 +1108,7 @@ static int __devinit gdth_init_pci(struct pci_dev *pdev, gdth_pci_str *pcistr,
         command |= 6;
 	pci_write_config_word(pdev, PCI_COMMAND, command);
 	if (pci_resource_start(pdev, 8) == 1UL)
-	    pci_resource_start(pdev, 8) = 0UL;
+	    pdev->resource[8].start = 0UL;
         i = 0xFEFF0001UL;
 	pci_write_config_dword(pdev, PCI_ROM_ADDRESS, i);
         gdth_delay(1);
