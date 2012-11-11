@@ -340,7 +340,7 @@ alloc_init_deleg(struct nfs4_client *clp, struct nfs4_ol_stateid *stp, struct sv
 	fh_copy_shallow(&dp->dl_fh, &current_fh->fh_handle);
 	dp->dl_time = 0;
 	atomic_set(&dp->dl_count, 1);
-	INIT_WORK(&dp->dl_recall.cb_work, nfsd4_do_callback_rpc);
+	nfsd4_init_callback(&dp->dl_recall);
 	return dp;
 }
 
@@ -945,7 +945,7 @@ static struct nfsd4_session *alloc_session(struct nfsd4_channel_attrs *fchan)
 	return new;
 }
 
-static struct nfsd4_session *init_session(struct svc_rqst *rqstp, struct nfsd4_session *new, struct nfs4_client *clp, struct nfsd4_create_session *cses)
+void init_session(struct svc_rqst *rqstp, struct nfsd4_session *new, struct nfs4_client *clp, struct nfsd4_create_session *cses)
 {
 	int idx;
 
@@ -957,6 +957,7 @@ static struct nfsd4_session *init_session(struct svc_rqst *rqstp, struct nfsd4_s
 	new->se_cb_seq_nr = 1;
 	new->se_flags = cses->flags;
 	new->se_cb_prog = cses->callback_prog;
+	new->se_cb_sec = cses->cb_sec;
 	kref_init(&new->se_ref);
 	idx = hash_sessionid(&new->se_sessionid);
 	spin_lock(&client_lock);
@@ -978,7 +979,6 @@ static struct nfsd4_session *init_session(struct svc_rqst *rqstp, struct nfsd4_s
 		rpc_copy_addr((struct sockaddr *)&clp->cl_cb_conn.cb_addr, sa);
 		clp->cl_cb_conn.cb_addrlen = svc_addr_len(sa);
 	}
-	return new;
 }
 
 /* caller must hold client_lock */
@@ -1313,7 +1313,7 @@ static struct nfs4_client *create_client(struct xdr_netobj name, char *recdir,
 	INIT_LIST_HEAD(&clp->cl_lru);
 	INIT_LIST_HEAD(&clp->cl_callbacks);
 	spin_lock_init(&clp->cl_lock);
-	INIT_WORK(&clp->cl_cb_null.cb_work, nfsd4_do_callback_rpc);
+	nfsd4_init_callback(&clp->cl_cb_null);
 	clp->cl_time = get_seconds();
 	clear_bit(0, &clp->cl_cb_slot_busy);
 	rpc_init_wait_queue(&clp->cl_cb_waitq, "Backchannel slot table");
@@ -1865,6 +1865,20 @@ static __be32 nfsd4_map_bcts_dir(u32 *dir)
 	return nfserr_inval;
 }
 
+__be32 nfsd4_backchannel_ctl(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate, struct nfsd4_backchannel_ctl *bc)
+{
+	struct nfsd4_session *session = cstate->session;
+
+	spin_lock(&client_lock);
+	session->se_cb_prog = bc->bc_cb_program;
+	session->se_cb_sec = bc->bc_cb_sec;
+	spin_unlock(&client_lock);
+
+	nfsd4_probe_callback(session->se_client);
+
+	return nfs_ok;
+}
+
 __be32 nfsd4_bind_conn_to_session(struct svc_rqst *rqstp,
 		     struct nfsd4_compound_state *cstate,
 		     struct nfsd4_bind_conn_to_session *bcts)
@@ -2340,7 +2354,7 @@ nfsd4_init_slabs(void)
 	if (openowner_slab == NULL)
 		goto out_nomem;
 	lockowner_slab = kmem_cache_create("nfsd4_lockowners",
-			sizeof(struct nfs4_openowner), 0, 0, NULL);
+			sizeof(struct nfs4_lockowner), 0, 0, NULL);
 	if (lockowner_slab == NULL)
 		goto out_nomem;
 	file_slab = kmem_cache_create("nfsd4_files",
@@ -2555,9 +2569,14 @@ static void nfsd_break_deleg_cb(struct file_lock *fl)
 	struct nfs4_file *fp = (struct nfs4_file *)fl->fl_owner;
 	struct nfs4_delegation *dp;
 
-	BUG_ON(!fp);
-	/* We assume break_lease is only called once per lease: */
-	BUG_ON(fp->fi_had_conflict);
+	if (!fp) {
+		WARN(1, "(%p)->fl_owner NULL\n", fl);
+		return;
+	}
+	if (fp->fi_had_conflict) {
+		WARN(1, "duplicate break on %p\n", fp);
+		return;
+	}
 	/*
 	 * We don't want the locks code to timeout the lease for us;
 	 * we'll remove it ourself if a delegation isn't returned
@@ -3807,12 +3826,10 @@ nfsd4_delegreturn(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	struct nfs4_delegation *dp;
 	stateid_t *stateid = &dr->dr_stateid;
 	struct nfs4_stid *s;
-	struct inode *inode;
 	__be32 status;
 
 	if ((status = fh_verify(rqstp, &cstate->current_fh, S_IFREG, 0)))
 		return status;
-	inode = cstate->current_fh.fh_dentry->d_inode;
 
 	nfs4_lock_state();
 	status = nfsd4_lookup_stateid(stateid, NFS4_DELEG_STID, &s, cstate->minorversion);
@@ -4467,7 +4484,7 @@ alloc_reclaim(void)
 }
 
 int
-nfs4_has_reclaimed_state(const char *name, bool use_exchange_id)
+nfs4_has_reclaimed_state(const char *name)
 {
 	unsigned int strhashval = clientstr_hashval(name);
 	struct nfs4_client *clp;
