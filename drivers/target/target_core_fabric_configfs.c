@@ -4,10 +4,11 @@
  * This file contains generic fabric module configfs infrastructure for
  * TCM v4.x code
  *
- * Copyright (c) 2010,2011 Rising Tide Systems
- * Copyright (c) 2010,2011 Linux-iSCSI.org
+ * (c) Copyright 2010-2012 RisingTide Systems LLC.
  *
- * Copyright (c) Nicholas A. Bellinger <nab@linux-iscsi.org>
+ * Licensed to the Linux Foundation under the General Public License (GPL) version 2.
+ *
+ * Nicholas A. Bellinger <nab@linux-iscsi.org>
 *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -734,14 +735,12 @@ static int target_fabric_port_link(
 	struct config_item *se_dev_ci)
 {
 	struct config_item *tpg_ci;
-	struct se_device *dev;
 	struct se_lun *lun = container_of(to_config_group(lun_ci),
 				struct se_lun, lun_group);
 	struct se_lun *lun_p;
 	struct se_portal_group *se_tpg;
-	struct se_subsystem_dev *se_dev = container_of(
-				to_config_group(se_dev_ci), struct se_subsystem_dev,
-				se_dev_group);
+	struct se_device *dev =
+		container_of(to_config_group(se_dev_ci), struct se_device, dev_group);
 	struct target_fabric_configfs *tf;
 	int ret;
 
@@ -753,14 +752,6 @@ static int target_fabric_port_link(
 	if (lun->lun_se_dev !=  NULL) {
 		pr_err("Port Symlink already exists\n");
 		return -EEXIST;
-	}
-
-	dev = se_dev->se_dev_ptr;
-	if (!dev) {
-		pr_err("Unable to locate struct se_device pointer from"
-			" %s\n", config_item_name(se_dev_ci));
-		ret = -ENODEV;
-		goto out;
 	}
 
 	lun_p = core_dev_add_lun(se_tpg, dev, lun->unpacked_lun);
