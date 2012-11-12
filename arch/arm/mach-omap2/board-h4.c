@@ -26,14 +26,13 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/input/matrix_keypad.h>
+#include <linux/mfd/menelaus.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 
-#include <plat/menelaus.h>
-#include <plat/dma.h>
-#include <plat/gpmc.h>
+#include <plat-omap/dma-omap.h>
 #include "debug-devices.h"
 
 #include <video/omapdss.h>
@@ -42,6 +41,7 @@
 #include "common.h"
 #include "mux.h"
 #include "control.h"
+#include "gpmc.h"
 
 #define H4_FLASH_CS	0
 #define H4_SMC91X_CS	1
