@@ -1727,6 +1727,21 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
+		.alg = "__driver-cbc-camellia-aesni",
+		.test = alg_test_null,
+		.suite = {
+			.cipher = {
+				.enc = {
+					.vecs = NULL,
+					.count = 0
+				},
+				.dec = {
+					.vecs = NULL,
+					.count = 0
+				}
+			}
+		}
+	}, {
 		.alg = "__driver-cbc-cast5-avx",
 		.test = alg_test_null,
 		.suite = {
@@ -1805,6 +1820,21 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.alg = "__driver-ecb-aes-aesni",
 		.test = alg_test_null,
 		.fips_allowed = 1,
+		.suite = {
+			.cipher = {
+				.enc = {
+					.vecs = NULL,
+					.count = 0
+				},
+				.dec = {
+					.vecs = NULL,
+					.count = 0
+				}
+			}
+		}
+	}, {
+		.alg = "__driver-ecb-camellia-aesni",
+		.test = alg_test_null,
 		.suite = {
 			.cipher = {
 				.enc = {
@@ -2143,7 +2173,39 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
+		.alg = "cryptd(__driver-cbc-camellia-aesni)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+		.suite = {
+			.cipher = {
+				.enc = {
+					.vecs = NULL,
+					.count = 0
+				},
+				.dec = {
+					.vecs = NULL,
+					.count = 0
+				}
+			}
+		}
+	}, {
 		.alg = "cryptd(__driver-ecb-aes-aesni)",
+		.test = alg_test_null,
+		.fips_allowed = 1,
+		.suite = {
+			.cipher = {
+				.enc = {
+					.vecs = NULL,
+					.count = 0
+				},
+				.dec = {
+					.vecs = NULL,
+					.count = 0
+				}
+			}
+		}
+	}, {
+		.alg = "cryptd(__driver-ecb-camellia-aesni)",
 		.test = alg_test_null,
 		.fips_allowed = 1,
 		.suite = {
@@ -2332,6 +2394,36 @@ static const struct alg_test_desc alg_test_descs[] = {
 				.dec = {
 					.vecs = cast6_ctr_dec_tv_template,
 					.count = CAST6_CTR_DEC_TEST_VECTORS
+				}
+			}
+		}
+	}, {
+		.alg = "ctr(des)",
+		.test = alg_test_skcipher,
+		.suite = {
+			.cipher = {
+				.enc = {
+					.vecs = des_ctr_enc_tv_template,
+					.count = DES_CTR_ENC_TEST_VECTORS
+				},
+				.dec = {
+					.vecs = des_ctr_dec_tv_template,
+					.count = DES_CTR_DEC_TEST_VECTORS
+				}
+			}
+		}
+	}, {
+		.alg = "ctr(des3_ede)",
+		.test = alg_test_skcipher,
+		.suite = {
+			.cipher = {
+				.enc = {
+					.vecs = des3_ede_ctr_enc_tv_template,
+					.count = DES3_EDE_CTR_ENC_TEST_VECTORS
+				},
+				.dec = {
+					.vecs = des3_ede_ctr_dec_tv_template,
+					.count = DES3_EDE_CTR_DEC_TEST_VECTORS
 				}
 			}
 		}
