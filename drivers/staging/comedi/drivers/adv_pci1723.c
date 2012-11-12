@@ -50,8 +50,6 @@ TODO:
 
 #include "../comedidev.h"
 
-#define PCI_VENDOR_ID_ADVANTECH		0x13fe	/* Advantech PCI vendor ID */
-
 /* all the registers for the pci1723 board */
 #define PCI1723_DA(N)   ((N)<<1)	/* W: D/A register N (0 to 7) */
 
@@ -234,20 +232,20 @@ static int pci1723_dio_insn_bits(struct comedi_device *dev,
 	return insn->n;
 }
 
-static int pci1723_attach_pci(struct comedi_device *dev,
-			      struct pci_dev *pcidev)
+static int __devinit pci1723_auto_attach(struct comedi_device *dev,
+					 unsigned long context_unused)
 {
+	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
 	struct pci1723_private *devpriv;
 	struct comedi_subdevice *s;
 	int ret;
 
-	comedi_set_hw_dev(dev, &pcidev->dev);
 	dev->board_name = dev->driver->driver_name;
 
-	ret = alloc_private(dev, sizeof(*devpriv));
-	if (ret < 0)
-		return ret;
-	devpriv = dev->private;
+	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
+	if (!devpriv)
+		return -ENOMEM;
+	dev->private = devpriv;
 
 	ret = comedi_pci_enable(pcidev, dev->board_name);
 	if (ret)
@@ -319,7 +317,7 @@ static void pci1723_detach(struct comedi_device *dev)
 static struct comedi_driver adv_pci1723_driver = {
 	.driver_name	= "adv_pci1723",
 	.module		= THIS_MODULE,
-	.attach_pci	= pci1723_attach_pci,
+	.auto_attach	= pci1723_auto_attach,
 	.detach		= pci1723_detach,
 };
 

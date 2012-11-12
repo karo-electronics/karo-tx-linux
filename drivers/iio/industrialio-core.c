@@ -397,6 +397,11 @@ static ssize_t iio_read_channel_info(struct device *dev,
 		val2 = do_div(tmp, 1000000000LL);
 		val = tmp;
 		return sprintf(buf, "%d.%09u\n", val, val2);
+	case IIO_VAL_FRACTIONAL_LOG2:
+		tmp = (s64)val * 1000000000LL >> val2;
+		val2 = do_div(tmp, 1000000000LL);
+		val = tmp;
+		return sprintf(buf, "%d.%09u\n", val, val2);
 	default:
 		return 0;
 	}
@@ -432,6 +437,8 @@ static ssize_t iio_write_channel_info(struct device *dev,
 	if (buf[0] == '-') {
 		negative = true;
 		buf++;
+	} else if (buf[0] == '+') {
+		buf++;
 	}
 
 	while (*buf) {
@@ -440,8 +447,6 @@ static ssize_t iio_write_channel_info(struct device *dev,
 				integer = integer*10 + *buf - '0';
 			else {
 				fract += fract_mult*(*buf - '0');
-				if (fract_mult == 1)
-					break;
 				fract_mult /= 10;
 			}
 		} else if (*buf == '\n') {
@@ -449,7 +454,7 @@ static ssize_t iio_write_channel_info(struct device *dev,
 				break;
 			else
 				return -EINVAL;
-		} else if (*buf == '.') {
+		} else if (*buf == '.' && integer_part) {
 			integer_part = false;
 		} else {
 			return -EINVAL;
