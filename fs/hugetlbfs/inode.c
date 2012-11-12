@@ -1023,7 +1023,7 @@ static int __init init_hugetlbfs_fs(void)
 		goto out;
 
 	i = 0;
-	for_each_hstate(h) {
+	for_each_hstate (h) {
 		char buf[50];
 		unsigned ps_kb = 1U << (h->order + PAGE_SHIFT - 10);
 
@@ -1032,8 +1032,9 @@ static int __init init_hugetlbfs_fs(void)
 							buf);
 
 		if (IS_ERR(hugetlbfs_vfsmount[i])) {
-			pr_err("hugetlb: Cannot mount internal hugetlbfs for "
-				"page size %uK", ps_kb);
+				pr_err(
+			"hugetlb: Cannot mount internal hugetlbfs for page size %uK",
+			       ps_kb);
 			error = PTR_ERR(hugetlbfs_vfsmount[i]);
 			hugetlbfs_vfsmount[i] = NULL;
 		}
@@ -1063,7 +1064,7 @@ static void __exit exit_hugetlbfs_fs(void)
 	rcu_barrier();
 	kmem_cache_destroy(hugetlbfs_inode_cachep);
 	i = 0;
-	for_each_hstate(h)
+	for_each_hstate (h)
 		kern_unmount(hugetlbfs_vfsmount[i++]);
 	unregister_filesystem(&hugetlbfs_fs_type);
 	bdi_destroy(&hugetlbfs_backing_dev_info);
