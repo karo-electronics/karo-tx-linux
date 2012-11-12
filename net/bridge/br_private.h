@@ -158,7 +158,9 @@ struct net_bridge_port
 
 static inline struct net_bridge_port *br_port_get_rcu(const struct net_device *dev)
 {
-	struct net_bridge_port *port = rcu_dereference(dev->rx_handler_data);
+	struct net_bridge_port *port =
+			rcu_dereference_rtnl(dev->rx_handler_data);
+
 	return br_port_exists(dev) ? port : NULL;
 }
 
@@ -288,7 +290,6 @@ struct br_input_skb_cb {
 	pr_debug("%s: " format,  (br)->dev->name, ##args)
 
 extern struct notifier_block br_device_notifier;
-extern const u8 br_group_address[ETH_ALEN];
 
 /* called under bridge lock */
 static inline int br_is_root_bridge(const struct net_bridge *br)
@@ -553,6 +554,9 @@ extern struct rtnl_link_ops br_link_ops;
 extern int br_netlink_init(void);
 extern void br_netlink_fini(void);
 extern void br_ifinfo_notify(int event, struct net_bridge_port *port);
+extern int br_setlink(struct net_device *dev, struct nlmsghdr *nlmsg);
+extern int br_getlink(struct sk_buff *skb, u32 pid, u32 seq,
+		      struct net_device *dev);
 
 #ifdef CONFIG_SYSFS
 /* br_sysfs_if.c */
@@ -566,10 +570,10 @@ extern void br_sysfs_delbr(struct net_device *dev);
 
 #else
 
-#define br_sysfs_addif(p)	(0)
-#define br_sysfs_renameif(p)	(0)
-#define br_sysfs_addbr(dev)	(0)
-#define br_sysfs_delbr(dev)	do { } while(0)
+static inline int br_sysfs_addif(struct net_bridge_port *p) { return 0; }
+static inline int br_sysfs_renameif(struct net_bridge_port *p) { return 0; }
+static inline int br_sysfs_addbr(struct net_device *dev) { return 0; }
+static inline void br_sysfs_delbr(struct net_device *dev) { return; }
 #endif /* CONFIG_SYSFS */
 
 #endif

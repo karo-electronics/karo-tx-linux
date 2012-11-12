@@ -78,7 +78,6 @@ static const int multicast_filter_limit = 32;
 
 #define MAX_READ_REQUEST_SHIFT	12
 #define TX_DMA_BURST	7	/* Maximum PCI burst, '7' is unlimited */
-#define SafeMtu		0x1c20	/* ... actually life sucks beyond ~7k */
 #define InterFrameGap	0x03	/* 3 means InterFrameGap = the shortest one */
 
 #define R8169_REGS_SIZE		256
@@ -456,6 +455,7 @@ enum rtl8168_registers {
 #define PWM_EN				(1 << 22)
 #define RXDV_GATED_EN			(1 << 19)
 #define EARLY_TALLY_EN			(1 << 16)
+#define FORCE_CLK			(1 << 15) /* force clock request */
 };
 
 enum rtl_register_content {
@@ -519,6 +519,7 @@ enum rtl_register_content {
 	PMEnable	= (1 << 0),	/* Power Management Enable */
 
 	/* Config2 register p. 25 */
+	ClkReqEn	= (1 << 7),	/* Clock Request Enable */
 	MSIEnable	= (1 << 5),	/* 8169 only. Reserved in the 8168. */
 	PCI_Clock_66MHz = 0x01,
 	PCI_Clock_33MHz = 0x00,
@@ -539,6 +540,7 @@ enum rtl_register_content {
 	Spi_en		= (1 << 3),
 	LanWake		= (1 << 1),	/* LanWake enable/disable */
 	PMEStatus	= (1 << 0),	/* PME status can be reset by PCI RST# */
+	ASPM_en		= (1 << 0),	/* ASPM enable */
 
 	/* TBICSR p.28 */
 	TBIReset	= 0x80000000,
@@ -687,6 +689,7 @@ enum features {
 	RTL_FEATURE_WOL		= (1 << 0),
 	RTL_FEATURE_MSI		= (1 << 1),
 	RTL_FEATURE_GMII	= (1 << 2),
+	RTL_FEATURE_FW_LOADED	= (1 << 3),
 };
 
 struct rtl8169_counters {
@@ -2394,8 +2397,10 @@ static void rtl_apply_firmware(struct rtl8169_private *tp)
 	struct rtl_fw *rtl_fw = tp->rtl_fw;
 
 	/* TODO: release firmware once rtl_phy_write_fw signals failures. */
-	if (!IS_ERR_OR_NULL(rtl_fw))
+	if (!IS_ERR_OR_NULL(rtl_fw)) {
 		rtl_phy_write_fw(tp, rtl_fw);
+		tp->features |= RTL_FEATURE_FW_LOADED;
+	}
 }
 
 static void rtl_apply_firmware_cond(struct rtl8169_private *tp, u8 reg, u16 val)
@@ -2404,6 +2409,31 @@ static void rtl_apply_firmware_cond(struct rtl8169_private *tp, u8 reg, u16 val)
 		netif_warn(tp, hw, tp->dev, "chipset not ready for firmware\n");
 	else
 		rtl_apply_firmware(tp);
+}
+
+static void r810x_aldps_disable(struct rtl8169_private *tp)
+{
+	rtl_writephy(tp, 0x1f, 0x0000);
+	rtl_writephy(tp, 0x18, 0x0310);
+	msleep(100);
+}
+
+static void r810x_aldps_enable(struct rtl8169_private *tp)
+{
+	if (!(tp->features & RTL_FEATURE_FW_LOADED))
+		return;
+
+	rtl_writephy(tp, 0x1f, 0x0000);
+	rtl_writephy(tp, 0x18, 0x8310);
+}
+
+static void r8168_aldps_enable_1(struct rtl8169_private *tp)
+{
+	if (!(tp->features & RTL_FEATURE_FW_LOADED))
+		return;
+
+	rtl_writephy(tp, 0x1f, 0x0000);
+	rtl_w1w0_phy(tp, 0x15, 0x1000, 0x0000);
 }
 
 static void rtl8169s_hw_phy_config(struct rtl8169_private *tp)
@@ -3178,6 +3208,8 @@ static void rtl8168e_2_hw_phy_config(struct rtl8169_private *tp)
 	rtl_w1w0_phy(tp, 0x19, 0x0000, 0x0001);
 	rtl_w1w0_phy(tp, 0x10, 0x0000, 0x0400);
 	rtl_writephy(tp, 0x1f, 0x0000);
+
+	r8168_aldps_enable_1(tp);
 }
 
 static void rtl8168f_hw_phy_config(struct rtl8169_private *tp)
@@ -3250,6 +3282,8 @@ static void rtl8168f_1_hw_phy_config(struct rtl8169_private *tp)
 	rtl_writephy(tp, 0x05, 0x8b85);
 	rtl_w1w0_phy(tp, 0x06, 0x4000, 0x0000);
 	rtl_writephy(tp, 0x1f, 0x0000);
+
+	r8168_aldps_enable_1(tp);
 }
 
 static void rtl8168f_2_hw_phy_config(struct rtl8169_private *tp)
@@ -3257,6 +3291,8 @@ static void rtl8168f_2_hw_phy_config(struct rtl8169_private *tp)
 	rtl_apply_firmware(tp);
 
 	rtl8168f_hw_phy_config(tp);
+
+	r8168_aldps_enable_1(tp);
 }
 
 static void rtl8411_hw_phy_config(struct rtl8169_private *tp)
@@ -3354,6 +3390,8 @@ static void rtl8411_hw_phy_config(struct rtl8169_private *tp)
 	rtl_w1w0_phy(tp, 0x19, 0x0000, 0x0001);
 	rtl_w1w0_phy(tp, 0x10, 0x0000, 0x0400);
 	rtl_writephy(tp, 0x1f, 0x0000);
+
+	r8168_aldps_enable_1(tp);
 }
 
 static void rtl8168g_1_hw_phy_config(struct rtl8169_private *tp)
@@ -3439,21 +3477,19 @@ static void rtl8105e_hw_phy_config(struct rtl8169_private *tp)
 	};
 
 	/* Disable ALDPS before ram code */
-	rtl_writephy(tp, 0x1f, 0x0000);
-	rtl_writephy(tp, 0x18, 0x0310);
-	msleep(100);
+	r810x_aldps_disable(tp);
 
 	rtl_apply_firmware(tp);
 
 	rtl_writephy_batch(tp, phy_reg_init, ARRAY_SIZE(phy_reg_init));
+
+	r810x_aldps_enable(tp);
 }
 
 static void rtl8402_hw_phy_config(struct rtl8169_private *tp)
 {
 	/* Disable ALDPS before setting firmware */
-	rtl_writephy(tp, 0x1f, 0x0000);
-	rtl_writephy(tp, 0x18, 0x0310);
-	msleep(20);
+	r810x_aldps_disable(tp);
 
 	rtl_apply_firmware(tp);
 
@@ -3463,6 +3499,8 @@ static void rtl8402_hw_phy_config(struct rtl8169_private *tp)
 	rtl_writephy(tp, 0x10, 0x401f);
 	rtl_writephy(tp, 0x19, 0x7030);
 	rtl_writephy(tp, 0x1f, 0x0000);
+
+	r810x_aldps_enable(tp);
 }
 
 static void rtl8106e_hw_phy_config(struct rtl8169_private *tp)
@@ -3475,9 +3513,7 @@ static void rtl8106e_hw_phy_config(struct rtl8169_private *tp)
 	};
 
 	/* Disable ALDPS before ram code */
-	rtl_writephy(tp, 0x1f, 0x0000);
-	rtl_writephy(tp, 0x18, 0x0310);
-	msleep(100);
+	r810x_aldps_disable(tp);
 
 	rtl_apply_firmware(tp);
 
@@ -3485,6 +3521,8 @@ static void rtl8106e_hw_phy_config(struct rtl8169_private *tp)
 	rtl_writephy_batch(tp, phy_reg_init, ARRAY_SIZE(phy_reg_init));
 
 	rtl_eri_write(tp, 0x1d0, ERIAR_MASK_0011, 0x0000, ERIAR_EXGMAC);
+
+	r810x_aldps_enable(tp);
 }
 
 static void rtl_hw_phy_config(struct net_device *dev)
@@ -5015,8 +5053,6 @@ static void rtl_hw_start_8168e_2(struct rtl8169_private *tp)
 
 	RTL_W8(MaxTxPacketSize, EarlySize);
 
-	rtl_disable_clock_request(pdev);
-
 	RTL_W32(TxConfig, RTL_R32(TxConfig) | TXCFG_AUTO_FIFO);
 	RTL_W8(MCU, RTL_R8(MCU) & ~NOW_IS_OOB);
 
@@ -5025,7 +5061,8 @@ static void rtl_hw_start_8168e_2(struct rtl8169_private *tp)
 
 	RTL_W8(DLLPR, RTL_R8(DLLPR) | PFM_EN);
 	RTL_W32(MISC, RTL_R32(MISC) | PWM_EN);
-	RTL_W8(Config5, RTL_R8(Config5) & ~Spi_en);
+	RTL_W8(Config5, (RTL_R8(Config5) & ~Spi_en) | ASPM_en);
+	RTL_W8(Config2, RTL_R8(Config2) | ClkReqEn);
 }
 
 static void rtl_hw_start_8168f(struct rtl8169_private *tp)
@@ -5050,13 +5087,12 @@ static void rtl_hw_start_8168f(struct rtl8169_private *tp)
 
 	RTL_W8(MaxTxPacketSize, EarlySize);
 
-	rtl_disable_clock_request(pdev);
-
 	RTL_W32(TxConfig, RTL_R32(TxConfig) | TXCFG_AUTO_FIFO);
 	RTL_W8(MCU, RTL_R8(MCU) & ~NOW_IS_OOB);
 	RTL_W8(DLLPR, RTL_R8(DLLPR) | PFM_EN);
-	RTL_W32(MISC, RTL_R32(MISC) | PWM_EN);
-	RTL_W8(Config5, RTL_R8(Config5) & ~Spi_en);
+	RTL_W32(MISC, RTL_R32(MISC) | PWM_EN | FORCE_CLK);
+	RTL_W8(Config5, (RTL_R8(Config5) & ~Spi_en) | ASPM_en);
+	RTL_W8(Config2, RTL_R8(Config2) | ClkReqEn);
 }
 
 static void rtl_hw_start_8168f_1(struct rtl8169_private *tp)
@@ -5113,8 +5149,10 @@ static void rtl_hw_start_8168g_1(struct rtl8169_private *tp)
 	rtl_w1w0_eri(tp, 0xdc, ERIAR_MASK_0001, 0x01, 0x00, ERIAR_EXGMAC);
 
 	RTL_W8(ChipCmd, CmdTxEnb | CmdRxEnb);
-	RTL_W32(MISC, RTL_R32(MISC) & ~RXDV_GATED_EN);
+	RTL_W32(MISC, (RTL_R32(MISC) | FORCE_CLK) & ~RXDV_GATED_EN);
 	RTL_W8(MaxTxPacketSize, EarlySize);
+	RTL_W8(Config5, RTL_R8(Config5) | ASPM_en);
+	RTL_W8(Config2, RTL_R8(Config2) | ClkReqEn);
 
 	rtl_eri_write(tp, 0xc0, ERIAR_MASK_0011, 0x0000, ERIAR_EXGMAC);
 	rtl_eri_write(tp, 0xb8, ERIAR_MASK_0011, 0x0000, ERIAR_EXGMAC);
@@ -5330,6 +5368,9 @@ static void rtl_hw_start_8105e_1(struct rtl8169_private *tp)
 
 	RTL_W8(MCU, RTL_R8(MCU) | EN_NDP | EN_OOB_RESET);
 	RTL_W8(DLLPR, RTL_R8(DLLPR) | PFM_EN);
+	RTL_W8(Config5, RTL_R8(Config5) | ASPM_en);
+	RTL_W8(Config2, RTL_R8(Config2) | ClkReqEn);
+	RTL_W32(MISC, RTL_R32(MISC) | FORCE_CLK);
 
 	rtl_ephy_init(tp, e_info_8105e_1, ARRAY_SIZE(e_info_8105e_1));
 }
@@ -5355,6 +5396,9 @@ static void rtl_hw_start_8402(struct rtl8169_private *tp)
 
 	RTL_W32(TxConfig, RTL_R32(TxConfig) | TXCFG_AUTO_FIFO);
 	RTL_W8(MCU, RTL_R8(MCU) & ~NOW_IS_OOB);
+	RTL_W8(Config5, RTL_R8(Config5) | ASPM_en);
+	RTL_W8(Config2, RTL_R8(Config2) | ClkReqEn);
+	RTL_W32(MISC, RTL_R32(MISC) | FORCE_CLK);
 
 	rtl_ephy_init(tp, e_info_8402, ARRAY_SIZE(e_info_8402));
 
@@ -5376,7 +5420,10 @@ static void rtl_hw_start_8106(struct rtl8169_private *tp)
 	/* Force LAN exit from ASPM if Rx/Tx are not idle */
 	RTL_W32(FuncEvent, RTL_R32(FuncEvent) | 0x002800);
 
-	RTL_W32(MISC, (RTL_R32(MISC) | DISABLE_LAN_EN) & ~EARLY_TALLY_EN);
+	RTL_W32(MISC,
+		(RTL_R32(MISC) | DISABLE_LAN_EN | FORCE_CLK) & ~EARLY_TALLY_EN);
+	RTL_W8(Config5, RTL_R8(Config5) | ASPM_en);
+	RTL_W8(Config2, RTL_R8(Config2) | ClkReqEn);
 	RTL_W8(MCU, RTL_R8(MCU) | EN_NDP | EN_OOB_RESET);
 	RTL_W8(DLLPR, RTL_R8(DLLPR) & ~PFM_EN);
 }
@@ -6992,15 +7039,4 @@ static struct pci_driver rtl8169_pci_driver = {
 	.driver.pm	= RTL8169_PM_OPS,
 };
 
-static int __init rtl8169_init_module(void)
-{
-	return pci_register_driver(&rtl8169_pci_driver);
-}
-
-static void __exit rtl8169_cleanup_module(void)
-{
-	pci_unregister_driver(&rtl8169_pci_driver);
-}
-
-module_init(rtl8169_init_module);
-module_exit(rtl8169_cleanup_module);
+module_pci_driver(rtl8169_pci_driver);
