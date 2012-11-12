@@ -1,7 +1,6 @@
 /*
- * arch/arm/mach-zynq/include/mach/clkdev.h
- *
- *  Copyright (C) 2011 Xilinx, Inc.
+ *  Copyright (C) 2011 Xilinx
+ *  Copyright (C) 2012 National Instruments Corp.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -11,22 +10,21 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
  */
+/dts-v1/;
+/include/ "zynq-7000.dtsi"
 
-#ifndef __MACH_CLKDEV_H__
-#define __MACH_CLKDEV_H__
+/ {
+	model = "Zynq ZC702 Development Board";
+	compatible = "xlnx,zynq-zc702", "xlnx,zynq-7000";
 
-#include <plat/clock.h>
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x40000000>;
+	};
 
-struct clk {
-	unsigned long		rate;
-	const struct clk_ops	*ops;
-	const struct icst_params *params;
-	void __iomem		*vcoreg;
+	chosen {
+		bootargs = "console=ttyPS1,115200 earlyprintk";
+	};
+
 };
-
-#define __clk_get(clk) ({ 1; })
-#define __clk_put(clk) do { } while (0)
-
-#endif
