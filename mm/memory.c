@@ -3484,6 +3484,7 @@ static int do_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 {
 	struct page *page = NULL;
 	int node, page_nid = -1;
+	int last_cpu = -1;
 	spinlock_t *ptl;
 
 	ptl = pte_lockptr(mm, pmd);
@@ -3495,6 +3496,7 @@ static int do_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	if (page) {
 		get_page(page);
 		page_nid = page_to_nid(page);
+		last_cpu = page_last_cpu(page);
 		node = mpol_misplaced(page, vma, address);
 		if (node != -1)
 			goto migrate;
@@ -3514,8 +3516,10 @@ out_pte_upgrade_unlock:
 out_unlock:
 	pte_unmap_unlock(ptep, ptl);
 out:
-	if (page)
+	if (page) {
+		task_numa_fault(page_nid, last_cpu, 1);
 		put_page(page);
+	}
 
 	return 0;
 

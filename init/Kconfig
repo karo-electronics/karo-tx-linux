@@ -710,6 +710,15 @@ config ARCH_WANT_NUMA_VARIABLE_LOCALITY
 config ARCH_SUPPORTS_NUMA_BALANCING
 	bool
 
+config NUMA_BALANCING
+	bool "Memory placement aware NUMA scheduler"
+	default n
+	depends on ARCH_SUPPORTS_NUMA_BALANCING
+	depends on !ARCH_WANT_NUMA_VARIABLE_LOCALITY
+	depends on SMP && NUMA && MIGRATION
+	help
+	  This option adds support for automatic NUMA aware memory/task placement.
+
 menuconfig CGROUPS
 	boolean "Control Group support"
 	depends on EVENTFD
