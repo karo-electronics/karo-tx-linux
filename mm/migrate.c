@@ -1427,12 +1427,6 @@ int migrate_misplaced_page(struct page *page, int node)
 	gfp_t gfp = GFP_HIGHUSER_MOVABLE;
 
 	/*
-	 * Don't migrate pages that are mapped in multiple processes.
-	 */
-	if (page_mapcount(page) != 1)
-		goto out;
-
-	/*
 	 * Never wait for allocations just to migrate on fault, but don't dip
 	 * into reserves. And, only accept pages from the specified node. No
 	 * sense migrating to a different "misplaced" page!
