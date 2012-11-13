@@ -130,6 +130,7 @@ struct omap2_mcspi {
 	struct omap2_mcspi_dma	*dma_channels;
 	struct device		*dev;
 	struct omap2_mcspi_regs ctx;
+	unsigned int		pin_dir:1;
 };
 
 struct omap2_mcspi_cs {
@@ -323,18 +324,13 @@ static void omap2_mcspi_tx_dma(struct spi_device *spi,
 	struct omap2_mcspi	*mcspi;
 	struct omap2_mcspi_dma  *mcspi_dma;
 	unsigned int		count;
-	u8			* rx;
 	const u8		* tx;
-	void __iomem		*chstat_reg;
-	struct omap2_mcspi_cs	*cs = spi->controller_state;
 
 	mcspi = spi_master_get_devdata(spi->master);
 	mcspi_dma = &mcspi->dma_channels[spi->chip_select];
 	count = xfer->len;
 
-	rx = xfer->rx_buf;
 	tx = xfer->tx_buf;
-	chstat_reg = cs->base + OMAP2_MCSPI_CHSTAT0;
 
 	if (mcspi_dma->dma_tx) {
 		struct dma_async_tx_descriptor *tx;
@@ -359,19 +355,6 @@ static void omap2_mcspi_tx_dma(struct spi_device *spi,
 	dma_async_issue_pending(mcspi_dma->dma_tx);
 	omap2_mcspi_set_dma_req(spi, 0, 1);
 
-	wait_for_completion(&mcspi_dma->dma_tx_completion);
-	dma_unmap_single(mcspi->dev, xfer->tx_dma, count,
-			 DMA_TO_DEVICE);
-
-	/* for TX_ONLY mode, be sure all words have shifted out */
-	if (rx == NULL) {
-		if (mcspi_wait_for_reg_bit(chstat_reg,
-					OMAP2_MCSPI_CHSTAT_TXS) < 0)
-			dev_err(&spi->dev, "TXS timed out\n");
-		else if (mcspi_wait_for_reg_bit(chstat_reg,
-					OMAP2_MCSPI_CHSTAT_EOT) < 0)
-			dev_err(&spi->dev, "EOT timed out\n");
-	}
 }
 
 static unsigned
@@ -492,6 +475,7 @@ omap2_mcspi_txrx_dma(struct spi_device *spi, struct spi_transfer *xfer)
 	struct dma_slave_config	cfg;
 	enum dma_slave_buswidth width;
 	unsigned es;
+	void __iomem		*chstat_reg;
 
 	mcspi = spi_master_get_devdata(spi->master);
 	mcspi_dma = &mcspi->dma_channels[spi->chip_select];
@@ -526,8 +510,24 @@ omap2_mcspi_txrx_dma(struct spi_device *spi, struct spi_transfer *xfer)
 		omap2_mcspi_tx_dma(spi, xfer, cfg);
 
 	if (rx != NULL)
-		return omap2_mcspi_rx_dma(spi, xfer, cfg, es);
+		count = omap2_mcspi_rx_dma(spi, xfer, cfg, es);
 
+	if (tx != NULL) {
+		chstat_reg = cs->base + OMAP2_MCSPI_CHSTAT0;
+		wait_for_completion(&mcspi_dma->dma_tx_completion);
+		dma_unmap_single(mcspi->dev, xfer->tx_dma, xfer->len,
+				 DMA_TO_DEVICE);
+
+		/* for TX_ONLY mode, be sure all words have shifted out */
+		if (rx == NULL) {
+			if (mcspi_wait_for_reg_bit(chstat_reg,
+						OMAP2_MCSPI_CHSTAT_TXS) < 0)
+				dev_err(&spi->dev, "TXS timed out\n");
+			else if (mcspi_wait_for_reg_bit(chstat_reg,
+						OMAP2_MCSPI_CHSTAT_EOT) < 0)
+				dev_err(&spi->dev, "EOT timed out\n");
+		}
+	}
 	return count;
 }
 
@@ -765,8 +765,15 @@ static int omap2_mcspi_setup_transfer(struct spi_device *spi,
 	/* standard 4-wire master mode:  SCK, MOSI/out, MISO/in, nCS
 	 * REVISIT: this controller could support SPI_3WIRE mode.
 	 */
-	l &= ~(OMAP2_MCSPI_CHCONF_IS|OMAP2_MCSPI_CHCONF_DPE1);
-	l |= OMAP2_MCSPI_CHCONF_DPE0;
+	if (mcspi->pin_dir == MCSPI_PINDIR_D0_OUT_D1_IN) {
+		l &= ~OMAP2_MCSPI_CHCONF_IS;
+		l &= ~OMAP2_MCSPI_CHCONF_DPE1;
+		l |= OMAP2_MCSPI_CHCONF_DPE0;
+	} else {
+		l |= OMAP2_MCSPI_CHCONF_IS;
+		l |= OMAP2_MCSPI_CHCONF_DPE1;
+		l &= ~OMAP2_MCSPI_CHCONF_DPE0;
+	}
 
 	/* wordlength */
 	l &= ~OMAP2_MCSPI_CHCONF_WL_MASK;
@@ -1167,6 +1174,11 @@ static int __devinit omap2_mcspi_probe(struct platform_device *pdev)
 	master->cleanup = omap2_mcspi_cleanup;
 	master->dev.of_node = node;
 
+	dev_set_drvdata(&pdev->dev, master);
+
+	mcspi = spi_master_get_devdata(master);
+	mcspi->master = master;
+
 	match = of_match_device(omap_mcspi_of_match, &pdev->dev);
 	if (match) {
 		u32 num_cs = 1; /* default number of chipselect */
@@ -1175,18 +1187,16 @@ static int __devinit omap2_mcspi_probe(struct platform_device *pdev)
 		of_property_read_u32(node, "ti,spi-num-cs", &num_cs);
 		master->num_chipselect = num_cs;
 		master->bus_num = bus_num++;
+		if (of_get_property(node, "ti,pindir-d0-in-d1-out", NULL))
+			mcspi->pin_dir = MCSPI_PINDIR_D0_IN_D1_OUT;
 	} else {
 		pdata = pdev->dev.platform_data;
 		master->num_chipselect = pdata->num_cs;
 		if (pdev->id != -1)
 			master->bus_num = pdev->id;
+		mcspi->pin_dir = pdata->pin_dir;
 	}
 	regs_offset = pdata->regs_offset;
-
-	dev_set_drvdata(&pdev->dev, master);
-
-	mcspi = spi_master_get_devdata(master);
-	mcspi->master = master;
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (r == NULL) {
