@@ -60,8 +60,6 @@ broken.
 #include "me4000_fw.h"
 #endif
 
-#define PCI_VENDOR_ID_MEILHAUS		0x1402
-
 #define PCI_DEVICE_ID_MEILHAUS_ME4650	0x4650
 #define PCI_DEVICE_ID_MEILHAUS_ME4660	0x4660
 #define PCI_DEVICE_ID_MEILHAUS_ME4660I	0x4661
@@ -1570,15 +1568,14 @@ static const void *me4000_find_boardinfo(struct comedi_device *dev,
 	return NULL;
 }
 
-static int me4000_attach_pci(struct comedi_device *dev,
-			     struct pci_dev *pcidev)
+static int __devinit me4000_auto_attach(struct comedi_device *dev,
+					unsigned long context_unused)
 {
+	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
 	const struct me4000_board *thisboard;
 	struct me4000_info *info;
 	struct comedi_subdevice *s;
 	int result;
-
-	comedi_set_hw_dev(dev, &pcidev->dev);
 
 	thisboard = me4000_find_boardinfo(dev, pcidev);
 	if (!thisboard)
@@ -1586,10 +1583,10 @@ static int me4000_attach_pci(struct comedi_device *dev,
 	dev->board_ptr = thisboard;
 	dev->board_name = thisboard->name;
 
-	result = alloc_private(dev, sizeof(*info));
-	if (result)
-		return result;
-	info = dev->private;
+	info = kzalloc(sizeof(*info), GFP_KERNEL);
+	if (!info)
+		return -ENOMEM;
+	dev->private = info;
 
 	result = comedi_pci_enable(pcidev, dev->board_name);
 	if (result)
@@ -1732,7 +1729,7 @@ static void me4000_detach(struct comedi_device *dev)
 static struct comedi_driver me4000_driver = {
 	.driver_name	= "me4000",
 	.module		= THIS_MODULE,
-	.attach_pci	= me4000_attach_pci,
+	.auto_attach	= me4000_auto_attach,
 	.detach		= me4000_detach,
 };
 

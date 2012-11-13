@@ -44,7 +44,35 @@ You should also find the complete GPL in the COPYING file accompanying this sour
   +----------+-----------+------------------------------------------------+
 */
 
-#include "hwdrv_apci3xxx.h"
+#ifndef COMEDI_SUBD_TTLIO
+#define COMEDI_SUBD_TTLIO	11	/* Digital Input Output But TTL */
+#endif
+
+#define APCI3XXX_SINGLE				0
+#define APCI3XXX_DIFF				1
+#define APCI3XXX_CONFIGURATION			0
+
+#define APCI3XXX_TTL_INIT_DIRECTION_PORT2	0
+
+static const struct comedi_lrange range_apci3XXX_ai = {
+	8, {
+		BIP_RANGE(10),
+		BIP_RANGE(5),
+		BIP_RANGE(2),
+		BIP_RANGE(1),
+		UNI_RANGE(10),
+		UNI_RANGE(5),
+		UNI_RANGE(2),
+		UNI_RANGE(1)
+	}
+};
+
+static const struct comedi_lrange range_apci3XXX_ao = {
+	2, {
+		BIP_RANGE(10),
+		UNI_RANGE(10)
+	}
+};
 
 /*
 +----------------------------------------------------------------------------+
@@ -69,6 +97,8 @@ You should also find the complete GPL in the COPYING file accompanying this sour
 */
 static int i_APCI3XXX_TestConversionStarted(struct comedi_device *dev)
 {
+	struct addi_private *devpriv = dev->private;
+
 	if ((readl(devpriv->dw_AiBase + 8) & 0x80000UL) == 0x80000UL)
 		return 1;
 	else
@@ -108,6 +138,8 @@ static int i_APCI3XXX_AnalogInputConfigOperatingMode(struct comedi_device *dev,
 						     struct comedi_insn *insn,
 						     unsigned int *data)
 {
+	const struct addi_board *this_board = comedi_board(dev);
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_TimeBase = 0;
 	unsigned char b_SingleDiff = 0;
@@ -358,6 +390,8 @@ static int i_APCI3XXX_InsnReadAnalogInput(struct comedi_device *dev,
 					  struct comedi_insn *insn,
 					  unsigned int *data)
 {
+	const struct addi_board *this_board = comedi_board(dev);
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_Configuration = (unsigned char) CR_RANGE(insn->chanspec);
 	unsigned char b_Channel = (unsigned char) CR_CHAN(insn->chanspec);
@@ -571,6 +605,7 @@ static int i_APCI3XXX_InsnReadAnalogInput(struct comedi_device *dev,
 static void v_APCI3XXX_Interrupt(int irq, void *d)
 {
 	struct comedi_device *dev = d;
+	struct addi_private *devpriv = dev->private;
 	unsigned char b_CopyCpt = 0;
 	unsigned int dw_Status = 0;
 
@@ -651,6 +686,7 @@ static int i_APCI3XXX_InsnWriteAnalogOutput(struct comedi_device *dev,
 					    struct comedi_insn *insn,
 					    unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned char b_Range = (unsigned char) CR_RANGE(insn->chanspec);
 	unsigned char b_Channel = (unsigned char) CR_CHAN(insn->chanspec);
 	unsigned int dw_Status = 0;
@@ -755,6 +791,7 @@ static int i_APCI3XXX_InsnConfigInitTTLIO(struct comedi_device *dev,
 					  struct comedi_insn *insn,
 					  unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_Command = 0;
 
@@ -884,6 +921,7 @@ static int i_APCI3XXX_InsnBitsTTLIO(struct comedi_device *dev,
 				    struct comedi_insn *insn,
 				    unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_ChannelCpt = 0;
 	unsigned int dw_ChannelMask = 0;
@@ -1040,6 +1078,7 @@ static int i_APCI3XXX_InsnReadTTLIO(struct comedi_device *dev,
 				    struct comedi_insn *insn,
 				    unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned char b_Channel = (unsigned char) CR_CHAN(insn->chanspec);
 	int i_ReturnValue = insn->n;
 	unsigned int *pls_ReadData = data;
@@ -1154,6 +1193,7 @@ static int i_APCI3XXX_InsnWriteTTLIO(struct comedi_device *dev,
 				     struct comedi_insn *insn,
 				     unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_Channel = (unsigned char) CR_CHAN(insn->chanspec);
 	unsigned char b_State = 0;
@@ -1267,6 +1307,7 @@ static int i_APCI3XXX_InsnReadDigitalInput(struct comedi_device *dev,
 					   struct comedi_insn *insn,
 					   unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_Channel = (unsigned char) CR_CHAN(insn->chanspec);
 	unsigned int dw_Temp = 0;
@@ -1327,6 +1368,7 @@ static int i_APCI3XXX_InsnBitsDigitalInput(struct comedi_device *dev,
 					   struct comedi_insn *insn,
 					   unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned int dw_Temp = 0;
 
@@ -1382,6 +1424,7 @@ static int i_APCI3XXX_InsnBitsDigitalOutput(struct comedi_device *dev,
 					    struct comedi_insn *insn,
 					    unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_ChannelCpt = 0;
 	unsigned int dw_ChannelMask = 0;
@@ -1480,6 +1523,7 @@ static int i_APCI3XXX_InsnWriteDigitalOutput(struct comedi_device *dev,
 					     struct comedi_insn *insn,
 					     unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_Channel = CR_CHAN(insn->chanspec);
 	unsigned char b_State = 0;
@@ -1557,6 +1601,7 @@ static int i_APCI3XXX_InsnReadDigitalOutput(struct comedi_device *dev,
 					    struct comedi_insn *insn,
 					    unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	int i_ReturnValue = insn->n;
 	unsigned char b_Channel = CR_CHAN(insn->chanspec);
 	unsigned int dw_Status = 0;
@@ -1614,6 +1659,7 @@ static int i_APCI3XXX_InsnReadDigitalOutput(struct comedi_device *dev,
 
 static int i_APCI3XXX_Reset(struct comedi_device *dev)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned char b_Cpt = 0;
 
 	/*************************/
