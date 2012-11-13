@@ -117,6 +117,17 @@ static const struct dmi_system_id pci_crs_quirks[] __initconst = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "HP xw9300 Workstation"),
 		},
 	},
+
+	/* https://bugzilla.kernel.org/show_bug.cgi?id=47981 */
+	{
+		.callback = set_nouse_crs,
+		.ident = "CheckPoint P-20-00",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "CheckPoint"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "P-20-00"),
+			DMI_MATCH(DMI_BOARD_NAME, "Bridgeport"),
+		},
+	},
 	{}
 };
 

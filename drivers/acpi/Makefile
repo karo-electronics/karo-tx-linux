@@ -21,9 +21,10 @@ obj-y				+= acpi.o \
 acpi-y				+= osl.o utils.o reboot.o
 acpi-y				+= nvs.o
 
-# sleep related files
+# Power management related files
 acpi-y				+= wakeup.o
 acpi-y				+= sleep.o
+acpi-$(CONFIG_PM)		+= device_pm.o
 acpi-$(CONFIG_ACPI_SLEEP)	+= proc.o
 
 
@@ -36,6 +37,7 @@ acpi-y				+= processor_core.o
 acpi-y				+= ec.o
 acpi-$(CONFIG_ACPI_DOCK)	+= dock.o
 acpi-y				+= pci_root.o pci_link.o pci_irq.o pci_bind.o
+acpi-y				+= acpi_platform.o
 acpi-y				+= power.o
 acpi-y				+= event.o
 acpi-y				+= sysfs.o
