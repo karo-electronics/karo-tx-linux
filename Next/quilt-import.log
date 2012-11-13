@@ -1,0 +1,25 @@
+Importing i2c based on 3.7-rc5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 77b67063bb6bce6d475e910d3b886a606d0d91f7
+HEAD is now at 77b6706 Linux 3.7-rc5
+$ git am ../quilt/i2c/i2c-new-subsystem-maintainer.patch
+Applying: MAINTAINERS: i2c: 7 years, this is it
+$ git am ../quilt/i2c/i2c-mux-pinctrl-fix-probe-error-path.patch
+Applying: i2c-mux-pinctrl: Fix probe error path
+$ git am ../quilt/i2c/i2c-i801-01-add-device-tree-support.patch
+Applying: i2c-i801: Add device tree support
+$ git am ../quilt/i2c/i2c-i801-02-enable-interrupts-for-all.patch
+Applying: i2c-i801: Enable interrupts for all post-ICH5 chips
+$ git am ../quilt/i2c/i2c-piix4-convert-dev_printk-kern_-level-to-dev_-level.patch
+Applying: i2c-piix4: Convert dev_printk(KERN_<LEVEL> to dev_<level>(
+$ git am ../quilt/i2c/i2c-mention-func-flags-in-smbus-documentation.patch
+Applying: i2c: Mention functionality flags in SMBus protocol documentation
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:i2c/master
+From ../quilt-tmp
+ + eb9d40f...3d84243 master     -> i2c/master  (forced update)
+Importing jdelvare-hwmon based on affd9a8dbc22beadae1186aa060685d6f6a06792
+Unchanged quilt series jdelvare-hwmon
+Importing device-mapper based on v3.7-rc1
+Unchanged quilt series device-mapper
