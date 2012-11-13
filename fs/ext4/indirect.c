@@ -755,8 +755,7 @@ cleanup:
 		partial--;
 	}
 out:
-	trace_ext4_ind_map_blocks_exit(inode, map->m_lblk,
-				map->m_pblk, map->m_len, err);
+	trace_ext4_ind_map_blocks_exit(inode, map, err);
 	return err;
 }
 
@@ -1412,6 +1411,7 @@ void ext4_ind_truncate(struct inode *inode)
 	down_write(&ei->i_data_sem);
 
 	ext4_discard_preallocations(inode);
+	ext4_es_remove_extent(inode, last_block, EXT_MAX_BLOCKS - last_block);
 
 	/*
 	 * The orphan list entry will now protect us from any crash which
