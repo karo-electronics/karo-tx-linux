@@ -42,6 +42,7 @@
 #include "xfs_fsops.h"
 #include "xfs_utils.h"
 #include "xfs_trace.h"
+#include "xfs_icache.h"
 
 
 #ifdef HAVE_PERCPU_SB
@@ -1427,6 +1428,8 @@ xfs_unmountfs(
 	__uint64_t		resblks;
 	int			error;
 
+	cancel_delayed_work_sync(&mp->m_eofblocks_work);
+
 	xfs_qm_unmount_quotas(mp);
 	xfs_rtunmount_inodes(mp);
 	IRELE(mp->m_rootip);
@@ -1450,19 +1453,14 @@ xfs_unmountfs(
 
 	/*
 	 * And reclaim all inodes.  At this point there should be no dirty
-	 * inode, and none should be pinned or locked, but use synchronous
-	 * reclaim just to be sure.
+	 * inodes and none should be pinned or locked, but use synchronous
+	 * reclaim just to be sure. We can stop background inode reclaim
+	 * here as well if it is still running.
 	 */
+	cancel_delayed_work_sync(&mp->m_reclaim_work);
 	xfs_reclaim_inodes(mp, SYNC_WAIT);
 
 	xfs_qm_unmount(mp);
-
-	/*
-	 * Flush out the log synchronously so that we know for sure
-	 * that nothing is pinned.  This is important because bflush()
-	 * will skip pinned buffers.
-	 */
-	xfs_log_force(mp, XFS_LOG_SYNC);
 
 	/*
 	 * Unreserve any blocks we have so that when we unmount we don't account
@@ -1489,23 +1487,6 @@ xfs_unmountfs(
 		xfs_warn(mp, "Unable to update superblock counters. "
 				"Freespace may not be correct on next mount.");
 
-	/*
-	 * At this point we might have modified the superblock again and thus
-	 * added an item to the AIL, thus flush it again.
-	 */
-	xfs_ail_push_all_sync(mp->m_ail);
-	xfs_wait_buftarg(mp->m_ddev_targp);
-
-	/*
-	 * The superblock buffer is uncached and xfsaild_push() will lock and
-	 * set the XBF_ASYNC flag on the buffer. We cannot do xfs_buf_iowait()
-	 * here but a lock on the superblock buffer will block until iodone()
-	 * has completed.
-	 */
-	xfs_buf_lock(mp->m_sb_bp);
-	xfs_buf_unlock(mp->m_sb_bp);
-
-	xfs_log_unmount_write(mp);
 	xfs_log_unmount(mp);
 	xfs_uuid_unmount(mp);
 
