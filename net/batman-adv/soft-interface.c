@@ -20,6 +20,7 @@
 #include "main.h"
 #include "soft-interface.h"
 #include "hard-interface.h"
+#include "distributed-arp-table.h"
 #include "routing.h"
 #include "send.h"
 #include "debugfs.h"
@@ -146,13 +147,16 @@ static int batadv_interface_tx(struct sk_buff *skb,
 	struct batadv_bcast_packet *bcast_packet;
 	struct vlan_ethhdr *vhdr;
 	__be16 ethertype = __constant_htons(BATADV_ETH_P_BATMAN);
-	static const uint8_t stp_addr[ETH_ALEN] = {0x01, 0x80, 0xC2, 0x00, 0x00,
-						   0x00};
+	static const uint8_t stp_addr[ETH_ALEN] = {0x01, 0x80, 0xC2, 0x00,
+						   0x00, 0x00};
+	static const uint8_t ectp_addr[ETH_ALEN] = {0xCF, 0x00, 0x00, 0x00,
+						    0x00, 0x00};
 	unsigned int header_len = 0;
 	int data_len = skb->len, ret;
 	short vid __maybe_unused = -1;
 	bool do_bcast = false;
 	uint32_t seqno;
+	unsigned long brd_delay = 1;
 
 	if (atomic_read(&bat_priv->mesh_state) != BATADV_MESH_ACTIVE)
 		goto dropped;
@@ -180,8 +184,14 @@ static int batadv_interface_tx(struct sk_buff *skb,
 
 	/* don't accept stp packets. STP does not help in meshes.
 	 * better use the bridge loop avoidance ...
+	 *
+	 * The same goes for ECTP sent at least by some Cisco Switches,
+	 * it might confuse the mesh when used with bridge loop avoidance.
 	 */
 	if (batadv_compare_eth(ethhdr->h_dest, stp_addr))
+		goto dropped;
+
+	if (batadv_compare_eth(ethhdr->h_dest, ectp_addr))
 		goto dropped;
 
 	if (is_multicast_ether_addr(ethhdr->h_dest)) {
@@ -216,6 +226,13 @@ static int batadv_interface_tx(struct sk_buff *skb,
 		if (!primary_if)
 			goto dropped;
 
+		/* in case of ARP request, we do not immediately broadcasti the
+		 * packet, instead we first wait for DAT to try to retrieve the
+		 * correct ARP entry
+		 */
+		if (batadv_dat_snoop_outgoing_arp_request(bat_priv, skb))
+			brd_delay = msecs_to_jiffies(ARP_REQ_DELAY);
+
 		if (batadv_skb_head_push(skb, sizeof(*bcast_packet)) < 0)
 			goto dropped;
 
@@ -237,7 +254,7 @@ static int batadv_interface_tx(struct sk_buff *skb,
 		seqno = atomic_inc_return(&bat_priv->bcast_seqno);
 		bcast_packet->seqno = htonl(seqno);
 
-		batadv_add_bcast_packet_to_list(bat_priv, skb, 1);
+		batadv_add_bcast_packet_to_list(bat_priv, skb, brd_delay);
 
 		/* a copy is stored in the bcast list, therefore removing
 		 * the original skb.
@@ -252,7 +269,12 @@ static int batadv_interface_tx(struct sk_buff *skb,
 				goto dropped;
 		}
 
-		ret = batadv_unicast_send_skb(skb, bat_priv);
+		if (batadv_dat_snoop_outgoing_arp_request(bat_priv, skb))
+			goto dropped;
+
+		batadv_dat_snoop_outgoing_arp_reply(bat_priv, skb);
+
+		ret = batadv_unicast_send_skb(bat_priv, skb);
 		if (ret != 0)
 			goto dropped_freed;
 	}
@@ -347,7 +369,51 @@ out:
 	return;
 }
 
+/* batman-adv network devices have devices nesting below it and are a special
+ * "super class" of normal network devices; split their locks off into a
+ * separate class since they always nest.
+ */
+static struct lock_class_key batadv_netdev_xmit_lock_key;
+static struct lock_class_key batadv_netdev_addr_lock_key;
+
+/**
+ * batadv_set_lockdep_class_one - Set lockdep class for a single tx queue
+ * @dev: device which owns the tx queue
+ * @txq: tx queue to modify
+ * @_unused: always NULL
+ */
+static void batadv_set_lockdep_class_one(struct net_device *dev,
+					 struct netdev_queue *txq,
+					 void *_unused)
+{
+	lockdep_set_class(&txq->_xmit_lock, &batadv_netdev_xmit_lock_key);
+}
+
+/**
+ * batadv_set_lockdep_class - Set txq and addr_list lockdep class
+ * @dev: network device to modify
+ */
+static void batadv_set_lockdep_class(struct net_device *dev)
+{
+	lockdep_set_class(&dev->addr_list_lock, &batadv_netdev_addr_lock_key);
+	netdev_for_each_tx_queue(dev, batadv_set_lockdep_class_one, NULL);
+}
+
+/**
+ * batadv_softif_init - Late stage initialization of soft interface
+ * @dev: registered network device to modify
+ *
+ * Returns error code on failures
+ */
+static int batadv_softif_init(struct net_device *dev)
+{
+	batadv_set_lockdep_class(dev);
+
+	return 0;
+}
+
 static const struct net_device_ops batadv_netdev_ops = {
+	.ndo_init = batadv_softif_init,
 	.ndo_open = batadv_interface_open,
 	.ndo_stop = batadv_interface_release,
 	.ndo_get_stats = batadv_interface_stats,
@@ -414,6 +480,9 @@ struct net_device *batadv_softif_create(const char *name)
 	atomic_set(&bat_priv->aggregated_ogms, 1);
 	atomic_set(&bat_priv->bonding, 0);
 	atomic_set(&bat_priv->bridge_loop_avoidance, 0);
+#ifdef CONFIG_BATMAN_ADV_DAT
+	atomic_set(&bat_priv->distributed_arp_table, 1);
+#endif
 	atomic_set(&bat_priv->ap_isolation, 0);
 	atomic_set(&bat_priv->vis_mode, BATADV_VIS_TYPE_CLIENT_UPDATE);
 	atomic_set(&bat_priv->gw_mode, BATADV_GW_MODE_OFF);
@@ -556,6 +625,13 @@ static const struct {
 	{ "tt_response_rx" },
 	{ "tt_roam_adv_tx" },
 	{ "tt_roam_adv_rx" },
+#ifdef CONFIG_BATMAN_ADV_DAT
+	{ "dat_get_tx" },
+	{ "dat_get_rx" },
+	{ "dat_put_tx" },
+	{ "dat_put_rx" },
+	{ "dat_cached_reply_tx" },
+#endif
 };
 
 static void batadv_get_strings(struct net_device *dev, uint32_t stringset,

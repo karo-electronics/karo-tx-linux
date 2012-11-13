@@ -28,6 +28,7 @@
 #include "vis.h"
 #include "unicast.h"
 #include "bridge_loop_avoidance.h"
+#include "distributed-arp-table.h"
 
 static int batadv_route_unicast_packet(struct sk_buff *skb,
 				       struct batadv_hard_iface *recv_if);
@@ -549,25 +550,18 @@ batadv_find_ifalter_router(struct batadv_orig_node *primary_orig,
 		if (tmp_neigh_node->if_incoming == recv_if)
 			continue;
 
+		if (router && tmp_neigh_node->tq_avg <= router->tq_avg)
+			continue;
+
 		if (!atomic_inc_not_zero(&tmp_neigh_node->refcount))
 			continue;
 
-		/* if we don't have a router yet
-		 * or this one is better, choose it.
-		 */
-		if ((!router) ||
-		    (tmp_neigh_node->tq_avg > router->tq_avg)) {
-			/* decrement refcount of
-			 * previously selected router
-			 */
-			if (router)
-				batadv_neigh_node_free_ref(router);
+		/* decrement refcount of previously selected router */
+		if (router)
+			batadv_neigh_node_free_ref(router);
 
-			router = tmp_neigh_node;
-			atomic_inc_not_zero(&router->refcount);
-		}
-
-		batadv_neigh_node_free_ref(tmp_neigh_node);
+		/* we found a better router (or at least one valid router) */
+		router = tmp_neigh_node;
 	}
 
 	/* use the first candidate if nothing was found. */
@@ -687,21 +681,8 @@ int batadv_recv_roam_adv(struct sk_buff *skb, struct batadv_hard_iface *recv_if)
 	struct batadv_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 	struct batadv_roam_adv_packet *roam_adv_packet;
 	struct batadv_orig_node *orig_node;
-	struct ethhdr *ethhdr;
 
-	/* drop packet if it has not necessary minimum size */
-	if (unlikely(!pskb_may_pull(skb,
-				    sizeof(struct batadv_roam_adv_packet))))
-		goto out;
-
-	ethhdr = (struct ethhdr *)skb_mac_header(skb);
-
-	/* packet with unicast indication but broadcast recipient */
-	if (is_broadcast_ether_addr(ethhdr->h_dest))
-		goto out;
-
-	/* packet with broadcast sender address */
-	if (is_broadcast_ether_addr(ethhdr->h_source))
+	if (batadv_check_unicast_packet(skb, sizeof(*roam_adv_packet)) < 0)
 		goto out;
 
 	batadv_inc_counter(bat_priv, BATADV_CNT_TT_ROAM_ADV_RX);
@@ -928,8 +909,12 @@ static int batadv_check_unicast_ttvn(struct batadv_priv *bat_priv,
 	bool tt_poss_change;
 	int is_old_ttvn;
 
-	/* I could need to modify it */
-	if (skb_cow(skb, sizeof(struct batadv_unicast_packet)) < 0)
+	/* check if there is enough data before accessing it */
+	if (pskb_may_pull(skb, sizeof(*unicast_packet) + ETH_HLEN) < 0)
+		return 0;
+
+	/* create a copy of the skb (in case of for re-routing) to modify it. */
+	if (skb_cow(skb, sizeof(*unicast_packet)) < 0)
 		return 0;
 
 	unicast_packet = (struct batadv_unicast_packet *)skb->data;
@@ -985,10 +970,10 @@ static int batadv_check_unicast_ttvn(struct batadv_priv *bat_priv,
 			batadv_orig_node_free_ref(orig_node);
 		}
 
-		batadv_dbg(BATADV_DBG_ROUTES, bat_priv,
-			   "TTVN mismatch (old_ttvn %u new_ttvn %u)! Rerouting unicast packet (for %pM) to %pM\n",
-			   unicast_packet->ttvn, curr_ttvn, ethhdr->h_dest,
-			   unicast_packet->dest);
+		net_ratelimited_function(batadv_dbg, BATADV_DBG_TT, bat_priv,
+					 "TTVN mismatch (old_ttvn %u new_ttvn %u)! Rerouting unicast packet (for %pM) to %pM\n",
+					 unicast_packet->ttvn, curr_ttvn,
+					 ethhdr->h_dest, unicast_packet->dest);
 
 		unicast_packet->ttvn = curr_ttvn;
 	}
@@ -1000,7 +985,19 @@ int batadv_recv_unicast_packet(struct sk_buff *skb,
 {
 	struct batadv_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 	struct batadv_unicast_packet *unicast_packet;
+	struct batadv_unicast_4addr_packet *unicast_4addr_packet;
+	uint8_t *orig_addr;
+	struct batadv_orig_node *orig_node = NULL;
 	int hdr_size = sizeof(*unicast_packet);
+	bool is4addr;
+
+	unicast_packet = (struct batadv_unicast_packet *)skb->data;
+	unicast_4addr_packet = (struct batadv_unicast_4addr_packet *)skb->data;
+
+	is4addr = unicast_packet->header.packet_type == BATADV_UNICAST_4ADDR;
+	/* the caller function should have already pulled 2 bytes */
+	if (is4addr)
+		hdr_size = sizeof(*unicast_4addr_packet);
 
 	if (batadv_check_unicast_packet(skb, hdr_size) < 0)
 		return NET_RX_DROP;
@@ -1008,12 +1005,28 @@ int batadv_recv_unicast_packet(struct sk_buff *skb,
 	if (!batadv_check_unicast_ttvn(bat_priv, skb))
 		return NET_RX_DROP;
 
-	unicast_packet = (struct batadv_unicast_packet *)skb->data;
-
 	/* packet for me */
 	if (batadv_is_my_mac(unicast_packet->dest)) {
+		if (is4addr) {
+			batadv_dat_inc_counter(bat_priv,
+					       unicast_4addr_packet->subtype);
+			orig_addr = unicast_4addr_packet->src;
+			orig_node = batadv_orig_hash_find(bat_priv, orig_addr);
+		}
+
+		if (batadv_dat_snoop_incoming_arp_request(bat_priv, skb,
+							  hdr_size))
+			goto rx_success;
+		if (batadv_dat_snoop_incoming_arp_reply(bat_priv, skb,
+							hdr_size))
+			goto rx_success;
+
 		batadv_interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size,
-				    NULL);
+				    orig_node);
+
+rx_success:
+		if (orig_node)
+			batadv_orig_node_free_ref(orig_node);
 
 		return NET_RX_SUCCESS;
 	}
@@ -1050,8 +1063,17 @@ int batadv_recv_ucast_frag_packet(struct sk_buff *skb,
 		if (!new_skb)
 			return NET_RX_SUCCESS;
 
+		if (batadv_dat_snoop_incoming_arp_request(bat_priv, new_skb,
+							  hdr_size))
+			goto rx_success;
+		if (batadv_dat_snoop_incoming_arp_reply(bat_priv, new_skb,
+							hdr_size))
+			goto rx_success;
+
 		batadv_interface_rx(recv_if->soft_iface, new_skb, recv_if,
 				    sizeof(struct batadv_unicast_packet), NULL);
+
+rx_success:
 		return NET_RX_SUCCESS;
 	}
 
@@ -1143,9 +1165,16 @@ int batadv_recv_bcast_packet(struct sk_buff *skb,
 	if (batadv_bla_is_backbone_gw(skb, orig_node, hdr_size))
 		goto out;
 
+	if (batadv_dat_snoop_incoming_arp_request(bat_priv, skb, hdr_size))
+		goto rx_success;
+	if (batadv_dat_snoop_incoming_arp_reply(bat_priv, skb, hdr_size))
+		goto rx_success;
+
 	/* broadcast for me */
 	batadv_interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size,
 			    orig_node);
+
+rx_success:
 	ret = NET_RX_SUCCESS;
 	goto out;
 

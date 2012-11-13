@@ -33,6 +33,9 @@ struct cpsw_platform_data {
 
 	u32	slaves;		/* number of slave cpgmac ports */
 	struct cpsw_slave_data	*slave_data;
+	u32	cpts_active_slave; /* time stamping slave */
+	u32	cpts_clock_mult;  /* convert input clock ticks to nanoseconds */
+	u32	cpts_clock_shift; /* convert input clock ticks to nanoseconds */
 
 	u32	ale_reg_ofs;	/* address lookup engine reg offset */
 	u32	ale_entries;	/* ale table size */
@@ -41,6 +44,7 @@ struct cpsw_platform_data {
 	u32     host_port_num; /* The port number for the host port */
 
 	u32	hw_stats_reg_ofs;  /* cpsw hardware statistics counters */
+	u32	cpts_reg_ofs;      /* cpts registers */
 
 	u32	bd_ram_ofs;   /* embedded buffer descriptor RAM offset*/
 	u32	bd_ram_size;  /*buffer descriptor ram size */

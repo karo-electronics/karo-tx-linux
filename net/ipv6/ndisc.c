@@ -535,7 +535,6 @@ static void ndisc_send_unsol_na(struct net_device *dev)
 {
 	struct inet6_dev *idev;
 	struct inet6_ifaddr *ifa;
-	struct in6_addr mcaddr = IN6ADDR_LINKLOCAL_ALLNODES_INIT;
 
 	idev = in6_dev_get(dev);
 	if (!idev)
@@ -543,7 +542,7 @@ static void ndisc_send_unsol_na(struct net_device *dev)
 
 	read_lock_bh(&idev->lock);
 	list_for_each_entry(ifa, &idev->addr_list, if_list) {
-		ndisc_send_na(dev, NULL, &mcaddr, &ifa->addr,
+		ndisc_send_na(dev, NULL, &in6addr_linklocal_allnodes, &ifa->addr,
 			      /*router=*/ !!idev->cnf.forwarding,
 			      /*solicited=*/ false, /*override=*/ true,
 			      /*inc_opt=*/ true);
@@ -905,7 +904,7 @@ static void ndisc_recv_na(struct sk_buff *skb)
 		if (lladdr && !memcmp(lladdr, dev->dev_addr, dev->addr_len) &&
 		    net->ipv6.devconf_all->forwarding && net->ipv6.devconf_all->proxy_ndp &&
 		    pneigh_lookup(&nd_tbl, net, &msg->target, dev, 0)) {
-			/* XXX: idev->cnf.prixy_ndp */
+			/* XXX: idev->cnf.proxy_ndp */
 			goto out;
 		}
 
@@ -1144,7 +1143,7 @@ static void ndisc_router_discovery(struct sk_buff *skb)
 			ND_PRINTK(0, err,
 				  "RA: %s got default router without neighbour\n",
 				  __func__);
-			dst_release(&rt->dst);
+			ip6_rt_put(rt);
 			return;
 		}
 	}
@@ -1169,7 +1168,7 @@ static void ndisc_router_discovery(struct sk_buff *skb)
 			ND_PRINTK(0, err,
 				  "RA: %s got default router without neighbour\n",
 				  __func__);
-			dst_release(&rt->dst);
+			ip6_rt_put(rt);
 			return;
 		}
 		neigh->flags |= NTF_ROUTER;
@@ -1325,8 +1324,7 @@ skip_routeinfo:
 		ND_PRINTK(2, warn, "RA: invalid RA options\n");
 	}
 out:
-	if (rt)
-		dst_release(&rt->dst);
+	ip6_rt_put(rt);
 	if (neigh)
 		neigh_release(neigh);
 }

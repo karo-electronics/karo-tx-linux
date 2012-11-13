@@ -18,6 +18,7 @@
  */
 
 #include "main.h"
+#include "distributed-arp-table.h"
 #include "hard-interface.h"
 #include "soft-interface.h"
 #include "send.h"
@@ -108,6 +109,8 @@ static void batadv_primary_if_update_addr(struct batadv_priv *bat_priv,
 	primary_if = batadv_primary_if_get_selected(bat_priv);
 	if (!primary_if)
 		goto out;
+
+	batadv_dat_init_own_addr(bat_priv, primary_if);
 
 	skb = bat_priv->vis.my_info->skb_packet;
 	vis_packet = (struct batadv_vis_packet *)skb->data;
@@ -450,8 +453,8 @@ batadv_hardif_add_interface(struct net_device *net_dev)
 	/* This can't be called via a bat_priv callback because
 	 * we have no bat_priv yet.
 	 */
-	atomic_set(&hard_iface->seqno, 1);
-	hard_iface->packet_buff = NULL;
+	atomic_set(&hard_iface->bat_iv.ogm_seqno, 1);
+	hard_iface->bat_iv.ogm_buff = NULL;
 
 	return hard_iface;
 
