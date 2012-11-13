@@ -40,12 +40,12 @@
 #include <linux/atmel_serial.h>
 #include <linux/uaccess.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/platform_data/atmel.h>
 
 #include <asm/io.h>
 #include <asm/ioctls.h>
 
 #include <asm/mach/serial_at91.h>
-#include <mach/board.h>
 
 #ifdef CONFIG_ARM
 #include <mach/cpu.h>

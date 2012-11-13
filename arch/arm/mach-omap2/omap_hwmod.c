@@ -139,18 +139,19 @@
 #include <linux/slab.h>
 #include <linux/bootmem.h>
 
-#include <plat/clock.h>
-#include <plat/omap_hwmod.h>
+#include "clock.h"
+#include "omap_hwmod.h"
 #include <plat/prcm.h>
 
 #include "soc.h"
 #include "common.h"
 #include "clockdomain.h"
 #include "powerdomain.h"
-#include "cm2xxx_3xxx.h"
+#include "cm2xxx.h"
+#include "cm3xxx.h"
 #include "cminst44xx.h"
 #include "cm33xx.h"
-#include "prm2xxx_3xxx.h"
+#include "prm3xxx.h"
 #include "prm44xx.h"
 #include "prm33xx.h"
 #include "prminst44xx.h"
@@ -419,6 +420,38 @@ static int _set_softreset(struct omap_hwmod *oh, u32 *v)
 	*v |= softrst_mask;
 
 	return 0;
+}
+
+/**
+ * _wait_softreset_complete - wait for an OCP softreset to complete
+ * @oh: struct omap_hwmod * to wait on
+ *
+ * Wait until the IP block represented by @oh reports that its OCP
+ * softreset is complete.  This can be triggered by software (see
+ * _ocp_softreset()) or by hardware upon returning from off-mode (one
+ * example is HSMMC).  Waits for up to MAX_MODULE_SOFTRESET_WAIT
+ * microseconds.  Returns the number of microseconds waited.
+ */
+static int _wait_softreset_complete(struct omap_hwmod *oh)
+{
+	struct omap_hwmod_class_sysconfig *sysc;
+	u32 softrst_mask;
+	int c = 0;
+
+	sysc = oh->class->sysc;
+
+	if (sysc->sysc_flags & SYSS_HAS_RESET_STATUS)
+		omap_test_timeout((omap_hwmod_read(oh, sysc->syss_offs)
+				   & SYSS_RESETDONE_MASK),
+				  MAX_MODULE_SOFTRESET_WAIT, c);
+	else if (sysc->sysc_flags & SYSC_HAS_RESET_STATUS) {
+		softrst_mask = (0x1 << sysc->sysc_fields->srst_shift);
+		omap_test_timeout(!(omap_hwmod_read(oh, sysc->sysc_offs)
+				    & softrst_mask),
+				  MAX_MODULE_SOFTRESET_WAIT, c);
+	}
+
+	return c;
 }
 
 /**
@@ -1282,6 +1315,18 @@ static void _enable_sysc(struct omap_hwmod *oh)
 	if (!oh->class->sysc)
 		return;
 
+	/*
+	 * Wait until reset has completed, this is needed as the IP
+	 * block is reset automatically by hardware in some cases
+	 * (off-mode for example), and the drivers require the
+	 * IP to be ready when they access it
+	 */
+	if (oh->flags & HWMOD_CONTROL_OPT_CLKS_IN_RESET)
+		_enable_optional_clocks(oh);
+	_wait_softreset_complete(oh);
+	if (oh->flags & HWMOD_CONTROL_OPT_CLKS_IN_RESET)
+		_disable_optional_clocks(oh);
+
 	v = oh->_sysc_cache;
 	sf = oh->class->sysc->sysc_flags;
 
@@ -1804,7 +1849,7 @@ static int _am33xx_disable_module(struct omap_hwmod *oh)
  */
 static int _ocp_softreset(struct omap_hwmod *oh)
 {
-	u32 v, softrst_mask;
+	u32 v;
 	int c = 0;
 	int ret = 0;
 
@@ -1834,19 +1879,7 @@ static int _ocp_softreset(struct omap_hwmod *oh)
 	if (oh->class->sysc->srst_udelay)
 		udelay(oh->class->sysc->srst_udelay);
 
-	if (oh->class->sysc->sysc_flags & SYSS_HAS_RESET_STATUS)
-		omap_test_timeout((omap_hwmod_read(oh,
-						    oh->class->sysc->syss_offs)
-				   & SYSS_RESETDONE_MASK),
-				  MAX_MODULE_SOFTRESET_WAIT, c);
-	else if (oh->class->sysc->sysc_flags & SYSC_HAS_RESET_STATUS) {
-		softrst_mask = (0x1 << oh->class->sysc->sysc_fields->srst_shift);
-		omap_test_timeout(!(omap_hwmod_read(oh,
-						     oh->class->sysc->sysc_offs)
-				   & softrst_mask),
-				  MAX_MODULE_SOFTRESET_WAIT, c);
-	}
-
+	c = _wait_softreset_complete(oh);
 	if (c == MAX_MODULE_SOFTRESET_WAIT)
 		pr_warning("omap_hwmod: %s: softreset failed (waited %d usec)\n",
 			   oh->name, MAX_MODULE_SOFTRESET_WAIT);
@@ -2352,6 +2385,9 @@ static int __init _setup_reset(struct omap_hwmod *oh)
 	if (oh->_state != _HWMOD_STATE_INITIALIZED)
 		return -EINVAL;
 
+	if (oh->flags & HWMOD_EXT_OPT_MAIN_CLK)
+		return -EPERM;
+
 	if (oh->rst_lines_cnt == 0) {
 		r = _enable(oh);
 		if (r) {
@@ -2668,7 +2704,7 @@ static int __init _alloc_linkspace(struct omap_hwmod_ocp_if **ois)
 /* Static functions intended only for use in soc_ops field function pointers */
 
 /**
- * _omap2_wait_target_ready - wait for a module to leave slave idle
+ * _omap2xxx_wait_target_ready - wait for a module to leave slave idle
  * @oh: struct omap_hwmod *
  *
  * Wait for a module @oh to leave slave idle.  Returns 0 if the module
@@ -2676,7 +2712,7 @@ static int __init _alloc_linkspace(struct omap_hwmod_ocp_if **ois)
  * slave idle; otherwise, pass along the return value of the
  * appropriate *_cm*_wait_module_ready() function.
  */
-static int _omap2_wait_target_ready(struct omap_hwmod *oh)
+static int _omap2xxx_wait_target_ready(struct omap_hwmod *oh)
 {
 	if (!oh)
 		return -EINVAL;
@@ -2689,9 +2725,36 @@ static int _omap2_wait_target_ready(struct omap_hwmod *oh)
 
 	/* XXX check module SIDLEMODE, hardreset status, enabled clocks */
 
-	return omap2_cm_wait_module_ready(oh->prcm.omap2.module_offs,
-					  oh->prcm.omap2.idlest_reg_id,
-					  oh->prcm.omap2.idlest_idle_bit);
+	return omap2xxx_cm_wait_module_ready(oh->prcm.omap2.module_offs,
+					     oh->prcm.omap2.idlest_reg_id,
+					     oh->prcm.omap2.idlest_idle_bit);
+}
+
+/**
+ * _omap3xxx_wait_target_ready - wait for a module to leave slave idle
+ * @oh: struct omap_hwmod *
+ *
+ * Wait for a module @oh to leave slave idle.  Returns 0 if the module
+ * does not have an IDLEST bit or if the module successfully leaves
+ * slave idle; otherwise, pass along the return value of the
+ * appropriate *_cm*_wait_module_ready() function.
+ */
+static int _omap3xxx_wait_target_ready(struct omap_hwmod *oh)
+{
+	if (!oh)
+		return -EINVAL;
+
+	if (oh->flags & HWMOD_NO_IDLEST)
+		return 0;
+
+	if (!_find_mpu_rt_port(oh))
+		return 0;
+
+	/* XXX check module SIDLEMODE, hardreset status, enabled clocks */
+
+	return omap3xxx_cm_wait_module_ready(oh->prcm.omap2.module_offs,
+					     oh->prcm.omap2.idlest_reg_id,
+					     oh->prcm.omap2.idlest_idle_bit);
 }
 
 /**
@@ -3959,8 +4022,13 @@ int omap_hwmod_pad_route_irq(struct omap_hwmod *oh, int pad_idx, int irq_idx)
  */
 void __init omap_hwmod_init(void)
 {
-	if (cpu_is_omap24xx() || cpu_is_omap34xx()) {
-		soc_ops.wait_target_ready = _omap2_wait_target_ready;
+	if (cpu_is_omap24xx()) {
+		soc_ops.wait_target_ready = _omap2xxx_wait_target_ready;
+		soc_ops.assert_hardreset = _omap2_assert_hardreset;
+		soc_ops.deassert_hardreset = _omap2_deassert_hardreset;
+		soc_ops.is_hardreset_asserted = _omap2_is_hardreset_asserted;
+	} else if (cpu_is_omap34xx()) {
+		soc_ops.wait_target_ready = _omap3xxx_wait_target_ready;
 		soc_ops.assert_hardreset = _omap2_assert_hardreset;
 		soc_ops.deassert_hardreset = _omap2_deassert_hardreset;
 		soc_ops.is_hardreset_asserted = _omap2_is_hardreset_asserted;

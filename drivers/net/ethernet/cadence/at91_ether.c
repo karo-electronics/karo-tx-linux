@@ -30,6 +30,7 @@
 #include <linux/of_device.h>
 #include <linux/of_net.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/platform_data/atmel.h>
 
 #include "macb.h"
 

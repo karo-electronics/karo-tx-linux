@@ -26,9 +26,6 @@
 #include <linux/regulator/machine.h>
 #include <linux/regulator/fixed.h>
 
-#include <plat/i2c.h>
-#include <plat/usb.h>
-
 #include "soc.h"
 #include "twl-common.h"
 #include "pm.h"
@@ -366,7 +363,7 @@ static struct regulator_init_data omap4_clk32kg_idata = {
 };
 
 static struct regulator_consumer_supply omap4_vdd1_supply[] = {
-	REGULATOR_SUPPLY("vcc", "mpu.0"),
+	REGULATOR_SUPPLY("vcc", "cpu0"),
 };
 
 static struct regulator_consumer_supply omap4_vdd2_supply[] = {
