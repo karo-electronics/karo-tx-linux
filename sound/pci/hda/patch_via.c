@@ -1454,7 +1454,7 @@ static const struct hda_pcm_stream via_pcm_digital_capture = {
  */
 static const char * const via_slave_pfxs[] = {
 	"Front", "Surround", "Center", "LFE", "Side",
-	"Headphone", "Speaker",
+	"Headphone", "Speaker", "Bass Speaker",
 	NULL,
 };
 
@@ -1555,6 +1555,10 @@ static int via_build_pcms(struct hda_codec *codec)
 				spec->multiout.dac_nids[0];
 			info->stream[SNDRV_PCM_STREAM_PLAYBACK].channels_max =
 				spec->multiout.max_channels;
+			if (spec->autocfg.line_out_type == AUTO_PIN_SPEAKER_OUT
+			    && spec->autocfg.line_outs == 2)
+				info->stream[SNDRV_PCM_STREAM_PLAYBACK].chmap =
+					snd_pcm_2_1_chmaps;
 		}
 
 		if (!spec->stream_analog_capture) {
@@ -1934,7 +1938,7 @@ static int via_auto_create_multi_out_ctls(struct hda_codec *codec)
 	struct auto_pin_cfg *cfg = &spec->autocfg;
 	struct nid_path *path;
 	static const char * const chname[4] = {
-		"Front", "Surround", "C/LFE", "Side"
+		"Front", "Surround", NULL /* "CLFE" */, "Side"
 	};
 	int i, idx, err;
 	int old_line_outs;
@@ -1969,8 +1973,8 @@ static int via_auto_create_multi_out_ctls(struct hda_codec *codec)
 		} else {
 			const char *pfx = chname[i];
 			if (cfg->line_out_type == AUTO_PIN_SPEAKER_OUT &&
-			    cfg->line_outs == 1)
-				pfx = "Speaker";
+			    cfg->line_outs <= 2)
+				pfx = i ? "Bass Speaker" : "Speaker";
 			err = create_ch_ctls(codec, pfx, 3, true, path);
 			if (err < 0)
 				return err;
