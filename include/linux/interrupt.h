@@ -521,7 +521,8 @@ struct tasklet_struct name = { NULL, 0, ATOMIC_INIT(1), func, data }
 enum
 {
 	TASKLET_STATE_SCHED,	/* Tasklet is scheduled for execution */
-	TASKLET_STATE_RUN	/* Tasklet is running (SMP only) */
+	TASKLET_STATE_RUN,	/* Tasklet is running (SMP only) */
+	TASKLET_STATE_HI	/* Tasklet is HI_SOFTIRQ */
 };
 
 #ifdef CONFIG_SMP
@@ -593,13 +594,14 @@ static inline void tasklet_disable(struct tasklet_struct *t)
 static inline void tasklet_enable(struct tasklet_struct *t)
 {
 	smp_mb__before_atomic_dec();
-	atomic_dec(&t->count);
-}
-
-static inline void tasklet_hi_enable(struct tasklet_struct *t)
-{
-	smp_mb__before_atomic_dec();
-	atomic_dec(&t->count);
+	if (atomic_dec_and_test(&t->count)) {
+		if (!test_bit(TASKLET_STATE_SCHED, &t->state))
+			return;
+		if (test_bit(TASKLET_STATE_HI, &t->state))
+			__tasklet_hi_schedule(t);
+		else
+			__tasklet_schedule(t);
+	}
 }
 
 extern void tasklet_kill(struct tasklet_struct *t);

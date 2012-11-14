@@ -1679,11 +1679,22 @@ static void get_scan_count(struct lruvec *lruvec, struct scan_control *sc,
 
 	if (global_reclaim(sc)) {
 		free  = zone_page_state(zone, NR_FREE_PAGES);
-		/* If we have very few page cache pages,
-		   force-scan anon pages. */
 		if (unlikely(file + free <= high_wmark_pages(zone))) {
+			/*
+			 * If we have very few page cache pages, force-scan
+			 * anon pages.
+			 */
 			fraction[0] = 1;
 			fraction[1] = 0;
+			denominator = 1;
+			goto out;
+		} else if (!inactive_file_is_low_global(zone)) {
+			/*
+			 * There is enough inactive page cache, do not
+			 * reclaim anything from the working set right now.
+			 */
+			fraction[0] = 0;
+			fraction[1] = 1;
 			denominator = 1;
 			goto out;
 		}
@@ -1752,7 +1763,7 @@ out:
 /* Use reclaim/compaction for costly allocs or under memory pressure */
 static bool in_reclaim_compaction(struct scan_control *sc)
 {
-	if (COMPACTION_BUILD && sc->order &&
+	if (IS_ENABLED(CONFIG_COMPACTION) && sc->order &&
 			(sc->order > PAGE_ALLOC_COSTLY_ORDER ||
 			 sc->priority < DEF_PRIORITY - 2))
 		return true;
@@ -1763,14 +1774,20 @@ static bool in_reclaim_compaction(struct scan_control *sc)
 #ifdef CONFIG_COMPACTION
 /*
  * If compaction is deferred for sc->order then scale the number of pages
- * reclaimed based on the number of consecutive allocation failures
+ * reclaimed based on the number of consecutive allocation failures. This
+ * scaling only happens for direct reclaim as it is about to attempt
+ * compaction. If compaction fails, future allocations will be deferred
+ * and reclaim avoided. On the other hand, kswapd does not take compaction
+ * deferral into account so if it scaled, it could scan excessively even
+ * though allocations are temporarily not being attempted.
  */
 static unsigned long scale_for_compaction(unsigned long pages_for_compaction,
 			struct lruvec *lruvec, struct scan_control *sc)
 {
 	struct zone *zone = lruvec_zone(lruvec);
 
-	if (zone->compact_order_failed <= sc->order)
+	if (zone->compact_order_failed <= sc->order &&
+	    !current_is_kswapd())
 		pages_for_compaction <<= zone->compact_defer_shift;
 	return pages_for_compaction;
 }
@@ -2030,7 +2047,7 @@ static bool shrink_zones(struct zonelist *zonelist, struct scan_control *sc)
 			if (zone->all_unreclaimable &&
 					sc->priority != DEF_PRIORITY)
 				continue;	/* Let kswapd poll it */
-			if (COMPACTION_BUILD) {
+			if (IS_ENABLED(CONFIG_COMPACTION)) {
 				/*
 				 * If we already have plenty of memory free for
 				 * compaction in this zone, don't free any more.
@@ -2681,7 +2698,7 @@ loop_again:
 			 * Do not reclaim more than needed for compaction.
 			 */
 			testorder = order;
-			if (COMPACTION_BUILD && order &&
+			if (IS_ENABLED(CONFIG_COMPACTION) && order &&
 					compaction_suitable(zone, order) !=
 						COMPACT_SKIPPED)
 				testorder = 0;
@@ -2827,7 +2844,7 @@ out:
 				continue;
 
 			/* Would compaction fail due to lack of free memory? */
-			if (COMPACTION_BUILD &&
+			if (IS_ENABLED(CONFIG_COMPACTION) &&
 			    compaction_suitable(zone, order) == COMPACT_SKIPPED)
 				goto loop_again;
 
@@ -2969,7 +2986,7 @@ static int kswapd(void *p)
 	classzone_idx = new_classzone_idx = pgdat->nr_zones - 1;
 	balanced_classzone_idx = classzone_idx;
 	for ( ; ; ) {
-		int ret;
+		bool ret;
 
 		/*
 		 * If the last balance_pgdat was unsuccessful it's unlikely a
