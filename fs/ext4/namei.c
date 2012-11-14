@@ -261,6 +261,12 @@ static __le32 ext4_dirent_csum(struct inode *inode,
 	return cpu_to_le32(csum);
 }
 
+static void warn_no_space_for_csum(struct inode *inode)
+{
+	ext4_warning(inode->i_sb, "no space in directory inode %lu leaf for "
+		     "checksum.  Please run e2fsck -D.", inode->i_ino);
+}
+
 int ext4_dirent_csum_verify(struct inode *inode, struct ext4_dir_entry *dirent)
 {
 	struct ext4_dir_entry_tail *t;
@@ -271,8 +277,7 @@ int ext4_dirent_csum_verify(struct inode *inode, struct ext4_dir_entry *dirent)
 
 	t = get_dirent_tail(inode, dirent);
 	if (!t) {
-		EXT4_ERROR_INODE(inode, "metadata_csum set but no space in dir "
-				 "leaf for checksum.  Please run e2fsck -D.");
+		warn_no_space_for_csum(inode);
 		return 0;
 	}
 
@@ -294,8 +299,7 @@ static void ext4_dirent_csum_set(struct inode *inode,
 
 	t = get_dirent_tail(inode, dirent);
 	if (!t) {
-		EXT4_ERROR_INODE(inode, "metadata_csum set but no space in dir "
-				 "leaf for checksum.  Please run e2fsck -D.");
+		warn_no_space_for_csum(inode);
 		return;
 	}
 
@@ -377,8 +381,7 @@ static int ext4_dx_csum_verify(struct inode *inode,
 	count = le16_to_cpu(c->count);
 	if (count_offset + (limit * sizeof(struct dx_entry)) >
 	    EXT4_BLOCK_SIZE(inode->i_sb) - sizeof(struct dx_tail)) {
-		EXT4_ERROR_INODE(inode, "metadata_csum set but no space for "
-				 "tree checksum found.  Run e2fsck -D.");
+		warn_no_space_for_csum(inode);
 		return 1;
 	}
 	t = (struct dx_tail *)(((struct dx_entry *)c) + limit);
@@ -408,8 +411,7 @@ static void ext4_dx_csum_set(struct inode *inode, struct ext4_dir_entry *dirent)
 	count = le16_to_cpu(c->count);
 	if (count_offset + (limit * sizeof(struct dx_entry)) >
 	    EXT4_BLOCK_SIZE(inode->i_sb) - sizeof(struct dx_tail)) {
-		EXT4_ERROR_INODE(inode, "metadata_csum set but no space for "
-				 "tree checksum.  Run e2fsck -D.");
+		warn_no_space_for_csum(inode);
 		return;
 	}
 	t = (struct dx_tail *)(((struct dx_entry *)c) + limit);
@@ -1144,6 +1146,21 @@ static inline int search_dirblock(struct buffer_head *bh,
 	return 0;
 }
 
+static int is_dx_internal_node(struct inode *dir, ext4_lblk_t block,
+			       struct ext4_dir_entry *de)
+{
+	struct super_block *sb = dir->i_sb;
+
+	if (!is_dx(dir))
+		return 0;
+	if (block == 0)
+		return 1;
+	if (de->inode == 0 &&
+	    ext4_rec_len_from_disk(de->rec_len, sb->s_blocksize) ==
+			sb->s_blocksize)
+		return 1;
+	return 0;
+}
 
 /*
  *	ext4_find_entry()
@@ -1244,6 +1261,8 @@ restart:
 			goto next;
 		}
 		if (!buffer_verified(bh) &&
+		    !is_dx_internal_node(dir, block,
+					 (struct ext4_dir_entry *)bh->b_data) &&
 		    !ext4_dirent_csum_verify(dir,
 				(struct ext4_dir_entry *)bh->b_data)) {
 			EXT4_ERROR_INODE(dir, "checksumming directory "

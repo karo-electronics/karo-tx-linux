@@ -811,6 +811,8 @@ struct ext4_ext_cache {
 	__u32		ec_len; /* must be 32bit to return holes */
 };
 
+#include "extents_status.h"
+
 /*
  * fourth extended file system inode data in memory
  */
@@ -887,6 +889,10 @@ struct ext4_inode_info {
 	/* mballoc */
 	struct list_head i_prealloc_list;
 	spinlock_t i_prealloc_lock;
+
+	/* extents status tree */
+	struct ext4_es_tree i_es_tree;
+	rwlock_t i_es_lock;
 
 	/* ialloc */
 	ext4_group_t	i_last_alloc_group;
@@ -2445,14 +2451,10 @@ enum ext4_state_bits {
 				 * never, ever appear in a buffer_head's state
 				 * flag. See EXT4_MAP_FROM_CLUSTER to see where
 				 * this is used. */
-	BH_Da_Mapped,	/* Delayed allocated block that now has a mapping. This
-			 * flag is set when ext4_map_blocks is called on a
-			 * delayed allocated block to get its real mapping. */
 };
 
 BUFFER_FNS(Uninit, uninit)
 TAS_BUFFER_FNS(Uninit, uninit)
-BUFFER_FNS(Da_Mapped, da_mapped)
 
 /*
  * Add new method to test wether block and inode bitmaps are properly

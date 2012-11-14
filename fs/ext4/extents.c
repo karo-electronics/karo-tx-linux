@@ -3461,115 +3461,34 @@ out:
 /**
  * ext4_find_delalloc_range: find delayed allocated block in the given range.
  *
- * Goes through the buffer heads in the range [lblk_start, lblk_end] and returns
- * whether there are any buffers marked for delayed allocation. It returns '1'
- * on the first delalloc'ed buffer head found. If no buffer head in the given
- * range is marked for delalloc, it returns 0.
- * lblk_start should always be <= lblk_end.
- * search_hint_reverse is to indicate that searching in reverse from lblk_end to
- * lblk_start might be more efficient (i.e., we will likely hit the delalloc'ed
- * block sooner). This is useful when blocks are truncated sequentially from
- * lblk_start towards lblk_end.
+ * Return 1 if there is a delalloc block in the range, otherwise 0.
  */
 static int ext4_find_delalloc_range(struct inode *inode,
 				    ext4_lblk_t lblk_start,
-				    ext4_lblk_t lblk_end,
-				    int search_hint_reverse)
+				    ext4_lblk_t lblk_end)
 {
-	struct address_space *mapping = inode->i_mapping;
-	struct buffer_head *head, *bh = NULL;
-	struct page *page;
-	ext4_lblk_t i, pg_lblk;
-	pgoff_t index;
+	struct extent_status es;
 
-	if (!test_opt(inode->i_sb, DELALLOC))
-		return 0;
-
-	/* reverse search wont work if fs block size is less than page size */
-	if (inode->i_blkbits < PAGE_CACHE_SHIFT)
-		search_hint_reverse = 0;
-
-	if (search_hint_reverse)
-		i = lblk_end;
+	es.start = lblk_start;
+	ext4_es_find_extent(inode, &es);
+	if (es.len == 0)
+		return 0; /* there is no delay extent in this tree */
+	else if (es.start <= lblk_start && lblk_start < es.start + es.len)
+		return 1;
+	else if (lblk_start <= es.start && es.start <= lblk_end)
+		return 1;
 	else
-		i = lblk_start;
-
-	index = i >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
-
-	while ((i >= lblk_start) && (i <= lblk_end)) {
-		page = find_get_page(mapping, index);
-		if (!page)
-			goto nextpage;
-
-		if (!page_has_buffers(page))
-			goto nextpage;
-
-		head = page_buffers(page);
-		if (!head)
-			goto nextpage;
-
-		bh = head;
-		pg_lblk = index << (PAGE_CACHE_SHIFT -
-						inode->i_blkbits);
-		do {
-			if (unlikely(pg_lblk < lblk_start)) {
-				/*
-				 * This is possible when fs block size is less
-				 * than page size and our cluster starts/ends in
-				 * middle of the page. So we need to skip the
-				 * initial few blocks till we reach the 'lblk'
-				 */
-				pg_lblk++;
-				continue;
-			}
-
-			/* Check if the buffer is delayed allocated and that it
-			 * is not yet mapped. (when da-buffers are mapped during
-			 * their writeout, their da_mapped bit is set.)
-			 */
-			if (buffer_delay(bh) && !buffer_da_mapped(bh)) {
-				page_cache_release(page);
-				trace_ext4_find_delalloc_range(inode,
-						lblk_start, lblk_end,
-						search_hint_reverse,
-						1, i);
-				return 1;
-			}
-			if (search_hint_reverse)
-				i--;
-			else
-				i++;
-		} while ((i >= lblk_start) && (i <= lblk_end) &&
-				((bh = bh->b_this_page) != head));
-nextpage:
-		if (page)
-			page_cache_release(page);
-		/*
-		 * Move to next page. 'i' will be the first lblk in the next
-		 * page.
-		 */
-		if (search_hint_reverse)
-			index--;
-		else
-			index++;
-		i = index << (PAGE_CACHE_SHIFT - inode->i_blkbits);
-	}
-
-	trace_ext4_find_delalloc_range(inode, lblk_start, lblk_end,
-					search_hint_reverse, 0, 0);
-	return 0;
+		return 0;
 }
 
-int ext4_find_delalloc_cluster(struct inode *inode, ext4_lblk_t lblk,
-			       int search_hint_reverse)
+int ext4_find_delalloc_cluster(struct inode *inode, ext4_lblk_t lblk)
 {
 	struct ext4_sb_info *sbi = EXT4_SB(inode->i_sb);
 	ext4_lblk_t lblk_start, lblk_end;
 	lblk_start = lblk & (~(sbi->s_cluster_ratio - 1));
 	lblk_end = lblk_start + sbi->s_cluster_ratio - 1;
 
-	return ext4_find_delalloc_range(inode, lblk_start, lblk_end,
-					search_hint_reverse);
+	return ext4_find_delalloc_range(inode, lblk_start, lblk_end);
 }
 
 /**
@@ -3630,7 +3549,7 @@ get_reserved_cluster_alloc(struct inode *inode, ext4_lblk_t lblk_start,
 		lblk_from = lblk_start & (~(sbi->s_cluster_ratio - 1));
 		lblk_to = lblk_from + c_offset - 1;
 
-		if (ext4_find_delalloc_range(inode, lblk_from, lblk_to, 0))
+		if (ext4_find_delalloc_range(inode, lblk_from, lblk_to))
 			allocated_clusters--;
 	}
 
@@ -3640,7 +3559,7 @@ get_reserved_cluster_alloc(struct inode *inode, ext4_lblk_t lblk_start,
 		lblk_from = lblk_start + num_blks;
 		lblk_to = lblk_from + (sbi->s_cluster_ratio - c_offset) - 1;
 
-		if (ext4_find_delalloc_range(inode, lblk_from, lblk_to, 0))
+		if (ext4_find_delalloc_range(inode, lblk_from, lblk_to))
 			allocated_clusters--;
 	}
 
@@ -3663,8 +3582,8 @@ ext4_ext_handle_uninitialized_extents(handle_t *handle, struct inode *inode,
 		  flags, allocated);
 	ext4_ext_show_leaf(inode, path);
 
-	trace_ext4_ext_handle_uninitialized_extents(inode, map, allocated,
-						    newblock);
+	trace_ext4_ext_handle_uninitialized_extents(inode, map, flags,
+						    allocated, newblock);
 
 	/* get_block() before submit the IO, split the extent */
 	if ((flags & EXT4_GET_BLOCKS_PRE_IO)) {
@@ -3911,7 +3830,7 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 	struct ext4_extent newex, *ex, *ex2;
 	struct ext4_sb_info *sbi = EXT4_SB(inode->i_sb);
 	ext4_fsblk_t newblock = 0;
-	int free_on_err = 0, err = 0, depth, ret;
+	int free_on_err = 0, err = 0, depth;
 	unsigned int allocated = 0, offset = 0;
 	unsigned int allocated_clusters = 0;
 	struct ext4_allocation_request ar;
@@ -3927,7 +3846,7 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 	if (ext4_ext_in_cache(inode, map->m_lblk, &newex)) {
 		if (!newex.ee_start_lo && !newex.ee_start_hi) {
 			if ((sbi->s_cluster_ratio > 1) &&
-			    ext4_find_delalloc_cluster(inode, map->m_lblk, 0))
+			    ext4_find_delalloc_cluster(inode, map->m_lblk))
 				map->m_flags |= EXT4_MAP_FROM_CLUSTER;
 
 			if ((flags & EXT4_GET_BLOCKS_CREATE) == 0) {
@@ -4007,15 +3926,15 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 					ee_len, ee_start);
 				goto out;
 			}
-			ret = ext4_ext_handle_uninitialized_extents(
+			allocated = ext4_ext_handle_uninitialized_extents(
 				handle, inode, map, path, flags,
 				allocated, newblock);
-			return ret;
+			goto out3;
 		}
 	}
 
 	if ((sbi->s_cluster_ratio > 1) &&
-	    ext4_find_delalloc_cluster(inode, map->m_lblk, 0))
+	    ext4_find_delalloc_cluster(inode, map->m_lblk))
 		map->m_flags |= EXT4_MAP_FROM_CLUSTER;
 
 	/*
@@ -4284,8 +4203,8 @@ out2:
 		kfree(path);
 	}
 
-	trace_ext4_ext_map_blocks_exit(inode, map->m_lblk,
-		newblock, map->m_len, err ? err : allocated);
+out3:
+	trace_ext4_ext_map_blocks_exit(inode, map, err ? err : allocated);
 
 	return err ? err : allocated;
 }
@@ -4344,6 +4263,8 @@ void ext4_ext_truncate(struct inode *inode)
 
 	last_block = (inode->i_size + sb->s_blocksize - 1)
 			>> EXT4_BLOCK_SIZE_BITS(sb);
+	err = ext4_es_remove_extent(inode, last_block,
+				    EXT_MAX_BLOCKS - last_block);
 	err = ext4_ext_remove_space(inode, last_block, EXT_MAX_BLOCKS - 1);
 
 	/* In a multi-transaction truncate, we only make the final
@@ -4578,192 +4499,50 @@ static int ext4_ext_fiemap_cb(struct inode *inode, ext4_lblk_t next,
 		       struct ext4_ext_cache *newex, struct ext4_extent *ex,
 		       void *data)
 {
+	struct extent_status es;
 	__u64	logical;
 	__u64	physical;
 	__u64	length;
 	__u32	flags = 0;
+	ext4_lblk_t next_del;
 	int		ret = 0;
 	struct fiemap_extent_info *fieinfo = data;
 	unsigned char blksize_bits;
 
-	blksize_bits = inode->i_sb->s_blocksize_bits;
-	logical = (__u64)newex->ec_block << blksize_bits;
+	es.start = newex->ec_block;
+	next_del = ext4_es_find_extent(inode, &es);
 
+	next = min(next_del, next);
 	if (newex->ec_start == 0) {
 		/*
 		 * No extent in extent-tree contains block @newex->ec_start,
 		 * then the block may stay in 1)a hole or 2)delayed-extent.
-		 *
-		 * Holes or delayed-extents are processed as follows.
-		 * 1. lookup dirty pages with specified range in pagecache.
-		 *    If no page is got, then there is no delayed-extent and
-		 *    return with EXT_CONTINUE.
-		 * 2. find the 1st mapped buffer,
-		 * 3. check if the mapped buffer is both in the request range
-		 *    and a delayed buffer. If not, there is no delayed-extent,
-		 *    then return.
-		 * 4. a delayed-extent is found, the extent will be collected.
 		 */
-		ext4_lblk_t	end = 0;
-		pgoff_t		last_offset;
-		pgoff_t		offset;
-		pgoff_t		index;
-		pgoff_t		start_index = 0;
-		struct page	**pages = NULL;
-		struct buffer_head *bh = NULL;
-		struct buffer_head *head = NULL;
-		unsigned int nr_pages = PAGE_SIZE / sizeof(struct page *);
+		if (es.len == 0)
+			/* A hole found. */
+			return EXT_CONTINUE;
 
-		pages = kmalloc(PAGE_SIZE, GFP_KERNEL);
-		if (pages == NULL)
-			return -ENOMEM;
-
-		offset = logical >> PAGE_SHIFT;
-repeat:
-		last_offset = offset;
-		head = NULL;
-		ret = find_get_pages_tag(inode->i_mapping, &offset,
-					PAGECACHE_TAG_DIRTY, nr_pages, pages);
-
-		if (!(flags & FIEMAP_EXTENT_DELALLOC)) {
-			/* First time, try to find a mapped buffer. */
-			if (ret == 0) {
-out:
-				for (index = 0; index < ret; index++)
-					page_cache_release(pages[index]);
-				/* just a hole. */
-				kfree(pages);
-				return EXT_CONTINUE;
-			}
-			index = 0;
-
-next_page:
-			/* Try to find the 1st mapped buffer. */
-			end = ((__u64)pages[index]->index << PAGE_SHIFT) >>
-				  blksize_bits;
-			if (!page_has_buffers(pages[index]))
-				goto out;
-			head = page_buffers(pages[index]);
-			if (!head)
-				goto out;
-
-			index++;
-			bh = head;
-			do {
-				if (end >= newex->ec_block +
-					newex->ec_len)
-					/* The buffer is out of
-					 * the request range.
-					 */
-					goto out;
-
-				if (buffer_mapped(bh) &&
-				    end >= newex->ec_block) {
-					start_index = index - 1;
-					/* get the 1st mapped buffer. */
-					goto found_mapped_buffer;
-				}
-
-				bh = bh->b_this_page;
-				end++;
-			} while (bh != head);
-
-			/* No mapped buffer in the range found in this page,
-			 * We need to look up next page.
-			 */
-			if (index >= ret) {
-				/* There is no page left, but we need to limit
-				 * newex->ec_len.
-				 */
-				newex->ec_len = end - newex->ec_block;
-				goto out;
-			}
-			goto next_page;
-		} else {
-			/*Find contiguous delayed buffers. */
-			if (ret > 0 && pages[0]->index == last_offset)
-				head = page_buffers(pages[0]);
-			bh = head;
-			index = 1;
-			start_index = 0;
+		if (es.start > newex->ec_block) {
+			/* A hole found. */
+			newex->ec_len = min(es.start - newex->ec_block,
+					    newex->ec_len);
+			return EXT_CONTINUE;
 		}
 
-found_mapped_buffer:
-		if (bh != NULL && buffer_delay(bh)) {
-			/* 1st or contiguous delayed buffer found. */
-			if (!(flags & FIEMAP_EXTENT_DELALLOC)) {
-				/*
-				 * 1st delayed buffer found, record
-				 * the start of extent.
-				 */
-				flags |= FIEMAP_EXTENT_DELALLOC;
-				newex->ec_block = end;
-				logical = (__u64)end << blksize_bits;
-			}
-			/* Find contiguous delayed buffers. */
-			do {
-				if (!buffer_delay(bh))
-					goto found_delayed_extent;
-				bh = bh->b_this_page;
-				end++;
-			} while (bh != head);
-
-			for (; index < ret; index++) {
-				if (!page_has_buffers(pages[index])) {
-					bh = NULL;
-					break;
-				}
-				head = page_buffers(pages[index]);
-				if (!head) {
-					bh = NULL;
-					break;
-				}
-
-				if (pages[index]->index !=
-				    pages[start_index]->index + index
-				    - start_index) {
-					/* Blocks are not contiguous. */
-					bh = NULL;
-					break;
-				}
-				bh = head;
-				do {
-					if (!buffer_delay(bh))
-						/* Delayed-extent ends. */
-						goto found_delayed_extent;
-					bh = bh->b_this_page;
-					end++;
-				} while (bh != head);
-			}
-		} else if (!(flags & FIEMAP_EXTENT_DELALLOC))
-			/* a hole found. */
-			goto out;
-
-found_delayed_extent:
-		newex->ec_len = min(end - newex->ec_block,
-						(ext4_lblk_t)EXT_INIT_MAX_LEN);
-		if (ret == nr_pages && bh != NULL &&
-			newex->ec_len < EXT_INIT_MAX_LEN &&
-			buffer_delay(bh)) {
-			/* Have not collected an extent and continue. */
-			for (index = 0; index < ret; index++)
-				page_cache_release(pages[index]);
-			goto repeat;
-		}
-
-		for (index = 0; index < ret; index++)
-			page_cache_release(pages[index]);
-		kfree(pages);
+		flags |= FIEMAP_EXTENT_DELALLOC;
+		newex->ec_len = es.start + es.len - newex->ec_block;
 	}
-
-	physical = (__u64)newex->ec_start << blksize_bits;
-	length =   (__u64)newex->ec_len << blksize_bits;
 
 	if (ex && ext4_ext_is_uninitialized(ex))
 		flags |= FIEMAP_EXTENT_UNWRITTEN;
 
 	if (next == EXT_MAX_BLOCKS)
 		flags |= FIEMAP_EXTENT_LAST;
+
+	blksize_bits = inode->i_sb->s_blocksize_bits;
+	logical = (__u64)newex->ec_block << blksize_bits;
+	physical = (__u64)newex->ec_start << blksize_bits;
+	length =   (__u64)newex->ec_len << blksize_bits;
 
 	ret = fiemap_fill_next_extent(fieinfo, logical, physical,
 					length, flags);
@@ -4971,6 +4750,8 @@ int ext4_ext_punch_hole(struct file *file, loff_t offset, loff_t length)
 	ext4_ext_invalidate_cache(inode);
 	ext4_discard_preallocations(inode);
 
+	err = ext4_es_remove_extent(inode, first_block,
+				    stop_block - first_block);
 	err = ext4_ext_remove_space(inode, first_block, stop_block - 1);
 
 	ext4_ext_invalidate_cache(inode);
