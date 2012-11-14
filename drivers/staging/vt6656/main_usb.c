@@ -1056,13 +1056,11 @@ static int  device_open(struct net_device *dev) {
     pDevice->bEventAvailable = FALSE;
 
    pDevice->bWPADEVUp = FALSE;
-#ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
      pDevice->bwextstep0 = FALSE;
      pDevice->bwextstep1 = FALSE;
      pDevice->bwextstep2 = FALSE;
      pDevice->bwextstep3 = FALSE;
      pDevice->bWPASuppWextEnabled = FALSE;
-#endif
     pDevice->byReAssocCount = 0;
 
     RXvWorkItem(pDevice);
@@ -1219,7 +1217,6 @@ static void __devexit vt6656_disconnect(struct usb_interface *intf)
 	}
 
 	device_release_WPADEV(device);
-	release_firmware(device->firmware);
 
 	usb_set_intfdata(intf, NULL);
 	usb_put_dev(interface_to_usbdev(intf));
@@ -1558,12 +1555,12 @@ static struct net_device_stats *device_get_stats(struct net_device *dev) {
 
 
 static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
-	PSDevice	        pDevice = (PSDevice)netdev_priv(dev);
-    PSMgmtObject        pMgmt = &(pDevice->sMgmtObj);
-    PSCmdRequest        pReq;
-    //BOOL                bCommit = FALSE;
+	PSDevice pDevice = (PSDevice)netdev_priv(dev);
+	PSMgmtObject pMgmt = &pDevice->sMgmtObj;
+	PSCmdRequest pReq;
+	u8 *buffer;
 	struct iwreq *wrq = (struct iwreq *) rq;
-	int                 rc =0;
+	int rc = 0;
 
     if (pMgmt == NULL) {
         rc = -EFAULT;
@@ -1800,20 +1797,28 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		break;
 
 	case SIOCGIWAPLIST:
-	    {
-            char buffer[IW_MAX_AP * (sizeof(struct sockaddr) + sizeof(struct iw_quality))];
+		if (wrq->u.data.pointer) {
+			buffer = kzalloc((sizeof(struct sockaddr) +
+				sizeof(struct iw_quality)) * IW_MAX_AP,
+					GFP_KERNEL);
+			if (buffer == NULL) {
+				rc = -ENOMEM;
+				break;
+			}
 
-		    if (wrq->u.data.pointer) {
-		        rc = iwctl_giwaplist(dev, NULL, &(wrq->u.data), buffer);
-		        if (rc == 0) {
-                    if (copy_to_user(wrq->u.data.pointer,
-					                buffer,
-					               (wrq->u.data.length * (sizeof(struct sockaddr) +  sizeof(struct iw_quality)))
-				        ))
-				    rc = -EFAULT;
-		        }
-            }
-        }
+			rc = iwctl_giwaplist(dev, NULL, &(wrq->u.data), buffer);
+			if (rc < 0) {
+				kfree(buffer);
+				break;
+			}
+
+			if (copy_to_user(wrq->u.data.pointer, buffer,
+				wrq->u.data.length * (sizeof(struct sockaddr)
+					+ sizeof(struct iw_quality))))
+				rc = -EFAULT;
+
+			kfree(buffer);
+		}
 		break;
 
 
@@ -1849,7 +1854,6 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 */
 		break;
 
-#ifdef  WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 	case SIOCSIWAUTH:
 		DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWAUTH\n");
 		rc = iwctl_siwauth(dev, NULL, &(wrq->u.param), NULL);
@@ -1902,7 +1906,6 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		rc = iwctl_siwmlme(dev, NULL, &(wrq->u.data), wrq->u.data.pointer);
 		break;
 
-#endif // #ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 
     case IOCTL_CMD_TEST:
 
@@ -1996,10 +1999,8 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
            ControlvMaskByte(pDevice,MESSAGE_REQUEST_MACREG,MAC_REG_PAPEDELAY,LEDSTS_STS,LEDSTS_SLOW);
 //End Modify
            netif_stop_queue(pDevice->dev);
-#ifdef  WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
            pMgmt->eScanType = WMAC_SCAN_ACTIVE;
 	   if (!pDevice->bWPASuppWextEnabled)
-#endif
 		bScheduleCommand((void *) pDevice,
 				 WLAN_CMD_BSSID_SCAN,
 				 pMgmt->abyDesireSSID);

@@ -160,7 +160,9 @@ static void variax_startup5(unsigned long data)
 	/* current model dump: */
 	line6_dump_request_async(&variax->dumpreq, &variax->line6, 0,
 				 VARIAX_DUMP_PASS1);
-	/* passes 2 and 3 are performed implicitly before entering variax_startup6 */
+	/* passes 2 and 3 are performed implicitly before entering
+	 * variax_startup6.
+	 */
 }
 
 static void variax_startup6(struct usb_line6_variax *variax)
@@ -260,10 +262,9 @@ void line6_variax_process_message(struct usb_line6_variax *variax)
 					     2, VARIAX_DUMP_PASS3);
 				}
 			} else {
-				DEBUG_MESSAGES(dev_err
-					       (variax->line6.ifcdev,
-						"illegal length %d of model data\n",
-						variax->line6.message_length));
+				dev_dbg(variax->line6.ifcdev,
+					"illegal length %d of model data\n",
+					variax->line6.message_length);
 				line6_dump_finished(&variax->dumpreq);
 			}
 		} else if (memcmp(buf + 1, variax_request_bank + 1,
@@ -293,9 +294,8 @@ void line6_variax_process_message(struct usb_line6_variax *variax)
 		break;
 
 	default:
-		DEBUG_MESSAGES(dev_err
-			       (variax->line6.ifcdev,
-				"Variax: unknown message %02X\n", buf[0]));
+		dev_dbg(variax->line6.ifcdev,
+			"Variax: unknown message %02X\n", buf[0]);
 	}
 }
 

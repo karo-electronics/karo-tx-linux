@@ -38,19 +38,12 @@
 #include "hostap.h"
 #include "power.h"
 #include "rf.h"
-
-#ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 #include "iowpa.h"
 #include "wpactl.h"
-#endif
 
 #include <net/iw_handler.h>
 
-#ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 #define SUPPORTED_WIRELESS_EXT 18
-#else
-#define SUPPORTED_WIRELESS_EXT 17
-#endif
 
 static const long frequency_list[] = {
 	2412, 2417, 2422, 2427, 2432, 2437, 2442, 2447, 2452, 2457, 2462, 2467, 2472, 2484,
@@ -639,47 +632,56 @@ int iwctl_giwap(struct net_device *dev, struct iw_request_info *info,
  * Wireless Handler: get ap list
  */
 int iwctl_giwaplist(struct net_device *dev, struct iw_request_info *info,
-		struct iw_point *wrq, char *extra)
+		struct iw_point *wrq, u8 *extra)
 {
+	struct sockaddr *sock;
+	struct iw_quality *qual;
+	PSDevice pDevice = netdev_priv(dev);
+	PSMgmtObject pMgmt = &pDevice->sMgmtObj;
+	PKnownBSS pBSS = &pMgmt->sBSSList[0];
 	int ii;
 	int jj;
-	int rc = 0;
-	struct sockaddr sock[IW_MAX_AP];
-	struct iw_quality qual[IW_MAX_AP];
-	PSDevice pDevice = netdev_priv(dev);
-	PSMgmtObject pMgmt = &(pDevice->sMgmtObj);
 
-	DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWAPLIST \n");
-	// Only super-user can see AP list
+	DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWAPLIST\n");
+	/* Only super-user can see AP list */
 
-	if (!capable(CAP_NET_ADMIN)) {
-		rc = -EPERM;
-		return rc;
+	if (pBSS == NULL)
+		return -ENODEV;
+
+	if (!capable(CAP_NET_ADMIN))
+		return -EPERM;
+
+	if (!wrq->pointer)
+		return -EINVAL;
+
+	sock = kzalloc(sizeof(struct sockaddr) * IW_MAX_AP, GFP_KERNEL);
+	qual = kzalloc(sizeof(struct iw_quality) * IW_MAX_AP, GFP_KERNEL);
+	if (sock == NULL || qual == NULL)
+		return -ENOMEM;
+
+	for (ii = 0, jj = 0; ii < MAX_BSS_NUM; ii++) {
+		if (!pBSS[ii].bActive)
+			continue;
+		if (jj >= IW_MAX_AP)
+			break;
+		memcpy(sock[jj].sa_data, pBSS[ii].abyBSSID, 6);
+		sock[jj].sa_family = ARPHRD_ETHER;
+		qual[jj].level = pBSS[ii].uRSSI;
+		qual[jj].qual = qual[jj].noise = 0;
+		qual[jj].updated = 2;
+		jj++;
 	}
 
-	if (wrq->pointer) {
-		PKnownBSS pBSS = &(pMgmt->sBSSList[0]);
+	wrq->flags = 1; /* Should be defined */
+	wrq->length = jj;
+	memcpy(extra, sock, sizeof(struct sockaddr) * jj);
+	memcpy(extra + sizeof(struct sockaddr) * jj, qual,
+		sizeof(struct iw_quality) * jj);
 
-		for (ii = 0, jj= 0; ii < MAX_BSS_NUM; ii++) {
-			pBSS = &(pMgmt->sBSSList[ii]);
-			if (!pBSS->bActive)
-				continue;
-			if (jj >= IW_MAX_AP)
-				break;
-			memcpy(sock[jj].sa_data, pBSS->abyBSSID, 6);
-			sock[jj].sa_family = ARPHRD_ETHER;
-			qual[jj].level = pBSS->uRSSI;
-			qual[jj].qual = qual[jj].noise = 0;
-			qual[jj].updated = 2;
-			jj++;
-		}
+	kfree(sock);
+	kfree(qual);
 
-		wrq->flags = 1; // Should be defined
-		wrq->length = jj;
-		memcpy(extra, sock, sizeof(struct sockaddr) * jj);
-		memcpy(extra + sizeof(struct sockaddr) * jj, qual, sizeof(struct iw_quality) * jj);
-	}
-	return rc;
+	return 0;
 }
 
 /*
@@ -704,10 +706,8 @@ int iwctl_siwessid(struct net_device *dev, struct iw_request_info *info,
 		memset(pMgmt->abyDesireSSID, 0, WLAN_IEHDR_LEN + WLAN_SSID_MAXLEN + 1);
 		memset(pMgmt->abyDesireBSSID, 0xFF,6);
 		PRINT_K("set essid to 'any' \n");
-#ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 		// Unknown desired AP, so here need not associate??
 		return 0;
-#endif
 	} else {
 		// Set the SSID
 		memset(pMgmt->abyDesireSSID, 0, WLAN_IEHDR_LEN + WLAN_SSID_MAXLEN + 1);
@@ -729,7 +729,6 @@ int iwctl_siwessid(struct net_device *dev, struct iw_request_info *info,
 			return 0;
 		}
 
-#ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 		// Wext wil order another command of siwap to link
 		// with desired AP, so here need not associate??
 		if (pDevice->bWPASuppWextEnabled == TRUE)  {
@@ -778,7 +777,6 @@ int iwctl_siwessid(struct net_device *dev, struct iw_request_info *info,
 			}
 			return 0;
 		}
-#endif
 
 		DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "set essid = %s \n", pItemSSID->abySSID);
 	}
@@ -1155,9 +1153,8 @@ int iwctl_siwencode(struct net_device *dev, struct iw_request_info *info,
 		pMgmt->bShareKeyAlgorithm = FALSE;
 	}
 
-#ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 	memset(pMgmt->abyDesireBSSID, 0xFF, 6);
-#endif
+
 	return rc;
 }
 
@@ -1310,8 +1307,6 @@ int iwctl_giwsens(struct net_device *dev, struct iw_request_info *info,
 	wrq->fixed = 1;
 	return 0;
 }
-
-#ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 
 int iwctl_siwauth(struct net_device *dev, struct iw_request_info *info,
 		struct iw_param *wrq, char *extra)
@@ -1488,17 +1483,15 @@ int iwctl_siwencodeext(struct net_device *dev, struct iw_request_info *info,
 	size_t seq_len = 0;
 	size_t key_len = 0;
 	u8 *buf;
-	size_t blen;
 	u8 key_array[64];
 	int ret = 0;
 
-	PRINT_K("SIOCSIWENCODEEXT...... \n");
+	PRINT_K("SIOCSIWENCODEEXT......\n");
 
-	blen = sizeof(*param);
-	buf = kmalloc((int)blen, (int)GFP_KERNEL);
+	buf = kzalloc(sizeof(struct viawget_wpa_param), GFP_KERNEL);
 	if (buf == NULL)
 		return -ENOMEM;
-	memset(buf, 0, blen);
+
 	param = (struct viawget_wpa_param *)buf;
 
 // recover alg_name
@@ -1592,7 +1585,7 @@ int iwctl_siwencodeext(struct net_device *dev, struct iw_request_info *info,
 	spin_unlock_irq(&pDevice->lock);
 
 error:
-	kfree(param);
+	kfree(buf);
 	return ret;
 }
 
@@ -1628,8 +1621,6 @@ int iwctl_siwmlme(struct net_device *dev, struct iw_request_info *info,
 	}
 	return ret;
 }
-
-#endif
 
 static const iw_handler iwctl_handler[] = {
 	(iw_handler)NULL, // SIOCSIWCOMMIT

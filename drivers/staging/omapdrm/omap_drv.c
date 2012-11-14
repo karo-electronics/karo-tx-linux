@@ -30,8 +30,6 @@
 #define DRIVER_MINOR		0
 #define DRIVER_PATCHLEVEL	0
 
-struct drm_device *drm_device;
-
 static int num_crtc = CONFIG_DRM_OMAP_NUM_CRTCS;
 
 MODULE_PARM_DESC(num_crtc, "Number of overlays to use as CRTCs");
@@ -419,13 +417,14 @@ static void omap_modeset_free(struct drm_device *dev)
 static int ioctl_get_param(struct drm_device *dev, void *data,
 		struct drm_file *file_priv)
 {
+	struct omap_drm_private *priv = dev->dev_private;
 	struct drm_omap_param *args = data;
 
 	DBG("%p: param=%llu", dev, args->param);
 
 	switch (args->param) {
 	case OMAP_PARAM_CHIPSET_ID:
-		args->value = GET_OMAP_TYPE;
+		args->value = priv->omaprev;
 		break;
 	default:
 		DBG("unknown parameter %lld", args->param);
@@ -557,18 +556,19 @@ struct drm_ioctl_desc ioctls[DRM_COMMAND_END - DRM_COMMAND_BASE] = {
  */
 static int dev_load(struct drm_device *dev, unsigned long flags)
 {
+	struct omap_drm_platform_data *pdata = dev->dev->platform_data;
 	struct omap_drm_private *priv;
 	int ret;
 
 	DBG("load: dev=%p", dev);
-
-	drm_device = dev;
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (!priv) {
 		dev_err(dev->dev, "could not allocate priv\n");
 		return -ENOMEM;
 	}
+
+	priv->omaprev = pdata->omaprev;
 
 	dev->dev_private = priv;
 
@@ -659,19 +659,22 @@ static void dev_lastclose(struct drm_device *dev)
 
 	DBG("lastclose: dev=%p", dev);
 
-	/* need to restore default rotation state.. not sure if there is
-	 * a cleaner way to restore properties to default state?  Maybe
-	 * a flag that properties should automatically be restored to
-	 * default state on lastclose?
-	 */
-	for (i = 0; i < priv->num_crtcs; i++) {
-		drm_object_property_set_value(&priv->crtcs[i]->base,
-				priv->rotation_prop, 0);
-	}
+	if (priv->rotation_prop) {
+		/* need to restore default rotation state.. not sure
+		 * if there is a cleaner way to restore properties to
+		 * default state?  Maybe a flag that properties should
+		 * automatically be restored to default state on
+		 * lastclose?
+		 */
+		for (i = 0; i < priv->num_crtcs; i++) {
+			drm_object_property_set_value(&priv->crtcs[i]->base,
+					priv->rotation_prop, 0);
+		}
 
-	for (i = 0; i < priv->num_planes; i++) {
-		drm_object_property_set_value(&priv->planes[i]->base,
-				priv->rotation_prop, 0);
+		for (i = 0; i < priv->num_planes; i++) {
+			drm_object_property_set_value(&priv->planes[i]->base,
+					priv->rotation_prop, 0);
+		}
 	}
 
 	ret = drm_fb_helper_restore_fbdev_mode(priv->fbdev);
