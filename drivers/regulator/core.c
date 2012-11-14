@@ -1979,6 +1979,11 @@ int regulator_is_supported_voltage(struct regulator *regulator,
 			return ret;
 	}
 
+	/* Any voltage within constrains range is fine? */
+	if (rdev->desc->continuous_voltage_range)
+		return min_uV >= rdev->constraints->min_uV &&
+				max_uV <= rdev->constraints->max_uV;
+
 	ret = regulator_count_voltages(regulator);
 	if (ret < 0)
 		return ret;
@@ -3365,7 +3370,7 @@ regulator_register(const struct regulator_desc *regulator_desc,
 		if (ret != 0) {
 			rdev_err(rdev, "Failed to request enable GPIO%d: %d\n",
 				 config->ena_gpio, ret);
-			goto clean;
+			goto wash;
 		}
 
 		rdev->ena_gpio = config->ena_gpio;
@@ -3449,6 +3454,7 @@ scrub:
 	if (rdev->ena_gpio)
 		gpio_free(rdev->ena_gpio);
 	kfree(rdev->constraints);
+wash:
 	device_unregister(&rdev->dev);
 	/* device core frees rdev */
 	rdev = ERR_PTR(ret);
