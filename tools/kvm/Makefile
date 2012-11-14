@@ -19,8 +19,8 @@ export E Q KINCL_PATH
 include config/utilities.mak
 include config/feature-tests.mak
 
-CC	:= $(CROSS_COMPILE)$(CC)
-LD	:= $(CROSS_COMPILE)$(LD)
+CC	:= $(CROSS_COMPILE)gcc
+LD	:= $(CROSS_COMPILE)ld
 
 FIND	:= find
 CSCOPE	:= cscope
@@ -171,11 +171,6 @@ endif
 # both and only build those that link!
 
 FLAGS_BFD := $(CFLAGS) -lbfd
-ifeq ($(call try-cc,$(SOURCE_BFD),$(FLAGS_BFD)),y)
-	CFLAGS_DYNOPT	+= -DCONFIG_HAS_BFD
-	OBJS_DYNOPT	+= symbol.o
-	LIBS_DYNOPT	+= -lbfd
-endif
 ifeq ($(call try-cc,$(SOURCE_BFD),$(FLAGS_BFD) -static),y)
 	CFLAGS_STATOPT	+= -DCONFIG_HAS_BFD
 	OBJS_STATOPT	+= symbol.o
@@ -226,6 +221,11 @@ ifeq ($(call try-cc,$(SOURCE_AIO),$(FLAGS_AIO) -static),y)
 	LIBS_STATOPT	+= -laio
 endif
 
+FLAGS_LTO := -flto
+ifeq ($(call try-cc,$(SOURCE_HELLO),$(FLAGS_LTO)),y)
+	CFLAGS		+= $(FLAGS_LTO)
+endif
+
 ifneq ($(call try-build,$(SOURCE_STATIC),-static,),y)
 $(error No static libc found. Please install glibc-static package.)
 endif
@@ -244,10 +244,9 @@ DEFINES	+= -DKVMTOOLS_VERSION='"$(KVMTOOLS_VERSION)"'
 DEFINES	+= -DBUILD_ARCH='"$(ARCH)"'
 
 KVM_INCLUDE := include
-CFLAGS	+= $(CPPFLAGS) $(DEFINES) -I$(KVM_INCLUDE) -I$(ARCH_INCLUDE) -I$(KINCL_PATH)/include/uapi -I$(KINCL_PATH)/include -I$(KINCL_PATH)/arch/$(ARCH)/include/ -O2 -fno-strict-aliasing -g -flto
+CFLAGS	+= $(CPPFLAGS) $(DEFINES) -I$(KVM_INCLUDE) -I$(ARCH_INCLUDE) -I$(KINCL_PATH)/include/uapi -I$(KINCL_PATH)/include -I$(KINCL_PATH)/arch/$(ARCH)/include/uapi -I$(KINCL_PATH)/arch/$(ARCH)/include/ -O2 -fno-strict-aliasing -g
 
 WARNINGS += -Wall
-WARNINGS += -Wcast-align
 WARNINGS += -Wformat=2
 WARNINGS += -Winit-self
 WARNINGS += -Wmissing-declarations
@@ -313,6 +312,9 @@ util/rbtree.d: ../../lib/rbtree.c
 
 %.d: %.c
 	$(Q) $(CC) -M -MT $(patsubst %.d,%.o,$@) $(CFLAGS) $< -o $@
+
+%.s: %.c
+	$(Q) $(CC) -o $@ -S $(CFLAGS) -fverbose-asm $<
 
 # The header file common-cmds.h is needed for compilation of builtin-help.c.
 builtin-help.d: $(KVM_INCLUDE)/common-cmds.h
