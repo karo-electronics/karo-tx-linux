@@ -95,7 +95,6 @@ struct skb_vnet_hdr {
 		struct virtio_net_hdr hdr;
 		struct virtio_net_hdr_mrg_rxbuf mhdr;
 	};
-	unsigned int num_sg;
 };
 
 struct padded_vnet_hdr {
@@ -468,10 +467,11 @@ static bool try_fill_recv(struct virtnet_info *vi, gfp_t gfp)
 			err = add_recvbuf_small(vi, gfp);
 
 		oom = err == -ENOMEM;
-		if (err < 0)
+		if (err)
 			break;
 		++vi->num;
-	} while (err > 0);
+	} while (vi->rvq->num_free);
+
 	if (unlikely(vi->num > vi->max))
 		vi->max = vi->num;
 	virtqueue_kick(vi->rvq);
@@ -553,10 +553,10 @@ again:
 	return received;
 }
 
-static unsigned int free_old_xmit_skbs(struct virtnet_info *vi)
+static void free_old_xmit_skbs(struct virtnet_info *vi)
 {
 	struct sk_buff *skb;
-	unsigned int len, tot_sgs = 0;
+	unsigned int len;
 	struct virtnet_stats *stats = this_cpu_ptr(vi->stats);
 
 	while ((skb = virtqueue_get_buf(vi->svq, &len)) != NULL) {
@@ -567,16 +567,15 @@ static unsigned int free_old_xmit_skbs(struct virtnet_info *vi)
 		stats->tx_packets++;
 		u64_stats_update_end(&stats->tx_syncp);
 
-		tot_sgs += skb_vnet_hdr(skb)->num_sg;
 		dev_kfree_skb_any(skb);
 	}
-	return tot_sgs;
 }
 
 static int xmit_skb(struct virtnet_info *vi, struct sk_buff *skb)
 {
 	struct skb_vnet_hdr *hdr = skb_vnet_hdr(skb);
 	const unsigned char *dest = ((struct ethhdr *)skb->data)->h_dest;
+	unsigned num_sg;
 
 	pr_debug("%s: xmit %p %pM\n", vi->dev->name, skb, dest);
 
@@ -615,35 +614,28 @@ static int xmit_skb(struct virtnet_info *vi, struct sk_buff *skb)
 	else
 		sg_set_buf(vi->tx_sg, &hdr->hdr, sizeof hdr->hdr);
 
-	hdr->num_sg = skb_to_sgvec(skb, vi->tx_sg + 1, 0, skb->len) + 1;
-	return virtqueue_add_buf(vi->svq, vi->tx_sg, hdr->num_sg,
+	num_sg = skb_to_sgvec(skb, vi->tx_sg + 1, 0, skb->len) + 1;
+	return virtqueue_add_buf(vi->svq, vi->tx_sg, num_sg,
 				 0, skb, GFP_ATOMIC);
 }
 
 static netdev_tx_t start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
-	int capacity;
+	int err;
 
 	/* Free up any pending old buffers before queueing new ones. */
 	free_old_xmit_skbs(vi);
 
 	/* Try to transmit */
-	capacity = xmit_skb(vi, skb);
+	err = xmit_skb(vi, skb);
 
-	/* This can happen with OOM and indirect buffers. */
-	if (unlikely(capacity < 0)) {
-		if (likely(capacity == -ENOMEM)) {
-			if (net_ratelimit())
-				dev_warn(&dev->dev,
-					 "TX queue failure: out of memory\n");
-		} else {
-			dev->stats.tx_fifo_errors++;
-			if (net_ratelimit())
-				dev_warn(&dev->dev,
-					 "Unexpected TX queue failure: %d\n",
-					 capacity);
-		}
+	/* This should not happen! */
+	if (unlikely(err)) {
+		dev->stats.tx_fifo_errors++;
+		if (net_ratelimit())
+			dev_warn(&dev->dev,
+				 "Unexpected TX queue failure: %d\n", err);
 		dev->stats.tx_dropped++;
 		kfree_skb(skb);
 		return NETDEV_TX_OK;
@@ -656,12 +648,12 @@ static netdev_tx_t start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	/* Apparently nice girls don't return TX_BUSY; stop the queue
 	 * before it gets out of hand.  Naturally, this wastes entries. */
-	if (capacity < 2+MAX_SKB_FRAGS) {
+	if (vi->svq->num_free < 2+MAX_SKB_FRAGS) {
 		netif_stop_queue(dev);
 		if (unlikely(!virtqueue_enable_cb_delayed(vi->svq))) {
 			/* More just got used, free them then recheck. */
-			capacity += free_old_xmit_skbs(vi);
-			if (capacity >= 2+MAX_SKB_FRAGS) {
+			free_old_xmit_skbs(vi);
+			if (vi->svq->num_free >= 2+MAX_SKB_FRAGS) {
 				netif_start_queue(dev);
 				virtqueue_disable_cb(vi->svq);
 			}
