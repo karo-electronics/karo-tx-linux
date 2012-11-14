@@ -145,7 +145,10 @@ static unsigned long change_protection_range(struct vm_area_struct *vma,
 		pages += change_pud_range(vma, pgd, addr, next, newprot,
 				 dirty_accountable);
 	} while (pgd++, addr = next, addr != end);
-	flush_tlb_range(vma, start, end);
+
+	/* Only flush the TLB if we actually modified any entries: */
+	if (pages)
+		flush_tlb_range(vma, start, end);
 
 	return pages;
 }
