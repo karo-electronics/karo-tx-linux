@@ -1099,7 +1099,7 @@ extern unsigned long move_page_tables(struct vm_area_struct *vma,
 extern unsigned long do_mremap(unsigned long addr,
 			       unsigned long old_len, unsigned long new_len,
 			       unsigned long flags, unsigned long new_addr);
-extern void change_protection(struct vm_area_struct *vma, unsigned long start,
+extern unsigned long change_protection(struct vm_area_struct *vma, unsigned long start,
 			      unsigned long end, pgprot_t newprot,
 			      int dirty_accountable);
 extern int mprotect_fixup(struct vm_area_struct *vma,
@@ -1581,10 +1581,10 @@ static inline pgprot_t vma_prot_none(struct vm_area_struct *vma)
 	return pgprot_modify(vma->vm_page_prot, vm_get_page_prot(vmflags));
 }
 
-static inline void
+static inline unsigned long
 change_prot_none(struct vm_area_struct *vma, unsigned long start, unsigned long end)
 {
-	change_protection(vma, start, end, vma_prot_none(vma), 0);
+	return change_protection(vma, start, end, vma_prot_none(vma), 0);
 }
 
 struct vm_area_struct *find_extend_vma(struct mm_struct *, unsigned long addr);
