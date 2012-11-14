@@ -20,6 +20,7 @@
  */
 
 #define _GNU_SOURCE
+#include <asm/msr.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -34,19 +35,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <sched.h>
-
-#define MSR_NEHALEM_PLATFORM_INFO	0xCE
-#define MSR_NEHALEM_TURBO_RATIO_LIMIT	0x1AD
-#define MSR_IVT_TURBO_RATIO_LIMIT	0x1AE
-#define MSR_APERF	0xE8
-#define MSR_MPERF	0xE7
-#define MSR_PKG_C2_RESIDENCY	0x60D	/* SNB only */
-#define MSR_PKG_C3_RESIDENCY	0x3F8
-#define MSR_PKG_C6_RESIDENCY	0x3F9
-#define MSR_PKG_C7_RESIDENCY	0x3FA	/* SNB only */
-#define MSR_CORE_C3_RESIDENCY	0x3FC
-#define MSR_CORE_C6_RESIDENCY	0x3FD
-#define MSR_CORE_C7_RESIDENCY	0x3FE	/* SNB only */
 
 char *proc_stat = "/proc/stat";
 unsigned int interval_sec = 5;	/* set with -i interval_sec */
@@ -74,6 +62,12 @@ unsigned int show_cpu;
 unsigned int show_pkg_only;
 unsigned int show_core_only;
 char *output_buffer, *outp;
+unsigned int has_rapl;
+
+#define HAS_RAPL_PKG 1
+#define HAS_RAPL_CORES 2
+#define HAS_RAPL_GFX 4
+#define HAS_RAPL_DRAM 8
 
 int aperf_mperf_unstable;
 int backwards_count;
@@ -206,8 +200,10 @@ int get_msr(int cpu, off_t offset, unsigned long long *msr)
 	retval = pread(fd, msr, sizeof *msr, offset);
 	close(fd);
 
-	if (retval != sizeof *msr)
+	if (retval != sizeof *msr) {
+		fprintf(stderr, "%s offset 0x%zx read failed\n", pathname, offset);
 		return -1;
+	}
 
 	return 0;
 }
@@ -666,15 +662,17 @@ int get_counters(struct thread_data *t, struct core_data *c, struct pkg_data *p)
 {
 	int cpu = t->cpu_id;
 
-	if (cpu_migrate(cpu))
+	if (cpu_migrate(cpu)) {
+		fprintf(stderr, "Could not migrate to CPU %d\n", cpu);
 		return -1;
+	}
 
 	t->tsc = rdtsc();	/* we are running on local CPU of interest */
 
 	if (has_aperf) {
-		if (get_msr(cpu, MSR_APERF, &t->aperf))
+		if (get_msr(cpu, MSR_IA32_APERF, &t->aperf))
 			return -3;
-		if (get_msr(cpu, MSR_MPERF, &t->mperf))
+		if (get_msr(cpu, MSR_IA32_MPERF, &t->mperf))
 			return -4;
 	}
 
@@ -740,10 +738,10 @@ void print_verbose_header(void)
 	if (!do_nehalem_platform_info)
 		return;
 
-	get_msr(0, MSR_NEHALEM_PLATFORM_INFO, &msr);
+	get_msr(0, MSR_NHM_PLATFORM_INFO, &msr);
 
 	if (verbose > 1)
-		fprintf(stderr, "MSR_NEHALEM_PLATFORM_INFO: 0x%llx\n", msr);
+		fprintf(stderr, "MSR_NHM_PLATFORM_INFO: 0x%llx\n", msr);
 
 	ratio = (msr >> 40) & 0xFF;
 	fprintf(stderr, "%d * %.0f = %.0f MHz max efficiency\n",
@@ -806,10 +804,10 @@ print_nhm_turbo_ratio_limits:
 	if (!do_nehalem_turbo_ratio_limit)
 		return;
 
-	get_msr(0, MSR_NEHALEM_TURBO_RATIO_LIMIT, &msr);
+	get_msr(0, MSR_NHM_TURBO_RATIO_LIMIT, &msr);
 
 	if (verbose > 1)
-		fprintf(stderr, "MSR_NEHALEM_TURBO_RATIO_LIMIT: 0x%llx\n", msr);
+		fprintf(stderr, "MSR_NHM_TURBO_RATIO_LIMIT: 0x%llx\n", msr);
 
 	ratio = (msr >> 56) & 0xFF;
 	if (ratio)
@@ -1098,13 +1096,22 @@ int mark_cpu_present(int cpu)
 void turbostat_loop()
 {
 	int retval;
+	int restarted = 0;
 
 restart:
+	restarted++;
+
 	retval = for_all_cpus(get_counters, EVEN_COUNTERS);
-	if (retval) {
+	if (retval < -1) {
+		exit(retval);
+	} else if (retval == -1) {
+		if (restarted > 1) {
+			exit(retval);
+		}
 		re_initialize();
 		goto restart;
 	}
+	restarted = 0;
 	gettimeofday(&tv_even, (struct timezone *)NULL);
 
 	while (1) {
@@ -1114,7 +1121,9 @@ restart:
 		}
 		sleep(interval_sec);
 		retval = for_all_cpus(get_counters, ODD_COUNTERS);
-		if (retval) {
+		if (retval < -1) {
+			exit(retval);
+		} else if (retval == -1) {
 			re_initialize();
 			goto restart;
 		}
@@ -1126,7 +1135,9 @@ restart:
 		flush_stdout();
 		sleep(interval_sec);
 		retval = for_all_cpus(get_counters, EVEN_COUNTERS);
-		if (retval) {
+		if (retval < -1) {
+			exit(retval);
+		} else if (retval == -1) {
 			re_initialize();
 			goto restart;
 		}
@@ -1197,6 +1208,88 @@ int has_ivt_turbo_ratio_limit(unsigned int family, unsigned int model)
 	default:
 		return 0;
 	}
+}
+
+/*
+ * rapl_probe()
+ *
+ * sets has_rapl
+ */
+void rapl_probe(unsigned int family, unsigned int model)
+{
+	if (!genuine_intel)
+		return;
+
+	if (family != 6)
+		return;
+
+	switch (model) {
+	case 0x2A:
+	case 0x3A:
+		has_rapl = HAS_RAPL_PKG | HAS_RAPL_CORES | HAS_RAPL_GFX;
+		return;
+	case 0x2D:
+	case 0x3E:
+		has_rapl = HAS_RAPL_PKG | HAS_RAPL_CORES | HAS_RAPL_DRAM;
+		return;
+	default:
+		return;
+	}
+}
+	
+#define	RAPL_POWER_GRANULARITY	0x7FFF	/* 15 bit power granularity */
+#define	RAPL_TIME_GRANULARITY	0x3F /* 6 bit time granularity */
+
+int rapl_dump()
+{
+	unsigned long long msr;
+	double rapl_power_units, rapl_energy_units, rapl_time_units;
+
+	if (!has_rapl)
+		return 0;
+
+	if (get_msr(0, MSR_RAPL_POWER_UNIT, &msr))
+		return -1;
+
+	fprintf(stderr, "MSR_RAPL_POWER_UNIT: 0x%08llx ", msr);
+
+	rapl_power_units = 1.0 / (1 << (msr & 0xF));
+	rapl_energy_units = 1.0 / (1 << (msr >> 8 & 0x1F));
+	rapl_time_units = 1.0 / (1 << (msr >> 16 & 0xF));
+
+	fprintf(stderr, "%f Watts, %f Joules, %f Seconds\n",
+		rapl_power_units, rapl_energy_units, rapl_time_units);
+
+	if (has_rapl & HAS_RAPL_PKG) {
+		if (get_msr(0, MSR_PKG_POWER_INFO, &msr))
+                	return -5;
+
+		fprintf(stderr, "MSR_PKG_POWER_INFO: 0x%016llx\n", msr);
+		fprintf(stderr, "%.2f Thermal Spec Watts\n"
+			"%.2f Minimum RAPL Watts\n"
+			"%.2f Maximum RAPL Watts\n"
+			"%f Maximum RAPL Time Window\n",
+			((msr >>  0) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 16) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 32) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 48) & RAPL_TIME_GRANULARITY) * rapl_time_units);
+		}
+
+	if (has_rapl & HAS_RAPL_DRAM) {
+		if (get_msr(0, MSR_DRAM_POWER_INFO, &msr))
+                	return -6;
+
+		fprintf(stderr, "MSR_DRAM_POWER_INFO: 0x%016llx\n", msr);
+		fprintf(stderr, "%.2f Thermal Spec Watts\n"
+			"%.2f Minimum RAPL Watts\n"
+			"%.2f Maximum RAPL Watts\n"
+			"%f Maximum RAPL Time Window\n",
+			((msr >>  0) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 16) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 32) & RAPL_POWER_GRANULARITY) * rapl_power_units,
+			((msr >> 48) & RAPL_TIME_GRANULARITY) * rapl_time_units);
+	}
+	return 0;
 }
 
 
@@ -1299,6 +1392,7 @@ void check_cpuid()
 
 	do_nehalem_turbo_ratio_limit = has_nehalem_turbo_ratio_limit(family, model);
 	do_ivt_turbo_ratio_limit = has_ivt_turbo_ratio_limit(family, model);
+	rapl_probe(family, model);
 }
 
 
@@ -1540,13 +1634,18 @@ void turbostat_init()
 
 	if (verbose)
 		print_verbose_header();
+	if (verbose)
+		rapl_dump();
 }
 
 int fork_it(char **argv)
 {
 	pid_t child_pid;
+	int status;
 
-	for_all_cpus(get_counters, EVEN_COUNTERS);
+	status = for_all_cpus(get_counters, EVEN_COUNTERS);
+	if (status)
+		exit(status);
 	/* clear affinity side-effect of get_counters() */
 	sched_setaffinity(0, cpu_present_setsize, cpu_present_set);
 	gettimeofday(&tv_even, (struct timezone *)NULL);
@@ -1556,7 +1655,6 @@ int fork_it(char **argv)
 		/* child */
 		execvp(argv[0], argv);
 	} else {
-		int status;
 
 		/* parent */
 		if (child_pid == -1) {
@@ -1568,7 +1666,7 @@ int fork_it(char **argv)
 		signal(SIGQUIT, SIG_IGN);
 		if (waitpid(child_pid, &status, 0) == -1) {
 			perror("wait");
-			exit(1);
+			exit(status);
 		}
 	}
 	/*
@@ -1585,7 +1683,7 @@ int fork_it(char **argv)
 
 	fprintf(stderr, "%.6f sec\n", tv_delta.tv_sec + tv_delta.tv_usec/1000000.0);
 
-	return 0;
+	return status;
 }
 
 void cmdline(int argc, char **argv)
@@ -1594,7 +1692,7 @@ void cmdline(int argc, char **argv)
 
 	progname = argv[0];
 
-	while ((opt = getopt(argc, argv, "+pPSvisc:sC:m:M:")) != -1) {
+	while ((opt = getopt(argc, argv, "+pPSvi:sc:sC:m:M:")) != -1) {
 		switch (opt) {
 		case 'p':
 			show_core_only++;
