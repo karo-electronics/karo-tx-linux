@@ -422,6 +422,86 @@ nfsd4_decode_access(struct nfsd4_compoundargs *argp, struct nfsd4_access *access
 	DECODE_TAIL;
 }
 
+static __be32 nfsd4_decode_cb_sec(struct nfsd4_compoundargs *argp, struct nfsd4_cb_sec *cbs)
+{
+	DECODE_HEAD;
+	u32 dummy, uid, gid;
+	char *machine_name;
+	int i;
+	int nr_secflavs;
+
+	/* callback_sec_params4 */
+	READ_BUF(4);
+	READ32(nr_secflavs);
+	cbs->flavor = (u32)(-1);
+	for (i = 0; i < nr_secflavs; ++i) {
+		READ_BUF(4);
+		READ32(dummy);
+		switch (dummy) {
+		case RPC_AUTH_NULL:
+			/* Nothing to read */
+			if (cbs->flavor == (u32)(-1))
+				cbs->flavor = RPC_AUTH_NULL;
+			break;
+		case RPC_AUTH_UNIX:
+			READ_BUF(8);
+			/* stamp */
+			READ32(dummy);
+
+			/* machine name */
+			READ32(dummy);
+			READ_BUF(dummy);
+			SAVEMEM(machine_name, dummy);
+
+			/* uid, gid */
+			READ_BUF(8);
+			READ32(uid);
+			READ32(gid);
+
+			/* more gids */
+			READ_BUF(4);
+			READ32(dummy);
+			READ_BUF(dummy * 4);
+			if (cbs->flavor == (u32)(-1)) {
+				cbs->uid = uid;
+				cbs->gid = gid;
+				cbs->flavor = RPC_AUTH_UNIX;
+			}
+			break;
+		case RPC_AUTH_GSS:
+			dprintk("RPC_AUTH_GSS callback secflavor "
+				"not supported!\n");
+			READ_BUF(8);
+			/* gcbp_service */
+			READ32(dummy);
+			/* gcbp_handle_from_server */
+			READ32(dummy);
+			READ_BUF(dummy);
+			p += XDR_QUADLEN(dummy);
+			/* gcbp_handle_from_client */
+			READ_BUF(4);
+			READ32(dummy);
+			READ_BUF(dummy);
+			break;
+		default:
+			dprintk("Illegal callback secflavor\n");
+			return nfserr_inval;
+		}
+	}
+	DECODE_TAIL;
+}
+
+static __be32 nfsd4_decode_backchannel_ctl(struct nfsd4_compoundargs *argp, struct nfsd4_backchannel_ctl *bc)
+{
+	DECODE_HEAD;
+
+	READ_BUF(4);
+	READ32(bc->bc_cb_program);
+	nfsd4_decode_cb_sec(argp, &bc->bc_cb_sec);
+
+	DECODE_TAIL;
+}
+
 static __be32 nfsd4_decode_bind_conn_to_session(struct nfsd4_compoundargs *argp, struct nfsd4_bind_conn_to_session *bcts)
 {
 	DECODE_HEAD;
@@ -1237,11 +1317,7 @@ nfsd4_decode_create_session(struct nfsd4_compoundargs *argp,
 			    struct nfsd4_create_session *sess)
 {
 	DECODE_HEAD;
-
 	u32 dummy;
-	char *machine_name;
-	int i;
-	int nr_secflavs;
 
 	READ_BUF(16);
 	COPYMEM(&sess->clientid, 8);
@@ -1282,58 +1358,9 @@ nfsd4_decode_create_session(struct nfsd4_compoundargs *argp,
 		goto xdr_error;
 	}
 
-	READ_BUF(8);
+	READ_BUF(4);
 	READ32(sess->callback_prog);
-
-	/* callback_sec_params4 */
-	READ32(nr_secflavs);
-	for (i = 0; i < nr_secflavs; ++i) {
-		READ_BUF(4);
-		READ32(dummy);
-		switch (dummy) {
-		case RPC_AUTH_NULL:
-			/* Nothing to read */
-			break;
-		case RPC_AUTH_UNIX:
-			READ_BUF(8);
-			/* stamp */
-			READ32(dummy);
-
-			/* machine name */
-			READ32(dummy);
-			READ_BUF(dummy);
-			SAVEMEM(machine_name, dummy);
-
-			/* uid, gid */
-			READ_BUF(8);
-			READ32(sess->uid);
-			READ32(sess->gid);
-
-			/* more gids */
-			READ_BUF(4);
-			READ32(dummy);
-			READ_BUF(dummy * 4);
-			break;
-		case RPC_AUTH_GSS:
-			dprintk("RPC_AUTH_GSS callback secflavor "
-				"not supported!\n");
-			READ_BUF(8);
-			/* gcbp_service */
-			READ32(dummy);
-			/* gcbp_handle_from_server */
-			READ32(dummy);
-			READ_BUF(dummy);
-			p += XDR_QUADLEN(dummy);
-			/* gcbp_handle_from_client */
-			READ_BUF(4);
-			READ32(dummy);
-			READ_BUF(dummy);
-			break;
-		default:
-			dprintk("Illegal callback secflavor\n");
-			return nfserr_inval;
-		}
-	}
+	nfsd4_decode_cb_sec(argp, &sess->cb_sec);
 	DECODE_TAIL;
 }
 
@@ -1528,7 +1555,7 @@ static nfsd4_dec nfsd41_dec_ops[] = {
 	[OP_RELEASE_LOCKOWNER]	= (nfsd4_dec)nfsd4_decode_notsupp,
 
 	/* new operations for NFSv4.1 */
-	[OP_BACKCHANNEL_CTL]	= (nfsd4_dec)nfsd4_decode_notsupp,
+	[OP_BACKCHANNEL_CTL]	= (nfsd4_dec)nfsd4_decode_backchannel_ctl,
 	[OP_BIND_CONN_TO_SESSION]= (nfsd4_dec)nfsd4_decode_bind_conn_to_session,
 	[OP_EXCHANGE_ID]	= (nfsd4_dec)nfsd4_decode_exchange_id,
 	[OP_CREATE_SESSION]	= (nfsd4_dec)nfsd4_decode_create_session,
@@ -2014,6 +2041,22 @@ static __be32 fattr_handle_absent_fs(u32 *bmval0, u32 *bmval1, u32 *rdattr_err)
 	return 0;
 }
 
+
+static int get_parent_attributes(struct svc_export *exp, struct kstat *stat)
+{
+	struct path path = exp->ex_path;
+	int err;
+
+	path_get(&path);
+	while (follow_up(&path)) {
+		if (path.dentry != path.mnt->mnt_root)
+			break;
+	}
+	err = vfs_getattr(path.mnt, path.dentry, stat);
+	path_put(&path);
+	return err;
+}
+
 /*
  * Note: @fhp can be NULL; in this case, we might have to compose the filehandle
  * ourselves.
@@ -2430,18 +2473,8 @@ out_acl:
 		 * and this is the root of a cross-mounted filesystem.
 		 */
 		if (ignore_crossmnt == 0 &&
-		    dentry == exp->ex_path.mnt->mnt_root) {
-			struct path path = exp->ex_path;
-			path_get(&path);
-			while (follow_up(&path)) {
-				if (path.dentry != path.mnt->mnt_root)
-					break;
-			}
-			err = vfs_getattr(path.mnt, path.dentry, &stat);
-			path_put(&path);
-			if (err)
-				goto out_nfserr;
-		}
+		    dentry == exp->ex_path.mnt->mnt_root)
+			get_parent_attributes(exp, &stat);
 		WRITE64(stat.ino);
 	}
 	if (bmval2 & FATTR4_WORD2_SUPPATTR_EXCLCREAT) {
