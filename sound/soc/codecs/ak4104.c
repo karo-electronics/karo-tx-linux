@@ -98,14 +98,32 @@ static int ak4104_hw_params(struct snd_pcm_substream *substream,
 	val = 0;
 
 	switch (params_rate(params)) {
+	case 22050:
+		val |= IEC958_AES3_CON_FS_22050;
+		break;
+	case 24000:
+		val |= IEC958_AES3_CON_FS_24000;
+		break;
+	case 32000:
+		val |= IEC958_AES3_CON_FS_32000;
+		break;
 	case 44100:
 		val |= IEC958_AES3_CON_FS_44100;
 		break;
 	case 48000:
 		val |= IEC958_AES3_CON_FS_48000;
 		break;
-	case 32000:
-		val |= IEC958_AES3_CON_FS_32000;
+	case 88200:
+		val |= IEC958_AES3_CON_FS_88200;
+		break;
+	case 96000:
+		val |= IEC958_AES3_CON_FS_96000;
+		break;
+	case 176400:
+		val |= IEC958_AES3_CON_FS_176400;
+		break;
+	case 192000:
+		val |= IEC958_AES3_CON_FS_192000;
 		break;
 	default:
 		dev_err(codec->dev, "unsupported sampling rate\n");
@@ -240,10 +258,17 @@ static int __devexit ak4104_spi_remove(struct spi_device *spi)
 	return 0;
 }
 
+static const struct of_device_id ak4104_of_match[] = {
+	{ .compatible = "asahi-kasei,ak4104", },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, ak4104_of_match);
+
 static struct spi_driver ak4104_spi_driver = {
 	.driver  = {
 		.name   = DRV_NAME,
 		.owner  = THIS_MODULE,
+		.of_match_table = ak4104_of_match,
 	},
 	.probe  = ak4104_spi_probe,
 	.remove = __devexit_p(ak4104_spi_remove),
