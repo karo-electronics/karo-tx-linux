@@ -538,8 +538,7 @@ static void ip6_copy_metadata(struct sk_buff *to, struct sk_buff *from)
 	to->tc_index = from->tc_index;
 #endif
 	nf_copy(to, from);
-#if defined(CONFIG_NETFILTER_XT_TARGET_TRACE) || \
-    defined(CONFIG_NETFILTER_XT_TARGET_TRACE_MODULE)
+#if IS_ENABLED(CONFIG_NETFILTER_XT_TARGET_TRACE)
 	to->nf_trace = from->nf_trace;
 #endif
 	skb_copy_secmark(to, from);
@@ -564,7 +563,7 @@ int ip6_find_1stfragopt(struct sk_buff *skb, u8 **nexthdr)
 			found_rhdr = 1;
 			break;
 		case NEXTHDR_DEST:
-#if defined(CONFIG_IPV6_MIP6) || defined(CONFIG_IPV6_MIP6_MODULE)
+#if IS_ENABLED(CONFIG_IPV6_MIP6)
 			if (ipv6_find_tlv(skb, offset, IPV6_TLV_HAO) >= 0)
 				break;
 #endif
@@ -756,7 +755,7 @@ int ip6_fragment(struct sk_buff *skb, int (*output)(struct sk_buff *))
 		if (err == 0) {
 			IP6_INC_STATS(net, ip6_dst_idev(&rt->dst),
 				      IPSTATS_MIB_FRAGOKS);
-			dst_release(&rt->dst);
+			ip6_rt_put(rt);
 			return 0;
 		}
 
@@ -768,7 +767,7 @@ int ip6_fragment(struct sk_buff *skb, int (*output)(struct sk_buff *))
 
 		IP6_INC_STATS(net, ip6_dst_idev(&rt->dst),
 			      IPSTATS_MIB_FRAGFAILS);
-		dst_release(&rt->dst);
+		ip6_rt_put(rt);
 		return err;
 
 slow_path_clean:
