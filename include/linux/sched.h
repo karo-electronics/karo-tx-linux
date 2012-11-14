@@ -2335,13 +2335,12 @@ extern void flush_itimer_signals(void);
 
 extern void do_group_exit(int);
 
-extern void daemonize(const char *, ...);
 extern int allow_signal(int);
 extern int disallow_signal(int);
 
 extern int do_execve(const char *,
 		     const char __user * const __user *,
-		     const char __user * const __user *, struct pt_regs *);
+		     const char __user * const __user *);
 extern long do_fork(unsigned long, unsigned long, struct pt_regs *, unsigned long, int __user *, int __user *);
 struct task_struct *fork_idle(int);
 #ifdef CONFIG_GENERIC_KERNEL_THREAD
