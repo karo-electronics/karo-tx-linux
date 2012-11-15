@@ -35,6 +35,7 @@
 #include <linux/hugetlb.h>
 #include <linux/hugetlb_cgroup.h>
 #include <linux/gfp.h>
+#include <linux/balloon_compaction.h>
 
 #include <asm/tlbflush.h>
 
@@ -79,7 +80,30 @@ void putback_lru_pages(struct list_head *l)
 		list_del(&page->lru);
 		dec_zone_page_state(page, NR_ISOLATED_ANON +
 				page_is_file_cache(page));
-		putback_lru_page(page);
+			putback_lru_page(page);
+	}
+}
+
+/*
+ * Put previously isolated pages back onto the appropriate lists
+ * from where they were once taken off for compaction/migration.
+ *
+ * This function shall be used instead of putback_lru_pages(),
+ * whenever the isolated pageset has been built by isolate_migratepages_range()
+ */
+void putback_movable_pages(struct list_head *l)
+{
+	struct page *page;
+	struct page *page2;
+
+	list_for_each_entry_safe(page, page2, l, lru) {
+		list_del(&page->lru);
+		dec_zone_page_state(page, NR_ISOLATED_ANON +
+				page_is_file_cache(page));
+		if (unlikely(balloon_page_movable(page)))
+			balloon_page_putback(page);
+		else
+			putback_lru_page(page);
 	}
 }
 
@@ -91,8 +115,6 @@ static int remove_migration_pte(struct page *new, struct vm_area_struct *vma,
 {
 	struct mm_struct *mm = vma->vm_mm;
 	swp_entry_t entry;
- 	pgd_t *pgd;
- 	pud_t *pud;
  	pmd_t *pmd;
 	pte_t *ptep, pte;
  	spinlock_t *ptl;
@@ -103,18 +125,10 @@ static int remove_migration_pte(struct page *new, struct vm_area_struct *vma,
 			goto out;
 		ptl = &mm->page_table_lock;
 	} else {
-		pgd = pgd_offset(mm, addr);
-		if (!pgd_present(*pgd))
+		pmd = mm_find_pmd(mm, addr);
+		if (!pmd)
 			goto out;
-
-		pud = pud_offset(pgd, addr);
-		if (!pud_present(*pud))
-			goto out;
-
-		pmd = pmd_offset(pud, addr);
 		if (pmd_trans_huge(*pmd))
-			goto out;
-		if (!pmd_present(*pmd))
 			goto out;
 
 		ptep = pte_offset_map(pmd, addr);
@@ -296,7 +310,7 @@ static int migrate_page_move_mapping(struct address_space *mapping,
 		expected_count += 1;
 		if (page_count(page) != expected_count)
 			return -EAGAIN;
-		return 0;
+		return MIGRATEPAGE_SUCCESS;
 	}
 
 	spin_lock_irq(&mapping->tree_lock);
@@ -366,7 +380,7 @@ static int migrate_page_move_mapping(struct address_space *mapping,
 	}
 	spin_unlock_irq(&mapping->tree_lock);
 
-	return 0;
+	return MIGRATEPAGE_SUCCESS;
 }
 
 /*
@@ -382,7 +396,7 @@ int migrate_huge_page_move_mapping(struct address_space *mapping,
 	if (!mapping) {
 		if (page_count(page) != 1)
 			return -EAGAIN;
-		return 0;
+		return MIGRATEPAGE_SUCCESS;
 	}
 
 	spin_lock_irq(&mapping->tree_lock);
@@ -409,7 +423,7 @@ int migrate_huge_page_move_mapping(struct address_space *mapping,
 	page_unfreeze_refs(page, expected_count - 1);
 
 	spin_unlock_irq(&mapping->tree_lock);
-	return 0;
+	return MIGRATEPAGE_SUCCESS;
 }
 
 /*
@@ -496,11 +510,11 @@ int migrate_page(struct address_space *mapping,
 
 	rc = migrate_page_move_mapping(mapping, newpage, page, NULL, mode);
 
-	if (rc)
+	if (rc != MIGRATEPAGE_SUCCESS)
 		return rc;
 
 	migrate_page_copy(newpage, page);
-	return 0;
+	return MIGRATEPAGE_SUCCESS;
 }
 EXPORT_SYMBOL(migrate_page);
 
@@ -523,7 +537,7 @@ int buffer_migrate_page(struct address_space *mapping,
 
 	rc = migrate_page_move_mapping(mapping, newpage, page, head, mode);
 
-	if (rc)
+	if (rc != MIGRATEPAGE_SUCCESS)
 		return rc;
 
 	/*
@@ -559,7 +573,7 @@ int buffer_migrate_page(struct address_space *mapping,
 
 	} while (bh != head);
 
-	return 0;
+	return MIGRATEPAGE_SUCCESS;
 }
 EXPORT_SYMBOL(buffer_migrate_page);
 #endif
@@ -675,7 +689,7 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 	else
 		rc = fallback_migrate_page(mapping, newpage, page, mode);
 
-	if (rc) {
+	if (rc != MIGRATEPAGE_SUCCESS) {
 		newpage->mapping = NULL;
 	} else {
 		if (remap_swapcache)
@@ -788,6 +802,18 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 		}
 	}
 
+	if (unlikely(balloon_page_movable(page))) {
+		/*
+		 * A ballooned page does not need any special attention from
+		 * physical to virtual reverse mapping procedures.
+		 * Skip any attempt to unmap PTEs or to remap swap cache,
+		 * in order to avoid burning cycles at rmap level, and perform
+		 * the page migration right away (proteced by page lock).
+		 */
+		rc = balloon_page_migrate(newpage, page, mode);
+		goto uncharge;
+	}
+
 	/*
 	 * Corner case handling:
 	 * 1. When a new swap-cache page is read into, it is added to the LRU
@@ -824,7 +850,9 @@ skip_unmap:
 		put_anon_vma(anon_vma);
 
 uncharge:
-	mem_cgroup_end_migration(mem, page, newpage, rc == 0);
+	mem_cgroup_end_migration(mem, page, newpage,
+				 (rc == MIGRATEPAGE_SUCCESS ||
+				  rc == MIGRATEPAGE_BALLOON_SUCCESS));
 unlock:
 	unlock_page(page);
 out:
@@ -856,6 +884,21 @@ static int unmap_and_move(new_page_t get_new_page, unsigned long private,
 			goto out;
 
 	rc = __unmap_and_move(page, newpage, force, offlining, mode);
+
+	if (unlikely(rc == MIGRATEPAGE_BALLOON_SUCCESS)) {
+		/*
+		 * A ballooned page has been migrated already.
+		 * Now, it's the time to remove the old page from the isolated
+		 * pageset list and handle it back to Buddy, wrap-up counters
+		 * and return.
+		 */
+		dec_zone_page_state(page, NR_ISOLATED_ANON +
+				    page_is_file_cache(page));
+		put_page(page);
+		__free_page(page);
+		balloon_event_count(COMPACTBALLOONRELEASED);
+		return 0;
+	}
 out:
 	if (rc != -EAGAIN) {
 		/*
@@ -997,7 +1040,7 @@ int migrate_pages(struct list_head *from,
 			case -EAGAIN:
 				retry++;
 				break;
-			case 0:
+			case MIGRATEPAGE_SUCCESS:
 				break;
 			default:
 				/* Permanent failure */
@@ -1006,15 +1049,12 @@ int migrate_pages(struct list_head *from,
 			}
 		}
 	}
-	rc = 0;
+	rc = nr_failed + retry;
 out:
 	if (!swapwrite)
 		current->flags &= ~PF_SWAPWRITE;
 
-	if (rc)
-		return rc;
-
-	return nr_failed + retry;
+	return rc;
 }
 
 int migrate_huge_page(struct page *hpage, new_page_t get_new_page,
@@ -1034,7 +1074,7 @@ int migrate_huge_page(struct page *hpage, new_page_t get_new_page,
 			/* try again */
 			cond_resched();
 			break;
-		case 0:
+		case MIGRATEPAGE_SUCCESS:
 			goto out;
 		default:
 			rc = -EIO;
