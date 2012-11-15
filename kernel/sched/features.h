@@ -32,6 +32,11 @@ SCHED_FEAT(LAST_BUDDY, true)
 SCHED_FEAT(CACHE_HOT_BUDDY, true)
 
 /*
+ * Allow wakeup-time preemption of the current task:
+ */
+SCHED_FEAT(WAKEUP_PREEMPTION, true)
+
+/*
  * Use arch dependent cpu power functions
  */
 SCHED_FEAT(ARCH_POWER, true)
@@ -61,3 +66,11 @@ SCHED_FEAT(TTWU_QUEUE, true)
 SCHED_FEAT(FORCE_SD_OVERLAP, false)
 SCHED_FEAT(RT_RUNTIME_SHARE, true)
 SCHED_FEAT(LB_MIN, false)
+
+#ifdef CONFIG_NUMA_BALANCING
+/* Do the working set probing faults: */
+SCHED_FEAT(NUMA,             true)
+SCHED_FEAT(NUMA_FAULTS_UP,   true)
+SCHED_FEAT(NUMA_FAULTS_DOWN, false)
+SCHED_FEAT(NUMA_SETTLE,      true)
+#endif
