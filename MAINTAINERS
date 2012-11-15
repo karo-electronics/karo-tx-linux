@@ -1887,6 +1887,7 @@ F:	drivers/misc/*
 
 CHECKPATCH
 M:	Andy Whitcroft <apw@canonical.com>
+M:	Joe Perches <joe@perches.com>
 S:	Supported
 F:	scripts/checkpatch.pl
 
