@@ -48,7 +48,4 @@ $(obj)/simpleImage.%: vmlinux FORCE
 # Rule to build device tree blobs
 DTC_FLAGS := -p 1024
 
-$(obj)/%.dtb: $(src)/dts/%.dts FORCE
-	$(call if_changed_dep,dtc)
-
 clean-files += *.dtb simpleImage.*.unstrip linux.bin.ub
