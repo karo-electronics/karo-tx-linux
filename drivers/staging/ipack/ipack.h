@@ -33,26 +33,25 @@ struct ipack_driver;
 
 enum ipack_space {
 	IPACK_IO_SPACE    = 0,
-	IPACK_ID_SPACE    = 1,
-	IPACK_MEM_SPACE   = 2,
+	IPACK_ID_SPACE,
 	IPACK_INT_SPACE,
+	IPACK_MEM8_SPACE,
+	IPACK_MEM16_SPACE,
+	/* Dummy for counting the number of entries.  Must remain the last
+	 * entry */
+	IPACK_SPACE_COUNT,
 };
 
 /**
- *	struct ipack_addr_space - Virtual address space mapped for a specified type.
- *
- *	@address: virtual address
- *	@size: size of the mapped space
  */
-struct ipack_addr_space {
-	void __iomem *address;
-	unsigned int size;
+struct ipack_region {
+	phys_addr_t start;
+	size_t      size;
 };
 
 /**
  *	struct ipack_device
  *
- *	@bus_nr: IP bus number where the device is plugged
  *	@slot: Slot where the device is plugged in the carrier board
  *	@bus: ipack_bus_device where the device is plugged to.
  *	@id_space: Virtual address to ID space.
@@ -65,14 +64,11 @@ struct ipack_addr_space {
  * by the carrier board throught bus->ops.
  */
 struct ipack_device {
-	unsigned int bus_nr;
 	unsigned int slot;
 	struct ipack_bus_device *bus;
-	struct ipack_addr_space id_space;
-	struct ipack_addr_space io_space;
-	struct ipack_addr_space int_space;
-	struct ipack_addr_space mem_space;
 	struct device dev;
+	void (*release) (struct ipack_device *dev);
+	struct ipack_region      region[IPACK_SPACE_COUNT];
 	u8                      *id;
 	size_t			 id_avail;
 	u32			 id_vendor;
@@ -84,10 +80,11 @@ struct ipack_device {
 };
 
 /**
- *	struct ipack_driver_ops -- callbacks to mezzanine driver for installing/removing one device
+ * struct ipack_driver_ops -- Callbacks to IPack device driver
  *
- *	@probe: Probe function
- *	@remove: tell the driver that the carrier board wants to remove one device
+ * @probe:  Probe function
+ * @remove: Prepare imminent removal of the device.  Services provided by the
+ *          device should be revoked.
  */
 
 struct ipack_driver_ops {
@@ -96,10 +93,10 @@ struct ipack_driver_ops {
 };
 
 /**
- *	struct ipack_driver -- Specific data to each ipack board driver
+ * struct ipack_driver -- Specific data to each ipack device driver
  *
- *	@driver: Device driver kernel representation
- *	@ops: Mezzanine driver operations specific for the ipack bus.
+ * @driver: Device driver kernel representation
+ * @ops:    Callbacks provided by the IPack device driver
  */
 struct ipack_driver {
 	struct device_driver driver;
@@ -125,8 +122,6 @@ struct ipack_driver {
  *	@reset_timeout: Resets the state returned by get_timeout.
  */
 struct ipack_bus_ops {
-	int (*map_space) (struct ipack_device *dev, unsigned int memory_size, int space);
-	int (*unmap_space) (struct ipack_device *dev, int space);
 	int (*request_irq) (struct ipack_device *dev,
 			    irqreturn_t (*handler)(void *), void *arg);
 	int (*free_irq) (struct ipack_device *dev);
@@ -171,7 +166,7 @@ struct ipack_bus_device *ipack_bus_register(struct device *parent, int slots,
 int ipack_bus_unregister(struct ipack_bus_device *bus);
 
 /**
- *	ipack_driver_register -- Register a new driver
+ * ipack_driver_register -- Register a new ipack device driver
  *
  * Called by a ipack driver to register itself as a driver
  * that can manage ipack devices.
@@ -181,15 +176,18 @@ int ipack_driver_register(struct ipack_driver *edrv, struct module *owner,
 void ipack_driver_unregister(struct ipack_driver *edrv);
 
 /**
- *	ipack_device_register -- register a new mezzanine device
+ *	ipack_device_register -- register an IPack device with the kernel
+ *	@dev: the new device to register.
  *
- * @bus: ipack bus device it is plugged to.
- * @slot: slot position in the bus device.
+ *	Register a new IPack device ("module" in IndustryPack jargon). The call
+ *	is done by the carrier driver.  The carrier should populate the fields
+ *	bus and slot as well as the region array of @dev prior to calling this
+ *	function.  The rest of the fields will be allocated and populated
+ *	during registration.
  *
- * Register a new ipack device (mezzanine device). The call is done by
- * the carrier device driver.
+ *	Return zero on success or error code on failure.
  */
-struct ipack_device *ipack_device_register(struct ipack_bus_device *bus, int slot);
+int ipack_device_register(struct ipack_device *dev);
 void ipack_device_unregister(struct ipack_device *dev);
 
 /**

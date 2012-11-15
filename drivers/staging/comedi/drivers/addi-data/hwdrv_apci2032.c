@@ -46,14 +46,39 @@ You should also find the complete GPL in the COPYING file accompanying this sour
   +----------+-----------+------------------------------------------------+
 */
 
-/*
-+----------------------------------------------------------------------------+
-|                               Included files                               |
-+----------------------------------------------------------------------------+
-*/
+/*********      Definitions for APCI-2032 card  *****/
 
-#include "hwdrv_apci2032.h"
+/* Card Specific information */
+#define APCI2032_ADDRESS_RANGE				63
+
+/* DIGITAL INPUT-OUTPUT DEFINE */
+
+#define APCI2032_DIGITAL_OP				0
+#define APCI2032_DIGITAL_OP_RW				0
+#define APCI2032_DIGITAL_OP_INTERRUPT			4
+#define APCI2032_DIGITAL_OP_IRQ				12
+
+/* Digital Output Interrupt Status */
+#define APCI2032_DIGITAL_OP_INTERRUPT_STATUS		8
+
+/* Digital Output Interrupt Enable Disable. */
+#define APCI2032_DIGITAL_OP_VCC_INTERRUPT_ENABLE	0x1
+#define APCI2032_DIGITAL_OP_VCC_INTERRUPT_DISABLE	0xfffffffe
+#define APCI2032_DIGITAL_OP_CC_INTERRUPT_ENABLE		0x2
+#define APCI2032_DIGITAL_OP_CC_INTERRUPT_DISABLE	0xfffffffd
+
+/* TIMER COUNTER WATCHDOG DEFINES */
+
+#define ADDIDATA_WATCHDOG				2
+#define APCI2032_DIGITAL_OP_WATCHDOG			16
+#define APCI2032_TCW_RELOAD_VALUE			4
+#define APCI2032_TCW_TIMEBASE				8
+#define APCI2032_TCW_PROG				12
+#define APCI2032_TCW_TRIG_STATUS			16
+#define APCI2032_TCW_IRQ				20
+
 static unsigned int ui_InterruptData, ui_Type;
+
 /*
 +----------------------------------------------------------------------------+
 | Function   Name   : int i_APCI2032_ConfigDigitalOutput                     |
@@ -79,10 +104,14 @@ static unsigned int ui_InterruptData, ui_Type;
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI2032_ConfigDigitalOutput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI2032_ConfigDigitalOutput(struct comedi_device *dev,
+					  struct comedi_subdevice *s,
+					  struct comedi_insn *insn,
+					  unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 	unsigned int ul_Command = 0;
+
 	devpriv->tsk_Current = current;
 
 	if ((data[0] != 0) && (data[0] != 1)) {
@@ -114,249 +143,25 @@ int i_APCI2032_ConfigDigitalOutput(struct comedi_device *dev, struct comedi_subd
 	return insn->n;
 }
 
-/*
-+----------------------------------------------------------------------------+
-| Function   Name   : int i_APCI2032_WriteDigitalOutput                      |
-|			  (struct comedi_device *dev,struct comedi_subdevice *s,               |
-|                      struct comedi_insn *insn,unsigned int *data)                     |
-+----------------------------------------------------------------------------+
-| Task              : Writes port value  To the selected port                |
-+----------------------------------------------------------------------------+
-| Input Parameters  : struct comedi_device *dev      : Driver handle                |
-|                     unsigned int ui_NoOfChannels    : No Of Channels To Write      |
-|                     unsigned int *data              : Data Pointer to read status  |
-+----------------------------------------------------------------------------+
-| Output Parameters :	--													 |
-+----------------------------------------------------------------------------+
-| Return Value      : TRUE  : No error occur                                 |
-|		            : FALSE : Error occur. Return the error          |
-|			                                                         |
-+----------------------------------------------------------------------------+
-*/
-
-int i_APCI2032_WriteDigitalOutput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int apci2032_do_insn_bits(struct comedi_device *dev,
+				 struct comedi_subdevice *s,
+				 struct comedi_insn *insn,
+				 unsigned int *data)
 {
-	unsigned int ui_Temp, ui_Temp1;
-	unsigned int ui_NoOfChannel = CR_CHAN(insn->chanspec);	/*  get the channel */
-	if (devpriv->b_OutputMemoryStatus) {
-		ui_Temp = inl(devpriv->iobase + APCI2032_DIGITAL_OP);
+	struct addi_private *devpriv = dev->private;
+	unsigned int mask = data[0];
+	unsigned int bits = data[1];
 
-	}			/* if(devpriv->b_OutputMemoryStatus ) */
-	else {
-		ui_Temp = 0;
-	}			/* if(devpriv->b_OutputMemoryStatus ) */
-	if (data[3] == 0) {
-		if (data[1] == 0) {
-			data[0] = (data[0] << ui_NoOfChannel) | ui_Temp;
-			outl(data[0], devpriv->iobase + APCI2032_DIGITAL_OP);
-		}		/* if(data[1]==0) */
-		else {
-			if (data[1] == 1) {
-				switch (ui_NoOfChannel) {
+	s->state = inl(devpriv->iobase + APCI2032_DIGITAL_OP_RW);
+	if (mask) {
+		s->state &= ~mask;
+		s->state |= (bits & mask);
 
-				case 2:
-					data[0] =
-						(data[0] << (2 *
-							data[2])) | ui_Temp;
-					break;
-
-				case 4:
-					data[0] =
-						(data[0] << (4 *
-							data[2])) | ui_Temp;
-					break;
-
-				case 8:
-					data[0] =
-						(data[0] << (8 *
-							data[2])) | ui_Temp;
-					break;
-
-				case 16:
-					data[0] =
-						(data[0] << (16 *
-							data[2])) | ui_Temp;
-					break;
-				case 31:
-					data[0] = data[0] | ui_Temp;
-					break;
-
-				default:
-					comedi_error(dev, " chan spec wrong");
-					return -EINVAL;	/*  "sorry channel spec wrong " */
-
-				}	/* switch(ui_NoOfChannels) */
-
-				outl(data[0],
-					devpriv->iobase + APCI2032_DIGITAL_OP);
-			}	/*  if(data[1]==1) */
-			else {
-				printk("\nSpecified channel not supported\n");
-			}	/* else if(data[1]==1) */
-		}		/* elseif(data[1]==0) */
-	}			/* if(data[3]==0) */
-	else {
-		if (data[3] == 1) {
-			if (data[1] == 0) {
-				data[0] = ~data[0] & 0x1;
-				ui_Temp1 = 1;
-				ui_Temp1 = ui_Temp1 << ui_NoOfChannel;
-				ui_Temp = ui_Temp | ui_Temp1;
-				data[0] =
-					(data[0] << ui_NoOfChannel) ^
-					0xffffffff;
-				data[0] = data[0] & ui_Temp;
-				outl(data[0],
-					devpriv->iobase + APCI2032_DIGITAL_OP);
-			}	/* if(data[1]==0) */
-			else {
-				if (data[1] == 1) {
-					switch (ui_NoOfChannel) {
-
-					case 2:
-						data[0] = ~data[0] & 0x3;
-						ui_Temp1 = 3;
-						ui_Temp1 =
-							ui_Temp1 << 2 * data[2];
-						ui_Temp = ui_Temp | ui_Temp1;
-						data[0] =
-							((data[0] << (2 *
-									data
-									[2])) ^
-							0xffffffff) & ui_Temp;
-						break;
-
-					case 4:
-						data[0] = ~data[0] & 0xf;
-						ui_Temp1 = 15;
-						ui_Temp1 =
-							ui_Temp1 << 4 * data[2];
-						ui_Temp = ui_Temp | ui_Temp1;
-						data[0] =
-							((data[0] << (4 *
-									data
-									[2])) ^
-							0xffffffff) & ui_Temp;
-						break;
-
-					case 8:
-						data[0] = ~data[0] & 0xff;
-						ui_Temp1 = 255;
-						ui_Temp1 =
-							ui_Temp1 << 8 * data[2];
-						ui_Temp = ui_Temp | ui_Temp1;
-						data[0] =
-							((data[0] << (8 *
-									data
-									[2])) ^
-							0xffffffff) & ui_Temp;
-						break;
-
-					case 16:
-						data[0] = ~data[0] & 0xffff;
-						ui_Temp1 = 65535;
-						ui_Temp1 =
-							ui_Temp1 << 16 *
-							data[2];
-						ui_Temp = ui_Temp | ui_Temp1;
-						data[0] =
-							((data[0] << (16 *
-									data
-									[2])) ^
-							0xffffffff) & ui_Temp;
-						break;
-
-					case 31:
-						break;
-					default:
-						comedi_error(dev,
-							" chan spec wrong");
-						return -EINVAL;	/*  "sorry channel spec wrong " */
-
-					}	/* switch(ui_NoOfChannels) */
-
-					outl(data[0],
-						devpriv->iobase +
-						APCI2032_DIGITAL_OP);
-				}	/*  if(data[1]==1) */
-				else {
-					printk("\nSpecified channel not supported\n");
-				}	/* else if(data[1]==1) */
-			}	/* elseif(data[1]==0) */
-		}		/* if(data[3]==1); */
-		else {
-			printk("\nSpecified functionality does not exist\n");
-			return -EINVAL;
-		}		/* if else data[3]==1) */
-	}			/* if else data[3]==0) */
-	return insn->n;
-}
-
-/*
-+----------------------------------------------------------------------------+
-| Function   Name   : int i_APCI2032_ReadDigitalOutput                       |
-|			  (struct comedi_device *dev,struct comedi_subdevice *s,               |
-|                      struct comedi_insn *insn,unsigned int *data)                     |
-+----------------------------------------------------------------------------+
-| Task              : Read  value  of the selected channel or port           |
-+----------------------------------------------------------------------------+
-| Input Parameters  : struct comedi_device *dev      : Driver handle                |
-|                     unsigned int ui_NoOfChannels    : No Of Channels To read       |
-|                     unsigned int *data              : Data Pointer to read status  |
-+----------------------------------------------------------------------------+
-| Output Parameters :	--													 |
-+----------------------------------------------------------------------------+
-| Return Value      : TRUE  : No error occur                                 |
-|		            : FALSE : Error occur. Return the error          |
-|			                                                         |
-+----------------------------------------------------------------------------+
-*/
-
-int i_APCI2032_ReadDigitalOutput(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
-{
-	unsigned int ui_Temp;
-	unsigned int ui_NoOfChannel;
-	ui_NoOfChannel = CR_CHAN(insn->chanspec);
-	ui_Temp = data[0];
-	*data = inl(devpriv->iobase + APCI2032_DIGITAL_OP_RW);
-	if (ui_Temp == 0) {
-		*data = (*data >> ui_NoOfChannel) & 0x1;
-	}			/* if  (ui_Temp==0) */
-	else {
-		if (ui_Temp == 1) {
-			switch (ui_NoOfChannel) {
-
-			case 2:
-				*data = (*data >> (2 * data[1])) & 3;
-				break;
-
-			case 4:
-				*data = (*data >> (4 * data[1])) & 15;
-				break;
-
-			case 8:
-				*data = (*data >> (8 * data[1])) & 255;
-				break;
-
-			case 16:
-				*data = (*data >> (16 * data[1])) & 65535;
-				break;
-
-			case 31:
-				break;
-
-			default:
-				comedi_error(dev, " chan spec wrong");
-				return -EINVAL;	/*  "sorry channel spec wrong " */
-
-			}	/* switch(ui_NoOfChannels) */
-		}		/* if  (ui_Temp==1) */
-		else {
-			printk("\nSpecified channel not supported \n");
-		}		/* elseif  (ui_Temp==1) */
+		outl(s->state, devpriv->iobase + APCI2032_DIGITAL_OP);
 	}
+
+	data[1] = s->state;
+
 	return insn->n;
 }
 
@@ -380,9 +185,13 @@ int i_APCI2032_ReadDigitalOutput(struct comedi_device *dev, struct comedi_subdev
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-int i_APCI2032_ConfigWatchdog(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI2032_ConfigWatchdog(struct comedi_device *dev,
+				     struct comedi_subdevice *s,
+				     struct comedi_insn *insn,
+				     unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
+
 	if (data[0] == 0) {
 		/* Disable the watchdog */
 		outl(0x0,
@@ -421,9 +230,13 @@ int i_APCI2032_ConfigWatchdog(struct comedi_device *dev, struct comedi_subdevice
     +----------------------------------------------------------------------------+
   */
 
-int i_APCI2032_StartStopWriteWatchdog(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI2032_StartStopWriteWatchdog(struct comedi_device *dev,
+					     struct comedi_subdevice *s,
+					     struct comedi_insn *insn,
+					     unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
+
 	switch (data[0]) {
 	case 0:		/* stop the watchdog */
 		outl(0x0, devpriv->iobase + APCI2032_DIGITAL_OP_WATCHDOG + APCI2032_TCW_PROG);	/* disable the watchdog */
@@ -466,9 +279,12 @@ int i_APCI2032_StartStopWriteWatchdog(struct comedi_device *dev, struct comedi_s
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI2032_ReadWatchdog(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI2032_ReadWatchdog(struct comedi_device *dev,
+				   struct comedi_subdevice *s,
+				   struct comedi_insn *insn,
+				   unsigned int *data)
 {
+	struct addi_private *devpriv = dev->private;
 
 	data[0] =
 		inl(devpriv->iobase + APCI2032_DIGITAL_OP_WATCHDOG +
@@ -493,9 +309,10 @@ int i_APCI2032_ReadWatchdog(struct comedi_device *dev, struct comedi_subdevice *
 |			                                                         |
 +----------------------------------------------------------------------------+
 */
-void v_APCI2032_Interrupt(int irq, void *d)
+static void v_APCI2032_Interrupt(int irq, void *d)
 {
 	struct comedi_device *dev = d;
+	struct addi_private *devpriv = dev->private;
 	unsigned int ui_DO;
 
 	ui_DO = inl(devpriv->iobase + APCI2032_DIGITAL_OP_IRQ) & 0x1;	/* Check if VCC OR CC interrupt has occurred. */
@@ -544,8 +361,10 @@ void v_APCI2032_Interrupt(int irq, void *d)
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI2032_ReadInterruptStatus(struct comedi_device *dev, struct comedi_subdevice *s,
-	struct comedi_insn *insn, unsigned int *data)
+static int i_APCI2032_ReadInterruptStatus(struct comedi_device *dev,
+					  struct comedi_subdevice *s,
+					  struct comedi_insn *insn,
+					  unsigned int *data)
 {
 	*data = ui_Type;
 	return insn->n;
@@ -567,8 +386,10 @@ int i_APCI2032_ReadInterruptStatus(struct comedi_device *dev, struct comedi_subd
 +----------------------------------------------------------------------------+
 */
 
-int i_APCI2032_Reset(struct comedi_device *dev)
+static int i_APCI2032_Reset(struct comedi_device *dev)
 {
+	struct addi_private *devpriv = dev->private;
+
 	devpriv->b_DigitalOutputRegister = 0;
 	ui_Type = 0;
 	outl(0x0, devpriv->iobase + APCI2032_DIGITAL_OP);	/* Resets the output channels */
