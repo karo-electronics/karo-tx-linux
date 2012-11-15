@@ -460,7 +460,7 @@ int __init of_scan_flat_dt(int (*it)(unsigned long node,
 
 	do {
 		u32 tag = be32_to_cpup((__be32 *)p);
-		char *pathp;
+		const char *pathp;
 
 		p += 4;
 		if (tag == OF_DT_END_NODE) {
