@@ -4,8 +4,9 @@
  * This file contains generic high level protocol identifier and PR
  * handlers for TCM fabric modules
  *
- * Copyright (c) 2010 Rising Tide Systems, Inc.
- * Copyright (c) 2010 Linux-iSCSI.org
+ * (c) Copyright 2010-2012 RisingTide Systems LLC.
+ *
+ * Licensed to the Linux Foundation under the General Public License (GPL) version 2.
  *
  * Nicholas A. Bellinger <nab@linux-iscsi.org>
  *
