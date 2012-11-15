@@ -21,6 +21,7 @@
 #include <linux/workqueue.h>
 #include <linux/module.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/err.h>
 
 struct gpio_led_data {
 	struct led_classdev cdev;
@@ -106,10 +107,6 @@ static int __devinit create_gpio_led(const struct gpio_led *template,
 		return 0;
 	}
 
-	ret = gpio_request(template->gpio, template->name);
-	if (ret < 0)
-		return ret;
-
 	led_dat->cdev.name = template->name;
 	led_dat->cdev.default_trigger = template->default_trigger;
 	led_dat->gpio = template->gpio;
@@ -129,10 +126,12 @@ static int __devinit create_gpio_led(const struct gpio_led *template,
 	if (!template->retain_state_suspended)
 		led_dat->cdev.flags |= LED_CORE_SUSPENDRESUME;
 
-	ret = gpio_direction_output(led_dat->gpio, led_dat->active_low ^ state);
+	ret = gpio_request_one(template->gpio,
+			GPIOF_DIR_OUT | (led_dat->active_low ^ state),
+			template->name);
 	if (ret < 0)
-		goto err;
-		
+		return ret;
+
 	INIT_WORK(&led_dat->work, gpio_led_work);
 
 	ret = led_classdev_register(parent, &led_dat->cdev);
@@ -176,12 +175,16 @@ static struct gpio_leds_priv * __devinit gpio_leds_create_of(struct platform_dev
 	/* count LEDs in this device, so we know how much to allocate */
 	count = of_get_child_count(np);
 	if (!count)
-		return NULL;
+		return ERR_PTR(-ENODEV);
+
+	for_each_child_of_node(np, child)
+		if (of_get_gpio(child, 0) == -EPROBE_DEFER)
+			return ERR_PTR(-EPROBE_DEFER);
 
 	priv = devm_kzalloc(&pdev->dev, sizeof_gpio_leds_priv(count),
 			GFP_KERNEL);
 	if (!priv)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 
 	for_each_child_of_node(np, child) {
 		struct gpio_led led = {};
@@ -216,7 +219,7 @@ static struct gpio_leds_priv * __devinit gpio_leds_create_of(struct platform_dev
 err:
 	for (count = priv->num_leds - 2; count >= 0; count--)
 		delete_gpio_led(&priv->leds[count]);
-	return NULL;
+	return ERR_PTR(-ENODEV);
 }
 
 static const struct of_device_id of_gpio_leds_match[] = {
@@ -226,7 +229,7 @@ static const struct of_device_id of_gpio_leds_match[] = {
 #else /* CONFIG_OF_GPIO */
 static struct gpio_leds_priv * __devinit gpio_leds_create_of(struct platform_device *pdev)
 {
-	return NULL;
+	return ERR_PTR(-ENODEV);
 }
 #endif /* CONFIG_OF_GPIO */
 
@@ -264,8 +267,8 @@ static int __devinit gpio_led_probe(struct platform_device *pdev)
 		}
 	} else {
 		priv = gpio_leds_create_of(pdev);
-		if (!priv)
-			return -ENODEV;
+		if (IS_ERR(priv))
+			return PTR_ERR(priv);
 	}
 
 	platform_set_drvdata(pdev, priv);
