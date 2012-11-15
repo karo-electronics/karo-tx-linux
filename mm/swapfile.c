@@ -1608,6 +1608,8 @@ SYSCALL_DEFINE1(swapoff, const char __user *, specialfile)
 out_dput:
 	filp_close(victim, NULL);
 out:
+	if (pathname && !IS_ERR(pathname))
+		putname(pathname);
 	return err;
 }
 
