@@ -37,6 +37,20 @@ struct ip_tunnel_parm {
 	struct iphdr		iph;
 };
 
+enum {
+	IFLA_IPTUN_UNSPEC,
+	IFLA_IPTUN_LINK,
+	IFLA_IPTUN_LOCAL,
+	IFLA_IPTUN_REMOTE,
+	IFLA_IPTUN_TTL,
+	IFLA_IPTUN_TOS,
+	IFLA_IPTUN_ENCAP_LIMIT,
+	IFLA_IPTUN_FLOWINFO,
+	IFLA_IPTUN_FLAGS,
+	__IFLA_IPTUN_MAX,
+};
+#define IFLA_IPTUN_MAX	(__IFLA_IPTUN_MAX - 1)
+
 /* SIT-mode i_flags */
 #define	SIT_ISATAP	0x0001
 

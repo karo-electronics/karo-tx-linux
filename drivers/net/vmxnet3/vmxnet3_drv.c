@@ -1922,7 +1922,7 @@ vmxnet3_free_irqs(struct vmxnet3_adapter *adapter)
 		free_irq(adapter->pdev->irq, adapter->netdev);
 		break;
 	default:
-		BUG_ON(true);
+		BUG();
 	}
 }
 

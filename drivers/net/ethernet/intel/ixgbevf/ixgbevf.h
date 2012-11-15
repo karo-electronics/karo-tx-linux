@@ -89,8 +89,8 @@ struct ixgbevf_ring {
 /* How many Rx Buffers do we bundle into one write to the hardware ? */
 #define IXGBEVF_RX_BUFFER_WRITE	16	/* Must be power of 2 */
 
-#define MAX_RX_QUEUES 1
-#define MAX_TX_QUEUES 1
+#define MAX_RX_QUEUES IXGBE_VF_MAX_RX_QUEUES
+#define MAX_TX_QUEUES IXGBE_VF_MAX_TX_QUEUES
 
 #define IXGBEVF_DEFAULT_TXD   1024
 #define IXGBEVF_DEFAULT_RXD   512
@@ -101,10 +101,10 @@ struct ixgbevf_ring {
 
 /* Supported Rx Buffer Sizes */
 #define IXGBEVF_RXBUFFER_256   256    /* Used for packet split */
-#define IXGBEVF_RXBUFFER_3K    3072
-#define IXGBEVF_RXBUFFER_7K    7168
-#define IXGBEVF_RXBUFFER_15K   15360
-#define IXGBEVF_MAX_RXBUFFER   16384  /* largest size for single descriptor */
+#define IXGBEVF_RXBUFFER_2K    2048
+#define IXGBEVF_RXBUFFER_4K    4096
+#define IXGBEVF_RXBUFFER_8K    8192
+#define IXGBEVF_RXBUFFER_10K   10240
 
 #define IXGBEVF_RX_HDR_SIZE IXGBEVF_RXBUFFER_256
 
@@ -229,6 +229,7 @@ struct ixgbevf_adapter {
 	 */
 	u32 flags;
 #define IXGBE_FLAG_IN_WATCHDOG_TASK             (u32)(1)
+#define IXGBE_FLAG_IN_NETPOLL                   (u32)(1 << 1)
 
 	/* OS defined structs */
 	struct net_device *netdev;
