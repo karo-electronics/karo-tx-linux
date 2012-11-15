@@ -1558,6 +1558,11 @@ static void __sched_fork(struct task_struct *p)
 	p->numa_faults = NULL;
 	p->numa_scan_period = sysctl_sched_numa_scan_delay;
 	p->numa_work.next = &p->numa_work;
+
+	p->shared_buddy = NULL;
+	p->shared_buddy_faults = 0;
+	p->ideal_cpu = -1;
+	p->ideal_cpu_curr = -1;
 #endif /* CONFIG_NUMA_BALANCING */
 }
 
