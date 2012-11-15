@@ -31,6 +31,8 @@ The \fB-S\fP option limits output to a 1-line System Summary for each interval.
 .PP
 The \fB-v\fP option increases verbosity.
 .PP
+The \fB-R\fP option enables verbose RAPL register decoding on startup.
+.PP
 The \fB-s\fP option prints the SMI counter, equivalent to "-c 0x34"
 .PP
 The \fB-c MSR#\fP option includes the delta of the specified 32-bit MSR counter.
@@ -58,6 +60,10 @@ Note that multiple CPUs per core indicate support for Intel(R) Hyper-Threading T
 \fBTSC\fP average GHz that the TSC ran during the entire interval.
 \fB%c1, %c3, %c6, %c7\fP show the percentage residency in hardware core idle states.
 \fB%pc2, %pc3, %pc6, %pc7\fP percentage residency in hardware package idle states.
+\fBPkg_W\fP Watts consumed by the whole package.
+\fBCor_W\fP Watts consumed by the core part of the package.
+\fBGFX_W\fP Watts consumed by the Graphics part of the package.
+\fBPKG_%\fP percent of the interval that RAPL throttling was active.
 .fi
 .PP
 .SH EXAMPLE
@@ -66,25 +72,22 @@ Without any parameters, turbostat prints out counters ever 5 seconds.
 for turbostat to fork).
 
 The first row of statistics is a summary for the entire system.
-Note that the summary is a weighted average.
+For residency % columns, the summary is a weighted average.
+For Watts columns, the summary is a system total.
 Subsequent rows show per-CPU statistics.
 
 .nf
-[root@x980]# ./turbostat
-cor CPU    %c0  GHz  TSC    %c1    %c3    %c6   %pc3   %pc6
-          0.09 1.62 3.38   1.83   0.32  97.76   1.26  83.61
-  0   0   0.15 1.62 3.38  10.23   0.05  89.56   1.26  83.61
-  0   6   0.05 1.62 3.38  10.34
-  1   2   0.03 1.62 3.38   0.07   0.05  99.86
-  1   8   0.03 1.62 3.38   0.06
-  2   4   0.21 1.62 3.38   0.10   1.49  98.21
-  2  10   0.02 1.62 3.38   0.29
-  8   1   0.04 1.62 3.38   0.04   0.08  99.84
-  8   7   0.01 1.62 3.38   0.06
-  9   3   0.53 1.62 3.38   0.10   0.20  99.17
-  9   9   0.02 1.62 3.38   0.60
- 10   5   0.01 1.62 3.38   0.02   0.04  99.92
- 10  11   0.02 1.62 3.38   0.02
+[root@sandy]# ./turbostat
+cor CPU    %c0  GHz  TSC    %c1    %c3    %c6    %c7   %pc2   %pc3   %pc6   %pc7  Pkg_W  Cor_W GFX_W
+          0.07 0.80 2.29   0.13   0.00   0.00  99.80   0.43   0.00   0.72  98.16   3.49   0.12  0.14
+  0   0   0.14 0.80 2.29   0.12   0.00   0.00  99.74   0.43   0.00   0.72  98.16   3.49   0.12  0.14
+  0   4   0.04 0.80 2.29   0.22
+  1   1   0.06 0.80 2.29   0.08   0.00   0.00  99.86
+  1   5   0.03 0.80 2.29   0.10
+  2   2   0.17 0.80 2.29   0.14   0.00   0.00  99.69
+  2   6   0.03 0.79 2.29   0.28
+  3   3   0.03 0.80 2.29   0.07   0.00   0.00  99.90
+  3   7   0.04 0.80 2.29   0.06
 .fi
 .SH SUMMARY EXAMPLE
 The "-s" option prints the column headers just once,
