@@ -276,8 +276,7 @@ int mwifiex_bss_start(struct mwifiex_private *priv, struct cfg80211_bss *bss,
 		dev_dbg(adapter->dev, "info: SSID found in scan list ... "
 				      "associating...\n");
 
-		if (!netif_queue_stopped(priv->netdev))
-			mwifiex_stop_net_dev_queue(priv->netdev, adapter);
+		mwifiex_stop_net_dev_queue(priv->netdev, adapter);
 		if (netif_carrier_ok(priv->netdev))
 			netif_carrier_off(priv->netdev);
 
@@ -318,8 +317,7 @@ int mwifiex_bss_start(struct mwifiex_private *priv, struct cfg80211_bss *bss,
 
 		ret = mwifiex_check_network_compatibility(priv, bss_desc);
 
-		if (!netif_queue_stopped(priv->netdev))
-			mwifiex_stop_net_dev_queue(priv->netdev, adapter);
+		mwifiex_stop_net_dev_queue(priv->netdev, adapter);
 		if (netif_carrier_ok(priv->netdev))
 			netif_carrier_off(priv->netdev);
 
@@ -713,7 +711,7 @@ static int mwifiex_set_wpa_ie_helper(struct mwifiex_private *priv,
 		dev_dbg(priv->adapter->dev, "cmd: Set Wpa_ie_len=%d IE=%#x\n",
 			priv->wpa_ie_len, priv->wpa_ie[0]);
 
-		if (priv->wpa_ie[0] == WLAN_EID_WPA) {
+		if (priv->wpa_ie[0] == WLAN_EID_VENDOR_SPECIFIC) {
 			priv->sec_info.wpa_enabled = true;
 		} else if (priv->wpa_ie[0] == WLAN_EID_RSN) {
 			priv->sec_info.wpa2_enabled = true;
@@ -1253,7 +1251,7 @@ mwifiex_set_gen_ie_helper(struct mwifiex_private *priv, u8 *ie_data_ptr,
 	}
 	pvendor_ie = (struct ieee_types_vendor_header *) ie_data_ptr;
 	/* Test to see if it is a WPA IE, if not, then it is a gen IE */
-	if (((pvendor_ie->element_id == WLAN_EID_WPA) &&
+	if (((pvendor_ie->element_id == WLAN_EID_VENDOR_SPECIFIC) &&
 	     (!memcmp(pvendor_ie->oui, wpa_oui, sizeof(wpa_oui)))) ||
 	    (pvendor_ie->element_id == WLAN_EID_RSN)) {
 
