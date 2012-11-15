@@ -68,6 +68,7 @@ struct cs_spec {
 
 	unsigned int hp_detect:1;
 	unsigned int mic_detect:1;
+	unsigned int speaker_2_1:1;
 	/* CS421x */
 	unsigned int spdif_detect:1;
 	unsigned int sense_b:1;
@@ -343,6 +344,9 @@ static int cs_build_pcms(struct hda_codec *codec)
 	info->stream[SNDRV_PCM_STREAM_PLAYBACK].nid = spec->dac_nid[0];
 	info->stream[SNDRV_PCM_STREAM_PLAYBACK].channels_max =
 		spec->multiout.max_channels;
+	if (spec->speaker_2_1)
+		info->stream[SNDRV_PCM_STREAM_PLAYBACK].chmap =
+			snd_pcm_2_1_chmaps;
 	info->stream[SNDRV_PCM_STREAM_CAPTURE] = cs_pcm_analog_capture;
 	info->stream[SNDRV_PCM_STREAM_CAPTURE].nid =
 		spec->adc_nid[spec->cur_input];
@@ -442,6 +446,9 @@ static int parse_output(struct hda_codec *codec)
 	spec->multiout.num_dacs = i;
 	spec->multiout.dac_nids = spec->dac_nid;
 	spec->multiout.max_channels = i * 2;
+
+	if (cfg->line_out_type == AUTO_PIN_SPEAKER_OUT && i == 2)
+		spec->speaker_2_1 = 1; /* assume 2.1 speakers */
 
 	/* add HP and speakers */
 	extra_nids = 0;
@@ -632,7 +639,9 @@ static int add_output(struct hda_codec *codec, hda_nid_t dac, int idx,
 		index = idx;
 		break;
 	case AUTO_PIN_SPEAKER_OUT:
-		if (num_ctls > 1)
+		if (spec->speaker_2_1)
+			name = idx ? "Bass Speaker" : "Speaker";
+		else if (num_ctls > 1)
 			name = speakers[idx];
 		else
 			name = "Speaker";
@@ -873,8 +882,9 @@ static int build_digital_output(struct hda_codec *codec)
 	if (!spec->multiout.dig_out_nid)
 		return 0;
 
-	err = snd_hda_create_spdif_out_ctls(codec, spec->multiout.dig_out_nid,
-					    spec->multiout.dig_out_nid);
+	err = snd_hda_create_dig_out_ctls(codec, spec->multiout.dig_out_nid,
+					  spec->multiout.dig_out_nid,
+					  spec->pcm_rec[1].pcm_type);
 	if (err < 0)
 		return err;
 	err = snd_hda_create_spdif_share_sw(codec, &spec->multiout);
