@@ -1511,6 +1511,7 @@ struct task_struct {
 	u64 node_stamp;			/* migration stamp  */
 	unsigned long numa_weight;
 	unsigned long *numa_faults;
+	unsigned long *numa_faults_curr;
 	struct callback_head numa_work;
 #endif /* CONFIG_NUMA_BALANCING */
 
