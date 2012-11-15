@@ -238,7 +238,7 @@ void balloon_page_putback(struct page *page)
 		__putback_balloon_page(page);
 		put_page(page);
 	} else {
-		__WARN();
+		WARN_ON(1);
 		dump_page(page);
 	}
 	unlock_page(page);
