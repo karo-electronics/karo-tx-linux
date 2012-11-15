@@ -97,7 +97,6 @@ struct percpu_counter vm_committed_as ____cacheline_aligned_in_smp;
  * Several metrics drive this policy engine including the guest reported
  * memory commitment.
  */
-
 unsigned long vm_memory_committed(void)
 {
 	return percpu_counter_read_positive(&vm_committed_as);
