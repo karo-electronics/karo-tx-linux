@@ -225,7 +225,7 @@ static bool buffer_migrate_lock_buffers(struct buffer_head *head,
 	struct buffer_head *bh = head;
 
 	/* Simple case, sync compaction */
-	if (mode != MIGRATE_ASYNC && mode != MIGRATE_FAULT) {
+	if (mode != MIGRATE_ASYNC) {
 		do {
 			get_bh(bh);
 			lock_buffer(bh);
@@ -282,19 +282,9 @@ static int migrate_page_move_mapping(struct address_space *mapping,
 	int expected_count = 0;
 	void **pslot;
 
-	if (mode == MIGRATE_FAULT) {
-		/*
-		 * MIGRATE_FAULT has an extra reference on the page and
-		 * otherwise acts like ASYNC, no point in delaying the
-		 * fault, we'll try again next time.
-		 */
-		expected_count++;
-	}
-
 	if (!mapping) {
 		/* Anonymous page without mapping */
-		expected_count += 1;
-		if (page_count(page) != expected_count)
+		if (page_count(page) != 1)
 			return -EAGAIN;
 		return 0;
 	}
@@ -304,7 +294,7 @@ static int migrate_page_move_mapping(struct address_space *mapping,
 	pslot = radix_tree_lookup_slot(&mapping->page_tree,
  					page_index(page));
 
-	expected_count += 2 + page_has_private(page);
+	expected_count = 2 + page_has_private(page);
 	if (page_count(page) != expected_count ||
 		radix_tree_deref_slot_protected(pslot, &mapping->tree_lock) != page) {
 		spin_unlock_irq(&mapping->tree_lock);
@@ -323,7 +313,7 @@ static int migrate_page_move_mapping(struct address_space *mapping,
 	 * the mapping back due to an elevated page count, we would have to
 	 * block waiting on other references to be dropped.
 	 */
-	if ((mode == MIGRATE_ASYNC || mode == MIGRATE_FAULT) && head &&
+	if (mode == MIGRATE_ASYNC && head &&
 			!buffer_migrate_lock_buffers(head, mode)) {
 		page_unfreeze_refs(page, expected_count);
 		spin_unlock_irq(&mapping->tree_lock);
@@ -531,7 +521,7 @@ int buffer_migrate_page(struct address_space *mapping,
 	 * with an IRQ-safe spinlock held. In the sync case, the buffers
 	 * need to be locked now
 	 */
-	if (mode != MIGRATE_ASYNC && mode != MIGRATE_FAULT)
+	if (mode != MIGRATE_ASYNC)
 		BUG_ON(!buffer_migrate_lock_buffers(head, mode));
 
 	ClearPagePrivate(page);
@@ -697,7 +687,7 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	struct anon_vma *anon_vma = NULL;
 
 	if (!trylock_page(page)) {
-		if (!force || mode == MIGRATE_ASYNC || mode == MIGRATE_FAULT)
+		if (!force || mode == MIGRATE_ASYNC)
 			goto out;
 
 		/*
@@ -1415,55 +1405,102 @@ int migrate_vmas(struct mm_struct *mm, const nodemask_t *to,
 }
 
 /*
+ * Returns true if this is a safe migration target node for misplaced NUMA
+ * pages. Currently it only checks the watermarks which is a bit crude.
+ */
+static bool migrate_balanced_pgdat(struct pglist_data *pgdat,
+				   int nr_migrate_pages)
+{
+	int z;
+
+	for (z = pgdat->nr_zones - 1; z >= 0; z--) {
+		struct zone *zone = pgdat->node_zones + z;
+
+		if (!populated_zone(zone))
+			continue;
+
+		if (zone->all_unreclaimable)
+			continue;
+
+		/* Avoid waking kswapd by allocating pages_to_migrate pages. */
+		if (!zone_watermark_ok(zone, 0,
+				       high_wmark_pages(zone) +
+				       nr_migrate_pages,
+				       0, 0))
+			continue;
+		return true;
+	}
+	return false;
+}
+
+static struct page *alloc_misplaced_dst_page(struct page *page,
+					   unsigned long data,
+					   int **result)
+{
+	int nid = (int) data;
+	struct page *newpage;
+
+	newpage = alloc_pages_exact_node(nid,
+					 (GFP_HIGHUSER_MOVABLE | GFP_THISNODE |
+					  __GFP_NOMEMALLOC | __GFP_NORETRY |
+					  __GFP_NOWARN) &
+					 ~GFP_IOFS, 0);
+	return newpage;
+}
+
+/*
  * Attempt to migrate a misplaced page to the specified destination
- * node.
+ * node. Caller is expected to have an elevated reference count on
+ * the page that will be dropped by this function before returning.
  */
 int migrate_misplaced_page(struct page *page, int node)
 {
-	struct address_space *mapping = page_mapping(page);
-	int page_lru = page_is_file_cache(page);
-	struct page *newpage;
-	int ret = -EAGAIN;
-	gfp_t gfp = GFP_HIGHUSER_MOVABLE;
+	int isolated = 0;
+	LIST_HEAD(migratepages);
 
 	/*
-	 * Never wait for allocations just to migrate on fault, but don't dip
-	 * into reserves. And, only accept pages from the specified node. No
-	 * sense migrating to a different "misplaced" page!
+	 * Don't migrate pages that are mapped in multiple processes.
+	 * TODO: Handle false sharing detection instead of this hammer
 	 */
-	if (mapping)
-		gfp = mapping_gfp_mask(mapping);
-	gfp &= ~__GFP_WAIT;
-	gfp |= __GFP_NOMEMALLOC | GFP_THISNODE;
-
-	newpage = alloc_pages_node(node, gfp, 0);
-	if (!newpage) {
-		ret = -ENOMEM;
+	if (page_mapcount(page) != 1)
 		goto out;
+
+	/* Avoid migrating to a node that is nearly full */
+	if (migrate_balanced_pgdat(NODE_DATA(node), 1)) {
+		int page_lru;
+
+		if (isolate_lru_page(page)) {
+			put_page(page);
+			goto out;
+		}
+		isolated = 1;
+
+		/*
+		 * Page is isolated which takes a reference count so now the
+		 * callers reference can be safely dropped without the page
+		 * disappearing underneath us during migration
+		 */
+		put_page(page);
+
+		page_lru = page_is_file_cache(page);
+		inc_zone_page_state(page, NR_ISOLATED_ANON + page_lru);
+		list_add(&page->lru, &migratepages);
 	}
 
-	if (isolate_lru_page(page)) {
-		ret = -EBUSY;
-		goto put_new;
-	}
+	if (isolated) {
+		int nr_remaining;
 
-	inc_zone_page_state(page, NR_ISOLATED_ANON + page_lru);
-	ret = __unmap_and_move(page, newpage, 0, 0, MIGRATE_FAULT);
-	/*
-	 * A page that has been migrated has all references removed and will be
-	 * freed. A page that has not been migrated will have kepts its
-	 * references and be restored.
-	 */
-	dec_zone_page_state(page, NR_ISOLATED_ANON + page_lru);
-	putback_lru_page(page);
-put_new:
-	/*
-	 * Move the new page to the LRU. If migration was not successful
-	 * then this will free the page.
-	 */
-	putback_lru_page(newpage);
+		nr_remaining = migrate_pages(&migratepages,
+				alloc_misplaced_dst_page,
+				node, false, MIGRATE_ASYNC);
+		if (nr_remaining) {
+			putback_lru_pages(&migratepages);
+			isolated = 0;
+		}
+	}
+	BUG_ON(!list_empty(&migratepages));
 out:
-	return ret;
+	return isolated;
 }
 
 #endif /* CONFIG_NUMA */

@@ -3492,28 +3492,25 @@ out_pte_upgrade_unlock:
 
 out_unlock:
 	pte_unmap_unlock(ptep, ptl);
-out:
+
 	if (page) {
 		task_numa_fault(page_nid, last_cpu, 1);
 		put_page(page);
 	}
-
+out:
 	return 0;
 
 migrate:
 	pte_unmap_unlock(ptep, ptl);
 
-	if (!migrate_misplaced_page(page, node)) {
-		page_nid = node;
+	if (migrate_misplaced_page(page, node)) {
 		goto out;
 	}
+	page = NULL;
 
 	ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
-	if (!pte_same(*ptep, entry)) {
-		put_page(page);
-		page = NULL;
+	if (!pte_same(*ptep, entry))
 		goto out_unlock;
-	}
 
 	goto out_pte_upgrade_unlock;
 }
