@@ -696,6 +696,28 @@ config LOG_BUF_SHIFT
 config HAVE_UNSTABLE_SCHED_CLOCK
 	bool
 
+#
+# Helper Kconfig switches to express compound feature dependencies
+# and thus make the .h/.c code more readable:
+#
+config NUMA_BALANCING_HUGEPAGE
+	bool
+	default y
+	depends on NUMA_BALANCING
+	depends on TRANSPARENT_HUGEPAGE
+
+config ARCH_USES_NUMA_GENERIC_PGPROT
+	bool
+	default y
+	depends on ARCH_WANTS_NUMA_GENERIC_PGPROT
+	depends on NUMA_BALANCING
+
+config ARCH_USES_NUMA_GENERIC_PGPROT_HUGEPAGE
+	bool
+	default y
+	depends on ARCH_USES_NUMA_GENERIC_PGPROT
+	depends on TRANSPARENT_HUGEPAGE
+
 menuconfig CGROUPS
 	boolean "Control Group support"
 	depends on EVENTFD

@@ -197,4 +197,16 @@ static inline int pmd_trans_huge_lock(pmd_t *pmd,
 }
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 
+#ifdef CONFIG_NUMA_BALANCING_HUGEPAGE
+extern void do_huge_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
+				  unsigned long address, pmd_t *pmd,
+				  unsigned int flags, pmd_t orig_pmd);
+#else
+static inline void do_huge_pmd_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
+					 unsigned long address, pmd_t *pmd,
+					 unsigned int flags, pmd_t orig_pmd)
+{
+}
+#endif
+
 #endif /* _LINUX_HUGE_MM_H */

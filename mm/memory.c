@@ -57,6 +57,7 @@
 #include <linux/swapops.h>
 #include <linux/elf.h>
 #include <linux/gfp.h>
+#include <linux/migrate.h>
 
 #include <asm/io.h>
 #include <asm/pgalloc.h>
@@ -3437,6 +3438,69 @@ static int do_nonlinear_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	return __do_fault(mm, vma, address, pmd, pgoff, flags, orig_pte);
 }
 
+static int do_numa_page(struct mm_struct *mm, struct vm_area_struct *vma,
+			unsigned long address, pte_t *ptep, pmd_t *pmd,
+			unsigned int flags, pte_t entry)
+{
+	struct page *page = NULL;
+	int node, page_nid = -1;
+	int last_cpu = -1;
+	spinlock_t *ptl;
+
+	ptl = pte_lockptr(mm, pmd);
+	spin_lock(ptl);
+	if (unlikely(!pte_same(*ptep, entry)))
+		goto out_unlock;
+
+	page = vm_normal_page(vma, address, entry);
+	if (page) {
+		get_page(page);
+		page_nid = page_to_nid(page);
+		last_cpu = page_last_cpu(page);
+		node = mpol_misplaced(page, vma, address);
+		if (node != -1 && node != page_nid)
+			goto migrate;
+	}
+
+out_pte_upgrade_unlock:
+	flush_cache_page(vma, address, pte_pfn(entry));
+
+	ptep_modify_prot_start(mm, address, ptep);
+	entry = pte_modify(entry, vma->vm_page_prot);
+	ptep_modify_prot_commit(mm, address, ptep, entry);
+
+	/* No TLB flush needed because we upgraded the PTE */
+
+	update_mmu_cache(vma, address, ptep);
+
+out_unlock:
+	pte_unmap_unlock(ptep, ptl);
+out:
+	if (page) {
+		task_numa_fault(page_nid, last_cpu, 1);
+		put_page(page);
+	}
+
+	return 0;
+
+migrate:
+	pte_unmap_unlock(ptep, ptl);
+
+	if (!migrate_misplaced_page(page, node)) {
+		page_nid = node;
+		goto out;
+	}
+
+	ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
+	if (!pte_same(*ptep, entry)) {
+		put_page(page);
+		page = NULL;
+		goto out_unlock;
+	}
+
+	goto out_pte_upgrade_unlock;
+}
+
 /*
  * These routines also need to handle stuff like marking pages dirty
  * and/or accessed for architectures that don't do it in hardware (most
@@ -3474,6 +3538,9 @@ int handle_pte_fault(struct mm_struct *mm,
 		return do_swap_page(mm, vma, address,
 					pte, pmd, flags, entry);
 	}
+
+	if (pte_numa(vma, entry))
+		return do_numa_page(mm, vma, address, pte, pmd, flags, entry);
 
 	ptl = pte_lockptr(mm, pmd);
 	spin_lock(ptl);
@@ -3539,13 +3606,16 @@ retry:
 							  pmd, flags);
 	} else {
 		pmd_t orig_pmd = *pmd;
-		int ret;
+		int ret = 0;
 
 		barrier();
-		if (pmd_trans_huge(orig_pmd)) {
-			if (flags & FAULT_FLAG_WRITE &&
-			    !pmd_write(orig_pmd) &&
-			    !pmd_trans_splitting(orig_pmd)) {
+		if (pmd_trans_huge(orig_pmd) && !pmd_trans_splitting(orig_pmd)) {
+			if (pmd_numa(vma, orig_pmd)) {
+				do_huge_pmd_numa_page(mm, vma, address, pmd,
+						      flags, orig_pmd);
+			}
+
+			if ((flags & FAULT_FLAG_WRITE) && !pmd_write(orig_pmd)) {
 				ret = do_huge_pmd_wp_page(mm, vma, address, pmd,
 							  orig_pmd);
 				/*
@@ -3555,11 +3625,12 @@ retry:
 				 */
 				if (unlikely(ret & VM_FAULT_OOM))
 					goto retry;
-				return ret;
 			}
-			return 0;
+
+			return ret;
 		}
 	}
+
 
 	/*
 	 * Use __pte_alloc instead of pte_alloc_map, because we can't
