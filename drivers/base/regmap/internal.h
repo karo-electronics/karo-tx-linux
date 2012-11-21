@@ -31,14 +31,12 @@ struct regmap_format {
 	unsigned int (*parse_val)(void *buf);
 };
 
-typedef void (*regmap_lock)(struct regmap *map);
-typedef void (*regmap_unlock)(struct regmap *map);
-
 struct regmap {
 	struct mutex mutex;
 	spinlock_t spinlock;
 	regmap_lock lock;
 	regmap_unlock unlock;
+	void *lock_arg; /* This is passed to lock/unlock functions */
 
 	struct device *dev; /* Device we do I/O on */
 	void *work_buf;     /* Scratch buffer used to format I/O */
@@ -57,6 +55,10 @@ struct regmap {
 	bool (*readable_reg)(struct device *dev, unsigned int reg);
 	bool (*volatile_reg)(struct device *dev, unsigned int reg);
 	bool (*precious_reg)(struct device *dev, unsigned int reg);
+	const struct regmap_access_table *wr_table;
+	const struct regmap_access_table *rd_table;
+	const struct regmap_access_table *volatile_table;
+	const struct regmap_access_table *precious_table;
 
 	u8 read_flag_mask;
 	u8 write_flag_mask;
@@ -120,6 +122,8 @@ int _regmap_write(struct regmap *map, unsigned int reg,
 
 struct regmap_range_node {
 	struct rb_node node;
+	const char *name;
+	struct regmap *map;
 
 	unsigned int range_min;
 	unsigned int range_max;
