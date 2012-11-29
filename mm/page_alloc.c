@@ -2501,7 +2501,7 @@ rebalance:
 	if (is_thp_alloc(gfp_mask, order)) {
 		/*
 		 * If compaction is deferred for high-order allocations, it is
-		 * because sync compaction recently failed. In this is the case
+		 * because sync compaction recently failed. If this is the case
 		 * and the caller requested a movable allocation that does not
 		 * heavily disrupt the system then fail the allocation instead
 		 * of entering direct reclaim.
