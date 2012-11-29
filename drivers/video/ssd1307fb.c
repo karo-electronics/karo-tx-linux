@@ -55,7 +55,7 @@ static struct fb_var_screeninfo ssd1307fb_var __devinitdata = {
 	.bits_per_pixel	= 1,
 };
 
-static int ssd1307fb_write_array(struct i2c_client *client, u8 type, u8* cmd, u32 len)
+static int ssd1307fb_write_array(struct i2c_client *client, u8 type, u8 *cmd, u32 len)
 {
 	u8 *buf;
 	int ret = 0;
@@ -80,7 +80,7 @@ error:
 	return ret;
 }
 
-static inline int ssd1307fb_write_cmd_array(struct i2c_client *client, u8* cmd, u32 len)
+static inline int ssd1307fb_write_cmd_array(struct i2c_client *client, u8 *cmd, u32 len)
 {
 	return ssd1307fb_write_array(client, SSD1307FB_COMMAND, cmd, len);
 }
@@ -90,7 +90,7 @@ static inline int ssd1307fb_write_cmd(struct i2c_client *client, u8 cmd)
 	return ssd1307fb_write_cmd_array(client, &cmd, 1);
 }
 
-static inline int ssd1307fb_write_data_array(struct i2c_client *client, u8* cmd, u32 len)
+static inline int ssd1307fb_write_data_array(struct i2c_client *client, u8 *cmd, u32 len)
 {
 	return ssd1307fb_write_array(client, SSD1307FB_DATA, cmd, len);
 }
