@@ -776,7 +776,7 @@ fixup:
 	/* change back to regular protection */
 	entry = pmd_modify(entry, vma->vm_page_prot);
 	set_pmd_at(mm, haddr, pmd, entry);
-	update_mmu_cache_pmd(vma, address, entry);
+	update_mmu_cache_pmd(vma, address, &entry);
 
 unlock:
 	spin_unlock(&mm->page_table_lock);
@@ -855,7 +855,7 @@ migrate:
 	page_add_new_anon_rmap(new_page, vma, haddr);
 
 	set_pmd_at(mm, haddr, pmd, entry);
-	update_mmu_cache_pmd(vma, address, entry);
+	update_mmu_cache_pmd(vma, address, &entry);
 	page_remove_rmap(page);
 	/*
 	 * Finish the charge transaction under the page table lock to
