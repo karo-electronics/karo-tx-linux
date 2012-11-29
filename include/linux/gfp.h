@@ -34,6 +34,7 @@ struct vm_area_struct;
 #define ___GFP_OTHER_NODE	0x200000u
 #define ___GFP_WRITE		0x400000u
 #define ___GFP_KMEMCG		0x800000u
+/* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
  * GFP bitmasks..
