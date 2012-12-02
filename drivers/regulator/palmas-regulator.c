@@ -436,44 +436,14 @@ static int palmas_is_enabled_ldo(struct regulator_dev *dev)
 	return !!(reg);
 }
 
-static int palmas_list_voltage_ldo(struct regulator_dev *dev,
-					unsigned selector)
-{
-	if (!selector)
-		return 0;
-
-	/* voltage is 0.85V + (selector * 0.05v) */
-	return  850000 + (selector * 50000);
-}
-
-static int palmas_map_voltage_ldo(struct regulator_dev *rdev,
-		int min_uV, int max_uV)
-{
-	int ret, voltage;
-
-	if (min_uV == 0)
-		return 0;
-
-	if (min_uV < 900000)
-		min_uV = 900000;
-	ret = DIV_ROUND_UP(min_uV - 900000, 50000) + 1;
-
-	/* Map back into a voltage to verify we're still in bounds */
-	voltage = palmas_list_voltage_ldo(rdev, ret);
-	if (voltage < min_uV || voltage > max_uV)
-		return -EINVAL;
-
-	return ret;
-}
-
 static struct regulator_ops palmas_ops_ldo = {
 	.is_enabled		= palmas_is_enabled_ldo,
 	.enable			= regulator_enable_regmap,
 	.disable		= regulator_disable_regmap,
 	.get_voltage_sel	= regulator_get_voltage_sel_regmap,
 	.set_voltage_sel	= regulator_set_voltage_sel_regmap,
-	.list_voltage		= palmas_list_voltage_ldo,
-	.map_voltage		= palmas_map_voltage_ldo,
+	.list_voltage		= regulator_list_voltage_linear,
+	.map_voltage		= regulator_map_voltage_linear,
 };
 
 /*
@@ -595,7 +565,7 @@ static struct of_regulator_match palmas_matches[] = {
 	{ .name = "ldousb", },
 };
 
-static void __devinit palmas_dt_to_pdata(struct device *dev,
+static void palmas_dt_to_pdata(struct device *dev,
 		struct device_node *node,
 		struct palmas_pmic_platform_data *pdata)
 {
@@ -663,7 +633,7 @@ static void __devinit palmas_dt_to_pdata(struct device *dev,
 }
 
 
-static __devinit int palmas_probe(struct platform_device *pdev)
+static int palmas_probe(struct platform_device *pdev)
 {
 	struct palmas *palmas = dev_get_drvdata(pdev->dev.parent);
 	struct palmas_pmic_platform_data *pdata = pdev->dev.platform_data;
@@ -821,6 +791,9 @@ static __devinit int palmas_probe(struct platform_device *pdev)
 
 		pmic->desc[id].type = REGULATOR_VOLTAGE;
 		pmic->desc[id].owner = THIS_MODULE;
+		pmic->desc[id].min_uV = 900000;
+		pmic->desc[id].uV_step = 50000;
+		pmic->desc[id].linear_min_sel = 1;
 		pmic->desc[id].vsel_reg = PALMAS_BASE_TO_REG(PALMAS_LDO_BASE,
 						palmas_regs_info[id].vsel_addr);
 		pmic->desc[id].vsel_mask = PALMAS_LDO1_VOLTAGE_VSEL_MASK;
@@ -868,7 +841,7 @@ err_unregister_regulator:
 	return ret;
 }
 
-static int __devexit palmas_remove(struct platform_device *pdev)
+static int palmas_remove(struct platform_device *pdev)
 {
 	struct palmas_pmic *pmic = platform_get_drvdata(pdev);
 	int id;
@@ -890,7 +863,7 @@ static struct platform_driver palmas_driver = {
 		.owner = THIS_MODULE,
 	},
 	.probe = palmas_probe,
-	.remove = __devexit_p(palmas_remove),
+	.remove = palmas_remove,
 };
 
 static int __init palmas_init(void)
