@@ -2021,6 +2021,8 @@ int ext4_get_block_write(struct inode *inode, sector_t iblock,
 			 struct buffer_head *bh_result, int create);
 int ext4_get_block(struct inode *inode, sector_t iblock,
 				struct buffer_head *bh_result, int create);
+int ext4_da_get_block_prep(struct inode *inode, sector_t iblock,
+			   struct buffer_head *bh, int create);
 int walk_page_buffers(handle_t *handle,
 			     struct buffer_head *head,
 			     unsigned from,
@@ -2030,6 +2032,8 @@ int walk_page_buffers(handle_t *handle,
 				       struct buffer_head *bh));
 int do_journal_get_write_access(handle_t *handle,
 				struct buffer_head *bh);
+#define FALL_BACK_TO_NONDELALLOC 1
+#define CONVERT_INLINE_DATA	 2
 
 extern struct inode *ext4_iget(struct super_block *, unsigned long);
 extern int  ext4_write_inode(struct inode *, struct writeback_control *);
