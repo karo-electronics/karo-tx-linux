@@ -770,7 +770,7 @@ struct buffer_head *ext4_bread(handle_t *handle, struct inode *inode,
 	return NULL;
 }
 
-static int walk_page_buffers(handle_t *handle,
+int walk_page_buffers(handle_t *handle,
 			     struct buffer_head *head,
 			     unsigned from,
 			     unsigned to,
@@ -826,8 +826,8 @@ static int walk_page_buffers(handle_t *handle,
  * is elevated.  We'll still have enough credits for the tiny quotafile
  * write.
  */
-static int do_journal_get_write_access(handle_t *handle,
-				       struct buffer_head *bh)
+int do_journal_get_write_access(handle_t *handle,
+				struct buffer_head *bh)
 {
 	int dirty = buffer_dirty(bh);
 	int ret;
@@ -850,8 +850,6 @@ static int do_journal_get_write_access(handle_t *handle,
 	return ret;
 }
 
-static int ext4_get_block_write(struct inode *inode, sector_t iblock,
-		   struct buffer_head *bh_result, int create);
 static int ext4_get_block_write_nolock(struct inode *inode, sector_t iblock,
 		   struct buffer_head *bh_result, int create);
 static int ext4_write_begin(struct file *file, struct address_space *mapping,
@@ -876,6 +874,17 @@ static int ext4_write_begin(struct file *file, struct address_space *mapping,
 	from = pos & (PAGE_CACHE_SIZE - 1);
 	to = from + len;
 
+	if (ext4_test_inode_state(inode, EXT4_STATE_MAY_INLINE_DATA)) {
+		ret = ext4_try_to_write_inline_data(mapping, inode, pos, len,
+						    flags, pagep);
+		if (ret < 0)
+			goto out;
+		if (ret == 1) {
+			ret = 0;
+			goto out;
+		}
+	}
+
 retry:
 	handle = ext4_journal_start(inode, needed_blocks);
 	if (IS_ERR(handle)) {
@@ -893,6 +902,7 @@ retry:
 		ret = -ENOMEM;
 		goto out;
 	}
+
 	*pagep = page;
 
 	if (ext4_should_dioread_nolock(inode))
@@ -957,7 +967,12 @@ static int ext4_generic_write_end(struct file *file,
 	struct inode *inode = mapping->host;
 	handle_t *handle = ext4_journal_current_handle();
 
-	copied = block_write_end(file, mapping, pos, len, copied, page, fsdata);
+	if (ext4_has_inline_data(inode))
+		copied = ext4_write_inline_data_end(inode, pos, len,
+						    copied, page);
+	else
+		copied = block_write_end(file, mapping, pos,
+					 len, copied, page, fsdata);
 
 	/*
 	 * No need to use i_size_read() here, the i_size
@@ -2831,7 +2846,7 @@ static int ext4_releasepage(struct page *page, gfp_t wait)
  * We allocate an uinitialized extent if blocks haven't been allocated.
  * The extent will be converted to initialized after the IO is complete.
  */
-static int ext4_get_block_write(struct inode *inode, sector_t iblock,
+int ext4_get_block_write(struct inode *inode, sector_t iblock,
 		   struct buffer_head *bh_result, int create)
 {
 	ext4_debug("ext4_get_block_write: inode %lu, create flag %d\n",
@@ -3738,7 +3753,8 @@ static inline void ext4_iget_extra_inode(struct inode *inode,
 	if (*magic == cpu_to_le32(EXT4_XATTR_MAGIC)) {
 		ext4_set_inode_state(inode, EXT4_STATE_XATTR);
 		ext4_find_inline_data(inode);
-	}
+	} else
+		EXT4_I(inode)->i_inline_off = 0;
 }
 
 struct inode *ext4_iget(struct super_block *sb, unsigned long ino)
@@ -3907,17 +3923,19 @@ struct inode *ext4_iget(struct super_block *sb, unsigned long ino)
 				 ei->i_file_acl);
 		ret = -EIO;
 		goto bad_inode;
-	} else if (ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS)) {
-		if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
-		    (S_ISLNK(inode->i_mode) &&
-		     !ext4_inode_is_fast_symlink(inode)))
-			/* Validate extent which is part of inode */
-			ret = ext4_ext_check_inode(inode);
-	} else if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
-		   (S_ISLNK(inode->i_mode) &&
-		    !ext4_inode_is_fast_symlink(inode))) {
-		/* Validate block references which are part of inode */
-		ret = ext4_ind_check_inode(inode);
+	} else if (!ext4_has_inline_data(inode)) {
+		if (ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS)) {
+			if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
+			    (S_ISLNK(inode->i_mode) &&
+			     !ext4_inode_is_fast_symlink(inode))))
+				/* Validate extent which is part of inode */
+				ret = ext4_ext_check_inode(inode);
+		} else if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
+			   (S_ISLNK(inode->i_mode) &&
+			    !ext4_inode_is_fast_symlink(inode))) {
+			/* Validate block references which are part of inode */
+			ret = ext4_ind_check_inode(inode);
+		}
 	}
 	if (ret)
 		goto bad_inode;
@@ -4104,9 +4122,10 @@ static int ext4_do_update_inode(handle_t *handle,
 				cpu_to_le32(new_encode_dev(inode->i_rdev));
 			raw_inode->i_block[2] = 0;
 		}
-	} else
+	} else if (!ext4_has_inline_data(inode)) {
 		for (block = 0; block < EXT4_N_BLOCKS; block++)
 			raw_inode->i_block[block] = ei->i_data[block];
+	}
 
 	raw_inode->i_disk_version = cpu_to_le32(inode->i_version);
 	if (ei->i_extra_isize) {
