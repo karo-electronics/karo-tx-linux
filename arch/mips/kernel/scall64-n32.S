@@ -17,12 +17,6 @@
 #include <asm/thread_info.h>
 #include <asm/unistd.h>
 
-/* This duplicates the definition from <linux/sched.h> */
-#define PT_TRACESYS	0x00000002	/* tracing system calls */
-
-/* This duplicates the definition from <asm/signal.h> */
-#define SIGILL		4		/* Illegal instruction (ANSI).  */
-
 #ifndef CONFIG_MIPS32_O32
 /* No O32, so define handle_sys here */
 #define handle_sysn32 handle_sys
@@ -403,8 +397,8 @@ EXPORT(sysn32_call_table)
 	PTR	sys_dup3			/* 6290 */
 	PTR	sys_pipe2
 	PTR	sys_inotify_init1
-	PTR	sys_preadv
-	PTR	sys_pwritev
+	PTR	compat_sys_preadv
+	PTR	compat_sys_pwritev
 	PTR	compat_sys_rt_tgsigqueueinfo	/* 6295 */
 	PTR	sys_perf_event_open
 	PTR	sys_accept4
