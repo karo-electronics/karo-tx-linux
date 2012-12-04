@@ -42,7 +42,7 @@ static const struct cifs_sid sid_authusers = {
 /* group users */
 static const struct cifs_sid sid_user = {1, 2 , {0, 0, 0, 0, 0, 5}, {} };
 
-const struct cred *root_cred;
+static const struct cred *root_cred;
 
 static void
 shrink_idmap_tree(struct rb_root *root, int nr_to_scan, int *nr_rem,
@@ -187,7 +187,7 @@ cifs_idmap_key_destroy(struct key *key)
 	kfree(key->payload.data);
 }
 
-struct key_type cifs_idmap_key_type = {
+static struct key_type cifs_idmap_key_type = {
 	.name        = "cifs.idmap",
 	.instantiate = cifs_idmap_key_instantiate,
 	.destroy     = cifs_idmap_key_destroy,
@@ -199,36 +199,89 @@ static void
 sid_to_str(struct cifs_sid *sidptr, char *sidstr)
 {
 	int i;
-	unsigned long saval;
+	unsigned int saval;
 	char *strptr;
 
 	strptr = sidstr;
 
-	sprintf(strptr, "%s", "S");
+	sprintf(strptr, "S-%hhu", sidptr->revision);
 	strptr = sidstr + strlen(sidstr);
 
-	sprintf(strptr, "-%d", sidptr->revision);
-	strptr = sidstr + strlen(sidstr);
-
-	for (i = 0; i < 6; ++i) {
+	for (i = 0; i < NUM_AUTHS; ++i) {
 		if (sidptr->authority[i]) {
-			sprintf(strptr, "-%d", sidptr->authority[i]);
+			sprintf(strptr, "-%hhu", sidptr->authority[i]);
 			strptr = sidstr + strlen(sidstr);
 		}
 	}
 
 	for (i = 0; i < sidptr->num_subauth; ++i) {
 		saval = le32_to_cpu(sidptr->sub_auth[i]);
-		sprintf(strptr, "-%ld", saval);
+		sprintf(strptr, "-%u", saval);
 		strptr = sidstr + strlen(sidstr);
 	}
+}
+
+/*
+ * if the two SIDs (roughly equivalent to a UUID for a user or group) are
+ * the same returns zero, if they do not match returns non-zero.
+ */
+static int
+compare_sids(const struct cifs_sid *ctsid, const struct cifs_sid *cwsid)
+{
+	int i;
+	int num_subauth, num_sat, num_saw;
+
+	if ((!ctsid) || (!cwsid))
+		return 1;
+
+	/* compare the revision */
+	if (ctsid->revision != cwsid->revision) {
+		if (ctsid->revision > cwsid->revision)
+			return 1;
+		else
+			return -1;
+	}
+
+	/* compare all of the six auth values */
+	for (i = 0; i < NUM_AUTHS; ++i) {
+		if (ctsid->authority[i] != cwsid->authority[i]) {
+			if (ctsid->authority[i] > cwsid->authority[i])
+				return 1;
+			else
+				return -1;
+		}
+	}
+
+	/* compare all of the subauth values if any */
+	num_sat = ctsid->num_subauth;
+	num_saw = cwsid->num_subauth;
+	num_subauth = num_sat < num_saw ? num_sat : num_saw;
+	if (num_subauth) {
+		for (i = 0; i < num_subauth; ++i) {
+			if (ctsid->sub_auth[i] != cwsid->sub_auth[i]) {
+				if (le32_to_cpu(ctsid->sub_auth[i]) >
+					le32_to_cpu(cwsid->sub_auth[i]))
+					return 1;
+				else
+					return -1;
+			}
+		}
+	}
+
+	return 0; /* sids compare/match */
 }
 
 static void
 cifs_copy_sid(struct cifs_sid *dst, const struct cifs_sid *src)
 {
-	memcpy(dst, src, sizeof(*dst));
-	dst->num_subauth = min_t(u8, src->num_subauth, NUM_SUBAUTHS);
+	int i;
+
+	dst->revision = src->revision;
+	dst->num_subauth = min_t(u8, src->num_subauth, SID_MAX_SUB_AUTHORITIES);
+	for (i = 0; i < NUM_AUTHS; ++i)
+		dst->authority[i] = src->authority[i];
+	for (i = 0; i < dst->num_subauth; ++i)
+		dst->sub_auth[i] = src->sub_auth[i];
 }
 
 static void
@@ -327,7 +380,7 @@ id_to_sid(unsigned long cid, uint sidtype, struct cifs_sid *ssid)
 		if (!npsidid)
 			return -ENOMEM;
 
-		npsidid->sidstr = kmalloc(SIDLEN, GFP_KERNEL);
+		npsidid->sidstr = kmalloc(SID_STRING_MAX, GFP_KERNEL);
 		if (!npsidid->sidstr) {
 			kfree(npsidid);
 			return -ENOMEM;
@@ -377,7 +430,7 @@ id_to_sid(unsigned long cid, uint sidtype, struct cifs_sid *ssid)
 		if (IS_ERR(sidkey)) {
 			rc = -EINVAL;
 			cFYI(1, "%s: Can't map and id to a SID", __func__);
-		} else if (sidkey->datalen < sizeof(struct cifs_sid)) {
+		} else if (sidkey->datalen < CIFS_SID_BASE_SIZE) {
 			rc = -EIO;
 			cFYI(1, "%s: Downcall contained malformed key "
 				"(datalen=%hu)", __func__, sidkey->datalen);
@@ -444,7 +497,7 @@ sid_to_id(struct cifs_sb_info *cifs_sb, struct cifs_sid *psid,
 		if (!npsidid)
 			return -ENOMEM;
 
-		npsidid->sidstr = kmalloc(SIDLEN, GFP_KERNEL);
+		npsidid->sidstr = kmalloc(SID_STRING_MAX, GFP_KERNEL);
 		if (!npsidid->sidstr) {
 			kfree(npsidid);
 			return -ENOMEM;
@@ -630,54 +683,6 @@ cifs_destroy_idmaptrees(void)
 	spin_unlock(&gidsidlock);
 }
 
-/* if the two SIDs (roughly equivalent to a UUID for a user or group) are
-   the same returns 1, if they do not match returns 0 */
-int compare_sids(const struct cifs_sid *ctsid, const struct cifs_sid *cwsid)
-{
-	int i;
-	int num_subauth, num_sat, num_saw;
-
-	if ((!ctsid) || (!cwsid))
-		return 1;
-
-	/* compare the revision */
-	if (ctsid->revision != cwsid->revision) {
-		if (ctsid->revision > cwsid->revision)
-			return 1;
-		else
-			return -1;
-	}
-
-	/* compare all of the six auth values */
-	for (i = 0; i < 6; ++i) {
-		if (ctsid->authority[i] != cwsid->authority[i]) {
-			if (ctsid->authority[i] > cwsid->authority[i])
-				return 1;
-			else
-				return -1;
-		}
-	}
-
-	/* compare all of the subauth values if any */
-	num_sat = ctsid->num_subauth;
-	num_saw = cwsid->num_subauth;
-	num_subauth = num_sat < num_saw ? num_sat : num_saw;
-	if (num_subauth) {
-		for (i = 0; i < num_subauth; ++i) {
-			if (ctsid->sub_auth[i] != cwsid->sub_auth[i]) {
-				if (le32_to_cpu(ctsid->sub_auth[i]) >
-					le32_to_cpu(cwsid->sub_auth[i]))
-					return 1;
-				else
-					return -1;
-			}
-		}
-	}
-
-	return 0; /* sids compare/match */
-}
-
-
 /* copy ntsd, owner sid, and group sid from a security descriptor to another */
 static void copy_sec_desc(const struct cifs_ntsd *pntsd,
 				struct cifs_ntsd *pnntsd, __u32 sidsoffset)
@@ -811,7 +816,7 @@ static __u16 fill_ace_for_sid(struct cifs_ace *pntace,
 
 	pntace->sid.revision = psid->revision;
 	pntace->sid.num_subauth = psid->num_subauth;
-	for (i = 0; i < 6; i++)
+	for (i = 0; i < NUM_AUTHS; i++)
 		pntace->sid.authority[i] = psid->authority[i];
 	for (i = 0; i < psid->num_subauth; i++)
 		pntace->sid.sub_auth[i] = psid->sub_auth[i];
@@ -987,8 +992,8 @@ static int parse_sid(struct cifs_sid *psid, char *end_of_acl)
 		return -EINVAL;
 	}
 
-	if (psid->num_subauth) {
 #ifdef CONFIG_CIFS_DEBUG2
+	if (psid->num_subauth) {
 		int i;
 		cFYI(1, "SID revision %d num_auth %d",
 			psid->revision, psid->num_subauth);
@@ -1002,8 +1007,8 @@ static int parse_sid(struct cifs_sid *psid, char *end_of_acl)
 			num auths and therefore go off the end */
 		cFYI(1, "RID 0x%x",
 			le32_to_cpu(psid->sub_auth[psid->num_subauth-1]));
-#endif
 	}
+#endif
 
 	return 0;
 }
@@ -1307,42 +1312,39 @@ id_mode_to_cifs_acl(struct inode *inode, const char *path, __u64 nmode,
 
 	/* Get the security descriptor */
 	pntsd = get_cifs_acl(CIFS_SB(inode->i_sb), inode, path, &secdesclen);
-
-	/* Add three ACEs for owner, group, everyone getting rid of
-	   other ACEs as chmod disables ACEs and set the security descriptor */
-
 	if (IS_ERR(pntsd)) {
 		rc = PTR_ERR(pntsd);
 		cERROR(1, "%s: error %d getting sec desc", __func__, rc);
-	} else {
-		/* allocate memory for the smb header,
-		   set security descriptor request security descriptor
-		   parameters, and secuirty descriptor itself */
-
-		secdesclen = secdesclen < DEFSECDESCLEN ?
-					DEFSECDESCLEN : secdesclen;
-		pnntsd = kmalloc(secdesclen, GFP_KERNEL);
-		if (!pnntsd) {
-			cERROR(1, "Unable to allocate security descriptor");
-			kfree(pntsd);
-			return -ENOMEM;
-		}
-
-		rc = build_sec_desc(pntsd, pnntsd, secdesclen, nmode, uid, gid,
-					&aclflag);
-
-		cFYI(DBG2, "build_sec_desc rc: %d", rc);
-
-		if (!rc) {
-			/* Set the security descriptor */
-			rc = set_cifs_acl(pnntsd, secdesclen, inode,
-						path, aclflag);
-			cFYI(DBG2, "set_cifs_acl rc: %d", rc);
-		}
-
-		kfree(pnntsd);
-		kfree(pntsd);
+		goto out;
 	}
 
+	/*
+	 * Add three ACEs for owner, group, everyone getting rid of other ACEs
+	 * as chmod disables ACEs and set the security descriptor. Allocate
+	 * memory for the smb header, set security descriptor request security
+	 * descriptor parameters, and secuirty descriptor itself
+	 */
+	secdesclen = max_t(u32, secdesclen, DEFSECDESCLEN);
+	pnntsd = kmalloc(secdesclen, GFP_KERNEL);
+	if (!pnntsd) {
+		cERROR(1, "Unable to allocate security descriptor");
+		kfree(pntsd);
+		return -ENOMEM;
+	}
+
+	rc = build_sec_desc(pntsd, pnntsd, secdesclen, nmode, uid, gid,
+				&aclflag);
+
+	cFYI(DBG2, "build_sec_desc rc: %d", rc);
+
+	if (!rc) {
+		/* Set the security descriptor */
+		rc = set_cifs_acl(pnntsd, secdesclen, inode, path, aclflag);
+		cFYI(DBG2, "set_cifs_acl rc: %d", rc);
+	}
+
+	kfree(pnntsd);
+	kfree(pntsd);
+out:
 	return rc;
 }

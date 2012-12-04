@@ -505,16 +505,36 @@ out:
 	return rc;
 }
 
+static int cifs_push_posix_locks(struct cifsFileInfo *cfile);
+
 /*
  * Try to reacquire byte range locks that were released when session
- * to server was lost
+ * to server was lost.
  */
-static int cifs_relock_file(struct cifsFileInfo *cifsFile)
+static int
+cifs_relock_file(struct cifsFileInfo *cfile)
 {
+	struct cifs_sb_info *cifs_sb = CIFS_SB(cfile->dentry->d_sb);
+	struct cifsInodeInfo *cinode = CIFS_I(cfile->dentry->d_inode);
+	struct cifs_tcon *tcon = tlink_tcon(cfile->tlink);
 	int rc = 0;
 
-	/* BB list all locks open on this file and relock */
+	/* we are going to update can_cache_brlcks here - need a write access */
+	down_write(&cinode->lock_sem);
+	if (cinode->can_cache_brlcks) {
+		/* can cache locks - no need to push them */
+		up_write(&cinode->lock_sem);
+		return rc;
+	}
 
+	if (cap_unix(tcon->ses) &&
+	    (CIFS_UNIX_FCNTL_CAP & le64_to_cpu(tcon->fsUnixInfo.Capability)) &&
+	    ((cifs_sb->mnt_cifs_flags & CIFS_MOUNT_NOPOSIXBRL) == 0))
+		rc = cifs_push_posix_locks(cfile);
+	else
+		rc = tcon->ses->server->ops->push_mand_locks(cfile);
+
+	up_write(&cinode->lock_sem);
 	return rc;
 }
 
@@ -948,7 +968,6 @@ cifs_push_mandatory_locks(struct cifsFileInfo *cfile)
 	int rc = 0, stored_rc;
 	struct cifsLockInfo *li, *tmp;
 	struct cifs_tcon *tcon;
-	struct cifsInodeInfo *cinode = CIFS_I(cfile->dentry->d_inode);
 	unsigned int num, max_num, max_buf;
 	LOCKING_ANDX_RANGE *buf, *cur;
 	int types[] = {LOCKING_ANDX_LARGE_FILES,
@@ -958,21 +977,12 @@ cifs_push_mandatory_locks(struct cifsFileInfo *cfile)
 	xid = get_xid();
 	tcon = tlink_tcon(cfile->tlink);
 
-	/* we are going to update can_cache_brlcks here - need a write access */
-	down_write(&cinode->lock_sem);
-	if (!cinode->can_cache_brlcks) {
-		up_write(&cinode->lock_sem);
-		free_xid(xid);
-		return rc;
-	}
-
 	/*
 	 * Accessing maxBuf is racy with cifs_reconnect - need to store value
 	 * and check it for zero before using.
 	 */
 	max_buf = tcon->ses->server->maxBuf;
 	if (!max_buf) {
-		up_write(&cinode->lock_sem);
 		free_xid(xid);
 		return -EINVAL;
 	}
@@ -981,7 +991,6 @@ cifs_push_mandatory_locks(struct cifsFileInfo *cfile)
 						sizeof(LOCKING_ANDX_RANGE);
 	buf = kzalloc(max_num * sizeof(LOCKING_ANDX_RANGE), GFP_KERNEL);
 	if (!buf) {
-		up_write(&cinode->lock_sem);
 		free_xid(xid);
 		return -ENOMEM;
 	}
@@ -1018,9 +1027,6 @@ cifs_push_mandatory_locks(struct cifsFileInfo *cfile)
 		}
 	}
 
-	cinode->can_cache_brlcks = false;
-	up_write(&cinode->lock_sem);
-
 	kfree(buf);
 	free_xid(xid);
 	return rc;
@@ -1043,7 +1049,6 @@ struct lock_to_push {
 static int
 cifs_push_posix_locks(struct cifsFileInfo *cfile)
 {
-	struct cifsInodeInfo *cinode = CIFS_I(cfile->dentry->d_inode);
 	struct cifs_tcon *tcon = tlink_tcon(cfile->tlink);
 	struct file_lock *flock, **before;
 	unsigned int count = 0, i = 0;
@@ -1053,14 +1058,6 @@ cifs_push_posix_locks(struct cifsFileInfo *cfile)
 	__u64 length;
 
 	xid = get_xid();
-
-	/* we are going to update can_cache_brlcks here - need a write access */
-	down_write(&cinode->lock_sem);
-	if (!cinode->can_cache_brlcks) {
-		up_write(&cinode->lock_sem);
-		free_xid(xid);
-		return rc;
-	}
 
 	lock_flocks();
 	cifs_for_each_lock(cfile->dentry->d_inode, before) {
@@ -1127,9 +1124,6 @@ cifs_push_posix_locks(struct cifsFileInfo *cfile)
 	}
 
 out:
-	cinode->can_cache_brlcks = false;
-	up_write(&cinode->lock_sem);
-
 	free_xid(xid);
 	return rc;
 err_out:
@@ -1144,14 +1138,27 @@ static int
 cifs_push_locks(struct cifsFileInfo *cfile)
 {
 	struct cifs_sb_info *cifs_sb = CIFS_SB(cfile->dentry->d_sb);
+	struct cifsInodeInfo *cinode = CIFS_I(cfile->dentry->d_inode);
 	struct cifs_tcon *tcon = tlink_tcon(cfile->tlink);
+	int rc = 0;
+
+	/* we are going to update can_cache_brlcks here - need a write access */
+	down_write(&cinode->lock_sem);
+	if (!cinode->can_cache_brlcks) {
+		up_write(&cinode->lock_sem);
+		return rc;
+	}
 
 	if (cap_unix(tcon->ses) &&
 	    (CIFS_UNIX_FCNTL_CAP & le64_to_cpu(tcon->fsUnixInfo.Capability)) &&
 	    ((cifs_sb->mnt_cifs_flags & CIFS_MOUNT_NOPOSIXBRL) == 0))
-		return cifs_push_posix_locks(cfile);
+		rc = cifs_push_posix_locks(cfile);
+	else
+		rc = tcon->ses->server->ops->push_mand_locks(cfile);
 
-	return tcon->ses->server->ops->push_mand_locks(cfile);
+	cinode->can_cache_brlcks = false;
+	up_write(&cinode->lock_sem);
+	return rc;
 }
 
 static void
@@ -1436,16 +1443,18 @@ cifs_setlk(struct file *file, struct file_lock *flock, __u32 type,
 			return -ENOMEM;
 
 		rc = cifs_lock_add_if(cfile, lock, wait_flag);
-		if (rc < 0)
+		if (rc < 0) {
 			kfree(lock);
-		if (rc <= 0)
+			return rc;
+		}
+		if (!rc)
 			goto out;
 
 		rc = server->ops->mand_lock(xid, cfile, flock->fl_start, length,
 					    type, 1, 0, wait_flag);
 		if (rc) {
 			kfree(lock);
-			goto out;
+			return rc;
 		}
 
 		cifs_lock_add(cfile, lock);
