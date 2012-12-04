@@ -70,7 +70,6 @@ struct ovl_priv_data {
 	bool shadow_extra_info_dirty;
 
 	bool enabled;
-	enum omap_channel channel;
 	u32 fifo_low, fifo_high;
 
 	/*
@@ -414,8 +413,6 @@ static void wait_pending_extra_info_updates(void)
 	r = wait_for_completion_timeout(&extra_updated_completion, t);
 	if (r == 0)
 		DSSWARN("timeout in wait_pending_extra_info_updates\n");
-	else if (r < 0)
-		DSSERR("wait_pending_extra_info_updates failed: %d\n", r);
 }
 
 int dss_mgr_wait_for_go(struct omap_overlay_manager *mgr)
@@ -573,7 +570,7 @@ static void dss_ovl_write_regs(struct omap_overlay *ovl)
 	struct mgr_priv_data *mp;
 	int r;
 
-	DSSDBGF("%d", ovl->id);
+	DSSDBG("writing ovl %d regs", ovl->id);
 
 	if (!op->enabled || !op->info_dirty)
 		return;
@@ -608,7 +605,7 @@ static void dss_ovl_write_regs_extra(struct omap_overlay *ovl)
 	struct ovl_priv_data *op = get_ovl_priv(ovl);
 	struct mgr_priv_data *mp;
 
-	DSSDBGF("%d", ovl->id);
+	DSSDBG("writing ovl %d regs extra", ovl->id);
 
 	if (!op->extra_info_dirty)
 		return;
@@ -617,7 +614,6 @@ static void dss_ovl_write_regs_extra(struct omap_overlay *ovl)
 	 * disabled */
 
 	dispc_ovl_enable(ovl->id, op->enabled);
-	dispc_ovl_set_channel_out(ovl->id, op->channel);
 	dispc_ovl_set_fifo_threshold(ovl->id, op->fifo_low, op->fifo_high);
 
 	mp = get_mgr_priv(ovl->manager);
@@ -632,7 +628,7 @@ static void dss_mgr_write_regs(struct omap_overlay_manager *mgr)
 	struct mgr_priv_data *mp = get_mgr_priv(mgr);
 	struct omap_overlay *ovl;
 
-	DSSDBGF("%d", mgr->id);
+	DSSDBG("writing mgr %d regs", mgr->id);
 
 	if (!mp->enabled)
 		return;
@@ -658,7 +654,7 @@ static void dss_mgr_write_regs_extra(struct omap_overlay_manager *mgr)
 {
 	struct mgr_priv_data *mp = get_mgr_priv(mgr);
 
-	DSSDBGF("%d", mgr->id);
+	DSSDBG("writing mgr %d regs extra", mgr->id);
 
 	if (!mp->extra_info_dirty)
 		return;
@@ -666,22 +662,8 @@ static void dss_mgr_write_regs_extra(struct omap_overlay_manager *mgr)
 	dispc_mgr_set_timings(mgr->id, &mp->timings);
 
 	/* lcd_config parameters */
-	if (dss_mgr_is_lcd(mgr->id)) {
-		dispc_mgr_set_io_pad_mode(mp->lcd_config.io_pad_mode);
-
-		dispc_mgr_enable_stallmode(mgr->id, mp->lcd_config.stallmode);
-		dispc_mgr_enable_fifohandcheck(mgr->id,
-			mp->lcd_config.fifohandcheck);
-
-		dispc_mgr_set_clock_div(mgr->id, &mp->lcd_config.clock_info);
-
-		dispc_mgr_set_tft_data_lines(mgr->id,
-			mp->lcd_config.video_port_width);
-
-		dispc_lcd_enable_signal_polarity(mp->lcd_config.lcden_sig_polarity);
-
-		dispc_mgr_set_lcd_type_tft(mgr->id);
-	}
+	if (dss_mgr_is_lcd(mgr->id))
+		dispc_mgr_set_lcd_config(mgr->id, &mp->lcd_config);
 
 	mp->extra_info_dirty = false;
 	if (mp->updating)
@@ -786,9 +768,7 @@ void dss_mgr_start_update(struct omap_overlay_manager *mgr)
 	if (!dss_data.irq_enabled && need_isr())
 		dss_register_vsync_isr();
 
-	dispc_mgr_enable(mgr->id, true);
-
-	mgr_clear_shadow_dirty(mgr);
+	dispc_mgr_enable_sync(mgr->id);
 
 	spin_unlock_irqrestore(&data_lock, flags);
 }
@@ -845,7 +825,6 @@ static void dss_apply_irq_handler(void *data, u32 mask)
 	for (i = 0; i < num_mgrs; i++) {
 		struct omap_overlay_manager *mgr;
 		struct mgr_priv_data *mp;
-		bool was_updating;
 
 		mgr = omap_dss_get_overlay_manager(i);
 		mp = get_mgr_priv(mgr);
@@ -853,7 +832,6 @@ static void dss_apply_irq_handler(void *data, u32 mask)
 		if (!mp->enabled)
 			continue;
 
-		was_updating = mp->updating;
 		mp->updating = dispc_mgr_is_enabled(i);
 
 		if (!mgr_manual_update(mgr)) {
@@ -1035,10 +1013,13 @@ int dss_mgr_enable(struct omap_overlay_manager *mgr)
 	if (!mgr_manual_update(mgr))
 		mp->updating = true;
 
+	if (!dss_data.irq_enabled && need_isr())
+		dss_register_vsync_isr();
+
 	spin_unlock_irqrestore(&data_lock, flags);
 
 	if (!mgr_manual_update(mgr))
-		dispc_mgr_enable(mgr->id, true);
+		dispc_mgr_enable_sync(mgr->id);
 
 out:
 	mutex_unlock(&apply_lock);
@@ -1063,7 +1044,7 @@ void dss_mgr_disable(struct omap_overlay_manager *mgr)
 		goto out;
 
 	if (!mgr_manual_update(mgr))
-		dispc_mgr_enable(mgr->id, false);
+		dispc_mgr_disable_sync(mgr->id);
 
 	spin_lock_irqsave(&data_lock, flags);
 
@@ -1289,39 +1270,34 @@ int dss_ovl_set_manager(struct omap_overlay *ovl,
 		goto err;
 	}
 
+	r = dispc_runtime_get();
+	if (r)
+		goto err;
+
 	spin_lock_irqsave(&data_lock, flags);
 
 	if (op->enabled) {
 		spin_unlock_irqrestore(&data_lock, flags);
 		DSSERR("overlay has to be disabled to change the manager\n");
 		r = -EINVAL;
-		goto err;
+		goto err1;
 	}
 
-	op->channel = mgr->id;
-	op->extra_info_dirty = true;
+	dispc_ovl_set_channel_out(ovl->id, mgr->id);
 
 	ovl->manager = mgr;
 	list_add_tail(&ovl->list, &mgr->overlays);
 
 	spin_unlock_irqrestore(&data_lock, flags);
 
-	/* XXX: When there is an overlay on a DSI manual update display, and
-	 * the overlay is first disabled, then moved to tv, and enabled, we
-	 * seem to get SYNC_LOST_DIGIT error.
-	 *
-	 * Waiting doesn't seem to help, but updating the manual update display
-	 * after disabling the overlay seems to fix this. This hints that the
-	 * overlay is perhaps somehow tied to the LCD output until the output
-	 * is updated.
-	 *
-	 * Userspace workaround for this is to update the LCD after disabling
-	 * the overlay, but before moving the overlay to TV.
-	 */
+	dispc_runtime_put();
 
 	mutex_unlock(&apply_lock);
 
 	return 0;
+
+err1:
+	dispc_runtime_put();
 err:
 	mutex_unlock(&apply_lock);
 	return r;
@@ -1355,9 +1331,24 @@ int dss_ovl_unset_manager(struct omap_overlay *ovl)
 	/* wait for pending extra_info updates to ensure the ovl is disabled */
 	wait_pending_extra_info_updates();
 
+	/*
+	 * For a manual update display, there is no guarantee that the overlay
+	 * is really disabled in HW, we may need an extra update from this
+	 * manager before the configurations can go in. Return an error if the
+	 * overlay needed an update from the manager.
+	 *
+	 * TODO: Instead of returning an error, try to do a dummy manager update
+	 * here to disable the overlay in hardware. Use the *GATED fields in
+	 * the DISPC_CONFIG registers to do a dummy update.
+	 */
 	spin_lock_irqsave(&data_lock, flags);
 
-	op->channel = -1;
+	if (ovl_manual_update(ovl) && op->extra_info_dirty) {
+		spin_unlock_irqrestore(&data_lock, flags);
+		DSSERR("need an update to change the manager\n");
+		r = -EINVAL;
+		goto err;
+	}
 
 	ovl->manager = NULL;
 	list_del(&ovl->list);

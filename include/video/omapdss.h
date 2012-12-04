@@ -158,7 +158,6 @@ enum omap_display_caps {
 enum omap_dss_display_state {
 	OMAP_DSS_DISPLAY_DISABLED = 0,
 	OMAP_DSS_DISPLAY_ACTIVE,
-	OMAP_DSS_DISPLAY_SUSPENDED,
 };
 
 enum omap_dss_audio_state {
@@ -314,6 +313,19 @@ int dsi_vc_send_bta_sync(struct omap_dss_device *dssdev, int channel);
 int dsi_enable_video_output(struct omap_dss_device *dssdev, int channel);
 void dsi_disable_video_output(struct omap_dss_device *dssdev, int channel);
 
+enum omapdss_version {
+	OMAPDSS_VER_UNKNOWN = 0,
+	OMAPDSS_VER_OMAP24xx,
+	OMAPDSS_VER_OMAP34xx_ES1,	/* OMAP3430 ES1.0, 2.0 */
+	OMAPDSS_VER_OMAP34xx_ES3,	/* OMAP3430 ES3.0+ */
+	OMAPDSS_VER_OMAP3630,
+	OMAPDSS_VER_AM35xx,
+	OMAPDSS_VER_OMAP4430_ES1,	/* OMAP4430 ES1.0 */
+	OMAPDSS_VER_OMAP4430_ES2,	/* OMAP4430 ES2.0, 2.1, 2.2 */
+	OMAPDSS_VER_OMAP4,		/* All other OMAP4s */
+	OMAPDSS_VER_OMAP5,
+};
+
 /* Board specific data */
 struct omap_dss_board_info {
 	int (*get_context_loss_count)(struct device *dev);
@@ -323,6 +335,7 @@ struct omap_dss_board_info {
 	int (*dsi_enable_pads)(int dsi_id, unsigned lane_mask);
 	void (*dsi_disable_pads)(int dsi_id, unsigned lane_mask);
 	int (*set_min_bus_tput)(struct device *dev, unsigned long r);
+	enum omapdss_version version;
 };
 
 /* Init with the board info */
@@ -607,10 +620,6 @@ struct omap_dss_device {
 	struct {
 		struct omap_video_timings timings;
 
-		int acbi;	/* ac-bias pin transitions per interrupt */
-		/* Unit: line clocks */
-		int acb;	/* ac-bias pin frequency */
-
 		enum omap_dss_dsi_pixel_format dsi_pix_fmt;
 		enum omap_dss_dsi_mode dsi_mode;
 		struct omap_dss_dsi_videomode_timings dsi_vm_timings;
@@ -672,8 +681,6 @@ struct omap_dss_driver {
 
 	int (*enable)(struct omap_dss_device *display);
 	void (*disable)(struct omap_dss_device *display);
-	int (*suspend)(struct omap_dss_device *display);
-	int (*resume)(struct omap_dss_device *display);
 	int (*run_test)(struct omap_dss_device *display, int test);
 
 	int (*update)(struct omap_dss_device *dssdev,
@@ -731,6 +738,8 @@ struct omap_dss_driver {
 
 };
 
+enum omapdss_version omapdss_get_version(void);
+
 int omap_dss_register_driver(struct omap_dss_driver *);
 void omap_dss_unregister_driver(struct omap_dss_driver *);
 
@@ -740,6 +749,7 @@ void omap_dss_put_device(struct omap_dss_device *dssdev);
 struct omap_dss_device *omap_dss_get_next_device(struct omap_dss_device *from);
 struct omap_dss_device *omap_dss_find_device(void *data,
 		int (*match)(struct omap_dss_device *dssdev, void *data));
+const char *omapdss_get_default_display_name(void);
 
 int omap_dss_start_device(struct omap_dss_device *dssdev);
 void omap_dss_stop_device(struct omap_dss_device *dssdev);
