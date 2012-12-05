@@ -212,8 +212,7 @@ static struct sk_buff *page_to_skb(struct virtnet_info *vi,
 	 * the case of a broken device.
 	 */
 	if (unlikely(len > MAX_SKB_FRAGS * PAGE_SIZE)) {
-		if (net_ratelimit())
-			pr_debug("%s: too much data\n", skb->dev->name);
+		net_dbg_ratelimited("%s: too much data\n", skb->dev->name);
 		dev_kfree_skb(skb);
 		return NULL;
 	}
@@ -333,9 +332,8 @@ static void receive_buf(struct net_device *dev, void *buf, unsigned int len)
 			skb_shinfo(skb)->gso_type = SKB_GSO_TCPV6;
 			break;
 		default:
-			if (net_ratelimit())
-				printk(KERN_WARNING "%s: bad gso type %u.\n",
-				       dev->name, hdr->hdr.gso_type);
+			net_warn_ratelimited("%s: bad gso type %u.\n",
+					     dev->name, hdr->hdr.gso_type);
 			goto frame_err;
 		}
 
@@ -344,9 +342,7 @@ static void receive_buf(struct net_device *dev, void *buf, unsigned int len)
 
 		skb_shinfo(skb)->gso_size = hdr->hdr.gso_size;
 		if (skb_shinfo(skb)->gso_size == 0) {
-			if (net_ratelimit())
-				printk(KERN_WARNING "%s: zero gso size.\n",
-				       dev->name);
+			net_warn_ratelimited("%s: zero gso size.\n", dev->name);
 			goto frame_err;
 		}
 
@@ -1207,7 +1203,7 @@ static void remove_vq_common(struct virtnet_info *vi)
 		__free_pages(get_a_page(vi, GFP_KERNEL), 0);
 }
 
-static void __devexit virtnet_remove(struct virtio_device *vdev)
+static void virtnet_remove(struct virtio_device *vdev)
 {
 	struct virtnet_info *vi = vdev->priv;
 
@@ -1297,7 +1293,7 @@ static struct virtio_driver virtio_net_driver = {
 	.driver.owner =	THIS_MODULE,
 	.id_table =	id_table,
 	.probe =	virtnet_probe,
-	.remove =	__devexit_p(virtnet_remove),
+	.remove =	virtnet_remove,
 	.config_changed = virtnet_config_changed,
 #ifdef CONFIG_PM
 	.freeze =	virtnet_freeze,

@@ -22,12 +22,9 @@ static inline u32 bcma_cc_write32_masked(struct bcma_drv_cc *cc, u16 offset,
 	return value;
 }
 
-void bcma_core_chipcommon_init(struct bcma_drv_cc *cc)
+void bcma_core_chipcommon_early_init(struct bcma_drv_cc *cc)
 {
-	u32 leddc_on = 10;
-	u32 leddc_off = 90;
-
-	if (cc->setup_done)
+	if (cc->early_setup_done)
 		return;
 
 	spin_lock_init(&cc->gpio_lock);
@@ -37,6 +34,22 @@ void bcma_core_chipcommon_init(struct bcma_drv_cc *cc)
 	cc->capabilities = bcma_cc_read32(cc, BCMA_CC_CAP);
 	if (cc->core->id.rev >= 35)
 		cc->capabilities_ext = bcma_cc_read32(cc, BCMA_CC_CAP_EXT);
+
+	if (cc->capabilities & BCMA_CC_CAP_PMU)
+		bcma_pmu_early_init(cc);
+
+	cc->early_setup_done = true;
+}
+
+void bcma_core_chipcommon_init(struct bcma_drv_cc *cc)
+{
+	u32 leddc_on = 10;
+	u32 leddc_off = 90;
+
+	if (cc->setup_done)
+		return;
+
+	bcma_core_chipcommon_early_init(cc);
 
 	if (cc->core->id.rev >= 20) {
 		bcma_cc_write32(cc, BCMA_CC_GPIOPULLUP, 0);

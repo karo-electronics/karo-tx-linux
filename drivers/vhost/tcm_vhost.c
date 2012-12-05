@@ -34,7 +34,6 @@
 #include <linux/ctype.h>
 #include <linux/compat.h>
 #include <linux/eventfd.h>
-#include <linux/vhost.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <asm/unaligned.h>
@@ -891,6 +890,7 @@ static int vhost_scsi_release(struct inode *inode, struct file *f)
 		vhost_scsi_clear_endpoint(s, &backend);
 	}
 
+	vhost_dev_stop(&s->dev);
 	vhost_dev_cleanup(&s->dev, false);
 	kfree(s);
 	return 0;

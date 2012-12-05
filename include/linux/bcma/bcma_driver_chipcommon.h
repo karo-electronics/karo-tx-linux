@@ -512,6 +512,7 @@ struct bcma_chipcommon_pmu {
 
 #ifdef CONFIG_BCMA_DRIVER_MIPS
 struct bcma_pflash {
+	bool present;
 	u8 buswidth;
 	u32 window;
 	u32 window_size;
@@ -534,6 +535,7 @@ struct mtd_info;
 
 struct bcma_nflash {
 	bool present;
+	bool boot;		/* This is the flash the SoC boots from */
 
 	struct mtd_info *mtd;
 };
@@ -554,6 +556,7 @@ struct bcma_drv_cc {
 	u32 capabilities;
 	u32 capabilities_ext;
 	u8 setup_done:1;
+	u8 early_setup_done:1;
 	/* Fast Powerup Delay constant */
 	u16 fast_pwrup_delay;
 	struct bcma_chipcommon_pmu pmu;
@@ -591,6 +594,7 @@ struct bcma_drv_cc {
 	bcma_cc_write32(cc, offset, (bcma_cc_read32(cc, offset) & (mask)) | (set))
 
 extern void bcma_core_chipcommon_init(struct bcma_drv_cc *cc);
+extern void bcma_core_chipcommon_early_init(struct bcma_drv_cc *cc);
 
 extern void bcma_chipco_suspend(struct bcma_drv_cc *cc);
 extern void bcma_chipco_resume(struct bcma_drv_cc *cc);
@@ -616,6 +620,7 @@ u32 bcma_chipco_gpio_pulldown(struct bcma_drv_cc *cc, u32 mask, u32 value);
 
 /* PMU support */
 extern void bcma_pmu_init(struct bcma_drv_cc *cc);
+extern void bcma_pmu_early_init(struct bcma_drv_cc *cc);
 
 extern void bcma_chipco_pll_write(struct bcma_drv_cc *cc, u32 offset,
 				  u32 value);
