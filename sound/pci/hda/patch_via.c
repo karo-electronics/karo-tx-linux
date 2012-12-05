@@ -241,6 +241,7 @@ static struct via_spec * via_new_spec(struct hda_codec *codec)
 	if (spec == NULL)
 		return NULL;
 
+	snd_array_init(&spec->kctls, sizeof(struct snd_kcontrol_new), 32);
 	mutex_init(&spec->config_mutex);
 	codec->spec = spec;
 	spec->codec = codec;
@@ -387,7 +388,6 @@ static struct snd_kcontrol_new *__via_clone_ctl(struct via_spec *spec,
 {
 	struct snd_kcontrol_new *knew;
 
-	snd_array_init(&spec->kctls, sizeof(*knew), 32);
 	knew = snd_array_new(&spec->kctls);
 	if (!knew)
 		return NULL;
@@ -739,18 +739,7 @@ static void set_pin_power_state(struct hda_codec *codec, hda_nid_t nid,
 static int via_pin_power_ctl_info(struct snd_kcontrol *kcontrol,
 				  struct snd_ctl_elem_info *uinfo)
 {
-	static const char * const texts[] = {
-		"Disabled", "Enabled"
-	};
-
-	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
-	uinfo->count = 1;
-	uinfo->value.enumerated.items = 2;
-	if (uinfo->value.enumerated.item >= uinfo->value.enumerated.items)
-		uinfo->value.enumerated.item = uinfo->value.enumerated.items - 1;
-	strcpy(uinfo->value.enumerated.name,
-	       texts[uinfo->value.enumerated.item]);
-	return 0;
+	return snd_hda_enum_bool_helper_info(kcontrol, uinfo);
 }
 
 static int via_pin_power_ctl_get(struct snd_kcontrol *kcontrol,
@@ -1454,7 +1443,7 @@ static const struct hda_pcm_stream via_pcm_digital_capture = {
  */
 static const char * const via_slave_pfxs[] = {
 	"Front", "Surround", "Center", "LFE", "Side",
-	"Headphone", "Speaker",
+	"Headphone", "Speaker", "Bass Speaker",
 	NULL,
 };
 
@@ -1555,6 +1544,10 @@ static int via_build_pcms(struct hda_codec *codec)
 				spec->multiout.dac_nids[0];
 			info->stream[SNDRV_PCM_STREAM_PLAYBACK].channels_max =
 				spec->multiout.max_channels;
+			if (spec->autocfg.line_out_type == AUTO_PIN_SPEAKER_OUT
+			    && spec->autocfg.line_outs == 2)
+				info->stream[SNDRV_PCM_STREAM_PLAYBACK].chmap =
+					snd_pcm_2_1_chmaps;
 		}
 
 		if (!spec->stream_analog_capture) {
@@ -1934,7 +1927,7 @@ static int via_auto_create_multi_out_ctls(struct hda_codec *codec)
 	struct auto_pin_cfg *cfg = &spec->autocfg;
 	struct nid_path *path;
 	static const char * const chname[4] = {
-		"Front", "Surround", "C/LFE", "Side"
+		"Front", "Surround", NULL /* "CLFE" */, "Side"
 	};
 	int i, idx, err;
 	int old_line_outs;
@@ -1969,8 +1962,8 @@ static int via_auto_create_multi_out_ctls(struct hda_codec *codec)
 		} else {
 			const char *pfx = chname[i];
 			if (cfg->line_out_type == AUTO_PIN_SPEAKER_OUT &&
-			    cfg->line_outs == 1)
-				pfx = "Speaker";
+			    cfg->line_outs <= 2)
+				pfx = i ? "Bass Speaker" : "Speaker";
 			err = create_ch_ctls(codec, pfx, 3, true, path);
 			if (err < 0)
 				return err;
