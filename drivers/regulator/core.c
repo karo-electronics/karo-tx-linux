@@ -199,8 +199,11 @@ static int regulator_check_consumers(struct regulator_dev *rdev,
 			*min_uV = regulator->min_uV;
 	}
 
-	if (*min_uV > *max_uV)
+	if (*min_uV > *max_uV) {
+		dev_err(regulator->dev, "Restricting voltage, %u-%uuV\n",
+			regulator->min_uV, regulator->max_uV);
 		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -880,7 +883,9 @@ static int machine_constraints_voltage(struct regulator_dev *rdev,
 
 		/* final: [min_uV..max_uV] valid iff constraints valid */
 		if (max_uV < min_uV) {
-			rdev_err(rdev, "unsupportable voltage constraints\n");
+			rdev_err(rdev,
+				 "unsupportable voltage constraints %u-%uuV\n",
+				 min_uV, max_uV);
 			return -EINVAL;
 		}
 
@@ -1897,6 +1902,10 @@ int regulator_list_voltage_linear(struct regulator_dev *rdev,
 {
 	if (selector >= rdev->desc->n_voltages)
 		return -EINVAL;
+	if (selector < rdev->desc->linear_min_sel)
+		return 0;
+
+	selector -= rdev->desc->linear_min_sel;
 
 	return rdev->desc->min_uV + (rdev->desc->uV_step * selector);
 }
@@ -1984,6 +1993,11 @@ int regulator_is_supported_voltage(struct regulator *regulator,
 		else
 			return ret;
 	}
+
+	/* Any voltage within constrains range is fine? */
+	if (rdev->desc->continuous_voltage_range)
+		return min_uV >= rdev->constraints->min_uV &&
+				max_uV <= rdev->constraints->max_uV;
 
 	ret = regulator_count_voltages(regulator);
 	if (ret < 0)
@@ -2119,6 +2133,8 @@ int regulator_map_voltage_linear(struct regulator_dev *rdev,
 	ret = DIV_ROUND_UP(min_uV - rdev->desc->min_uV, rdev->desc->uV_step);
 	if (ret < 0)
 		return ret;
+
+	ret += rdev->desc->linear_min_sel;
 
 	/* Map back into a voltage to verify we're still in bounds */
 	voltage = rdev->desc->ops->list_voltage(rdev, ret);

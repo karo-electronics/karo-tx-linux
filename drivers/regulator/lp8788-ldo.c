@@ -126,7 +126,7 @@ struct lp8788_ldo {
 };
 
 /* DLDO 1, 2, 3, 9 voltage table */
-const int lp8788_dldo1239_vtbl[] = {
+static const int lp8788_dldo1239_vtbl[] = {
 	1800000, 1900000, 2000000, 2100000, 2200000, 2300000, 2400000, 2500000,
 	2600000, 2700000, 2800000, 2900000, 3000000, 2850000, 2850000, 2850000,
 	2850000, 2850000, 2850000, 2850000, 2850000, 2850000, 2850000, 2850000,
@@ -712,7 +712,7 @@ set_default_ldo_enable_mode:
 				val[enable_id]);
 }
 
-static __devinit int lp8788_dldo_probe(struct platform_device *pdev)
+static int lp8788_dldo_probe(struct platform_device *pdev)
 {
 	struct lp8788 *lp = dev_get_drvdata(pdev->dev.parent);
 	int id = pdev->id;
@@ -749,7 +749,7 @@ static __devinit int lp8788_dldo_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int __devexit lp8788_dldo_remove(struct platform_device *pdev)
+static int lp8788_dldo_remove(struct platform_device *pdev)
 {
 	struct lp8788_ldo *ldo = platform_get_drvdata(pdev);
 
@@ -761,14 +761,14 @@ static int __devexit lp8788_dldo_remove(struct platform_device *pdev)
 
 static struct platform_driver lp8788_dldo_driver = {
 	.probe = lp8788_dldo_probe,
-	.remove = __devexit_p(lp8788_dldo_remove),
+	.remove = lp8788_dldo_remove,
 	.driver = {
 		.name = LP8788_DEV_DLDO,
 		.owner = THIS_MODULE,
 	},
 };
 
-static __devinit int lp8788_aldo_probe(struct platform_device *pdev)
+static int lp8788_aldo_probe(struct platform_device *pdev)
 {
 	struct lp8788 *lp = dev_get_drvdata(pdev->dev.parent);
 	int id = pdev->id;
@@ -805,7 +805,7 @@ static __devinit int lp8788_aldo_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int __devexit lp8788_aldo_remove(struct platform_device *pdev)
+static int lp8788_aldo_remove(struct platform_device *pdev)
 {
 	struct lp8788_ldo *ldo = platform_get_drvdata(pdev);
 
@@ -817,7 +817,7 @@ static int __devexit lp8788_aldo_remove(struct platform_device *pdev)
 
 static struct platform_driver lp8788_aldo_driver = {
 	.probe = lp8788_aldo_probe,
-	.remove = __devexit_p(lp8788_aldo_remove),
+	.remove = lp8788_aldo_remove,
 	.driver = {
 		.name = LP8788_DEV_ALDO,
 		.owner = THIS_MODULE,
