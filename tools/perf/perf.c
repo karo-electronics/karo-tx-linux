@@ -24,6 +24,7 @@ const char perf_more_info_string[] =
 
 int use_browser = -1;
 static int use_pager = -1;
+const char *input_name;
 
 struct cmd_struct {
 	const char *cmd;
@@ -440,6 +441,8 @@ int main(int argc, const char **argv)
 {
 	const char *cmd;
 
+	page_size = sysconf(_SC_PAGE_SIZE);
+
 	cmd = perf_extract_argv0_path(argv[0]);
 	if (!cmd)
 		cmd = "perf-help";
@@ -480,6 +483,8 @@ int main(int argc, const char **argv)
 		exit(1);
 	}
 	cmd = argv[0];
+
+	test_attr__init();
 
 	/*
 	 * We use PATH to find perf commands, but we prepend some higher

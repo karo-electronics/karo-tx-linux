@@ -6,9 +6,11 @@
 #include "builtin.h"
 
 #include "util/cache.h"
+#include "util/color.h"
 #include "util/debug.h"
 #include "util/debugfs.h"
 #include "util/evlist.h"
+#include "util/machine.h"
 #include "util/parse-options.h"
 #include "util/parse-events.h"
 #include "util/symbol.h"
@@ -35,7 +37,6 @@ static int test__vmlinux_matches_kallsyms(void)
 	struct map *kallsyms_map, *vmlinux_map;
 	struct machine kallsyms, vmlinux;
 	enum map_type type = MAP__FUNCTION;
-	long page_size = sysconf(_SC_PAGE_SIZE);
 	struct ref_reloc_sym ref_reloc_sym = { .name = "_stext", };
 
 	/*
@@ -318,7 +319,7 @@ static int test__open_syscall_event(void)
 			 nr_open_calls, evsel->counts->cpu[0].val);
 		goto out_close_fd;
 	}
-	
+
 	err = 0;
 out_close_fd:
 	perf_evsel__close_fd(evsel, 1, threads->nr);
@@ -604,19 +605,13 @@ out_free_threads:
 #undef nsyscalls
 }
 
-static int sched__get_first_possible_cpu(pid_t pid, cpu_set_t **maskp,
-					 size_t *sizep)
+static int sched__get_first_possible_cpu(pid_t pid, cpu_set_t *maskp)
 {
-	cpu_set_t *mask;
-	size_t size;
 	int i, cpu = -1, nrcpus = 1024;
 realloc:
-	mask = CPU_ALLOC(nrcpus);
-	size = CPU_ALLOC_SIZE(nrcpus);
-	CPU_ZERO_S(size, mask);
+	CPU_ZERO(maskp);
 
-	if (sched_getaffinity(pid, size, mask) == -1) {
-		CPU_FREE(mask);
+	if (sched_getaffinity(pid, sizeof(*maskp), maskp) == -1) {
 		if (errno == EINVAL && nrcpus < (1024 << 8)) {
 			nrcpus = nrcpus << 2;
 			goto realloc;
@@ -626,18 +621,13 @@ realloc:
 	}
 
 	for (i = 0; i < nrcpus; i++) {
-		if (CPU_ISSET_S(i, size, mask)) {
-			if (cpu == -1) {
+		if (CPU_ISSET(i, maskp)) {
+			if (cpu == -1)
 				cpu = i;
-				*maskp = mask;
-				*sizep = size;
-			} else
-				CPU_CLR_S(i, size, mask);
+			else
+				CPU_CLR(i, maskp);
 		}
 	}
-
-	if (cpu == -1)
-		CPU_FREE(mask);
 
 	return cpu;
 }
@@ -653,8 +643,8 @@ static int test__PERF_RECORD(void)
 		.freq	    = 10,
 		.mmap_pages = 256,
 	};
-	cpu_set_t *cpu_mask = NULL;
-	size_t cpu_mask_size = 0;
+	cpu_set_t cpu_mask;
+	size_t cpu_mask_size = sizeof(cpu_mask);
 	struct perf_evlist *evlist = perf_evlist__new(NULL, NULL);
 	struct perf_evsel *evsel;
 	struct perf_sample sample;
@@ -718,8 +708,7 @@ static int test__PERF_RECORD(void)
 	evsel->attr.sample_type |= PERF_SAMPLE_TIME;
 	perf_evlist__config_attrs(evlist, &opts);
 
-	err = sched__get_first_possible_cpu(evlist->workload.pid, &cpu_mask,
-					    &cpu_mask_size);
+	err = sched__get_first_possible_cpu(evlist->workload.pid, &cpu_mask);
 	if (err < 0) {
 		pr_debug("sched__get_first_possible_cpu: %s\n", strerror(errno));
 		goto out_delete_evlist;
@@ -730,9 +719,9 @@ static int test__PERF_RECORD(void)
 	/*
 	 * So that we can check perf_sample.cpu on all the samples.
 	 */
-	if (sched_setaffinity(evlist->workload.pid, cpu_mask_size, cpu_mask) < 0) {
+	if (sched_setaffinity(evlist->workload.pid, cpu_mask_size, &cpu_mask) < 0) {
 		pr_debug("sched_setaffinity: %s\n", strerror(errno));
-		goto out_free_cpu_mask;
+		goto out_delete_evlist;
 	}
 
 	/*
@@ -916,8 +905,6 @@ found_exit:
 	}
 out_err:
 	perf_evlist__munmap(evlist);
-out_free_cpu_mask:
-	CPU_FREE(cpu_mask);
 out_delete_evlist:
 	perf_evlist__delete(evlist);
 out:
@@ -1007,7 +994,6 @@ static void segfault_handler(int sig __maybe_unused,
 
 static int __test__rdpmc(void)
 {
-	long page_size = sysconf(_SC_PAGE_SIZE);
 	volatile int tmp = 0;
 	u64 i, loops = 1000;
 	int n;
@@ -1345,8 +1331,8 @@ static int test__syscall_open_tp_fields(void)
 	perf_evlist__enable(evlist);
 
 	/*
- 	 * Generate the event:
- 	 */
+	 * Generate the event:
+	 */
 	open(filename, flags);
 
 	while (1) {
@@ -1456,6 +1442,10 @@ static struct test {
 		.func = test__syscall_open_tp_fields,
 	},
 	{
+		.desc = "struct perf_event_attr setup",
+		.func = test_attr__run,
+	},
+	{
 		.func = NULL,
 	},
 };
@@ -1487,18 +1477,31 @@ static bool perf_test__matches(int curr, int argc, const char *argv[])
 static int __cmd_test(int argc, const char *argv[])
 {
 	int i = 0;
+	int width = 0;
 
+	while (tests[i].func) {
+		int len = strlen(tests[i].desc);
+
+		if (width < len)
+			width = len;
+		++i;
+	}
+
+	i = 0;
 	while (tests[i].func) {
 		int curr = i++, err;
 
 		if (!perf_test__matches(curr, argc, argv))
 			continue;
 
-		pr_info("%2d: %s:", i, tests[curr].desc);
+		pr_info("%2d: %-*s:", i, width, tests[curr].desc);
 		pr_debug("\n--- start ---\n");
 		err = tests[curr].func();
 		pr_debug("---- end ----\n%s:", tests[curr].desc);
-		pr_info(" %s\n", err ? "FAILED!\n" : "Ok");
+		if (err)
+			color_fprintf(stderr, PERF_COLOR_RED, " FAILED!\n");
+		else
+			pr_info(" Ok\n");
 	}
 
 	return 0;

@@ -219,6 +219,10 @@ static inline int pmd_same(pmd_t pmd_a, pmd_t pmd_b)
 #define move_pte(pte, prot, old_addr, new_addr)	(pte)
 #endif
 
+#ifndef pte_accessible
+# define pte_accessible(pte)		((void)(pte),1)
+#endif
+
 #ifndef flush_tlb_fix_spurious_fault
 #define flush_tlb_fix_spurious_fault(vma, address) flush_tlb_page(vma, address)
 #endif
@@ -531,6 +535,61 @@ static inline int pmd_none_or_trans_huge_or_clear_bad(pmd_t *pmd)
 	}
 	return 0;
 }
+
+/*
+ * Is this pte used for NUMA scanning?
+ */
+#ifdef CONFIG_ARCH_USES_NUMA_GENERIC_PGPROT
+extern bool pte_numa(struct vm_area_struct *vma, pte_t pte);
+#else
+# ifndef pte_numa
+static inline bool pte_numa(struct vm_area_struct *vma, pte_t pte)
+{
+	return false;
+}
+# endif
+#endif
+
+/*
+ * Turn a pte into a NUMA entry:
+ */
+#ifdef CONFIG_ARCH_USES_NUMA_GENERIC_PGPROT
+extern pte_t pte_mknuma(struct vm_area_struct *vma, pte_t pte);
+#else
+# ifndef pte_mknuma
+static inline pte_t pte_mknuma(struct vm_area_struct *vma, pte_t pte)
+{
+	return pte;
+}
+# endif
+#endif
+
+/*
+ * Is this pmd used for NUMA scanning?
+ */
+#ifdef CONFIG_ARCH_USES_NUMA_GENERIC_PGPROT_HUGEPAGE
+extern bool pmd_numa(struct vm_area_struct *vma, pmd_t pmd);
+#else
+# ifndef pmd_numa
+static inline bool pmd_numa(struct vm_area_struct *vma, pmd_t pmd)
+{
+	return false;
+}
+# endif
+#endif
+
+/*
+ * Some architectures (such as x86) may need to preserve certain pgprot
+ * bits, without complicating generic pgprot code.
+ *
+ * Most architectures don't care:
+ */
+#ifndef pgprot_modify
+static inline pgprot_t pgprot_modify(pgprot_t oldprot, pgprot_t newprot)
+{
+	return newprot;
+}
+#endif
 
 /*
  * This is a noop if Transparent Hugepage Support is not built into

@@ -111,11 +111,29 @@ enum zone_type policy_zone = 0;
 /*
  * run-time system-wide default policy => local allocation
  */
-static struct mempolicy default_policy = {
-	.refcnt = ATOMIC_INIT(1), /* never free it */
-	.mode = MPOL_PREFERRED,
-	.flags = MPOL_F_LOCAL,
+
+static struct mempolicy default_policy_local = {
+	.refcnt		= ATOMIC_INIT(1), /* never free it */
+	.mode		= MPOL_PREFERRED,
+	.flags		= MPOL_F_LOCAL,
 };
+
+/*
+ * .v.nodes is set by numa_policy_init():
+ */
+static struct mempolicy default_policy_shared = {
+	.refcnt			= ATOMIC_INIT(1), /* never free it */
+	.mode			= MPOL_INTERLEAVE,
+	.flags			= 0,
+};
+
+static struct mempolicy *default_policy(void)
+{
+	if (task_numa_shared(current) == 1)
+		return &default_policy_shared;
+
+	return &default_policy_local;
+}
 
 static const struct mempolicy_operations {
 	int (*create)(struct mempolicy *pol, const nodemask_t *nodes);
@@ -789,7 +807,7 @@ out:
 static void get_policy_nodemask(struct mempolicy *p, nodemask_t *nodes)
 {
 	nodes_clear(*nodes);
-	if (p == &default_policy)
+	if (p == default_policy())
 		return;
 
 	switch (p->mode) {
@@ -864,7 +882,7 @@ static long do_get_mempolicy(int *policy, nodemask_t *nmask,
 		return -EINVAL;
 
 	if (!pol)
-		pol = &default_policy;	/* indicates default behavior */
+		pol = default_policy();	/* indicates default behavior */
 
 	if (flags & MPOL_F_NODE) {
 		if (flags & MPOL_F_ADDR) {
@@ -880,7 +898,7 @@ static long do_get_mempolicy(int *policy, nodemask_t *nmask,
 			goto out;
 		}
 	} else {
-		*policy = pol == &default_policy ? MPOL_DEFAULT :
+		*policy = pol == default_policy() ? MPOL_DEFAULT :
 						pol->mode;
 		/*
 		 * Internal mempolicy flags must be masked off before exposing
@@ -1568,7 +1586,7 @@ struct mempolicy *get_vma_policy(struct task_struct *task,
 		}
 	}
 	if (!pol)
-		pol = &default_policy;
+		pol = default_policy();
 	return pol;
 }
 
@@ -1974,7 +1992,7 @@ struct page *alloc_pages_current(gfp_t gfp, unsigned order)
 	unsigned int cpuset_mems_cookie;
 
 	if (!pol || in_interrupt() || (gfp & __GFP_THISNODE))
-		pol = &default_policy;
+		pol = default_policy();
 
 retry_cpuset:
 	cpuset_mems_cookie = get_mems_allowed();
@@ -2175,6 +2193,151 @@ static void sp_free(struct sp_node *n)
 	kmem_cache_free(sn_cache, n);
 }
 
+/*
+ * Multi-stage node selection is used in conjunction with a periodic
+ * migration fault to build a temporal task<->page relation. By
+ * using a two-stage filter we remove short/unlikely relations.
+ *
+ * Using P(p) ~ n_p / n_t as per frequentist probability, we can
+ * equate a task's usage of a particular page (n_p) per total usage
+ * of this page (n_t) (in a given time-span) to a probability.
+ *
+ * Our periodic faults will then sample this probability and getting
+ * the same result twice in a row, given these samples are fully
+ * independent, is then given by P(n)^2, provided our sample period
+ * is sufficiently short compared to the usage pattern.
+ *
+ * This quadric squishes small probabilities, making it less likely
+ * we act on an unlikely task<->page relation.
+ *
+ * Return the best node ID this page should be on, or -1 if it should
+ * stay where it is.
+ */
+static int
+numa_migration_target(struct page *page, int page_nid,
+		      struct task_struct *p, int this_cpu,
+		      int cpu_last_access)
+{
+	int nid_last_access;
+	int this_nid;
+
+	if (task_numa_shared(p) < 0)
+		return -1;
+
+	/*
+	 * Possibly migrate towards the current node, depends on
+	 * task_numa_placement() and access details.
+	 */
+	nid_last_access = cpu_to_node(cpu_last_access);
+	this_nid = cpu_to_node(this_cpu);
+
+	if (nid_last_access != this_nid) {
+		/*
+		 * 'Access miss': the page got last accessed from a remote node.
+		 */
+		return -1;
+	}
+	/*
+	 * 'Access hit': the page got last accessed from our node.
+	 *
+	 * Migrate the page if needed.
+	 */
+
+	/* The page is already on this node: */
+	if (page_nid == this_nid)
+		return -1;
+
+	return this_nid;
+}
+
+/**
+ * mpol_misplaced - check whether current page node is valid in policy
+ *
+ * @page   - page to be checked
+ * @vma    - vm area where page mapped
+ * @addr   - virtual address where page mapped
+ * @multi  - use multi-stage node binding
+ *
+ * Lookup current policy node id for vma,addr and "compare to" page's
+ * node id.
+ *
+ * Returns:
+ *	-1	- not misplaced, page is in the right node
+ *	node	- node id where the page should be
+ *
+ * Policy determination "mimics" alloc_page_vma().
+ * Called from fault path where we know the vma and faulting address.
+ */
+int mpol_misplaced(struct page *page, struct vm_area_struct *vma, unsigned long addr)
+{
+	int best_nid = -1, page_nid;
+	int cpu_last_access, this_cpu;
+	struct mempolicy *pol;
+	struct zone *zone;
+
+	BUG_ON(!vma);
+
+	this_cpu = raw_smp_processor_id();
+	page_nid = page_to_nid(page);
+
+	cpu_last_access = page_xchg_last_cpu(page, this_cpu);
+
+	pol = get_vma_policy(current, vma, addr);
+	if (!(task_numa_shared(current) >= 0))
+		goto out_keep_page;
+
+	switch (pol->mode) {
+	case MPOL_INTERLEAVE:
+	{
+		int shift;
+
+		BUG_ON(addr >= vma->vm_end);
+		BUG_ON(addr < vma->vm_start);
+
+#ifdef CONFIG_HUGETLB_PAGE
+		if (transparent_hugepage_enabled(vma) || vma->vm_flags & VM_HUGETLB)
+			shift = HPAGE_SHIFT;
+		else
+#endif
+			shift = PAGE_SHIFT;
+
+		best_nid = interleave_nid(pol, vma, addr, shift);
+		break;
+	}
+
+	case MPOL_PREFERRED:
+		if (pol->flags & MPOL_F_LOCAL)
+			best_nid = numa_migration_target(page, page_nid, current, this_cpu, cpu_last_access);
+		else
+			best_nid = pol->v.preferred_node;
+		break;
+
+	case MPOL_BIND:
+		/*
+		 * allows binding to multiple nodes.
+		 * use current page if in policy nodemask,
+		 * else select nearest allowed node, if any.
+		 * If no allowed nodes, use current [!misplaced].
+		 */
+		if (node_isset(page_nid, pol->v.nodes))
+			goto out_keep_page;
+		(void)first_zones_zonelist(
+				node_zonelist(numa_node_id(), GFP_HIGHUSER),
+				gfp_zone(GFP_HIGHUSER),
+				&pol->v.nodes, &zone);
+		best_nid = zone->node;
+		break;
+
+	default:
+		BUG();
+	}
+
+out_keep_page:
+	mpol_cond_put(pol);
+
+	return best_nid;
+}
+
 static void sp_delete(struct shared_policy *sp, struct sp_node *n)
 {
 	pr_debug("deleting %lx-l%lx\n", n->start, n->end);
@@ -2354,6 +2517,8 @@ void __init numa_policy_init(void)
 	sn_cache = kmem_cache_create("shared_policy_node",
 				     sizeof(struct sp_node),
 				     0, SLAB_PANIC, NULL);
+
+	default_policy_shared.v.nodes = node_online_map;
 
 	/*
 	 * Set interleaving policy for system init. Interleaving is only
@@ -2575,7 +2740,7 @@ int mpol_to_str(char *buffer, int maxlen, struct mempolicy *pol, int no_context)
 	 */
 	VM_BUG_ON(maxlen < strlen("interleave") + strlen("relative") + 16);
 
-	if (!pol || pol == &default_policy)
+	if (!pol || pol == default_policy())
 		mode = MPOL_DEFAULT;
 	else
 		mode = pol->mode;
