@@ -1363,7 +1363,7 @@ static int __init mxcnd_probe_pdata(struct mxc_nand_host *host)
 	return 0;
 }
 
-static int __devinit mxcnd_probe(struct platform_device *pdev)
+static int mxcnd_probe(struct platform_device *pdev)
 {
 	struct nand_chip *this;
 	struct mtd_info *mtd;
@@ -1538,7 +1538,7 @@ escan:
 	return err;
 }
 
-static int __devexit mxcnd_remove(struct platform_device *pdev)
+static int mxcnd_remove(struct platform_device *pdev)
 {
 	struct mxc_nand_host *host = platform_get_drvdata(pdev);
 
@@ -1556,7 +1556,7 @@ static struct platform_driver mxcnd_driver = {
 		   .of_match_table = of_match_ptr(mxcnd_dt_ids),
 	},
 	.probe = mxcnd_probe,
-	.remove = __devexit_p(mxcnd_remove),
+	.remove = mxcnd_remove,
 };
 module_platform_driver(mxcnd_driver);
 
