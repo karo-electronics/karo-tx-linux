@@ -95,6 +95,9 @@ static int pnpacpi_set_resources(struct pnp_dev *dev)
 		return -ENODEV;
 	}
 
+	if (WARN_ON_ONCE(acpi_dev != dev->data))
+		dev->data = acpi_dev;
+
 	ret = pnpacpi_build_resource_template(dev, &buffer);
 	if (ret)
 		return ret;
@@ -241,6 +244,10 @@ static int __init pnpacpi_add_device(struct acpi_device *device)
 	struct pnp_dev *dev;
 	char *pnpid;
 	struct acpi_hardware_id *id;
+
+	/* Skip devices that are already bound */
+	if (device->physical_node_count)
+		return 0;
 
 	/*
 	 * If a PnPacpi device is not present , the device
