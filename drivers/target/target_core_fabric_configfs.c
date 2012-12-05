@@ -4,10 +4,9 @@
  * This file contains generic fabric module configfs infrastructure for
  * TCM v4.x code
  *
- * Copyright (c) 2010,2011 Rising Tide Systems
- * Copyright (c) 2010,2011 Linux-iSCSI.org
+ * (c) Copyright 2010-2012 RisingTide Systems LLC.
  *
- * Copyright (c) Nicholas A. Bellinger <nab@linux-iscsi.org>
+ * Nicholas A. Bellinger <nab@linux-iscsi.org>
 *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -358,7 +357,7 @@ static struct config_group *target_fabric_make_mappedlun(
 	}
 
 	lacl_cg = &lacl->se_lun_group;
-	lacl_cg->default_groups = kzalloc(sizeof(struct config_group) * 2,
+	lacl_cg->default_groups = kmalloc(sizeof(struct config_group *) * 2,
 				GFP_KERNEL);
 	if (!lacl_cg->default_groups) {
 		pr_err("Unable to allocate lacl_cg->default_groups\n");
@@ -374,7 +373,7 @@ static struct config_group *target_fabric_make_mappedlun(
 	lacl_cg->default_groups[1] = NULL;
 
 	ml_stat_grp = &lacl->ml_stat_grps.stat_group;
-	ml_stat_grp->default_groups = kzalloc(sizeof(struct config_group) * 3,
+	ml_stat_grp->default_groups = kmalloc(sizeof(struct config_group *) * 3,
 				GFP_KERNEL);
 	if (!ml_stat_grp->default_groups) {
 		pr_err("Unable to allocate ml_stat_grp->default_groups\n");
@@ -734,14 +733,12 @@ static int target_fabric_port_link(
 	struct config_item *se_dev_ci)
 {
 	struct config_item *tpg_ci;
-	struct se_device *dev;
 	struct se_lun *lun = container_of(to_config_group(lun_ci),
 				struct se_lun, lun_group);
 	struct se_lun *lun_p;
 	struct se_portal_group *se_tpg;
-	struct se_subsystem_dev *se_dev = container_of(
-				to_config_group(se_dev_ci), struct se_subsystem_dev,
-				se_dev_group);
+	struct se_device *dev =
+		container_of(to_config_group(se_dev_ci), struct se_device, dev_group);
 	struct target_fabric_configfs *tf;
 	int ret;
 
@@ -753,14 +750,6 @@ static int target_fabric_port_link(
 	if (lun->lun_se_dev !=  NULL) {
 		pr_err("Port Symlink already exists\n");
 		return -EEXIST;
-	}
-
-	dev = se_dev->se_dev_ptr;
-	if (!dev) {
-		pr_err("Unable to locate struct se_device pointer from"
-			" %s\n", config_item_name(se_dev_ci));
-		ret = -ENODEV;
-		goto out;
 	}
 
 	lun_p = core_dev_add_lun(se_tpg, dev, lun->unpacked_lun);
@@ -869,7 +858,7 @@ static struct config_group *target_fabric_make_lun(
 		return ERR_PTR(-EINVAL);
 
 	lun_cg = &lun->lun_group;
-	lun_cg->default_groups = kzalloc(sizeof(struct config_group) * 2,
+	lun_cg->default_groups = kmalloc(sizeof(struct config_group *) * 2,
 				GFP_KERNEL);
 	if (!lun_cg->default_groups) {
 		pr_err("Unable to allocate lun_cg->default_groups\n");
