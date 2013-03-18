@@ -434,6 +434,9 @@ struct nand_buffers {
  *			bad block marker position; i.e., BBM == 11110111b is
  *			not bad when badblockbits == 7
  * @cellinfo:		[INTERN] MLC/multichip data from chip ident
+ * @ecc_strength:	[INTERN] ECC correctability from the datasheet.
+ * @ecc_size:		[INTERN] ECC size required by the @ecc_strength,
+ *                      also from the datasheet.
  * @numchips:		[INTERN] number of physical chips
  * @chipsize:		[INTERN] the size of one chip for multichip arrays
  * @pagemask:		[INTERN] page number mask = number of (pages / chip) - 1
@@ -510,6 +513,8 @@ struct nand_chip {
 	unsigned int pagebuf_bitflips;
 	int subpagesize;
 	uint8_t cellinfo;
+	uint16_t ecc_strength;
+	uint16_t ecc_size;
 	int badblockpos;
 	int badblockbits;
 
