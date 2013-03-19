@@ -261,7 +261,9 @@ static DEFINE_SPINLOCK(pwq_lock);	/* protects pool_workqueues */
 static DEFINE_SPINLOCK(wq_mayday_lock);	/* protects wq->maydays list */
 
 static LIST_HEAD(workqueues);		/* WQ: list of all workqueues */
+#ifdef CONFIG_FREEZER
 static bool workqueue_freezing;		/* WQ: have wqs started freezing? */
+#endif
 
 /* the per-cpu worker pools */
 static DEFINE_PER_CPU_SHARED_ALIGNED(struct worker_pool [NR_STD_WORKER_POOLS],
