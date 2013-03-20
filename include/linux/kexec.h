@@ -47,14 +47,16 @@
 #define KEXEC_CORE_NOTE_NAME_BYTES ALIGN(sizeof(KEXEC_CORE_NOTE_NAME), 4)
 #define KEXEC_CORE_NOTE_DESC_BYTES ALIGN(sizeof(struct elf_prstatus), 4)
 /*
- * The per-cpu notes area is a list of notes terminated by a "NULL"
- * note header.  For kdump, the code in vmcore.c runs in the context
- * of the second kernel to combine them into one note.
+ * The per-cpu notes area is a list of notes terminated by a note
+ * header with NT_VMCORE_PAD type. For kdump, the code in vmcore.c
+ * runs in the context of the second kernel to combine them into one
+ * note.
  */
 #ifndef KEXEC_NOTE_BYTES
 #define KEXEC_NOTE_BYTES ( (KEXEC_NOTE_HEAD_BYTES * 2) +		\
 			    KEXEC_CORE_NOTE_NAME_BYTES +		\
-			    KEXEC_CORE_NOTE_DESC_BYTES )
+			    KEXEC_CORE_NOTE_DESC_BYTES +		\
+			    VMCOREINFO_NOTE_NAME_BYTES)
 #endif
 
 /*
@@ -187,7 +189,7 @@ extern struct kimage *kexec_crash_image;
 #define VMCOREINFO_NOTE_NAME_BYTES ALIGN(sizeof(VMCOREINFO_NOTE_NAME), 4)
 #define VMCOREINFO_NOTE_SIZE       ALIGN(KEXEC_NOTE_HEAD_BYTES*2	\
 					 +VMCOREINFO_BYTES		\
-					 +VMCOREINFO_NOTE_NAME_BYTES,	\
+					 +VMCOREINFO_NOTE_NAME_BYTES*2,	\
 					 PAGE_SIZE)
 
 /* Location of a reserved region to hold the crash kernel.

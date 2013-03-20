@@ -40,6 +40,7 @@
 
 /* Per cpu memory for storing cpu states in case of system crash. */
 note_buf_t __percpu *crash_notes;
+static size_t crash_notes_size = ALIGN(sizeof(note_buf_t), PAGE_SIZE);
 
 /* vmcoreinfo stuff */
 static unsigned char vmcoreinfo_data[VMCOREINFO_BYTES];
@@ -1166,6 +1167,7 @@ unlock:
 	return ret;
 }
 
+/* If @data is NULL, fill @buf with 0 in @data_len bytes. */
 static u32 *append_elf_note(u32 *buf, char *name, unsigned type, void *data,
 			    size_t data_len)
 {
@@ -1178,26 +1180,36 @@ static u32 *append_elf_note(u32 *buf, char *name, unsigned type, void *data,
 	buf += (sizeof(note) + 3)/4;
 	memcpy(buf, name, note.n_namesz);
 	buf += (note.n_namesz + 3)/4;
-	memcpy(buf, data, note.n_descsz);
+	if (data)
+		memcpy(buf, data, note.n_descsz);
+	else
+		memset(buf, 0, note.n_descsz);
 	buf += (note.n_descsz + 3)/4;
 
 	return buf;
 }
 
-static void final_note(u32 *buf)
+static void final_note(u32 *buf, size_t buf_len, size_t data_len)
 {
-	struct elf_note note;
+	size_t used_bytes, pad_hdr_size;
 
-	note.n_namesz = 0;
-	note.n_descsz = 0;
-	note.n_type   = 0;
-	memcpy(buf, &note, sizeof(note));
+	pad_hdr_size = KEXEC_NOTE_HEAD_BYTES + VMCOREINFO_NOTE_NAME_BYTES;
+
+	/*
+	 * keep space for ELF note header and "VMCOREINFO" name to
+	 * terminate ELF segment by NT_VMCORE_PAD note.
+	 */
+	BUG_ON(data_len + pad_hdr_size > buf_len);
+
+	used_bytes = data_len + pad_hdr_size;
+	append_elf_note(buf, VMCOREINFO_NOTE_NAME, NT_VMCORE_PAD, NULL,
+			roundup(used_bytes, PAGE_SIZE) - used_bytes);
 }
 
 void crash_save_cpu(struct pt_regs *regs, int cpu)
 {
 	struct elf_prstatus prstatus;
-	u32 *buf;
+	u32 *buf, *buf_end;
 
 	if ((cpu < 0) || (cpu >= nr_cpu_ids))
 		return;
@@ -1215,16 +1227,15 @@ void crash_save_cpu(struct pt_regs *regs, int cpu)
 	memset(&prstatus, 0, sizeof(prstatus));
 	prstatus.pr_pid = current->pid;
 	elf_core_copy_kernel_regs(&prstatus.pr_reg, regs);
-	buf = append_elf_note(buf, KEXEC_CORE_NOTE_NAME, NT_PRSTATUS,
-		      	      &prstatus, sizeof(prstatus));
-	final_note(buf);
+	buf_end = append_elf_note(buf, KEXEC_CORE_NOTE_NAME, NT_PRSTATUS,
+				  &prstatus, sizeof(prstatus));
+	final_note(buf_end, crash_notes_size, (buf_end - buf) * sizeof(u32));
 }
 
 static int __init crash_notes_memory_init(void)
 {
 	/* Allocate memory for saving cpu registers. */
-	crash_notes = __alloc_percpu(roundup(sizeof(note_buf_t), PAGE_SIZE),
-				     PAGE_SIZE);
+	crash_notes = __alloc_percpu(crash_notes_size, PAGE_SIZE);
 	if (!crash_notes) {
 		printk("Kexec: Memory allocation for saving cpu register"
 		" states failed\n");
@@ -1423,13 +1434,14 @@ int __init parse_crashkernel_low(char *cmdline,
 
 static void update_vmcoreinfo_note(void)
 {
-	u32 *buf = vmcoreinfo_note;
+	u32 *buf = vmcoreinfo_note, *buf_end;
 
 	if (!vmcoreinfo_size)
 		return;
-	buf = append_elf_note(buf, VMCOREINFO_NOTE_NAME, NT_VMCORE_DEBUGINFO,
-			      vmcoreinfo_data, vmcoreinfo_size);
-	final_note(buf);
+	buf_end = append_elf_note(buf, VMCOREINFO_NOTE_NAME, NT_VMCORE_DEBUGINFO,
+				  vmcoreinfo_data, vmcoreinfo_size);
+	final_note(buf_end, sizeof(vmcoreinfo_note),
+		   (buf_end - buf) * sizeof(u32));
 }
 
 void crash_save_vmcoreinfo(void)
