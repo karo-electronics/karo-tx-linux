@@ -261,7 +261,6 @@ static int __init merge_note_headers_elf64(char *elfptr, size_t *elfsz,
 	ehdr_ptr = (Elf64_Ehdr *)elfptr;
 	phdr_ptr = (Elf64_Phdr*)(elfptr + ehdr_ptr->e_phoff);
 	for (i = 0; i < ehdr_ptr->e_phnum; i++, phdr_ptr++) {
-		int j;
 		void *notes_section;
 		struct vmcore *new;
 		u64 offset, max_sz, sz, real_sz = 0;
@@ -279,7 +278,7 @@ static int __init merge_note_headers_elf64(char *elfptr, size_t *elfsz,
 			return rc;
 		}
 		nhdr_ptr = notes_section;
-		for (j = 0; j < max_sz; j += sz) {
+		while (real_sz < max_sz) {
 			if (nhdr_ptr->n_namesz == 0)
 				break;
 			sz = sizeof(Elf64_Nhdr) +
@@ -342,7 +341,6 @@ static int __init merge_note_headers_elf32(char *elfptr, size_t *elfsz,
 	ehdr_ptr = (Elf32_Ehdr *)elfptr;
 	phdr_ptr = (Elf32_Phdr*)(elfptr + ehdr_ptr->e_phoff);
 	for (i = 0; i < ehdr_ptr->e_phnum; i++, phdr_ptr++) {
-		int j;
 		void *notes_section;
 		struct vmcore *new;
 		u64 offset, max_sz, sz, real_sz = 0;
@@ -360,7 +358,7 @@ static int __init merge_note_headers_elf32(char *elfptr, size_t *elfsz,
 			return rc;
 		}
 		nhdr_ptr = notes_section;
-		for (j = 0; j < max_sz; j += sz) {
+		while (real_sz < max_sz) {
 			if (nhdr_ptr->n_namesz == 0)
 				break;
 			sz = sizeof(Elf32_Nhdr) +
