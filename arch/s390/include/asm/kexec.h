@@ -41,8 +41,8 @@
 /*
  * Size for s390x ELF notes per CPU
  *
- * Seven notes plus zero note at the end: prstatus, fpregset, timer,
- * tod_cmp, tod_reg, control regs, and prefix
+ * Seven notes plus note with NT_VMCORE_PAD type at the end: prstatus,
+ * fpregset, timer, tod_cmp, tod_reg, control regs, and prefix
  */
 #define KEXEC_NOTE_BYTES \
 	(ALIGN(sizeof(struct elf_note), 4) * 8 + \
@@ -53,7 +53,9 @@
 	 ALIGN(sizeof(u64), 4) + \
 	 ALIGN(sizeof(u32), 4) + \
 	 ALIGN(sizeof(u64) * 16, 4) + \
-	 ALIGN(sizeof(u32), 4) \
+	 ALIGN(sizeof(u32), 4) + \
+	 KEXEC_CORE_NOTE_DESC_BYTES + \
+	 VMCOREINFO_NOTE_NAME_BYTES \
 	)
 
 /* Provide a dummy definition to avoid build failures. */

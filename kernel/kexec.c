@@ -40,10 +40,11 @@
 
 /* Per cpu memory for storing cpu states in case of system crash. */
 note_buf_t __percpu *crash_notes;
+static size_t crash_notes_size = ALIGN(sizeof(note_buf_t), PAGE_SIZE);
 
 /* vmcoreinfo stuff */
 static unsigned char vmcoreinfo_data[VMCOREINFO_BYTES];
-u32 vmcoreinfo_note[VMCOREINFO_NOTE_SIZE/4];
+u32 vmcoreinfo_note[VMCOREINFO_NOTE_SIZE/4] __aligned(PAGE_SIZE);
 size_t vmcoreinfo_size;
 size_t vmcoreinfo_max_size = sizeof(vmcoreinfo_data);
 
@@ -786,7 +787,7 @@ static int kimage_load_normal_segment(struct kimage *image,
 					 struct kexec_segment *segment)
 {
 	unsigned long maddr;
-	unsigned long ubytes, mbytes;
+	size_t ubytes, mbytes;
 	int result;
 	unsigned char __user *buf;
 
@@ -819,13 +820,9 @@ static int kimage_load_normal_segment(struct kimage *image,
 		/* Start with a clear page */
 		clear_page(ptr);
 		ptr += maddr & ~PAGE_MASK;
-		mchunk = PAGE_SIZE - (maddr & ~PAGE_MASK);
-		if (mchunk > mbytes)
-			mchunk = mbytes;
-
-		uchunk = mchunk;
-		if (uchunk > ubytes)
-			uchunk = ubytes;
+		mchunk = min_t(size_t, mbytes,
+				PAGE_SIZE - (maddr & ~PAGE_MASK));
+		uchunk = min(ubytes, mchunk);
 
 		result = copy_from_user(ptr, buf, uchunk);
 		kunmap(page);
@@ -850,7 +847,7 @@ static int kimage_load_crash_segment(struct kimage *image,
 	 * We do things a page at a time for the sake of kmap.
 	 */
 	unsigned long maddr;
-	unsigned long ubytes, mbytes;
+	size_t ubytes, mbytes;
 	int result;
 	unsigned char __user *buf;
 
@@ -871,13 +868,10 @@ static int kimage_load_crash_segment(struct kimage *image,
 		}
 		ptr = kmap(page);
 		ptr += maddr & ~PAGE_MASK;
-		mchunk = PAGE_SIZE - (maddr & ~PAGE_MASK);
-		if (mchunk > mbytes)
-			mchunk = mbytes;
-
-		uchunk = mchunk;
-		if (uchunk > ubytes) {
-			uchunk = ubytes;
+		mchunk = min_t(size_t, mbytes,
+				PAGE_SIZE - (maddr & ~PAGE_MASK));
+		uchunk = min(ubytes, mchunk);
+		if (mchunk > uchunk) {
 			/* Zero the trailing part of the page */
 			memset(ptr + uchunk, 0, mchunk - uchunk);
 		}
@@ -1118,12 +1112,8 @@ void __weak crash_free_reserved_phys_range(unsigned long begin,
 {
 	unsigned long addr;
 
-	for (addr = begin; addr < end; addr += PAGE_SIZE) {
-		ClearPageReserved(pfn_to_page(addr >> PAGE_SHIFT));
-		init_page_count(pfn_to_page(addr >> PAGE_SHIFT));
-		free_page((unsigned long)__va(addr));
-		totalram_pages++;
-	}
+	for (addr = begin; addr < end; addr += PAGE_SIZE)
+		free_reserved_page(pfn_to_page(addr >> PAGE_SHIFT));
 }
 
 int crash_shrink_memory(unsigned long new_size)
@@ -1177,6 +1167,7 @@ unlock:
 	return ret;
 }
 
+/* If @data is NULL, fill @buf with 0 in @data_len bytes. */
 static u32 *append_elf_note(u32 *buf, char *name, unsigned type, void *data,
 			    size_t data_len)
 {
@@ -1189,26 +1180,36 @@ static u32 *append_elf_note(u32 *buf, char *name, unsigned type, void *data,
 	buf += (sizeof(note) + 3)/4;
 	memcpy(buf, name, note.n_namesz);
 	buf += (note.n_namesz + 3)/4;
-	memcpy(buf, data, note.n_descsz);
+	if (data)
+		memcpy(buf, data, note.n_descsz);
+	else
+		memset(buf, 0, note.n_descsz);
 	buf += (note.n_descsz + 3)/4;
 
 	return buf;
 }
 
-static void final_note(u32 *buf)
+static void final_note(u32 *buf, size_t buf_len, size_t data_len)
 {
-	struct elf_note note;
+	size_t used_bytes, pad_hdr_size;
 
-	note.n_namesz = 0;
-	note.n_descsz = 0;
-	note.n_type   = 0;
-	memcpy(buf, &note, sizeof(note));
+	pad_hdr_size = KEXEC_NOTE_HEAD_BYTES + VMCOREINFO_NOTE_NAME_BYTES;
+
+	/*
+	 * keep space for ELF note header and "VMCOREINFO" name to
+	 * terminate ELF segment by NT_VMCORE_PAD note.
+	 */
+	BUG_ON(data_len + pad_hdr_size > buf_len);
+
+	used_bytes = data_len + pad_hdr_size;
+	append_elf_note(buf, VMCOREINFO_NOTE_NAME, NT_VMCORE_PAD, NULL,
+			roundup(used_bytes, PAGE_SIZE) - used_bytes);
 }
 
 void crash_save_cpu(struct pt_regs *regs, int cpu)
 {
 	struct elf_prstatus prstatus;
-	u32 *buf;
+	u32 *buf, *buf_end;
 
 	if ((cpu < 0) || (cpu >= nr_cpu_ids))
 		return;
@@ -1226,15 +1227,15 @@ void crash_save_cpu(struct pt_regs *regs, int cpu)
 	memset(&prstatus, 0, sizeof(prstatus));
 	prstatus.pr_pid = current->pid;
 	elf_core_copy_kernel_regs(&prstatus.pr_reg, regs);
-	buf = append_elf_note(buf, KEXEC_CORE_NOTE_NAME, NT_PRSTATUS,
-		      	      &prstatus, sizeof(prstatus));
-	final_note(buf);
+	buf_end = append_elf_note(buf, KEXEC_CORE_NOTE_NAME, NT_PRSTATUS,
+				  &prstatus, sizeof(prstatus));
+	final_note(buf_end, crash_notes_size, (buf_end - buf) * sizeof(u32));
 }
 
 static int __init crash_notes_memory_init(void)
 {
 	/* Allocate memory for saving cpu registers. */
-	crash_notes = alloc_percpu(note_buf_t);
+	crash_notes = __alloc_percpu(crash_notes_size, PAGE_SIZE);
 	if (!crash_notes) {
 		printk("Kexec: Memory allocation for saving cpu register"
 		" states failed\n");
@@ -1433,13 +1434,14 @@ int __init parse_crashkernel_low(char *cmdline,
 
 static void update_vmcoreinfo_note(void)
 {
-	u32 *buf = vmcoreinfo_note;
+	u32 *buf = vmcoreinfo_note, *buf_end;
 
 	if (!vmcoreinfo_size)
 		return;
-	buf = append_elf_note(buf, VMCOREINFO_NOTE_NAME, 0, vmcoreinfo_data,
-			      vmcoreinfo_size);
-	final_note(buf);
+	buf_end = append_elf_note(buf, VMCOREINFO_NOTE_NAME, NT_VMCORE_DEBUGINFO,
+				  vmcoreinfo_data, vmcoreinfo_size);
+	final_note(buf_end, sizeof(vmcoreinfo_note),
+		   (buf_end - buf) * sizeof(u32));
 }
 
 void crash_save_vmcoreinfo(void)
@@ -1452,14 +1454,13 @@ void vmcoreinfo_append_str(const char *fmt, ...)
 {
 	va_list args;
 	char buf[0x50];
-	int r;
+	size_t r;
 
 	va_start(args, fmt);
 	r = vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
 
-	if (r + vmcoreinfo_size > vmcoreinfo_max_size)
-		r = vmcoreinfo_max_size - vmcoreinfo_size;
+	r = min(r, vmcoreinfo_max_size - vmcoreinfo_size);
 
 	memcpy(&vmcoreinfo_data[vmcoreinfo_size], buf, r);
 
@@ -1489,7 +1490,7 @@ static int __init crash_save_vmcoreinfo_init(void)
 	VMCOREINFO_SYMBOL(swapper_pg_dir);
 #endif
 	VMCOREINFO_SYMBOL(_stext);
-	VMCOREINFO_SYMBOL(vmlist);
+	VMCOREINFO_SYMBOL(vmap_area_list);
 
 #ifndef CONFIG_NEED_MULTIPLE_NODES
 	VMCOREINFO_SYMBOL(mem_map);
@@ -1527,7 +1528,8 @@ static int __init crash_save_vmcoreinfo_init(void)
 	VMCOREINFO_OFFSET(free_area, free_list);
 	VMCOREINFO_OFFSET(list_head, next);
 	VMCOREINFO_OFFSET(list_head, prev);
-	VMCOREINFO_OFFSET(vm_struct, addr);
+	VMCOREINFO_OFFSET(vmap_area, va_start);
+	VMCOREINFO_OFFSET(vmap_area, list);
 	VMCOREINFO_LENGTH(zone.free_area, MAX_ORDER);
 	log_buf_kexec_setup();
 	VMCOREINFO_LENGTH(free_area.free_list, MIGRATE_TYPES);

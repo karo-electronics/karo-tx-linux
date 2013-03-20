@@ -1,4 +1,5 @@
 TARGETS = breakpoints
+TARGETS += epoll
 TARGETS += kcmp
 TARGETS += mqueue
 TARGETS += vm
@@ -7,6 +8,8 @@ TARGETS += memory-hotplug
 TARGETS += efivarfs
 TARGETS += net-socket
 TARGETS += net-afpacket
+TARGETS += timers
+TARGETS += ptrace
 
 all:
 	for TARGET in $(TARGETS); do \
