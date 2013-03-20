@@ -7,6 +7,7 @@ TARGETS += memory-hotplug
 TARGETS += efivarfs
 TARGETS += net-socket
 TARGETS += net-afpacket
+TARGETS += timers
 
 all:
 	for TARGET in $(TARGETS); do \
