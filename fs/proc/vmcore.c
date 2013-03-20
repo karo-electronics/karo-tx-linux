@@ -195,7 +195,7 @@ static struct vmcore* __init get_new_element(void)
 	return kzalloc(sizeof(struct vmcore), GFP_KERNEL);
 }
 
-static u64 __init get_vmcore_size_elf64(char *elfptr)
+static u64 __init get_vmcore_size_elf64(char *elfptr, size_t elfsz)
 {
 	int i;
 	u64 size;
@@ -204,15 +204,15 @@ static u64 __init get_vmcore_size_elf64(char *elfptr)
 
 	ehdr_ptr = (Elf64_Ehdr *)elfptr;
 	phdr_ptr = (Elf64_Phdr*)(elfptr + ehdr_ptr->e_phoff);
-	size = ehdr_ptr->e_phoff + ((ehdr_ptr->e_phnum) * sizeof(Elf64_Phdr));
+	size = elfsz;
 	for (i = 0; i < ehdr_ptr->e_phnum; i++) {
-		size += phdr_ptr->p_memsz;
+		size += roundup(phdr_ptr->p_memsz, PAGE_SIZE);
 		phdr_ptr++;
 	}
 	return size;
 }
 
-static u64 __init get_vmcore_size_elf32(char *elfptr)
+static u64 __init get_vmcore_size_elf32(char *elfptr, size_t elfsz)
 {
 	int i;
 	u64 size;
@@ -221,9 +221,9 @@ static u64 __init get_vmcore_size_elf32(char *elfptr)
 
 	ehdr_ptr = (Elf32_Ehdr *)elfptr;
 	phdr_ptr = (Elf32_Phdr*)(elfptr + ehdr_ptr->e_phoff);
-	size = ehdr_ptr->e_phoff + ((ehdr_ptr->e_phnum) * sizeof(Elf32_Phdr));
+	size = elfsz;
 	for (i = 0; i < ehdr_ptr->e_phnum; i++) {
-		size += phdr_ptr->p_memsz;
+		size += roundup(phdr_ptr->p_memsz, PAGE_SIZE);
 		phdr_ptr++;
 	}
 	return size;
@@ -892,14 +892,14 @@ static int __init parse_crash_elf_headers(void)
 			return rc;
 
 		/* Determine vmcore size. */
-		vmcore_size = get_vmcore_size_elf64(elfcorebuf);
+		vmcore_size = get_vmcore_size_elf64(elfcorebuf, elfcorebuf_sz);
 	} else if (e_ident[EI_CLASS] == ELFCLASS32) {
 		rc = parse_crash_elf32_headers();
 		if (rc)
 			return rc;
 
 		/* Determine vmcore size. */
-		vmcore_size = get_vmcore_size_elf32(elfcorebuf);
+		vmcore_size = get_vmcore_size_elf32(elfcorebuf, elfcorebuf_sz);
 	} else {
 		pr_warn("Warning: Core image elf header is not sane\n");
 		return -EINVAL;
