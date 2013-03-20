@@ -9,6 +9,7 @@ TARGETS += efivarfs
 TARGETS += net-socket
 TARGETS += net-afpacket
 TARGETS += timers
+TARGETS += ptrace
 
 all:
 	for TARGET in $(TARGETS); do \
