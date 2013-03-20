@@ -867,10 +867,13 @@ static void check_unmap(struct dma_debug_entry *ref)
 
 		if (dma_mapping_error(ref->dev, ref->dev_addr)) {
 			err_printk(ref->dev, NULL,
-				   "DMA-API: device driver tries to free an invalid DMA memory address\n");
+				   "DMA-API: device driver tries to free an "
+				   "invalid DMA memory address\n");
 		} else {
 			err_printk(ref->dev, NULL,
-				   "DMA-API: device driver tries to free DMA memory it has not allocated [device address=0x%016llx] [size=%llu bytes]\n",
+				   "DMA-API: device driver tries to free DMA "
+				   "memory it has not allocated [device "
+				   "address=0x%016llx] [size=%llu bytes]\n",
 				   ref->dev_addr, ref->size);
 		}
 		return;
