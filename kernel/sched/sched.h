@@ -1030,6 +1030,7 @@ extern void update_group_power(struct sched_domain *sd, int cpu);
 
 extern void trigger_load_balance(struct rq *rq, int cpu);
 extern void idle_balance(int this_cpu, struct rq *this_rq);
+extern void update_group_power(struct sched_domain *sd, int cpu);
 
 #else	/* CONFIG_SMP */
 
