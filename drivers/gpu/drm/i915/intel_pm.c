@@ -2821,7 +2821,7 @@ static void ironlake_enable_rc6(struct drm_device *dev)
 	ret = intel_ring_idle(ring);
 	dev_priv->mm.interruptible = was_interruptible;
 	if (ret) {
-		DRM_ERROR("failed to enable ironlake power power savings\n");
+		DRM_ERROR("failed to enable ironlake power savings\n");
 		ironlake_teardown_rc6(dev);
 		return;
 	}
@@ -3899,8 +3899,10 @@ static void valleyview_init_clock_gating(struct drm_device *dev)
 		   CHICKEN3_DGMG_REQ_OUT_FIX_DISABLE |
 		   CHICKEN3_DGMG_DONE_FIX_DISABLE);
 
+	/* WaDisablePSDDualDispatchEnable */
 	I915_WRITE(GEN7_HALF_SLICE_CHICKEN1,
-		   _MASKED_BIT_ENABLE(GEN7_PSD_SINGLE_PORT_DISPATCH_ENABLE));
+		   _MASKED_BIT_ENABLE(GEN7_MAX_PS_THREAD_DEP |
+				      GEN7_PSD_SINGLE_PORT_DISPATCH_ENABLE));
 
 	/* Apply the WaDisableRHWOOptimizationForRenderHang workaround. */
 	I915_WRITE(GEN7_COMMON_SLICE_CHICKEN1,
@@ -3985,7 +3987,16 @@ static void valleyview_init_clock_gating(struct drm_device *dev)
 	 * Disable clock gating on th GCFG unit to prevent a delay
 	 * in the reporting of vblank events.
 	 */
-	I915_WRITE(VLV_GUNIT_CLOCK_GATE, GCFG_DIS);
+	I915_WRITE(VLV_GUNIT_CLOCK_GATE, 0xffffffff);
+
+	/* Conservative clock gating settings for now */
+	I915_WRITE(0x9400, 0xffffffff);
+	I915_WRITE(0x9404, 0xffffffff);
+	I915_WRITE(0x9408, 0xffffffff);
+	I915_WRITE(0x940c, 0xffffffff);
+	I915_WRITE(0x9410, 0xffffffff);
+	I915_WRITE(0x9414, 0xffffffff);
+	I915_WRITE(0x9418, 0xffffffff);
 }
 
 static void g4x_init_clock_gating(struct drm_device *dev)
@@ -4076,7 +4087,7 @@ void intel_set_power_well(struct drm_device *dev, bool enable)
 	bool is_enabled, enable_requested;
 	uint32_t tmp;
 
-	if (!IS_HASWELL(dev))
+	if (!HAS_POWER_WELL(dev))
 		return;
 
 	tmp = I915_READ(HSW_PWR_WELL_DRIVER);
@@ -4111,7 +4122,7 @@ void intel_init_power_well(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
-	if (!IS_HASWELL(dev))
+	if (!HAS_POWER_WELL(dev))
 		return;
 
 	/* For now, we need the power well to be always enabled. */
@@ -4271,21 +4282,14 @@ static void __gen6_gt_force_wake_reset(struct drm_i915_private *dev_priv)
 
 static void __gen6_gt_force_wake_get(struct drm_i915_private *dev_priv)
 {
-	u32 forcewake_ack;
-
-	if (IS_HASWELL(dev_priv->dev))
-		forcewake_ack = FORCEWAKE_ACK_HSW;
-	else
-		forcewake_ack = FORCEWAKE_ACK;
-
-	if (wait_for_atomic((I915_READ_NOTRACE(forcewake_ack) & 1) == 0,
+	if (wait_for_atomic((I915_READ_NOTRACE(FORCEWAKE_ACK) & 1) == 0,
 			    FORCEWAKE_ACK_TIMEOUT_MS))
 		DRM_ERROR("Timed out waiting for forcewake old ack to clear.\n");
 
-	I915_WRITE_NOTRACE(FORCEWAKE, FORCEWAKE_KERNEL);
+	I915_WRITE_NOTRACE(FORCEWAKE, 1);
 	POSTING_READ(ECOBUS); /* something from same cacheline, but !FORCEWAKE */
 
-	if (wait_for_atomic((I915_READ_NOTRACE(forcewake_ack) & 1),
+	if (wait_for_atomic((I915_READ_NOTRACE(FORCEWAKE_ACK) & 1),
 			    FORCEWAKE_ACK_TIMEOUT_MS))
 		DRM_ERROR("Timed out waiting for forcewake to ack request.\n");
 
@@ -4308,7 +4312,7 @@ static void __gen6_gt_force_wake_mt_get(struct drm_i915_private *dev_priv)
 	else
 		forcewake_ack = FORCEWAKE_MT_ACK;
 
-	if (wait_for_atomic((I915_READ_NOTRACE(forcewake_ack) & 1) == 0,
+	if (wait_for_atomic((I915_READ_NOTRACE(forcewake_ack) & FORCEWAKE_KERNEL) == 0,
 			    FORCEWAKE_ACK_TIMEOUT_MS))
 		DRM_ERROR("Timed out waiting for forcewake old ack to clear.\n");
 
@@ -4316,7 +4320,7 @@ static void __gen6_gt_force_wake_mt_get(struct drm_i915_private *dev_priv)
 	/* something from same cacheline, but !FORCEWAKE_MT */
 	POSTING_READ(ECOBUS);
 
-	if (wait_for_atomic((I915_READ_NOTRACE(forcewake_ack) & 1),
+	if (wait_for_atomic((I915_READ_NOTRACE(forcewake_ack) & FORCEWAKE_KERNEL),
 			    FORCEWAKE_ACK_TIMEOUT_MS))
 		DRM_ERROR("Timed out waiting for forcewake to ack request.\n");
 
@@ -4406,15 +4410,22 @@ static void vlv_force_wake_reset(struct drm_i915_private *dev_priv)
 
 static void vlv_force_wake_get(struct drm_i915_private *dev_priv)
 {
-	if (wait_for_atomic((I915_READ_NOTRACE(FORCEWAKE_ACK_VLV) & 1) == 0,
+	if (wait_for_atomic((I915_READ_NOTRACE(FORCEWAKE_ACK_VLV) & FORCEWAKE_KERNEL) == 0,
 			    FORCEWAKE_ACK_TIMEOUT_MS))
 		DRM_ERROR("Timed out waiting for forcewake old ack to clear.\n");
 
 	I915_WRITE_NOTRACE(FORCEWAKE_VLV, _MASKED_BIT_ENABLE(FORCEWAKE_KERNEL));
+	I915_WRITE_NOTRACE(FORCEWAKE_MEDIA_VLV,
+			   _MASKED_BIT_ENABLE(FORCEWAKE_KERNEL));
 
-	if (wait_for_atomic((I915_READ_NOTRACE(FORCEWAKE_ACK_VLV) & 1),
+	if (wait_for_atomic((I915_READ_NOTRACE(FORCEWAKE_ACK_VLV) & FORCEWAKE_KERNEL),
 			    FORCEWAKE_ACK_TIMEOUT_MS))
-		DRM_ERROR("Timed out waiting for forcewake to ack request.\n");
+		DRM_ERROR("Timed out waiting for GT to ack forcewake request.\n");
+
+	if (wait_for_atomic((I915_READ_NOTRACE(FORCEWAKE_ACK_MEDIA_VLV) &
+			     FORCEWAKE_KERNEL),
+			    FORCEWAKE_ACK_TIMEOUT_MS))
+		DRM_ERROR("Timed out waiting for media to ack forcewake request.\n");
 
 	__gen6_gt_wait_for_thread_c0(dev_priv);
 }
@@ -4422,8 +4433,9 @@ static void vlv_force_wake_get(struct drm_i915_private *dev_priv)
 static void vlv_force_wake_put(struct drm_i915_private *dev_priv)
 {
 	I915_WRITE_NOTRACE(FORCEWAKE_VLV, _MASKED_BIT_DISABLE(FORCEWAKE_KERNEL));
-	/* something from same cacheline, but !FORCEWAKE_VLV */
-	POSTING_READ(FORCEWAKE_ACK_VLV);
+	I915_WRITE_NOTRACE(FORCEWAKE_MEDIA_VLV,
+			   _MASKED_BIT_DISABLE(FORCEWAKE_KERNEL));
+	/* The below doubles as a POSTING_READ */
 	gen6_gt_check_fifodbg(dev_priv);
 }
 
