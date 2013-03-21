@@ -1,0 +1,19 @@
+Importing jdelvare-hwmon based on 10b38669d64c757cfd927e3820292c580ed70aae
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 10b38669d64c757cfd927e3820292c580ed70aae
+HEAD is now at 10b3866 Merge tag 'for-linus-v3.9-rc4' of git://oss.sgi.com/xfs/xfs
+$ git am ../quilt/jdelvare-hwmon/hwmon-lm75-03-per-chip-initialization.patch
+Applying: hwmon: (lm75) Per-chip configuration register initialization
+$ git am ../quilt/jdelvare-hwmon/hwmon-lm75-04-tweak-per-chip-part-1.patch
+Applying: hwmon: (lm75) Prepare to support per-chip resolution and sample time
+$ git am ../quilt/jdelvare-hwmon/hwmon-lm75-05-tweak-per-chip-part-2.patch
+Applying: hwmon: (lm75) Tune resolution and sample time per chip
+$ git am ../quilt/jdelvare-hwmon/hwmon-lm75-06-add-DS7505.patch
+Applying: hwmon: (lm75) Add support for the Dallas/Maxim DS7505
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:jdelvare-hwmon/master
+From ../quilt-tmp
+ + 4aafa4f...c662b7a master     -> jdelvare-hwmon/master  (forced update)
+Importing device-mapper based on v3.9-rc3
+Unchanged quilt series device-mapper
