@@ -336,6 +336,31 @@ static inline int clk_debug_register(struct clk *clk) { return 0; }
 #endif
 
 /* caller must hold prepare_lock */
+static void clk_unprepare_unused_subtree(struct clk *clk)
+{
+	struct clk *child;
+
+	if (!clk)
+		return;
+
+	hlist_for_each_entry(child, &clk->children, child_node)
+		clk_unprepare_unused_subtree(child);
+
+	if (clk->prepare_count)
+		return;
+
+	if (clk->flags & CLK_IGNORE_UNUSED)
+		return;
+
+	if (__clk_is_prepared(clk)) {
+		if (clk->ops->unprepare_unused)
+			clk->ops->unprepare_unused(clk->hw);
+		else if (clk->ops->unprepare)
+			clk->ops->unprepare(clk->hw);
+	}
+}
+
+/* caller must hold prepare_lock */
 static void clk_disable_unused_subtree(struct clk *clk)
 {
 	struct clk *child;
@@ -385,6 +410,12 @@ static int clk_disable_unused(void)
 
 	hlist_for_each_entry(clk, &clk_orphan_list, child_node)
 		clk_disable_unused_subtree(clk);
+
+	hlist_for_each_entry(clk, &clk_root_list, child_node)
+		clk_unprepare_unused_subtree(clk);
+
+	hlist_for_each_entry(clk, &clk_orphan_list, child_node)
+		clk_unprepare_unused_subtree(clk);
 
 	mutex_unlock(&prepare_lock);
 
@@ -449,6 +480,27 @@ out:
 unsigned long __clk_get_flags(struct clk *clk)
 {
 	return !clk ? 0 : clk->flags;
+}
+
+bool __clk_is_prepared(struct clk *clk)
+{
+	int ret;
+
+	if (!clk)
+		return false;
+
+	/*
+	 * .is_prepared is optional for clocks that can prepare
+	 * fall back to software usage counter if it is missing
+	 */
+	if (!clk->ops->is_prepared) {
+		ret = clk->prepare_count ? 1 : 0;
+		goto out;
+	}
+
+	ret = clk->ops->is_prepared(clk->hw);
+out:
+	return !!ret;
 }
 
 bool __clk_is_enabled(struct clk *clk)
