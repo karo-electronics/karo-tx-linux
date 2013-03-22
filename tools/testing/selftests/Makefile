@@ -1,4 +1,5 @@
 TARGETS = breakpoints
+TARGETS += epoll
 TARGETS += kcmp
 TARGETS += mqueue
 TARGETS += vm
@@ -6,6 +7,8 @@ TARGETS += cpu-hotplug
 TARGETS += memory-hotplug
 TARGETS += efivarfs
 TARGETS += net
+TARGETS += timers
+TARGETS += ptrace
 
 all:
 	for TARGET in $(TARGETS); do \
