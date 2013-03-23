@@ -1054,6 +1054,10 @@ static int loop_clr_fd(struct loop_device *lo)
 	 * added partitions when max_part=0
 	 */
 	if (bdev) {
+		/*
+		 * Remove all partitions, since BLKRRPART won't remove user
+		 * added partitions when max_part=0.
+		 */
 		struct disk_part_iter piter;
 		struct hd_struct *part;
 
