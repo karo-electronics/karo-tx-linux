@@ -160,19 +160,18 @@ static ssize_t _store_boost(const char *buf, size_t count)
 	return count;
 }
 
-static ssize_t store_global_boost(struct kobject *kobj, struct attribute *attr,
-				  const char *buf, size_t count)
+static ssize_t store_global_boost(struct cpufreq_policy *policy,
+		const char *buf, size_t count)
 {
 	return _store_boost(buf, count);
 }
 
-static ssize_t show_global_boost(struct kobject *kobj,
-				 struct attribute *attr, char *buf)
+static ssize_t show_global_boost(struct cpufreq_policy *policy, char *buf)
 {
 	return sprintf(buf, "%u\n", boost_enabled);
 }
 
-static struct global_attr global_boost = __ATTR(boost, 0644,
+static struct freq_attr global_boost = __ATTR(boost, 0644,
 						show_global_boost,
 						store_global_boost);
 

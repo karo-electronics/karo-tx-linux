@@ -275,13 +275,13 @@ static void intel_pstate_debug_expose_params(void)
 /************************** sysfs begin ************************/
 #define show_one(file_name, object)					\
 	static ssize_t show_##file_name					\
-	(struct kobject *kobj, struct attribute *attr, char *buf)	\
+	(struct cpufreq_policy *policy, char *buf)			\
 	{								\
 		return sprintf(buf, "%u\n", limits.object);		\
 	}
 
-static ssize_t store_no_turbo(struct kobject *a, struct attribute *b,
-				const char *buf, size_t count)
+static ssize_t store_no_turbo(struct cpufreq_policy *policy, const char *buf,
+		size_t count)
 {
 	unsigned int input;
 	int ret;
@@ -293,8 +293,8 @@ static ssize_t store_no_turbo(struct kobject *a, struct attribute *b,
 	return count;
 }
 
-static ssize_t store_max_perf_pct(struct kobject *a, struct attribute *b,
-				const char *buf, size_t count)
+static ssize_t store_max_perf_pct(struct cpufreq_policy *policy,
+		const char *buf, size_t count)
 {
 	unsigned int input;
 	int ret;
@@ -307,8 +307,8 @@ static ssize_t store_max_perf_pct(struct kobject *a, struct attribute *b,
 	return count;
 }
 
-static ssize_t store_min_perf_pct(struct kobject *a, struct attribute *b,
-				const char *buf, size_t count)
+static ssize_t store_min_perf_pct(struct cpufreq_policy *policy,
+		const char *buf, size_t count)
 {
 	unsigned int input;
 	int ret;
@@ -325,9 +325,9 @@ show_one(no_turbo, no_turbo);
 show_one(max_perf_pct, max_perf_pct);
 show_one(min_perf_pct, min_perf_pct);
 
-define_one_global_rw(no_turbo);
-define_one_global_rw(max_perf_pct);
-define_one_global_rw(min_perf_pct);
+cpufreq_freq_attr_rw(no_turbo);
+cpufreq_freq_attr_rw(max_perf_pct);
+cpufreq_freq_attr_rw(min_perf_pct);
 
 static struct attribute *intel_pstate_attributes[] = {
 	&no_turbo.attr,
