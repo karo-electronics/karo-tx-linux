@@ -38,7 +38,6 @@
  *
  */
 
-#include "ttype.h"
 #include "tmacro.h"
 #include "device.h"
 #include "mac.h"
@@ -56,17 +55,13 @@
 #include "channel.h"
 #include "iowpa.h"
 
-/*---------------------  Static Definitions -------------------------*/
 
 
 
 
-/*---------------------  Static Classes  ----------------------------*/
 
-/*---------------------  Static Variables  --------------------------*/
 static int          msglevel                =MSG_LEVEL_INFO;
 //static int          msglevel                =MSG_LEVEL_DEBUG;
-/*---------------------  Static Functions  --------------------------*/
 
 static void s_vProbeChannel(struct vnt_private *);
 
@@ -80,9 +75,7 @@ static int s_bCommandComplete(struct vnt_private *);
 
 static int s_bClearBSSID_SCAN(struct vnt_private *);
 
-/*---------------------  Export Variables  --------------------------*/
 
-/*---------------------  Export Functions  --------------------------*/
 
 /*
  * Description:
@@ -260,7 +253,7 @@ struct vnt_tx_mgmt *s_MgrMakeProbeRequest(struct vnt_private *pDevice,
 		+ WLAN_PROBEREQ_FR_MAXLEN);
 	pTxPacket->p80211Header = (PUWLAN_80211HDR)((u8 *)pTxPacket
 		+ sizeof(struct vnt_tx_mgmt));
-    sFrame.pBuf = (PBYTE)pTxPacket->p80211Header;
+    sFrame.pBuf = (u8 *)pTxPacket->p80211Header;
     sFrame.len = WLAN_PROBEREQ_FR_MAXLEN;
     vMgrEncodeProbeRequest(&sFrame);
     sFrame.pHdr->sA3.wFrameCtl = cpu_to_le16(
@@ -845,7 +838,7 @@ void vRunCommand(struct vnt_private *pDevice)
 
        {
 	       int ntStatus = STATUS_SUCCESS;
-        BYTE            byTmp;
+        u8            byTmp;
 
         ntStatus = CONTROLnsRequestIn(pDevice,
                                     MESSAGE_TYPE_READ,
@@ -1147,7 +1140,7 @@ int bScheduleCommand(struct vnt_private *pDevice,
                 break;
 /*
             case WLAN_CMD_DEAUTH:
-                pDevice->eCmdQueue[pDevice->uCmdEnqueueIdx].wDeAuthenReason = *((PWORD)pbyItem0);
+                pDevice->eCmdQueue[pDevice->uCmdEnqueueIdx].wDeAuthenReason = *((u16 *)pbyItem0);
                 break;
 */
 

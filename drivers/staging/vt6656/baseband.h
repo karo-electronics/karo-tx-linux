@@ -33,11 +33,9 @@
 #ifndef __BASEBAND_H__
 #define __BASEBAND_H__
 
-#include "ttype.h"
 #include "tether.h"
 #include "device.h"
 
-/*---------------------  Export Definitions -------------------------*/
 
 #define PREAMBLE_LONG   0
 #define PREAMBLE_SHORT  1
@@ -85,22 +83,17 @@
 #define TOP_RATE_1M         0x00100000
 
 
-/*---------------------  Export Types  ------------------------------*/
 
-/*---------------------  Export Macros ------------------------------*/
 
-/*---------------------  Export Classes  ----------------------------*/
 
-/*---------------------  Export Variables  --------------------------*/
 
-/*---------------------  Export Functions  --------------------------*/
 
 unsigned int
 BBuGetFrameTime(
-     BYTE byPreambleType,
-     BYTE byFreqType,
+     u8 byPreambleType,
+     u8 byFreqType,
      unsigned int cbFrameLength,
-     WORD wRate
+     u16 wRate
     );
 
 void BBvCalculateParameter(struct vnt_private *, u32 cbFrameLength,
