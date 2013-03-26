@@ -570,8 +570,6 @@ static inline unsigned fract_exp_two(unsigned x, unsigned fract_bits)
 
 void bio_map(struct bio *bio, void *base);
 
-int bio_alloc_pages(struct bio *bio, gfp_t gfp);
-
 static inline sector_t bdev_sectors(struct block_device *bdev)
 {
 	return bdev->bd_inode->i_size >> 9;
