@@ -403,11 +403,13 @@ static void unmask_evtchn(int port)
 
 	if (unlikely((cpu != cpu_from_evtchn(port))))
 		do_hypercall = 1;
-	else
+	else {
+		sync_clear_bit(port, BM(&s->evtchn_mask[0]));
 		evtchn_pending = sync_test_bit(port, BM(&s->evtchn_pending[0]));
 
-	if (unlikely(evtchn_pending && xen_hvm_domain()))
-		do_hypercall = 1;
+		if (unlikely(evtchn_pending && xen_hvm_domain()))
+			do_hypercall = 1;
+	}
 
 	/* Slow path (hypercall) if this is a non-local port or if this is
 	 * an hvm domain and an event is pending (hvm domains don't have
@@ -417,8 +419,6 @@ static void unmask_evtchn(int port)
 		(void)HYPERVISOR_event_channel_op(EVTCHNOP_unmask, &unmask);
 	} else {
 		struct vcpu_info *vcpu_info = __this_cpu_read(xen_vcpu);
-
-		sync_clear_bit(port, BM(&s->evtchn_mask[0]));
 
 		/*
 		 * The following is basically the equivalent of
@@ -1797,7 +1797,7 @@ int xen_set_callback_via(uint64_t via)
 }
 EXPORT_SYMBOL_GPL(xen_set_callback_via);
 
-#ifdef CONFIG_XEN_PVHVM
+#ifdef CONFIG_X86
 /* Vector callbacks are better than PCI interrupts to receive event
  * channel notifications because we can receive vector callbacks on any
  * vcpu and we don't need PCI support or APIC interactions. */
@@ -1858,6 +1858,13 @@ void __init xen_init_IRQ(void)
 		irq_ctx_init(smp_processor_id());
 		if (xen_initial_domain())
 			pci_xen_initial_domain();
+
+		if (xen_feature(XENFEAT_hvm_callback_vector)) {
+			xen_callback_vector();
+			return;
+		}
+
+		/* PVH: TBD/FIXME: debug and fix eio map to work with pvh */
 
 		pirq_eoi_map = (void *)__get_free_page(GFP_KERNEL|__GFP_ZERO);
 		eoi_gmfn.gmfn = virt_to_mfn(pirq_eoi_map);
