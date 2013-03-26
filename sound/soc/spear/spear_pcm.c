@@ -25,7 +25,7 @@
 #include <sound/soc.h>
 #include <sound/spear_dma.h>
 
-struct snd_pcm_hardware spear_pcm_hardware = {
+static struct snd_pcm_hardware spear_pcm_hardware = {
 	.info = (SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER |
 		 SNDRV_PCM_INFO_MMAP | SNDRV_PCM_INFO_MMAP_VALID |
 		 SNDRV_PCM_INFO_PAUSE | SNDRV_PCM_INFO_RESUME),
@@ -149,9 +149,9 @@ static void spear_pcm_free(struct snd_pcm *pcm)
 
 static u64 spear_pcm_dmamask = DMA_BIT_MASK(32);
 
-static int spear_pcm_new(struct snd_card *card,
-		struct snd_soc_dai *dai, struct snd_pcm *pcm)
+static int spear_pcm_new(struct snd_soc_pcm_runtime *rtd)
 {
+	struct snd_card *card = rtd->card->snd_card;
 	int ret;
 
 	if (!card->dev->dma_mask)
@@ -159,16 +159,16 @@ static int spear_pcm_new(struct snd_card *card,
 	if (!card->dev->coherent_dma_mask)
 		card->dev->coherent_dma_mask = DMA_BIT_MASK(32);
 
-	if (dai->driver->playback.channels_min) {
-		ret = spear_pcm_preallocate_dma_buffer(pcm,
+	if (rtd->cpu_dai->driver->playback.channels_min) {
+		ret = spear_pcm_preallocate_dma_buffer(rtd->pcm,
 				SNDRV_PCM_STREAM_PLAYBACK,
 				spear_pcm_hardware.buffer_bytes_max);
 		if (ret)
 			return ret;
 	}
 
-	if (dai->driver->capture.channels_min) {
-		ret = spear_pcm_preallocate_dma_buffer(pcm,
+	if (rtd->cpu_dai->driver->capture.channels_min) {
+		ret = spear_pcm_preallocate_dma_buffer(rtd->pcm,
 				SNDRV_PCM_STREAM_CAPTURE,
 				spear_pcm_hardware.buffer_bytes_max);
 		if (ret)
@@ -178,7 +178,7 @@ static int spear_pcm_new(struct snd_card *card,
 	return 0;
 }
 
-struct snd_soc_platform_driver spear_soc_platform = {
+static struct snd_soc_platform_driver spear_soc_platform = {
 	.ops		=	&spear_pcm_ops,
 	.pcm_new	=	spear_pcm_new,
 	.pcm_free	=	spear_pcm_free,
