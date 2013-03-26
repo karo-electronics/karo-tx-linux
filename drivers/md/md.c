@@ -72,6 +72,9 @@ static DECLARE_WAIT_QUEUE_HEAD(resync_wait);
 static struct workqueue_struct *md_wq;
 static struct workqueue_struct *md_misc_wq;
 
+static int remove_and_add_spares(struct mddev *mddev,
+				 struct md_rdev *this);
+
 #define MD_BUG(x...) { printk("md: bug in file %s, line %d\n", __FILE__, __LINE__); md_print_devices(); }
 
 /*
@@ -598,9 +601,9 @@ static struct mddev * mddev_find(dev_t unit)
 	goto retry;
 }
 
-static inline int mddev_lock(struct mddev * mddev)
+int md_queue_misc_work(struct work_struct *work)
 {
-	return mutex_lock_interruptible(&mddev->reconfig_mutex);
+	return queue_work(md_misc_wq, work);
 }
 
 static inline int mddev_is_locked(struct mddev *mddev)
@@ -615,7 +618,7 @@ static inline int mddev_trylock(struct mddev * mddev)
 
 static struct attribute_group md_redundancy_group;
 
-static void mddev_unlock(struct mddev * mddev)
+void mddev_unlock(struct mddev * mddev)
 {
 	if (mddev->to_remove) {
 		/* These cannot be removed under reconfig_mutex as
@@ -2402,6 +2405,11 @@ static void md_update_sb(struct mddev * mddev, int force_change)
 	int nospares = 0;
 	int any_badblocks_changed = 0;
 
+	if (mddev->ro) {
+		if (force_change)
+			set_bit(MD_CHANGE_DEVS, &mddev->flags);
+		return;
+	}
 repeat:
 	/* First make sure individual recovery_offsets are correct */
 	rdev_for_each(rdev, mddev) {
@@ -2791,12 +2799,10 @@ slot_store(struct md_rdev *rdev, const char *buf, size_t len)
 		/* personality does all needed checks */
 		if (rdev->mddev->pers->hot_remove_disk == NULL)
 			return -EINVAL;
-		err = rdev->mddev->pers->
-			hot_remove_disk(rdev->mddev, rdev);
-		if (err)
-			return err;
-		sysfs_unlink_rdev(rdev->mddev, rdev);
-		rdev->raid_disk = -1;
+		clear_bit(Blocked, &rdev->flags);
+		remove_and_add_spares(rdev->mddev, rdev);
+		if (rdev->raid_disk >= 0)
+			return -EBUSY;
 		set_bit(MD_RECOVERY_NEEDED, &rdev->mddev->recovery);
 		md_wakeup_thread(rdev->mddev->thread);
 	} else if (rdev->mddev->pers) {
@@ -5868,6 +5874,9 @@ static int hot_remove_disk(struct mddev * mddev, dev_t dev)
 	if (!rdev)
 		return -ENXIO;
 
+	clear_bit(Blocked, &rdev->flags);
+	remove_and_add_spares(mddev, rdev);
+
 	if (rdev->raid_disk >= 0)
 		goto busy;
 
@@ -6481,6 +6490,10 @@ static int md_ioctl(struct block_device *bdev, fmode_t mode,
 		err = md_set_readonly(mddev, bdev);
 		goto done_unlock;
 
+	case HOT_REMOVE_DISK:
+		err = hot_remove_disk(mddev, new_decode_dev(arg));
+		goto done_unlock;
+
 	case BLKROSET:
 		if (get_user(ro, (int __user *)(arg))) {
 			err = -EFAULT;
@@ -6550,10 +6563,6 @@ static int md_ioctl(struct block_device *bdev, fmode_t mode,
 			err = add_new_disk(mddev, &info);
 		goto done_unlock;
 	}
-
-	case HOT_REMOVE_DISK:
-		err = hot_remove_disk(mddev, new_decode_dev(arg));
-		goto done_unlock;
 
 	case HOT_ADD_DISK:
 		err = hot_add_disk(mddev, new_decode_dev(arg));
@@ -7635,14 +7644,16 @@ void md_do_sync(struct md_thread *thread)
 }
 EXPORT_SYMBOL_GPL(md_do_sync);
 
-static int remove_and_add_spares(struct mddev *mddev)
+static int remove_and_add_spares(struct mddev *mddev,
+				 struct md_rdev *this)
 {
 	struct md_rdev *rdev;
 	int spares = 0;
 	int removed = 0;
 
 	rdev_for_each(rdev, mddev)
-		if (rdev->raid_disk >= 0 &&
+		if ((this == NULL || rdev == this) &&
+		    rdev->raid_disk >= 0 &&
 		    !test_bit(Blocked, &rdev->flags) &&
 		    (test_bit(Faulty, &rdev->flags) ||
 		     ! test_bit(In_sync, &rdev->flags)) &&
@@ -7656,6 +7667,9 @@ static int remove_and_add_spares(struct mddev *mddev)
 		}
 	if (removed && mddev->kobj.sd)
 		sysfs_notify(&mddev->kobj, NULL, "degraded");
+
+	if (this)
+		goto no_add;
 
 	rdev_for_each(rdev, mddev) {
 		if (rdev->raid_disk >= 0 &&
@@ -7675,6 +7689,7 @@ static int remove_and_add_spares(struct mddev *mddev)
 			}
 		}
 	}
+no_add:
 	if (removed)
 		set_bit(MD_CHANGE_DEVS, &mddev->flags);
 	return spares;
@@ -7858,7 +7873,7 @@ void md_check_recovery(struct mddev *mddev)
 				goto unlock;
 			set_bit(MD_RECOVERY_RESHAPE, &mddev->recovery);
 			clear_bit(MD_RECOVERY_RECOVER, &mddev->recovery);
-		} else if ((spares = remove_and_add_spares(mddev))) {
+		} else if ((spares = remove_and_add_spares(mddev, NULL))) {
 			clear_bit(MD_RECOVERY_SYNC, &mddev->recovery);
 			clear_bit(MD_RECOVERY_CHECK, &mddev->recovery);
 			clear_bit(MD_RECOVERY_REQUESTED, &mddev->recovery);
@@ -8633,6 +8648,8 @@ EXPORT_SYMBOL(md_register_thread);
 EXPORT_SYMBOL(md_unregister_thread);
 EXPORT_SYMBOL(md_wakeup_thread);
 EXPORT_SYMBOL(md_check_recovery);
+EXPORT_SYMBOL(mddev_unlock);
+EXPORT_SYMBOL(md_queue_misc_work);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("MD RAID framework");
 MODULE_ALIAS("md");
