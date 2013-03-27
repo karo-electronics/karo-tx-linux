@@ -39,6 +39,7 @@
 #include <linux/udp.h>
 
 #include <net/tcp.h>
+#include <net/flow_keys.h>
 
 #include <xen/xen.h>
 #include <xen/events.h>
@@ -942,7 +943,6 @@ static int netbk_count_requests(struct xenvif *vif,
 }
 
 static struct page *xen_netbk_alloc_page(struct xen_netbk *netbk,
-					 struct sk_buff *skb,
 					 u16 pending_idx)
 {
 	struct page *page;
@@ -976,7 +976,7 @@ static struct gnttab_copy *xen_netbk_get_requests(struct xen_netbk *netbk,
 
 		index = pending_index(netbk->pending_cons++);
 		pending_idx = netbk->pending_ring[index];
-		page = xen_netbk_alloc_page(netbk, skb, pending_idx);
+		page = xen_netbk_alloc_page(netbk, pending_idx);
 		if (!page)
 			goto err;
 
@@ -1185,6 +1185,7 @@ static int checksum_setup(struct xenvif *vif, struct sk_buff *skb)
 	if (th >= skb_tail_pointer(skb))
 		goto out;
 
+	skb_set_transport_header(skb, 4 * iph->ihl);
 	skb->csum_start = th - skb->head;
 	switch (iph->protocol) {
 	case IPPROTO_TCP:
@@ -1381,7 +1382,7 @@ static unsigned xen_netbk_tx_build_gops(struct xen_netbk *netbk)
 		}
 
 		/* XXX could copy straight to head */
-		page = xen_netbk_alloc_page(netbk, skb, pending_idx);
+		page = xen_netbk_alloc_page(netbk, pending_idx);
 		if (!page) {
 			kfree_skb(skb);
 			netbk_tx_err(vif, &txreq, idx);
@@ -1496,12 +1497,22 @@ static void xen_netbk_tx_submit(struct xen_netbk *netbk)
 
 		skb->dev      = vif->dev;
 		skb->protocol = eth_type_trans(skb, skb->dev);
+		skb_reset_network_header(skb);
 
 		if (checksum_setup(vif, skb)) {
 			netdev_dbg(vif->dev,
 				   "Can't setup checksum in net_tx_action\n");
 			kfree_skb(skb);
 			continue;
+		}
+
+		if (!skb_transport_header_was_set(skb)) {
+			struct flow_keys keys;
+
+			if (skb_flow_dissect(skb, &keys))
+				skb_set_transport_header(skb, keys.thoff);
+			else
+				skb_reset_transport_header(skb);
 		}
 
 		vif->dev->stats.rx_bytes += skb->len;
