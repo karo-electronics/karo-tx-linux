@@ -160,19 +160,18 @@ static ssize_t _store_boost(const char *buf, size_t count)
 	return count;
 }
 
-static ssize_t store_global_boost(struct kobject *kobj, struct attribute *attr,
-				  const char *buf, size_t count)
+static ssize_t store_global_boost(struct cpufreq_policy *policy,
+		const char *buf, size_t count)
 {
 	return _store_boost(buf, count);
 }
 
-static ssize_t show_global_boost(struct kobject *kobj,
-				 struct attribute *attr, char *buf)
+static ssize_t show_global_boost(struct cpufreq_policy *policy, char *buf)
 {
 	return sprintf(buf, "%u\n", boost_enabled);
 }
 
-static struct global_attr global_boost = __ATTR(boost, 0644,
+static struct freq_attr global_boost = __ATTR(boost, 0644,
 						show_global_boost,
 						store_global_boost);
 
@@ -730,7 +729,6 @@ static int acpi_cpufreq_cpu_init(struct cpufreq_policy *policy)
 	    policy->shared_type == CPUFREQ_SHARED_TYPE_ANY) {
 		cpumask_copy(policy->cpus, perf->shared_cpu_map);
 	}
-	cpumask_copy(policy->related_cpus, perf->shared_cpu_map);
 
 #ifdef CONFIG_SMP
 	dmi_check_system(sw_any_bug_dmi_table);
@@ -742,7 +740,6 @@ static int acpi_cpufreq_cpu_init(struct cpufreq_policy *policy)
 	if (check_amd_hwpstate_cpu(cpu) && !acpi_pstate_strict) {
 		cpumask_clear(policy->cpus);
 		cpumask_set_cpu(cpu, policy->cpus);
-		cpumask_copy(policy->related_cpus, cpu_sibling_mask(cpu));
 		policy->shared_type = CPUFREQ_SHARED_TYPE_HW;
 		pr_info_once(PFX "overriding BIOS provided _PSD data\n");
 	}

@@ -275,13 +275,13 @@ static void intel_pstate_debug_expose_params(void)
 /************************** sysfs begin ************************/
 #define show_one(file_name, object)					\
 	static ssize_t show_##file_name					\
-	(struct kobject *kobj, struct attribute *attr, char *buf)	\
+	(struct cpufreq_policy *policy, char *buf)			\
 	{								\
 		return sprintf(buf, "%u\n", limits.object);		\
 	}
 
-static ssize_t store_no_turbo(struct kobject *a, struct attribute *b,
-				const char *buf, size_t count)
+static ssize_t store_no_turbo(struct cpufreq_policy *policy, const char *buf,
+		size_t count)
 {
 	unsigned int input;
 	int ret;
@@ -293,8 +293,8 @@ static ssize_t store_no_turbo(struct kobject *a, struct attribute *b,
 	return count;
 }
 
-static ssize_t store_max_perf_pct(struct kobject *a, struct attribute *b,
-				const char *buf, size_t count)
+static ssize_t store_max_perf_pct(struct cpufreq_policy *policy,
+		const char *buf, size_t count)
 {
 	unsigned int input;
 	int ret;
@@ -307,8 +307,8 @@ static ssize_t store_max_perf_pct(struct kobject *a, struct attribute *b,
 	return count;
 }
 
-static ssize_t store_min_perf_pct(struct kobject *a, struct attribute *b,
-				const char *buf, size_t count)
+static ssize_t store_min_perf_pct(struct cpufreq_policy *policy,
+		const char *buf, size_t count)
 {
 	unsigned int input;
 	int ret;
@@ -325,9 +325,9 @@ show_one(no_turbo, no_turbo);
 show_one(max_perf_pct, max_perf_pct);
 show_one(min_perf_pct, min_perf_pct);
 
-define_one_global_rw(no_turbo);
-define_one_global_rw(max_perf_pct);
-define_one_global_rw(min_perf_pct);
+cpufreq_freq_attr_rw(no_turbo);
+cpufreq_freq_attr_rw(max_perf_pct);
+cpufreq_freq_attr_rw(min_perf_pct);
 
 static struct attribute *intel_pstate_attributes[] = {
 	&no_turbo.attr,
@@ -358,14 +358,14 @@ static void intel_pstate_sysfs_expose_params(void)
 static int intel_pstate_min_pstate(void)
 {
 	u64 value;
-	rdmsrl(0xCE, value);
+	rdmsrl(MSR_PLATFORM_INFO, value);
 	return (value >> 40) & 0xFF;
 }
 
 static int intel_pstate_max_pstate(void)
 {
 	u64 value;
-	rdmsrl(0xCE, value);
+	rdmsrl(MSR_PLATFORM_INFO, value);
 	return (value >> 8) & 0xFF;
 }
 
@@ -373,7 +373,7 @@ static int intel_pstate_turbo_pstate(void)
 {
 	u64 value;
 	int nont, ret;
-	rdmsrl(0x1AD, value);
+	rdmsrl(MSR_NHM_TURBO_RATIO_LIMIT, value);
 	nont = intel_pstate_max_pstate();
 	ret = ((value) & 255);
 	if (ret <= nont)
@@ -454,7 +454,7 @@ static inline void intel_pstate_calc_busy(struct cpudata *cpu,
 					sample->idletime_us * 100,
 					sample->duration_us);
 	core_pct = div64_u64(sample->aperf * 100, sample->mperf);
-	sample->freq = cpu->pstate.turbo_pstate * core_pct * 1000;
+	sample->freq = cpu->pstate.max_pstate * core_pct * 1000;
 
 	sample->core_pct_busy = div_s64((sample->pstate_pct_busy * core_pct),
 					100);
@@ -752,6 +752,29 @@ static struct cpufreq_driver intel_pstate_driver = {
 
 static int __initdata no_load;
 
+static int intel_pstate_msrs_not_valid(void)
+{
+	/* Check that all the msr's we are using are valid. */
+	u64 aperf, mperf, tmp;
+
+	rdmsrl(MSR_IA32_APERF, aperf);
+	rdmsrl(MSR_IA32_MPERF, mperf);
+
+	if (!intel_pstate_min_pstate() ||
+		!intel_pstate_max_pstate() ||
+		!intel_pstate_turbo_pstate())
+		return -ENODEV;
+
+	rdmsrl(MSR_IA32_APERF, tmp);
+	if (!(tmp - aperf))
+		return -ENODEV;
+
+	rdmsrl(MSR_IA32_MPERF, tmp);
+	if (!(tmp - mperf))
+		return -ENODEV;
+
+	return 0;
+}
 static int __init intel_pstate_init(void)
 {
 	int cpu, rc = 0;
@@ -762,6 +785,9 @@ static int __init intel_pstate_init(void)
 
 	id = x86_match_cpu(intel_pstate_cpu_ids);
 	if (!id)
+		return -ENODEV;
+
+	if (intel_pstate_msrs_not_valid())
 		return -ENODEV;
 
 	pr_info("Intel P-state driver initializing.\n");
