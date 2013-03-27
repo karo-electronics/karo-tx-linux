@@ -43,17 +43,11 @@
 #include "wctl.h"
 #include "baseband.h"
 
-/*---------------------  Static Definitions -------------------------*/
 static int          msglevel                =MSG_LEVEL_INFO;
-/*---------------------  Static Classes  ----------------------------*/
 
-/*---------------------  Static Variables  --------------------------*/
 
-/*---------------------  Static Functions  --------------------------*/
 
-/*---------------------  Export Variables  --------------------------*/
 
-/*---------------------  Export Functions  --------------------------*/
 
 
 
@@ -89,7 +83,7 @@ void STAvClearAllCounter (PSStatCounter pStatistic)
  * Return Value: none
  *
  */
-void STAvUpdateIsrStatCounter (PSStatCounter pStatistic, BYTE byIsr0, BYTE byIsr1)
+void STAvUpdateIsrStatCounter (PSStatCounter pStatistic, u8 byIsr0, u8 byIsr1)
 {
     /**********************/
     /* ABNORMAL interrupt */
@@ -152,12 +146,12 @@ void STAvUpdateIsrStatCounter (PSStatCounter pStatistic, BYTE byIsr0, BYTE byIsr
  *
  */
 void STAvUpdateRDStatCounter(PSStatCounter pStatistic,
-			     BYTE byRSR, BYTE byNewRSR,
-			     BYTE byRxSts, BYTE byRxRate,
-			     PBYTE pbyBuffer, unsigned int cbFrameLength)
+			     u8 byRSR, u8 byNewRSR,
+			     u8 byRxSts, u8 byRxRate,
+			     u8 * pbyBuffer, unsigned int cbFrameLength)
 {
 	/* need change */
-	PS802_11Header pHeader = (PS802_11Header)pbyBuffer;
+	struct ieee80211_hdr *pHeader = (struct ieee80211_hdr *)pbyBuffer;
 
 	if (byRSR & RSR_ADDROK)
 		pStatistic->dwRsrADDROk++;
@@ -343,7 +337,7 @@ void STAvUpdateRDStatCounter(PSStatCounter pStatistic,
     else
         pStatistic->dwRsrDirected++;
 
-    if (WLAN_GET_FC_MOREFRAG(pHeader->wFrameCtl))
+    if (WLAN_GET_FC_MOREFRAG(pHeader->frame_control))
         pStatistic->dwRsrRxFragment++;
 
     if (cbFrameLength < ETH_ZLEN + 4) {
@@ -390,11 +384,11 @@ void STAvUpdateRDStatCounter(PSStatCounter pStatistic,
 void
 STAvUpdateRDStatCounterEx (
     PSStatCounter   pStatistic,
-    BYTE            byRSR,
-    BYTE            byNewRSR,
-    BYTE            byRxSts,
-    BYTE            byRxRate,
-    PBYTE           pbyBuffer,
+    u8            byRSR,
+    u8            byNewRSR,
+    u8            byRxSts,
+    u8            byRxRate,
+    u8 *           pbyBuffer,
     unsigned int            cbFrameLength
     )
 {
@@ -411,7 +405,7 @@ STAvUpdateRDStatCounterEx (
     // rx length
     pStatistic->dwCntRxFrmLength = cbFrameLength;
     // rx pattern, we just see 10 bytes for sample
-    memcpy(pStatistic->abyCntRxPattern, (PBYTE)pbyBuffer, 10);
+    memcpy(pStatistic->abyCntRxPattern, (u8 *)pbyBuffer, 10);
 }
 
 
@@ -435,12 +429,12 @@ STAvUpdateRDStatCounterEx (
 void
 STAvUpdateTDStatCounter (
     PSStatCounter   pStatistic,
-    BYTE            byPktNum,
-    BYTE            byRate,
-    BYTE            byTSR
+    u8            byPktNum,
+    u8            byRate,
+    u8            byTSR
     )
 {
-    BYTE    byRetyCnt;
+    u8    byRetyCnt;
     // increase tx packet count
     pStatistic->dwTsrTxPacket++;
 
@@ -524,10 +518,10 @@ void
 STAvUpdate802_11Counter(
     PSDot11Counters         p802_11Counter,
     PSStatCounter           pStatistic,
-    BYTE                    byRTSSuccess,
-    BYTE                    byRTSFail,
-    BYTE                    byACKFail,
-    BYTE                    byFCSErr
+    u8                    byRTSSuccess,
+    u8                    byRTSFail,
+    u8                    byACKFail,
+    u8                    byFCSErr
     )
 {
     //p802_11Counter->TransmittedFragmentCount
