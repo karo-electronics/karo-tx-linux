@@ -188,15 +188,11 @@ get_wd_set_caps_pfs(char *page, char **start, off_t off, int count,
 	return len;
 }
 
-int
-set_bypass_pfs(struct file *file, const char *buffer,
-	       unsigned long count, void *data)
+static int user_on_off(const void __user *buffer, size_t count)
 {
 
 	char kbuf[256];
-	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
-
-	int bypass_param = 0, length = 0;
+	int length = 0;
 
 	if (count > (sizeof(kbuf) - 1))
 		return -1;
@@ -210,12 +206,24 @@ set_bypass_pfs(struct file *file, const char *buffer,
 		kbuf[--length] = '\0';
 
 	if (strcmp(kbuf, "on") == 0)
-		bypass_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		bypass_param = 0;
+		return 1;
+	if (strcmp(kbuf, "off") == 0)
+		return 0;
+	return 0;
+}
+
+int
+set_bypass_pfs(struct file *file, const char *buffer,
+	       unsigned long count, void *data)
+{
+
+	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int bypass_param = user_on_off(buffer, count);
+
+	if (bypass_param < 0)
+		return -1;
 
 	set_bypass_fn(pbp_device_block, bypass_param);
-
 	return count;
 }
 
@@ -224,29 +232,13 @@ set_tap_pfs(struct file *file, const char *buffer,
 	    unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int tap_param = user_on_off(buffer, count);
 
-	int tap_param = 0, length = 0;
-
-	if (count > (sizeof(kbuf) - 1))
+	if (tap_param < 0)
 		return -1;
-
-	if (copy_from_user(&kbuf, buffer, count))
-		return -1;
-
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		tap_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		tap_param = 0;
 
 	set_tap_fn(pbp_device_block, tap_param);
-
 	return count;
 }
 
@@ -255,29 +247,13 @@ set_disc_pfs(struct file *file, const char *buffer,
 	     unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int tap_param = user_on_off(buffer, count);
 
-	int tap_param = 0, length = 0;
-
-	if (count > (sizeof(kbuf) - 1))
+	if (tap_param < 0)
 		return -1;
-
-	if (copy_from_user(&kbuf, buffer, count))
-		return -1;
-
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		tap_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		tap_param = 0;
 
 	set_disc_fn(pbp_device_block, tap_param);
-
 	return count;
 }
 
@@ -555,26 +531,13 @@ set_dis_bypass_pfs(struct file *file, const char *buffer,
 		   unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int bypass_param = user_on_off(buffer, count);
 
-	int bypass_param = 0, length = 0;
-
-	if (copy_from_user(&kbuf, buffer, count))
+	if (bypass_param < 0)
 		return -1;
 
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		bypass_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		bypass_param = 0;
-
 	set_dis_bypass_fn(pbp_device_block, bypass_param);
-
 	return count;
 }
 
@@ -583,26 +546,13 @@ set_dis_tap_pfs(struct file *file, const char *buffer,
 		unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int tap_param = user_on_off(buffer, count);
 
-	int tap_param = 0, length = 0;
-
-	if (copy_from_user(&kbuf, buffer, count))
+	if (tap_param < 0)
 		return -1;
 
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		tap_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		tap_param = 0;
-
 	set_dis_tap_fn(pbp_device_block, tap_param);
-
 	return count;
 }
 
@@ -611,26 +561,13 @@ set_dis_disc_pfs(struct file *file, const char *buffer,
 		 unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int tap_param = user_on_off(buffer, count);
 
-	int tap_param = 0, length = 0;
-
-	if (copy_from_user(&kbuf, buffer, count))
+	if (tap_param < 0)
 		return -1;
 
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		tap_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		tap_param = 0;
-
 	set_dis_disc_fn(pbp_device_block, tap_param);
-
 	return count;
 }
 
@@ -699,26 +636,13 @@ set_bypass_pwup_pfs(struct file *file, const char *buffer,
 		    unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int bypass_param = user_on_off(buffer, count);
 
-	int bypass_param = 0, length = 0;
-
-	if (copy_from_user(&kbuf, buffer, count))
+	if (bypass_param < 0)
 		return -1;
 
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		bypass_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		bypass_param = 0;
-
 	set_bypass_pwup_fn(pbp_device_block, bypass_param);
-
 	return count;
 }
 
@@ -727,26 +651,13 @@ set_bypass_pwoff_pfs(struct file *file, const char *buffer,
 		     unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int bypass_param = user_on_off(buffer, count);
 
-	int bypass_param = 0, length = 0;
-
-	if (copy_from_user(&kbuf, buffer, count))
+	if (bypass_param < 0)
 		return -1;
 
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		bypass_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		bypass_param = 0;
-
 	set_bypass_pwoff_fn(pbp_device_block, bypass_param);
-
 	return count;
 }
 
@@ -755,26 +666,13 @@ set_tap_pwup_pfs(struct file *file, const char *buffer,
 		 unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int tap_param = user_on_off(buffer, count);
 
-	int tap_param = 0, length = 0;
-
-	if (copy_from_user(&kbuf, buffer, count))
+	if (tap_param < 0)
 		return -1;
 
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		tap_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		tap_param = 0;
-
 	set_tap_pwup_fn(pbp_device_block, tap_param);
-
 	return count;
 }
 
@@ -783,26 +681,13 @@ set_disc_pwup_pfs(struct file *file, const char *buffer,
 		  unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int tap_param = user_on_off(buffer, count);
 
-	int tap_param = 0, length = 0;
-
-	if (copy_from_user(&kbuf, buffer, count))
+	if (tap_param < 0)
 		return -1;
 
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		tap_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		tap_param = 0;
-
 	set_disc_pwup_fn(pbp_device_block, tap_param);
-
 	return count;
 }
 
@@ -891,26 +776,13 @@ set_std_nic_pfs(struct file *file, const char *buffer,
 		unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int bypass_param = user_on_off(buffer, count);
 
-	int bypass_param = 0, length = 0;
-
-	if (copy_from_user(&kbuf, buffer, count))
+	if (bypass_param < 0)
 		return -1;
 
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		bypass_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		bypass_param = 0;
-
 	set_std_nic_fn(pbp_device_block, bypass_param);
-
 	return count;
 }
 
@@ -1033,29 +905,13 @@ set_tpl_pfs(struct file *file, const char *buffer,
 	    unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int tpl_param = user_on_off(buffer, count);
 
-	int tpl_param = 0, length = 0;
-
-	if (count > (sizeof(kbuf) - 1))
+	if (tpl_param < 0)
 		return -1;
-
-	if (copy_from_user(&kbuf, buffer, count))
-		return -1;
-
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		tpl_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		tpl_param = 0;
 
 	set_tpl_fn(pbp_device_block, tpl_param);
-
 	return count;
 }
 
@@ -1065,29 +921,13 @@ set_wait_at_pwup_pfs(struct file *file, const char *buffer,
 		     unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int tpl_param = user_on_off(buffer, count);
 
-	int tpl_param = 0, length = 0;
-
-	if (count > (sizeof(kbuf) - 1))
+	if (tpl_param < 0)
 		return -1;
-
-	if (copy_from_user(&kbuf, buffer, count))
-		return -1;
-
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		tpl_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		tpl_param = 0;
 
 	set_bp_wait_at_pwup_fn(pbp_device_block, tpl_param);
-
 	return count;
 }
 
@@ -1096,29 +936,13 @@ set_hw_reset_pfs(struct file *file, const char *buffer,
 		 unsigned long count, void *data)
 {
 
-	char kbuf[256];
 	bpctl_dev_t *pbp_device_block = (bpctl_dev_t *) data;
+	int tpl_param = user_on_off(buffer, count);
 
-	int tpl_param = 0, length = 0;
-
-	if (count > (sizeof(kbuf) - 1))
+	if (tpl_param < 0)
 		return -1;
-
-	if (copy_from_user(&kbuf, buffer, count))
-		return -1;
-
-	kbuf[count] = '\0';
-	length = strlen(kbuf);
-	if (kbuf[length - 1] == '\n')
-		kbuf[--length] = '\0';
-
-	if (strcmp(kbuf, "on") == 0)
-		tpl_param = 1;
-	else if (strcmp(kbuf, "off") == 0)
-		tpl_param = 0;
 
 	set_bp_hw_reset_fn(pbp_device_block, tpl_param);
-
 	return count;
 }
 
