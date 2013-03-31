@@ -847,32 +847,13 @@ fail:
 	return ERR_PTR(err);
 }
 
-static int read_node_page(struct page *page, int type)
-{
-	struct f2fs_sb_info *sbi = F2FS_SB(page->mapping->host->i_sb);
-	struct node_info ni;
-
-	get_node_info(sbi, page->index, &ni);
-
-	if (ni.blk_addr == NULL_ADDR) {
-		f2fs_put_page(page, 1);
-		return -ENOENT;
-	}
-
-	if (PageUptodate(page)) {
-		unlock_page(page);
-		return 0;
-	}
-
-	return f2fs_readpage(sbi, page, ni.blk_addr, type);
-}
-
 /*
  * Readahead a node page
  */
 void ra_node_page(struct f2fs_sb_info *sbi, nid_t nid)
 {
 	struct address_space *mapping = sbi->node_inode->i_mapping;
+	struct node_info ni;
 	struct page *apage;
 
 	apage = find_get_page(mapping, nid);
@@ -886,22 +867,40 @@ void ra_node_page(struct f2fs_sb_info *sbi, nid_t nid)
 	if (!apage)
 		return;
 
-	if (read_node_page(apage, READA) == 0)
+	get_node_info(sbi, nid, &ni);
+
+	if (ni.blk_addr == NULL_ADDR || PageUptodate(apage)) {
+		f2fs_put_page(apage, 1);
+		return;
+	}
+
+	if (f2fs_readpage(sbi, apage, ni.blk_addr, READA) == 0)
 		f2fs_put_page(apage, 0);
 	return;
 }
 
 struct page *get_node_page(struct f2fs_sb_info *sbi, pgoff_t nid)
 {
-	int err;
-	struct page *page;
 	struct address_space *mapping = sbi->node_inode->i_mapping;
+	struct page *page;
+	struct node_info ni;
+	int err;
 
 	page = grab_cache_page(mapping, nid);
 	if (!page)
 		return ERR_PTR(-ENOMEM);
 
-	err = read_node_page(page, READ_SYNC);
+	get_node_info(sbi, nid, &ni);
+
+	if (ni.blk_addr == NULL_ADDR) {
+		f2fs_put_page(page, 1);
+		return ERR_PTR(-ENOENT);
+	}
+
+	if (PageUptodate(page))
+		goto got_it;
+
+	err = f2fs_readpage(sbi, page, ni.blk_addr, READ_SYNC);
 	if (err)
 		return ERR_PTR(err);
 
@@ -910,6 +909,7 @@ struct page *get_node_page(struct f2fs_sb_info *sbi, pgoff_t nid)
 		f2fs_put_page(page, 1);
 		return ERR_PTR(-EIO);
 	}
+got_it:
 	BUG_ON(nid != nid_of_node(page));
 	mark_page_accessed(page);
 	return page;
@@ -923,6 +923,7 @@ struct page *get_node_page_ra(struct page *parent, int start)
 {
 	struct f2fs_sb_info *sbi = F2FS_SB(parent->mapping->host->i_sb);
 	struct address_space *mapping = sbi->node_inode->i_mapping;
+	struct node_info ni;
 	int i, end;
 	int err = 0;
 	nid_t nid;
@@ -936,10 +937,18 @@ struct page *get_node_page_ra(struct page *parent, int start)
 	page = grab_cache_page(mapping, nid);
 	if (!page)
 		return ERR_PTR(-ENOMEM);
-	else if (PageUptodate(page))
+
+	get_node_info(sbi, nid, &ni);
+
+	if (ni.blk_addr == NULL_ADDR) {
+		f2fs_put_page(page, 1);
+		return ERR_PTR(-ENOENT);
+	}
+
+	if (PageUptodate(page))
 		goto page_hit;
 
-	err = read_node_page(page, READ_SYNC);
+	err = f2fs_readpage(sbi, page, ni.blk_addr, READ_SYNC);
 	if (err)
 		return ERR_PTR(err);
 
@@ -956,7 +965,7 @@ struct page *get_node_page_ra(struct page *parent, int start)
 	lock_page(page);
 
 page_hit:
-	if (PageError(page)) {
+	if (!PageUptodate(page)) {
 		f2fs_put_page(page, 1);
 		return ERR_PTR(-EIO);
 	}
