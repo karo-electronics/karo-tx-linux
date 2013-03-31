@@ -214,7 +214,7 @@ struct dirty_seglist_info {
 	unsigned long *dirty_segmap[NR_DIRTY_TYPE];
 	struct mutex seglist_lock;		/* lock for segment bitmaps */
 	int nr_dirty[NR_DIRTY_TYPE];		/* # of dirty segments */
-	unsigned long *victim_segmap[2];	/* BG_GC, FG_GC */
+	unsigned long *victim_secmap;		/* background GC victims */
 };
 
 /* victim selection function for cleaning and SSR */
@@ -615,4 +615,13 @@ static inline block_t sum_blk_addr(struct f2fs_sb_info *sbi, int base, int type)
 	return __start_cp_addr(sbi) +
 		le32_to_cpu(F2FS_CKPT(sbi)->cp_pack_total_block_count)
 				- (base + 1) + type;
+}
+
+static inline int sec_usage_check(struct f2fs_sb_info *sbi, unsigned int secno)
+{
+	if (IS_CURSEC(sbi, secno))
+		return -1;
+	if (sbi->cur_victim_sec == secno)
+		return -1;
+	return 0;
 }
