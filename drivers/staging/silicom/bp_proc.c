@@ -84,7 +84,7 @@ static struct proc_dir_entry *proc_getdir(char *name,
 	}
 	if (pde == (struct proc_dir_entry *)0) {
 		/* create the directory */
-		pde = create_proc_entry(name, S_IFDIR, proc_dir);
+		pde = proc_mkdir(name, proc_dir);
 		if (pde == (struct proc_dir_entry *)0)
 			return pde;
 	}
