@@ -1,105 +1,103 @@
 /*
-    comedi/drivers/rtd520.c
-    Comedi driver for Real Time Devices (RTD) PCI4520/DM7520
-
-    COMEDI - Linux Control and Measurement Device Interface
-    Copyright (C) 2001 David A. Schleef <ds@schleef.org>
-
-    This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 2 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-*/
-/*
-Driver: rtd520
-Description: Real Time Devices PCI4520/DM7520
-Author: Dan Christian
-Devices: [Real Time Devices] DM7520HR-1 (rtd520), DM7520HR-8,
-  PCI4520, PCI4520-8
-Status: Works.  Only tested on DM7520-8.  Not SMP safe.
-
-Configuration options:
-  [0] - PCI bus of device (optional)
-	If bus / slot is not specified, the first available PCI
-	device will be used.
-  [1] - PCI slot of device (optional)
-*/
-/*
-    Created by Dan Christian, NASA Ames Research Center.
-
-    The PCI4520 is a PCI card.  The DM7520 is a PC/104-plus card.
-    Both have:
-    8/16 12 bit ADC with FIFO and channel gain table
-    8 bits high speed digital out (for external MUX) (or 8 in or 8 out)
-    8 bits high speed digital in with FIFO and interrupt on change (or 8 IO)
-    2 12 bit DACs with FIFOs
-    2 bits output
-    2 bits input
-    bus mastering DMA
-    timers: ADC sample, pacer, burst, about, delay, DA1, DA2
-    sample counter
-    3 user timer/counters (8254)
-    external interrupt
-
-    The DM7520 has slightly fewer features (fewer gain steps).
-
-    These boards can support external multiplexors and multi-board
-    synchronization, but this driver doesn't support that.
-
-    Board docs: http://www.rtdusa.com/PC104/DM/analog%20IO/dm7520.htm
-    Data sheet: http://www.rtdusa.com/pdf/dm7520.pdf
-    Example source: http://www.rtdusa.com/examples/dm/dm7520.zip
-    Call them and ask for the register level manual.
-    PCI chip: http://www.plxtech.com/products/io/pci9080
-
-    Notes:
-    This board is memory mapped.  There is some IO stuff, but it isn't needed.
-
-    I use a pretty loose naming style within the driver (rtd_blah).
-    All externally visible names should be rtd520_blah.
-    I use camelCase for structures (and inside them).
-    I may also use upper CamelCase for function names (old habit).
-
-    This board is somewhat related to the RTD PCI4400 board.
-
-    I borrowed heavily from the ni_mio_common, ni_atmio16d, mite, and
-    das1800, since they have the best documented code.  Driver
-    cb_pcidas64.c uses the same DMA controller.
-
-    As far as I can tell, the About interrupt doesn't work if Sample is
-    also enabled.  It turns out that About really isn't needed, since
-    we always count down samples read.
-
-    There was some timer/counter code, but it didn't follow the right API.
-
-*/
+ * comedi/drivers/rtd520.c
+ * Comedi driver for Real Time Devices (RTD) PCI4520/DM7520
+ *
+ * COMEDI - Linux Control and Measurement Device Interface
+ * Copyright (C) 2001 David A. Schleef <ds@schleef.org>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
 
 /*
-  driver status:
+ * Driver: rtd520
+ * Description: Real Time Devices PCI4520/DM7520
+ * Devices: (Real Time Devices) DM7520HR-1 [DM7520]
+ *	    (Real Time Devices) DM7520HR-8 [DM7520]
+ *	    (Real Time Devices) PCI4520 [PCI4520]
+ *	    (Real Time Devices) PCI4520-8 [PCI4520]
+ * Author: Dan Christian
+ * Status: Works. Only tested on DM7520-8. Not SMP safe.
+ *
+ * Configuration options: not applicable, uses PCI auto config
+ */
 
-  Analog-In supports instruction and command mode.
+/*
+ * Created by Dan Christian, NASA Ames Research Center.
+ *
+ * The PCI4520 is a PCI card. The DM7520 is a PC/104-plus card.
+ * Both have:
+ *   8/16 12 bit ADC with FIFO and channel gain table
+ *   8 bits high speed digital out (for external MUX) (or 8 in or 8 out)
+ *   8 bits high speed digital in with FIFO and interrupt on change (or 8 IO)
+ *   2 12 bit DACs with FIFOs
+ *   2 bits output
+ *   2 bits input
+ *   bus mastering DMA
+ *   timers: ADC sample, pacer, burst, about, delay, DA1, DA2
+ *   sample counter
+ *   3 user timer/counters (8254)
+ *   external interrupt
+ *
+ * The DM7520 has slightly fewer features (fewer gain steps).
+ *
+ * These boards can support external multiplexors and multi-board
+ * synchronization, but this driver doesn't support that.
+ *
+ * Board docs: http://www.rtdusa.com/PC104/DM/analog%20IO/dm7520.htm
+ * Data sheet: http://www.rtdusa.com/pdf/dm7520.pdf
+ * Example source: http://www.rtdusa.com/examples/dm/dm7520.zip
+ * Call them and ask for the register level manual.
+ * PCI chip: http://www.plxtech.com/products/io/pci9080
+ *
+ * Notes:
+ * This board is memory mapped. There is some IO stuff, but it isn't needed.
+ *
+ * I use a pretty loose naming style within the driver (rtd_blah).
+ * All externally visible names should be rtd520_blah.
+ * I use camelCase for structures (and inside them).
+ * I may also use upper CamelCase for function names (old habit).
+ *
+ * This board is somewhat related to the RTD PCI4400 board.
+ *
+ * I borrowed heavily from the ni_mio_common, ni_atmio16d, mite, and
+ * das1800, since they have the best documented code. Driver cb_pcidas64.c
+ * uses the same DMA controller.
+ *
+ * As far as I can tell, the About interrupt doesn't work if Sample is
+ * also enabled. It turns out that About really isn't needed, since
+ * we always count down samples read.
+ *
+ * There was some timer/counter code, but it didn't follow the right API.
+ */
 
-  With DMA, you can sample at 1.15Mhz with 70% idle on a 400Mhz K6-2
-  (single channel, 64K read buffer).  I get random system lockups when
-  using DMA with ALI-15xx based systems.  I haven't been able to test
-  any other chipsets.  The lockups happen soon after the start of an
-  acquistion, not in the middle of a long run.
-
-  Without DMA, you can do 620Khz sampling with 20% idle on a 400Mhz K6-2
-  (with a 256K read buffer).
-
-  Digital-IO and Analog-Out only support instruction mode.
-
-*/
+/*
+ * driver status:
+ *
+ * Analog-In supports instruction and command mode.
+ *
+ * With DMA, you can sample at 1.15Mhz with 70% idle on a 400Mhz K6-2
+ * (single channel, 64K read buffer). I get random system lockups when
+ * using DMA with ALI-15xx based systems. I haven't been able to test
+ * any other chipsets. The lockups happen soon after the start of an
+ * acquistion, not in the middle of a long run.
+ *
+ * Without DMA, you can do 620Khz sampling with 20% idle on a 400Mhz K6-2
+ * (with a 256K read buffer).
+ *
+ * Digital-IO and Analog-Out only support instruction mode.
+ */
 
 #include <linux/pci.h>
 #include <linux/delay.h>
@@ -108,8 +106,122 @@ Configuration options:
 #include "../comedidev.h"
 
 #include "comedi_fc.h"
-#include "rtd520.h"
 #include "plx9080.h"
+
+/*
+ * Local Address Space 0 Offsets
+ */
+#define LAS0_USER_IO		0x0008	/* User I/O */
+#define LAS0_ADC		0x0010	/* FIFO Status/Software A/D Start */
+#define FS_DAC1_NOT_EMPTY	(1 << 0)	/* DAC1 FIFO not empty */
+#define FS_DAC1_HEMPTY		(1 << 1)	/* DAC1 FIFO half empty */
+#define FS_DAC1_NOT_FULL	(1 << 2)	/* DAC1 FIFO not full */
+#define FS_DAC2_NOT_EMPTY	(1 << 4)	/* DAC2 FIFO not empty */
+#define FS_DAC2_HEMPTY		(1 << 5)	/* DAC2 FIFO half empty */
+#define FS_DAC2_NOT_FULL	(1 << 6)	/* DAC2 FIFO not full */
+#define FS_ADC_NOT_EMPTY	(1 << 8)	/* ADC FIFO not empty */
+#define FS_ADC_HEMPTY		(1 << 9)	/* ADC FIFO half empty */
+#define FS_ADC_NOT_FULL		(1 << 10)	/* ADC FIFO not full */
+#define FS_DIN_NOT_EMPTY	(1 << 12)	/* DIN FIFO not empty */
+#define FS_DIN_HEMPTY		(1 << 13)	/* DIN FIFO half empty */
+#define FS_DIN_NOT_FULL		(1 << 14)	/* DIN FIFO not full */
+#define LAS0_DAC1		0x0014	/* Software D/A1 Update (w) */
+#define LAS0_DAC2		0x0018	/* Software D/A2 Update (w) */
+#define LAS0_DAC		0x0024	/* Software Simultaneous Update (w) */
+#define LAS0_PACER		0x0028	/* Software Pacer Start/Stop */
+#define LAS0_TIMER		0x002c	/* Timer Status/HDIN Software Trig. */
+#define LAS0_IT			0x0030	/* Interrupt Status/Enable */
+#define IRQM_ADC_FIFO_WRITE	(1 << 0)	/* ADC FIFO Write */
+#define IRQM_CGT_RESET		(1 << 1)	/* Reset CGT */
+#define IRQM_CGT_PAUSE		(1 << 3)	/* Pause CGT */
+#define IRQM_ADC_ABOUT_CNT	(1 << 4)	/* About Counter out */
+#define IRQM_ADC_DELAY_CNT	(1 << 5)	/* Delay Counter out */
+#define IRQM_ADC_SAMPLE_CNT	(1 << 6)	/* ADC Sample Counter */
+#define IRQM_DAC1_UCNT		(1 << 7)	/* DAC1 Update Counter */
+#define IRQM_DAC2_UCNT		(1 << 8)	/* DAC2 Update Counter */
+#define IRQM_UTC1		(1 << 9)	/* User TC1 out */
+#define IRQM_UTC1_INV		(1 << 10)	/* User TC1 out, inverted */
+#define IRQM_UTC2		(1 << 11)	/* User TC2 out */
+#define IRQM_DIGITAL_IT		(1 << 12)	/* Digital Interrupt */
+#define IRQM_EXTERNAL_IT	(1 << 13)	/* External Interrupt */
+#define IRQM_ETRIG_RISING	(1 << 14)	/* Ext Trigger rising-edge */
+#define IRQM_ETRIG_FALLING	(1 << 15)	/* Ext Trigger falling-edge */
+#define LAS0_CLEAR		0x0034	/* Clear/Set Interrupt Clear Mask */
+#define LAS0_OVERRUN		0x0038	/* Pending interrupts/Clear Overrun */
+#define LAS0_PCLK		0x0040	/* Pacer Clock (24bit) */
+#define LAS0_BCLK		0x0044	/* Burst Clock (10bit) */
+#define LAS0_ADC_SCNT		0x0048	/* A/D Sample counter (10bit) */
+#define LAS0_DAC1_UCNT		0x004c	/* D/A1 Update counter (10 bit) */
+#define LAS0_DAC2_UCNT		0x0050	/* D/A2 Update counter (10 bit) */
+#define LAS0_DCNT		0x0054	/* Delay counter (16 bit) */
+#define LAS0_ACNT		0x0058	/* About counter (16 bit) */
+#define LAS0_DAC_CLK		0x005c	/* DAC clock (16bit) */
+#define LAS0_UTC0		0x0060	/* 8254 TC Counter 0 */
+#define LAS0_UTC1		0x0064	/* 8254 TC Counter 1 */
+#define LAS0_UTC2		0x0068	/* 8254 TC Counter 2 */
+#define LAS0_UTC_CTRL		0x006c	/* 8254 TC Control */
+#define LAS0_DIO0		0x0070	/* Digital I/O Port 0 */
+#define LAS0_DIO1		0x0074	/* Digital I/O Port 1 */
+#define LAS0_DIO0_CTRL		0x0078	/* Digital I/O Control */
+#define LAS0_DIO_STATUS		0x007c	/* Digital I/O Status */
+#define LAS0_BOARD_RESET	0x0100	/* Board reset */
+#define LAS0_DMA0_SRC		0x0104	/* DMA 0 Sources select */
+#define LAS0_DMA1_SRC		0x0108	/* DMA 1 Sources select */
+#define LAS0_ADC_CONVERSION	0x010c	/* A/D Conversion Signal select */
+#define LAS0_BURST_START	0x0110	/* Burst Clock Start Trigger select */
+#define LAS0_PACER_START	0x0114	/* Pacer Clock Start Trigger select */
+#define LAS0_PACER_STOP		0x0118	/* Pacer Clock Stop Trigger select */
+#define LAS0_ACNT_STOP_ENABLE	0x011c	/* About Counter Stop Enable */
+#define LAS0_PACER_REPEAT	0x0120	/* Pacer Start Trigger Mode select */
+#define LAS0_DIN_START		0x0124	/* HiSpd DI Sampling Signal select */
+#define LAS0_DIN_FIFO_CLEAR	0x0128	/* Digital Input FIFO Clear */
+#define LAS0_ADC_FIFO_CLEAR	0x012c	/* A/D FIFO Clear */
+#define LAS0_CGT_WRITE		0x0130	/* Channel Gain Table Write */
+#define LAS0_CGL_WRITE		0x0134	/* Channel Gain Latch Write */
+#define LAS0_CG_DATA		0x0138	/* Digital Table Write */
+#define LAS0_CGT_ENABLE		0x013c	/* Channel Gain Table Enable */
+#define LAS0_CG_ENABLE		0x0140	/* Digital Table Enable */
+#define LAS0_CGT_PAUSE		0x0144	/* Table Pause Enable */
+#define LAS0_CGT_RESET		0x0148	/* Reset Channel Gain Table */
+#define LAS0_CGT_CLEAR		0x014c	/* Clear Channel Gain Table */
+#define LAS0_DAC1_CTRL		0x0150	/* D/A1 output type/range */
+#define LAS0_DAC1_SRC		0x0154	/* D/A1 update source */
+#define LAS0_DAC1_CYCLE		0x0158	/* D/A1 cycle mode */
+#define LAS0_DAC1_RESET		0x015c	/* D/A1 FIFO reset */
+#define LAS0_DAC1_FIFO_CLEAR	0x0160	/* D/A1 FIFO clear */
+#define LAS0_DAC2_CTRL		0x0164	/* D/A2 output type/range */
+#define LAS0_DAC2_SRC		0x0168	/* D/A2 update source */
+#define LAS0_DAC2_CYCLE		0x016c	/* D/A2 cycle mode */
+#define LAS0_DAC2_RESET		0x0170	/* D/A2 FIFO reset */
+#define LAS0_DAC2_FIFO_CLEAR	0x0174	/* D/A2 FIFO clear */
+#define LAS0_ADC_SCNT_SRC	0x0178	/* A/D Sample Counter Source select */
+#define LAS0_PACER_SELECT	0x0180	/* Pacer Clock select */
+#define LAS0_SBUS0_SRC		0x0184	/* SyncBus 0 Source select */
+#define LAS0_SBUS0_ENABLE	0x0188	/* SyncBus 0 enable */
+#define LAS0_SBUS1_SRC		0x018c	/* SyncBus 1 Source select */
+#define LAS0_SBUS1_ENABLE	0x0190	/* SyncBus 1 enable */
+#define LAS0_SBUS2_SRC		0x0198	/* SyncBus 2 Source select */
+#define LAS0_SBUS2_ENABLE	0x019c	/* SyncBus 2 enable */
+#define LAS0_ETRG_POLARITY	0x01a4	/* Ext. Trigger polarity select */
+#define LAS0_EINT_POLARITY	0x01a8	/* Ext. Interrupt polarity select */
+#define LAS0_UTC0_CLOCK		0x01ac	/* UTC0 Clock select */
+#define LAS0_UTC0_GATE		0x01b0	/* UTC0 Gate select */
+#define LAS0_UTC1_CLOCK		0x01b4	/* UTC1 Clock select */
+#define LAS0_UTC1_GATE		0x01b8	/* UTC1 Gate select */
+#define LAS0_UTC2_CLOCK		0x01bc	/* UTC2 Clock select */
+#define LAS0_UTC2_GATE		0x01c0	/* UTC2 Gate select */
+#define LAS0_UOUT0_SELECT	0x01c4	/* User Output 0 source select */
+#define LAS0_UOUT1_SELECT	0x01c8	/* User Output 1 source select */
+#define LAS0_DMA0_RESET		0x01cc	/* DMA0 Request state machine reset */
+#define LAS0_DMA1_RESET		0x01d0	/* DMA1 Request state machine reset */
+
+/*
+ * Local Address Space 1 Offsets
+ */
+#define LAS1_ADC_FIFO		0x0000	/* A/D FIFO (16bit) */
+#define LAS1_HDIO_FIFO		0x0004	/* HiSpd DI FIFO (16bit) */
+#define LAS1_DAC1_FIFO		0x0008	/* D/A1 FIFO (16bit) */
+#define LAS1_DAC2_FIFO		0x000c	/* D/A2 FIFO (16bit) */
 
 /*======================================================================
   Driver specific stuff (tunable)
@@ -249,24 +361,27 @@ static const struct comedi_lrange rtd_ao_range = {
 	}
 };
 
+enum rtd_boardid {
+	BOARD_DM7520,
+	BOARD_PCI4520,
+};
+
 struct rtdBoard {
 	const char *name;
-	int device_id;
 	int range10Start;	/* start of +-10V range */
 	int rangeUniStart;	/* start of +10V range */
 	const struct comedi_lrange *ai_range;
 };
 
 static const struct rtdBoard rtd520Boards[] = {
-	{
+	[BOARD_DM7520] = {
 		.name		= "DM7520",
-		.device_id	= 0x7520,
 		.range10Start	= 6,
 		.rangeUniStart	= 12,
 		.ai_range	= &rtd_ai_7520_range,
-	}, {
+	},
+	[BOARD_PCI4520] = {
 		.name		= "PCI4520",
-		.device_id	= 0x4520,
 		.range10Start	= 8,
 		.rangeUniStart	= 16,
 		.ai_range	= &rtd_ai_4520_range,
@@ -294,15 +409,6 @@ struct rtdPrivate {
 	/* read back data */
 	unsigned int aoValue[2];	/* Used for AO read back */
 
-	/* timer gate (when enabled) */
-	u8 utcGate[4];		/* 1 extra allows simple range check */
-
-	/* shadow registers affect other registers, but can't be read back */
-	/* The macros below update these on writes */
-	u16 intMask;		/* interrupt mask */
-	u16 intClearMask;	/* interrupt clear mask */
-	u8 utcCtrl[4];		/* crtl mode for 3 utc + read back */
-	u8 dioStatus;		/* could be read back (dio0Ctrl) */
 	unsigned fifoLen;
 };
 
@@ -669,8 +775,7 @@ static irqreturn_t rtd_interrupt(int irq,	/* interrupt number (ignored) */
 		goto abortTransfer;
 
 	/* clear the interrupt */
-	devpriv->intClearMask = status;
-	writew(devpriv->intClearMask, devpriv->las0 + LAS0_CLEAR);
+	writew(status, devpriv->las0 + LAS0_CLEAR);
 	readw(devpriv->las0 + LAS0_CLEAR);
 	return IRQ_HANDLED;
 
@@ -685,8 +790,7 @@ transferDone:
 	writel(0, devpriv->las0 + LAS0_PACER_STOP);
 	writel(0, devpriv->las0 + LAS0_PACER);	/* stop pacer */
 	writel(0, devpriv->las0 + LAS0_ADC_CONVERSION);
-	devpriv->intMask = 0;
-	writew(devpriv->intMask, devpriv->las0 + LAS0_IT);
+	writew(0, devpriv->las0 + LAS0_IT);
 
 	if (devpriv->aiCount > 0) {	/* there shouldn't be anything left */
 		fifoStatus = readl(devpriv->las0 + LAS0_ADC);
@@ -698,8 +802,7 @@ transferDone:
 
 	/* clear the interrupt */
 	status = readw(devpriv->las0 + LAS0_IT);
-	devpriv->intClearMask = status;
-	writew(devpriv->intClearMask, devpriv->las0 + LAS0_CLEAR);
+	writew(status, devpriv->las0 + LAS0_CLEAR);
 	readw(devpriv->las0 + LAS0_CLEAR);
 
 	fifoStatus = readl(devpriv->las0 + LAS0_ADC);
@@ -884,8 +987,7 @@ static int rtd_ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 	writel(0, devpriv->las0 + LAS0_PACER_STOP);
 	writel(0, devpriv->las0 + LAS0_PACER);	/* stop pacer */
 	writel(0, devpriv->las0 + LAS0_ADC_CONVERSION);
-	devpriv->intMask = 0;
-	writew(devpriv->intMask, devpriv->las0 + LAS0_IT);
+	writew(0, devpriv->las0 + LAS0_IT);
 	writel(0, devpriv->las0 + LAS0_ADC_FIFO_CLEAR);
 	writel(0, devpriv->las0 + LAS0_OVERRUN);
 
@@ -1011,17 +1113,14 @@ static int rtd_ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 
 	/* This doesn't seem to work.  There is no way to clear an interrupt
 	   that the priority controller has queued! */
-	devpriv->intClearMask = ~0;
-	writew(devpriv->intClearMask, devpriv->las0 + LAS0_CLEAR);
+	writew(~0, devpriv->las0 + LAS0_CLEAR);
 	readw(devpriv->las0 + LAS0_CLEAR);
 
 	/* TODO: allow multiple interrupt sources */
 	if (devpriv->transCount > 0) {	/* transfer every N samples */
-		devpriv->intMask = IRQM_ADC_ABOUT_CNT;
-		writew(devpriv->intMask, devpriv->las0 + LAS0_IT);
+		writew(IRQM_ADC_ABOUT_CNT, devpriv->las0 + LAS0_IT);
 	} else {		/* 1/2 FIFO transfers */
-		devpriv->intMask = IRQM_ADC_ABOUT_CNT;
-		writew(devpriv->intMask, devpriv->las0 + LAS0_IT);
+		writew(IRQM_ADC_ABOUT_CNT, devpriv->las0 + LAS0_IT);
 	}
 
 	/* BUG: start_src is ASSUMED to be TRIG_NOW */
@@ -1043,8 +1142,7 @@ static int rtd_ai_cancel(struct comedi_device *dev, struct comedi_subdevice *s)
 	writel(0, devpriv->las0 + LAS0_PACER_STOP);
 	writel(0, devpriv->las0 + LAS0_PACER);	/* stop pacer */
 	writel(0, devpriv->las0 + LAS0_ADC_CONVERSION);
-	devpriv->intMask = 0;
-	writew(devpriv->intMask, devpriv->las0 + LAS0_IT);
+	writew(0, devpriv->las0 + LAS0_IT);
 	devpriv->aiCount = 0;	/* stop and don't transfer any more */
 	status = readw(devpriv->las0 + LAS0_IT);
 	overrun = readl(devpriv->las0 + LAS0_OVERRUN) & 0xffff;
@@ -1125,33 +1223,22 @@ static int rtd_ao_rinsn(struct comedi_device *dev,
 	return i;
 }
 
-/*
-   Write a masked set of bits and the read back the port.
-   We track what the bits should be (i.e. we don't read the port first).
-
-   DIO devices are slightly special.  Although it is possible to
- * implement the insn_read/insn_write interface, it is much more
- * useful to applications if you implement the insn_bits interface.
- * This allows packed reading/writing of the DIO channels.  The
- * comedi core can convert between insn_bits and insn_read/write
- */
 static int rtd_dio_insn_bits(struct comedi_device *dev,
 			     struct comedi_subdevice *s,
-			     struct comedi_insn *insn, unsigned int *data)
+			     struct comedi_insn *insn,
+			     unsigned int *data)
 {
 	struct rtdPrivate *devpriv = dev->private;
+	unsigned int mask = data[0];
+	unsigned int bits = data[1];
 
-	/* The insn data is a mask in data[0] and the new data
-	 * in data[1], each channel cooresponding to a bit. */
-	if (data[0]) {
-		s->state &= ~data[0];
-		s->state |= data[0] & data[1];
+	if (mask) {
+		s->state &= ~mask;
+		s->state |= (bits & mask);
 
-		/* Write out the new digital output lines */
 		writew(s->state & 0xff, devpriv->las0 + LAS0_DIO0);
 	}
-	/* on return, data[1] contains the value of the digital
-	 * input lines. */
+
 	data[1] = readw(devpriv->las0 + LAS0_DIO0) & 0xff;
 
 	return insn->n;
@@ -1188,11 +1275,13 @@ static int rtd_dio_insn_config(struct comedi_device *dev,
 	}
 
 	/* TODO support digital match interrupts and strobes */
-	devpriv->dioStatus = 0x01;	/* set direction */
-	writew(devpriv->dioStatus, devpriv->las0 + LAS0_DIO_STATUS);
+
+	/* set direction */
+	writew(0x01, devpriv->las0 + LAS0_DIO_STATUS);
 	writew(s->io_bits & 0xff, devpriv->las0 + LAS0_DIO0_CTRL);
-	devpriv->dioStatus = 0x00;	/* clear interrupts */
-	writew(devpriv->dioStatus, devpriv->las0 + LAS0_DIO_STATUS);
+
+	/* clear interrupts */
+	writew(0x00, devpriv->las0 + LAS0_DIO_STATUS);
 
 	/* port1 can only be all input or all output */
 
@@ -1207,11 +1296,9 @@ static void rtd_reset(struct comedi_device *dev)
 
 	writel(0, devpriv->las0 + LAS0_BOARD_RESET);
 	udelay(100);		/* needed? */
-	writel(0, devpriv->lcfg + LCFG_ITCSR);
-	devpriv->intMask = 0;
-	writew(devpriv->intMask, devpriv->las0 + LAS0_IT);
-	devpriv->intClearMask = ~0;
-	writew(devpriv->intClearMask, devpriv->las0 + LAS0_CLEAR);
+	writel(0, devpriv->lcfg + PLX_INTRCS_REG);
+	writew(0, devpriv->las0 + LAS0_IT);
+	writew(~0, devpriv->las0 + LAS0_CLEAR);
 	readw(devpriv->las0 + LAS0_CLEAR);
 }
 
@@ -1231,16 +1318,11 @@ static void rtd_init_board(struct comedi_device *dev)
 	writel(0, devpriv->las0 + LAS0_DAC1_RESET);
 	writel(0, devpriv->las0 + LAS0_DAC2_RESET);
 	/* clear digital IO fifo */
-	devpriv->dioStatus = 0;
-	writew(devpriv->dioStatus, devpriv->las0 + LAS0_DIO_STATUS);
-	devpriv->utcCtrl[0] = (0 << 6) | 0x30;
-	devpriv->utcCtrl[1] = (1 << 6) | 0x30;
-	devpriv->utcCtrl[2] = (2 << 6) | 0x30;
-	devpriv->utcCtrl[3] = (3 << 6) | 0x00;
-	writeb(devpriv->utcCtrl[0], devpriv->las0 + LAS0_UTC_CTRL);
-	writeb(devpriv->utcCtrl[1], devpriv->las0 + LAS0_UTC_CTRL);
-	writeb(devpriv->utcCtrl[2], devpriv->las0 + LAS0_UTC_CTRL);
-	writeb(devpriv->utcCtrl[3], devpriv->las0 + LAS0_UTC_CTRL);
+	writew(0, devpriv->las0 + LAS0_DIO_STATUS);
+	writeb((0 << 6) | 0x30, devpriv->las0 + LAS0_UTC_CTRL);
+	writeb((1 << 6) | 0x30, devpriv->las0 + LAS0_UTC_CTRL);
+	writeb((2 << 6) | 0x30, devpriv->las0 + LAS0_UTC_CTRL);
+	writeb((3 << 6) | 0x00, devpriv->las0 + LAS0_UTC_CTRL);
 	/* TODO: set user out source ??? */
 }
 
@@ -1259,30 +1341,17 @@ static void rtd_pci_latency_quirk(struct comedi_device *dev,
 	}
 }
 
-static const void *rtd_find_boardinfo(struct comedi_device *dev,
-				      struct pci_dev *pcidev)
-{
-	const struct rtdBoard *thisboard;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(rtd520Boards); i++) {
-		thisboard = &rtd520Boards[i];
-		if (pcidev->device == thisboard->device_id)
-			return thisboard;
-	}
-	return NULL;
-}
-
 static int rtd_auto_attach(struct comedi_device *dev,
-				     unsigned long context_unused)
+			   unsigned long context)
 {
 	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
-	const struct rtdBoard *thisboard;
+	const struct rtdBoard *thisboard = NULL;
 	struct rtdPrivate *devpriv;
 	struct comedi_subdevice *s;
 	int ret;
 
-	thisboard = rtd_find_boardinfo(dev, pcidev);
+	if (context < ARRAY_SIZE(rtd520Boards))
+		thisboard = &rtd520Boards[context];
 	if (!thisboard)
 		return -ENODEV;
 	dev->board_ptr = thisboard;
@@ -1293,17 +1362,13 @@ static int rtd_auto_attach(struct comedi_device *dev,
 		return -ENOMEM;
 	dev->private = devpriv;
 
-	ret = comedi_pci_enable(pcidev, dev->board_name);
+	ret = comedi_pci_enable(dev);
 	if (ret)
 		return ret;
-	dev->iobase = 1;	/* the "detach" needs this */
 
-	devpriv->las0 = ioremap_nocache(pci_resource_start(pcidev, 2),
-					pci_resource_len(pcidev, 2));
-	devpriv->las1 = ioremap_nocache(pci_resource_start(pcidev, 3),
-					pci_resource_len(pcidev, 3));
-	devpriv->lcfg = ioremap_nocache(pci_resource_start(pcidev, 0),
-					pci_resource_len(pcidev, 0));
+	devpriv->las0 = pci_ioremap_bar(pcidev, 2);
+	devpriv->las1 = pci_ioremap_bar(pcidev, 3);
+	devpriv->lcfg = pci_ioremap_bar(pcidev, 0);
 	if (!devpriv->las0 || !devpriv->las1 || !devpriv->lcfg)
 		return -ENOMEM;
 
@@ -1373,7 +1438,7 @@ static int rtd_auto_attach(struct comedi_device *dev,
 	devpriv->fifoLen = ret;
 
 	if (dev->irq)
-		writel(ICS_PIE | ICS_PLIE, devpriv->lcfg + LCFG_ITCSR);
+		writel(ICS_PIE | ICS_PLIE, devpriv->lcfg + PLX_INTRCS_REG);
 
 	dev_info(dev->class_dev, "%s attached\n", dev->board_name);
 
@@ -1383,16 +1448,15 @@ static int rtd_auto_attach(struct comedi_device *dev,
 static void rtd_detach(struct comedi_device *dev)
 {
 	struct rtdPrivate *devpriv = dev->private;
-	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
 
 	if (devpriv) {
 		/* Shut down any board ops by resetting it */
 		if (devpriv->las0 && devpriv->lcfg)
 			rtd_reset(dev);
 		if (dev->irq) {
-			writel(readl(devpriv->lcfg + LCFG_ITCSR) &
+			writel(readl(devpriv->lcfg + PLX_INTRCS_REG) &
 				~(ICS_PLIE | ICS_DMA0_E | ICS_DMA1_E),
-				devpriv->lcfg + LCFG_ITCSR);
+				devpriv->lcfg + PLX_INTRCS_REG);
 			free_irq(dev->irq, dev);
 		}
 		if (devpriv->las0)
@@ -1402,10 +1466,7 @@ static void rtd_detach(struct comedi_device *dev)
 		if (devpriv->lcfg)
 			iounmap(devpriv->lcfg);
 	}
-	if (pcidev) {
-		if (dev->iobase)
-			comedi_pci_disable(pcidev);
-	}
+	comedi_pci_disable(dev);
 }
 
 static struct comedi_driver rtd520_driver = {
@@ -1416,14 +1477,14 @@ static struct comedi_driver rtd520_driver = {
 };
 
 static int rtd520_pci_probe(struct pci_dev *dev,
-				      const struct pci_device_id *ent)
+			    const struct pci_device_id *id)
 {
-	return comedi_pci_auto_config(dev, &rtd520_driver);
+	return comedi_pci_auto_config(dev, &rtd520_driver, id->driver_data);
 }
 
 static DEFINE_PCI_DEVICE_TABLE(rtd520_pci_table) = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_RTD, 0x7520) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_RTD, 0x4520) },
+	{ PCI_VDEVICE(RTD, 0x7520), BOARD_DM7520 },
+	{ PCI_VDEVICE(RTD, 0x4520), BOARD_PCI4520 },
 	{ 0 }
 };
 MODULE_DEVICE_TABLE(pci, rtd520_pci_table);
