@@ -485,6 +485,8 @@ static void macb_tx_interrupt(struct macb *bp)
 	status = macb_readl(bp, TSR);
 	macb_writel(bp, TSR, status);
 
+	macb_writel(bp, ISR, MACB_BIT(TCOMP));
+
 	netdev_vdbg(bp->dev, "macb_tx_interrupt status = 0x%03lx\n",
 		(unsigned long)status);
 
@@ -736,6 +738,7 @@ static irqreturn_t macb_interrupt(int irq, void *dev_id)
 			 * now.
 			 */
 			macb_writel(bp, IDR, MACB_RX_INT_FLAGS);
+			macb_writel(bp, ISR, MACB_BIT(RCOMP));
 
 			if (napi_schedule_prep(&bp->napi)) {
 				netdev_vdbg(bp->dev, "scheduling RX softirq\n");
@@ -1054,6 +1057,7 @@ static void macb_configure_dma(struct macb *bp)
 		dmacfg |= GEM_BF(RXBS, RX_BUFFER_SIZE / 64);
 		dmacfg |= GEM_BF(FBLDO, 16);
 		dmacfg |= GEM_BIT(TXPBMS) | GEM_BF(RXBMS, -1L);
+		dmacfg &= ~GEM_BIT(ENDIA);
 		gem_writel(bp, DMACFG, dmacfg);
 	}
 }
@@ -1557,14 +1561,14 @@ static int __init macb_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to get macb_clk\n");
 		goto err_out_free_dev;
 	}
-	clk_enable(bp->pclk);
+	clk_prepare_enable(bp->pclk);
 
 	bp->hclk = clk_get(&pdev->dev, "hclk");
 	if (IS_ERR(bp->hclk)) {
 		dev_err(&pdev->dev, "failed to get hclk\n");
 		goto err_out_put_pclk;
 	}
-	clk_enable(bp->hclk);
+	clk_prepare_enable(bp->hclk);
 
 	bp->regs = ioremap(regs->start, resource_size(regs));
 	if (!bp->regs) {
@@ -1654,9 +1658,9 @@ err_out_free_irq:
 err_out_iounmap:
 	iounmap(bp->regs);
 err_out_disable_clocks:
-	clk_disable(bp->hclk);
+	clk_disable_unprepare(bp->hclk);
 	clk_put(bp->hclk);
-	clk_disable(bp->pclk);
+	clk_disable_unprepare(bp->pclk);
 err_out_put_pclk:
 	clk_put(bp->pclk);
 err_out_free_dev:
@@ -1683,9 +1687,9 @@ static int __exit macb_remove(struct platform_device *pdev)
 		unregister_netdev(dev);
 		free_irq(dev->irq, dev);
 		iounmap(bp->regs);
-		clk_disable(bp->hclk);
+		clk_disable_unprepare(bp->hclk);
 		clk_put(bp->hclk);
-		clk_disable(bp->pclk);
+		clk_disable_unprepare(bp->pclk);
 		clk_put(bp->pclk);
 		free_netdev(dev);
 		platform_set_drvdata(pdev, NULL);
@@ -1703,8 +1707,8 @@ static int macb_suspend(struct platform_device *pdev, pm_message_t state)
 	netif_carrier_off(netdev);
 	netif_device_detach(netdev);
 
-	clk_disable(bp->hclk);
-	clk_disable(bp->pclk);
+	clk_disable_unprepare(bp->hclk);
+	clk_disable_unprepare(bp->pclk);
 
 	return 0;
 }
@@ -1714,8 +1718,8 @@ static int macb_resume(struct platform_device *pdev)
 	struct net_device *netdev = platform_get_drvdata(pdev);
 	struct macb *bp = netdev_priv(netdev);
 
-	clk_enable(bp->pclk);
-	clk_enable(bp->hclk);
+	clk_prepare_enable(bp->pclk);
+	clk_prepare_enable(bp->hclk);
 
 	netif_device_attach(netdev);
 
@@ -1737,18 +1741,7 @@ static struct platform_driver macb_driver = {
 	},
 };
 
-static int __init macb_init(void)
-{
-	return platform_driver_probe(&macb_driver, macb_probe);
-}
-
-static void __exit macb_exit(void)
-{
-	platform_driver_unregister(&macb_driver);
-}
-
-module_init(macb_init);
-module_exit(macb_exit);
+module_platform_driver_probe(macb_driver, macb_probe);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Cadence MACB/GEM Ethernet driver");

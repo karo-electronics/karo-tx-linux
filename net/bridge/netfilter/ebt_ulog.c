@@ -35,7 +35,7 @@
 #include <linux/skbuff.h>
 #include <linux/kernel.h>
 #include <linux/timer.h>
-#include <linux/netlink.h>
+#include <net/netlink.h>
 #include <linux/netdevice.h>
 #include <linux/netfilter/x_tables.h>
 #include <linux/netfilter_bridge/ebtables.h>
@@ -134,7 +134,7 @@ static void ebt_ulog_packet(unsigned int hooknr, const struct sk_buff *skb,
 	else
 		copy_len = uloginfo->cprange;
 
-	size = NLMSG_SPACE(sizeof(*pm) + copy_len);
+	size = nlmsg_total_size(sizeof(*pm) + copy_len);
 	if (size > nlbufsiz) {
 		pr_debug("Size %Zd needed, but nlbufsiz=%d\n", size, nlbufsiz);
 		return;
@@ -319,12 +319,11 @@ static void __exit ebt_ulog_fini(void)
 	for (i = 0; i < EBT_ULOG_MAXNLGROUPS; i++) {
 		ub = &ulog_buffers[i];
 		del_timer(&ub->timer);
-		spin_lock_bh(&ub->lock);
+
 		if (ub->skb) {
 			kfree_skb(ub->skb);
 			ub->skb = NULL;
 		}
-		spin_unlock_bh(&ub->lock);
 	}
 	netlink_kernel_release(ebtulognl);
 }
