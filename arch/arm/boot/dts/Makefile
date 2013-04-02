@@ -88,9 +88,11 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx25-karo-tx25.dtb \
 	imx25-pdk.dtb \
 	imx27-apf27.dtb \
+	imx27-apf27dev.dtb \
 	imx27-pdk.dtb \
 	imx31-bug.dtb \
 	imx51-apf51.dtb \
+	imx51-apf51dev.dtb \
 	imx51-babbage.dtb \
 	imx53-ard.dtb \
 	imx53-evk.dtb \
