@@ -40,7 +40,11 @@ static noinline void print_reg_file(long *reg_rev, int start_num)
 	if (start_num != 0)
 		n += scnprintf(buf + n, len - n, "\n\n");
 
-	pr_info("%s", buf);
+	/* To continue printing callee regs on same line as scratch regs */
+	if (start_num == 0)
+		pr_info("%s", buf);
+	else
+		pr_cont("%s\n", buf);
 }
 
 static void show_callee_regs(struct callee_regs *cregs)
