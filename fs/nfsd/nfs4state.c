@@ -94,17 +94,32 @@ nfs4_lock_state(void)
 	mutex_lock(&client_mutex);
 }
 
-static void free_session(struct kref *);
+static void free_session(struct nfsd4_session *);
 
-/* Must be called under the client_lock */
-static void nfsd4_put_session_locked(struct nfsd4_session *ses)
+void nfsd4_put_session(struct nfsd4_session *ses)
 {
-	kref_put(&ses->se_ref, free_session);
+	atomic_dec(&ses->se_ref);
 }
 
-static void nfsd4_get_session(struct nfsd4_session *ses)
+static bool is_session_dead(struct nfsd4_session *ses)
 {
-	kref_get(&ses->se_ref);
+	return ses->se_flags & NFS4_SESSION_DEAD;
+}
+
+static __be32 mark_session_dead_locked(struct nfsd4_session *ses)
+{
+	if (atomic_read(&ses->se_ref))
+		return nfserr_jukebox;
+	ses->se_flags |= NFS4_SESSION_DEAD;
+	return nfs_ok;
+}
+
+static __be32 nfsd4_get_session_locked(struct nfsd4_session *ses)
+{
+	if (is_session_dead(ses))
+		return nfserr_badsession;
+	atomic_inc(&ses->se_ref);
+	return nfs_ok;
 }
 
 void
@@ -112,6 +127,90 @@ nfs4_unlock_state(void)
 {
 	mutex_unlock(&client_mutex);
 }
+
+static bool is_client_expired(struct nfs4_client *clp)
+{
+	return clp->cl_time == 0;
+}
+
+static __be32 mark_client_expired_locked(struct nfs4_client *clp)
+{
+	if (atomic_read(&clp->cl_refcount))
+		return nfserr_jukebox;
+	clp->cl_time = 0;
+	return nfs_ok;
+}
+
+static __be32 mark_client_expired(struct nfs4_client *clp)
+{
+	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
+	__be32 ret;
+
+	spin_lock(&nn->client_lock);
+	ret = mark_client_expired_locked(clp);
+	spin_unlock(&nn->client_lock);
+	return ret;
+}
+
+static __be32 get_client_locked(struct nfs4_client *clp)
+{
+	if (is_client_expired(clp))
+		return nfserr_expired;
+	atomic_inc(&clp->cl_refcount);
+	return nfs_ok;
+}
+
+/* must be called under the client_lock */
+static inline void
+renew_client_locked(struct nfs4_client *clp)
+{
+	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
+
+	if (is_client_expired(clp)) {
+		WARN_ON(1);
+		printk("%s: client (clientid %08x/%08x) already expired\n",
+			__func__,
+			clp->cl_clientid.cl_boot,
+			clp->cl_clientid.cl_id);
+		return;
+	}
+
+	dprintk("renewing client (clientid %08x/%08x)\n",
+			clp->cl_clientid.cl_boot,
+			clp->cl_clientid.cl_id);
+	list_move_tail(&clp->cl_lru, &nn->client_lru);
+	clp->cl_time = get_seconds();
+}
+
+static inline void
+renew_client(struct nfs4_client *clp)
+{
+	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
+
+	spin_lock(&nn->client_lock);
+	renew_client_locked(clp);
+	spin_unlock(&nn->client_lock);
+}
+
+void put_client_renew_locked(struct nfs4_client *clp)
+{
+	if (!atomic_dec_and_test(&clp->cl_refcount))
+		return;
+	if (!is_client_expired(clp))
+		renew_client_locked(clp);
+}
+
+void put_client_renew(struct nfs4_client *clp)
+{
+	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
+
+	if (!atomic_dec_and_lock(&clp->cl_refcount, &nn->client_lock))
+		return;
+	if (!is_client_expired(clp))
+		renew_client_locked(clp);
+	spin_unlock(&nn->client_lock);
+}
+
 
 static inline u32
 opaque_hashval(const void *ptr, int nbytes)
@@ -137,7 +236,7 @@ static inline void
 put_nfs4_file(struct nfs4_file *fi)
 {
 	if (atomic_dec_and_lock(&fi->fi_ref, &recall_lock)) {
-		list_del(&fi->fi_hash);
+		hlist_del(&fi->fi_hash);
 		spin_unlock(&recall_lock);
 		iput(fi->fi_inode);
 		nfsd4_free_file(fi);
@@ -181,7 +280,7 @@ static unsigned int file_hashval(struct inode *ino)
 	return hash_ptr(ino, FILE_HASH_BITS);
 }
 
-static struct list_head file_hashtbl[FILE_HASH_SIZE];
+static struct hlist_head file_hashtbl[FILE_HASH_SIZE];
 
 static void __nfs4_file_get_access(struct nfs4_file *fp, int oflag)
 {
@@ -761,8 +860,8 @@ static void nfsd4_conn_lost(struct svc_xpt_user *u)
 		list_del(&c->cn_persession);
 		free_conn(c);
 	}
-	spin_unlock(&clp->cl_lock);
 	nfsd4_probe_callback(clp);
+	spin_unlock(&clp->cl_lock);
 }
 
 static struct nfsd4_conn *alloc_conn(struct svc_rqst *rqstp, u32 flags)
@@ -851,26 +950,13 @@ static void __free_session(struct nfsd4_session *ses)
 	kfree(ses);
 }
 
-static void free_session(struct kref *kref)
+static void free_session(struct nfsd4_session *ses)
 {
-	struct nfsd4_session *ses;
-	struct nfsd_net *nn;
-
-	ses = container_of(kref, struct nfsd4_session, se_ref);
-	nn = net_generic(ses->se_client->net, nfsd_net_id);
+	struct nfsd_net *nn = net_generic(ses->se_client->net, nfsd_net_id);
 
 	lockdep_assert_held(&nn->client_lock);
 	nfsd4_del_conns(ses);
 	__free_session(ses);
-}
-
-void nfsd4_put_session(struct nfsd4_session *ses)
-{
-	struct nfsd_net *nn = net_generic(ses->se_client->net, nfsd_net_id);
-
-	spin_lock(&nn->client_lock);
-	nfsd4_put_session_locked(ses);
-	spin_unlock(&nn->client_lock);
 }
 
 static struct nfsd4_session *alloc_session(struct nfsd4_channel_attrs *fchan,
@@ -913,7 +999,7 @@ static void init_session(struct svc_rqst *rqstp, struct nfsd4_session *new, stru
 	new->se_flags = cses->flags;
 	new->se_cb_prog = cses->callback_prog;
 	new->se_cb_sec = cses->cb_sec;
-	kref_init(&new->se_ref);
+	atomic_set(&new->se_ref, 0);
 	idx = hash_sessionid(&new->se_sessionid);
 	spin_lock(&nn->client_lock);
 	list_add(&new->se_hash, &nn->sessionid_hashtbl[idx]);
@@ -968,38 +1054,6 @@ unhash_session(struct nfsd4_session *ses)
 	spin_unlock(&ses->se_client->cl_lock);
 }
 
-/* must be called under the client_lock */
-static inline void
-renew_client_locked(struct nfs4_client *clp)
-{
-	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
-
-	if (is_client_expired(clp)) {
-		WARN_ON(1);
-		printk("%s: client (clientid %08x/%08x) already expired\n",
-			__func__,
-			clp->cl_clientid.cl_boot,
-			clp->cl_clientid.cl_id);
-		return;
-	}
-
-	dprintk("renewing client (clientid %08x/%08x)\n", 
-			clp->cl_clientid.cl_boot, 
-			clp->cl_clientid.cl_id);
-	list_move_tail(&clp->cl_lru, &nn->client_lru);
-	clp->cl_time = get_seconds();
-}
-
-static inline void
-renew_client(struct nfs4_client *clp)
-{
-	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
-
-	spin_lock(&nn->client_lock);
-	renew_client_locked(clp);
-	spin_unlock(&nn->client_lock);
-}
-
 /* SETCLIENTID and SETCLIENTID_CONFIRM Helper functions */
 static int
 STALE_CLIENTID(clientid_t *clid, struct nfsd_net *nn)
@@ -1043,28 +1097,13 @@ free_client(struct nfs4_client *clp)
 		ses = list_entry(clp->cl_sessions.next, struct nfsd4_session,
 				se_perclnt);
 		list_del(&ses->se_perclnt);
-		nfsd4_put_session_locked(ses);
+		WARN_ON_ONCE(atomic_read(&ses->se_ref));
+		free_session(ses);
 	}
 	free_svc_cred(&clp->cl_cred);
 	kfree(clp->cl_name.data);
 	idr_destroy(&clp->cl_stateids);
 	kfree(clp);
-}
-
-void
-release_session_client(struct nfsd4_session *session)
-{
-	struct nfs4_client *clp = session->se_client;
-	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
-
-	if (!atomic_dec_and_lock(&clp->cl_refcount, &nn->client_lock))
-		return;
-	if (is_client_expired(clp)) {
-		free_client(clp);
-		session->se_client = NULL;
-	} else
-		renew_client_locked(clp);
-	spin_unlock(&nn->client_lock);
 }
 
 /* must be called under the client_lock */
@@ -1073,7 +1112,6 @@ unhash_client_locked(struct nfs4_client *clp)
 {
 	struct nfsd4_session *ses;
 
-	mark_client_expired(clp);
 	list_del(&clp->cl_lru);
 	spin_lock(&clp->cl_lock);
 	list_for_each_entry(ses, &clp->cl_sessions, se_perclnt)
@@ -1115,8 +1153,8 @@ destroy_client(struct nfs4_client *clp)
 		rb_erase(&clp->cl_namenode, &nn->unconf_name_tree);
 	spin_lock(&nn->client_lock);
 	unhash_client_locked(clp);
-	if (atomic_read(&clp->cl_refcount) == 0)
-		free_client(clp);
+	WARN_ON_ONCE(atomic_read(&clp->cl_refcount));
+	free_client(clp);
 	spin_unlock(&nn->client_lock);
 }
 
@@ -1376,12 +1414,12 @@ move_to_confirmed(struct nfs4_client *clp)
 }
 
 static struct nfs4_client *
-find_confirmed_client(clientid_t *clid, bool sessions, struct nfsd_net *nn)
+find_client_in_id_table(struct list_head *tbl, clientid_t *clid, bool sessions)
 {
 	struct nfs4_client *clp;
 	unsigned int idhashval = clientid_hashval(clid->cl_id);
 
-	list_for_each_entry(clp, &nn->conf_id_hashtbl[idhashval], cl_idhash) {
+	list_for_each_entry(clp, &tbl[idhashval], cl_idhash) {
 		if (same_clid(&clp->cl_clientid, clid)) {
 			if ((bool)clp->cl_minorversion != sessions)
 				return NULL;
@@ -1393,19 +1431,19 @@ find_confirmed_client(clientid_t *clid, bool sessions, struct nfsd_net *nn)
 }
 
 static struct nfs4_client *
+find_confirmed_client(clientid_t *clid, bool sessions, struct nfsd_net *nn)
+{
+	struct list_head *tbl = nn->conf_id_hashtbl;
+
+	return find_client_in_id_table(tbl, clid, sessions);
+}
+
+static struct nfs4_client *
 find_unconfirmed_client(clientid_t *clid, bool sessions, struct nfsd_net *nn)
 {
-	struct nfs4_client *clp;
-	unsigned int idhashval = clientid_hashval(clid->cl_id);
+	struct list_head *tbl = nn->unconf_id_hashtbl;
 
-	list_for_each_entry(clp, &nn->unconf_id_hashtbl[idhashval], cl_idhash) {
-		if (same_clid(&clp->cl_clientid, clid)) {
-			if ((bool)clp->cl_minorversion != sessions)
-				return NULL;
-			return clp;
-		}
-	}
-	return NULL;
+	return find_client_in_id_table(tbl, clid, sessions);
 }
 
 static bool clp_used_exchangeid(struct nfs4_client *clp)
@@ -1784,6 +1822,7 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 	nfs4_lock_state();
 	unconf = find_unconfirmed_client(&cr_ses->clientid, true, nn);
 	conf = find_confirmed_client(&cr_ses->clientid, true, nn);
+	WARN_ON_ONCE(conf && unconf);
 
 	if (conf) {
 		cs_slot = &conf->cl_cs_slot;
@@ -1810,8 +1849,12 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 			goto out_free_conn;
 		}
 		old = find_confirmed_client_by_name(&unconf->cl_name, nn);
-		if (old)
+		if (old) {
+			status = mark_client_expired(old);
+			if (status)
+				goto out_free_conn;
 			expire_client(old);
+		}
 		move_to_confirmed(unconf);
 		conf = unconf;
 	} else {
@@ -1838,15 +1881,13 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 	/* cache solo and embedded create sessions under the state lock */
 	nfsd4_cache_create_session(cr_ses, cs_slot, status);
 	nfs4_unlock_state();
-out:
-	dprintk("%s returns %d\n", __func__, ntohl(status));
 	return status;
 out_free_conn:
 	nfs4_unlock_state();
 	free_conn(conn);
 out_free_session:
 	__free_session(new);
-	goto out;
+	return status;
 }
 
 static __be32 nfsd4_map_bcts_dir(u32 *dir)
@@ -1884,30 +1925,30 @@ __be32 nfsd4_bind_conn_to_session(struct svc_rqst *rqstp,
 {
 	__be32 status;
 	struct nfsd4_conn *conn;
+	struct nfsd4_session *session;
 	struct nfsd_net *nn = net_generic(SVC_NET(rqstp), nfsd_net_id);
 
 	if (!nfsd4_last_compound_op(rqstp))
 		return nfserr_not_only_op;
+	nfs4_lock_state();
 	spin_lock(&nn->client_lock);
-	cstate->session = find_in_sessionid_hashtbl(&bcts->sessionid, SVC_NET(rqstp));
-	/* Sorta weird: we only need the refcnt'ing because new_conn acquires
-	 * client_lock iself: */
-	if (cstate->session) {
-		nfsd4_get_session(cstate->session);
-		atomic_inc(&cstate->session->se_client->cl_refcount);
-	}
+	session = find_in_sessionid_hashtbl(&bcts->sessionid, SVC_NET(rqstp));
 	spin_unlock(&nn->client_lock);
-	if (!cstate->session)
-		return nfserr_badsession;
-
+	status = nfserr_badsession;
+	if (!session)
+		goto out;
 	status = nfsd4_map_bcts_dir(&bcts->dir);
 	if (status)
-		return status;
+		goto out;
 	conn = alloc_conn(rqstp, bcts->dir);
+	status = nfserr_jukebox;
 	if (!conn)
-		return nfserr_jukebox;
-	nfsd4_init_conn(rqstp, conn, cstate->session);
-	return nfs_ok;
+		goto out;
+	nfsd4_init_conn(rqstp, conn, session);
+	status = nfs_ok;
+out:
+	nfs4_unlock_state();
+	return status;
 }
 
 static bool nfsd4_compound_in_session(struct nfsd4_session *session, struct nfs4_sessionid *sid)
@@ -1923,42 +1964,36 @@ nfsd4_destroy_session(struct svc_rqst *r,
 		      struct nfsd4_destroy_session *sessionid)
 {
 	struct nfsd4_session *ses;
-	__be32 status = nfserr_badsession;
+	__be32 status;
 	struct nfsd_net *nn = net_generic(SVC_NET(r), nfsd_net_id);
 
-	/* Notes:
-	 * - The confirmed nfs4_client->cl_sessionid holds destroyed sessinid
-	 * - Should we return nfserr_back_chan_busy if waiting for
-	 *   callbacks on to-be-destroyed session?
-	 * - Do we need to clear any callback info from previous session?
-	 */
-
+	nfs4_lock_state();
+	status = nfserr_not_only_op;
 	if (nfsd4_compound_in_session(cstate->session, &sessionid->sessionid)) {
 		if (!nfsd4_last_compound_op(r))
-			return nfserr_not_only_op;
+			goto out;
 	}
 	dump_sessionid(__func__, &sessionid->sessionid);
 	spin_lock(&nn->client_lock);
 	ses = find_in_sessionid_hashtbl(&sessionid->sessionid, SVC_NET(r));
-	if (!ses) {
-		spin_unlock(&nn->client_lock);
-		goto out;
-	}
-
+	status = nfserr_badsession;
+	if (!ses)
+		goto out_client_lock;
+	status = mark_session_dead_locked(ses);
+	if (status)
+		goto out_client_lock;
 	unhash_session(ses);
 	spin_unlock(&nn->client_lock);
 
-	nfs4_lock_state();
 	nfsd4_probe_callback_sync(ses->se_client);
-	nfs4_unlock_state();
 
 	spin_lock(&nn->client_lock);
-	nfsd4_del_conns(ses);
-	nfsd4_put_session_locked(ses);
-	spin_unlock(&nn->client_lock);
+	free_session(ses);
 	status = nfs_ok;
+out_client_lock:
+	spin_unlock(&nn->client_lock);
 out:
-	dprintk("%s returns %d\n", __func__, ntohl(status));
+	nfs4_unlock_state();
 	return status;
 }
 
@@ -2018,6 +2053,7 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 {
 	struct nfsd4_compoundres *resp = rqstp->rq_resp;
 	struct nfsd4_session *session;
+	struct nfs4_client *clp;
 	struct nfsd4_slot *slot;
 	struct nfsd4_conn *conn;
 	__be32 status;
@@ -2038,19 +2074,26 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 	status = nfserr_badsession;
 	session = find_in_sessionid_hashtbl(&seq->sessionid, SVC_NET(rqstp));
 	if (!session)
-		goto out;
+		goto out_no_session;
+	clp = session->se_client;
+	status = get_client_locked(clp);
+	if (status)
+		goto out_no_session;
+	status = nfsd4_get_session_locked(session);
+	if (status)
+		goto out_put_client;
 
 	status = nfserr_too_many_ops;
 	if (nfsd4_session_too_many_ops(rqstp, session))
-		goto out;
+		goto out_put_session;
 
 	status = nfserr_req_too_big;
 	if (nfsd4_request_too_big(rqstp, session))
-		goto out;
+		goto out_put_session;
 
 	status = nfserr_badslot;
 	if (seq->slotid >= session->se_fchannel.maxreqs)
-		goto out;
+		goto out_put_session;
 
 	slot = session->se_slots[seq->slotid];
 	dprintk("%s: slotid %d\n", __func__, seq->slotid);
@@ -2065,7 +2108,7 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 	if (status == nfserr_replay_cache) {
 		status = nfserr_seq_misordered;
 		if (!(slot->sl_flags & NFSD4_SLOT_INITIALIZED))
-			goto out;
+			goto out_put_session;
 		cstate->slot = slot;
 		cstate->session = session;
 		/* Return the cached reply status and set cstate->status
@@ -2075,7 +2118,7 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 		goto out;
 	}
 	if (status)
-		goto out;
+		goto out_put_session;
 
 	nfsd4_sequence_check_conn(conn, session);
 	conn = NULL;
@@ -2092,27 +2135,25 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 	cstate->session = session;
 
 out:
-	/* Hold a session reference until done processing the compound. */
-	if (cstate->session) {
-		struct nfs4_client *clp = session->se_client;
-
-		nfsd4_get_session(cstate->session);
-		atomic_inc(&clp->cl_refcount);
-		switch (clp->cl_cb_state) {
-		case NFSD4_CB_DOWN:
-			seq->status_flags = SEQ4_STATUS_CB_PATH_DOWN;
-			break;
-		case NFSD4_CB_FAULT:
-			seq->status_flags = SEQ4_STATUS_BACKCHANNEL_FAULT;
-			break;
-		default:
-			seq->status_flags = 0;
-		}
+	switch (clp->cl_cb_state) {
+	case NFSD4_CB_DOWN:
+		seq->status_flags = SEQ4_STATUS_CB_PATH_DOWN;
+		break;
+	case NFSD4_CB_FAULT:
+		seq->status_flags = SEQ4_STATUS_BACKCHANNEL_FAULT;
+		break;
+	default:
+		seq->status_flags = 0;
 	}
+out_no_session:
 	kfree(conn);
 	spin_unlock(&nn->client_lock);
-	dprintk("%s: return %d\n", __func__, ntohl(status));
 	return status;
+out_put_session:
+	nfsd4_put_session(session);
+out_put_client:
+	put_client_renew_locked(clp);
+	goto out_no_session;
 }
 
 __be32
@@ -2125,17 +2166,12 @@ nfsd4_destroy_clientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *csta
 	nfs4_lock_state();
 	unconf = find_unconfirmed_client(&dc->clientid, true, nn);
 	conf = find_confirmed_client(&dc->clientid, true, nn);
+	WARN_ON_ONCE(conf && unconf);
 
 	if (conf) {
 		clp = conf;
 
-		if (!is_client_expired(conf) && client_has_state(conf)) {
-			status = nfserr_clientid_busy;
-			goto out;
-		}
-
-		/* rfc5661 18.50.3 */
-		if (cstate->session && conf == cstate->session->se_client) {
+		if (client_has_state(conf)) {
 			status = nfserr_clientid_busy;
 			goto out;
 		}
@@ -2149,7 +2185,6 @@ nfsd4_destroy_clientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *csta
 	expire_client(clp);
 out:
 	nfs4_unlock_state();
-	dprintk("%s return %d\n", __func__, ntohl(status));
 	return status;
 }
 
@@ -2287,8 +2322,12 @@ nfsd4_setclientid_confirm(struct svc_rqst *rqstp,
 		expire_client(unconf);
 	} else { /* case 3: normal case; new or rebooted client */
 		conf = find_confirmed_client_by_name(&unconf->cl_name, nn);
-		if (conf)
+		if (conf) {
+			status = mark_client_expired(conf);
+			if (status)
+				goto out;
 			expire_client(conf);
+		}
 		move_to_confirmed(unconf);
 		nfsd4_probe_callback(unconf);
 	}
@@ -2308,7 +2347,6 @@ static void nfsd4_init_file(struct nfs4_file *fp, struct inode *ino)
 	unsigned int hashval = file_hashval(ino);
 
 	atomic_set(&fp->fi_ref, 1);
-	INIT_LIST_HEAD(&fp->fi_hash);
 	INIT_LIST_HEAD(&fp->fi_stateids);
 	INIT_LIST_HEAD(&fp->fi_delegations);
 	fp->fi_inode = igrab(ino);
@@ -2317,7 +2355,7 @@ static void nfsd4_init_file(struct nfs4_file *fp, struct inode *ino)
 	memset(fp->fi_fds, 0, sizeof(fp->fi_fds));
 	memset(fp->fi_access, 0, sizeof(fp->fi_access));
 	spin_lock(&recall_lock);
-	list_add(&fp->fi_hash, &file_hashtbl[hashval]);
+	hlist_add_head(&fp->fi_hash, &file_hashtbl[hashval]);
 	spin_unlock(&recall_lock);
 }
 
@@ -2503,7 +2541,7 @@ find_file(struct inode *ino)
 	struct nfs4_file *fp;
 
 	spin_lock(&recall_lock);
-	list_for_each_entry(fp, &file_hashtbl[hashval], fi_hash) {
+	hlist_for_each_entry(fp, &file_hashtbl[hashval], fi_hash) {
 		if (fp->fi_inode == ino) {
 			get_nfs4_file(fp);
 			spin_unlock(&recall_lock);
@@ -2525,8 +2563,6 @@ nfs4_share_conflict(struct svc_fh *current_fh, unsigned int deny_type)
 	struct nfs4_file *fp;
 	struct nfs4_ol_stateid *stp;
 	__be32 ret;
-
-	dprintk("NFSD: nfs4_share_conflict\n");
 
 	fp = find_file(ino);
 	if (!fp)
@@ -3202,13 +3238,12 @@ nfs4_laundromat(struct nfsd_net *nn)
 				clientid_val = t;
 			break;
 		}
-		if (atomic_read(&clp->cl_refcount)) {
+		if (mark_client_expired_locked(clp)) {
 			dprintk("NFSD: client in use (clientid %08x)\n",
 				clp->cl_clientid.cl_id);
 			continue;
 		}
-		unhash_client_locked(clp);
-		list_add(&clp->cl_lru, &reaplist);
+		list_move(&clp->cl_lru, &reaplist);
 	}
 	spin_unlock(&nn->client_lock);
 	list_for_each_safe(pos, next, &reaplist) {
@@ -3274,16 +3309,6 @@ static inline __be32 nfs4_check_fh(struct svc_fh *fhp, struct nfs4_ol_stateid *s
 	if (fhp->fh_dentry->d_inode != stp->st_file->fi_inode)
 		return nfserr_bad_stateid;
 	return nfs_ok;
-}
-
-static int
-STALE_STATEID(stateid_t *stateid, struct nfsd_net *nn)
-{
-	if (stateid->si_opaque.so_clid.cl_boot == nn->boot_time)
-		return 0;
-	dprintk("NFSD: stale stateid " STATEID_FMT "!\n",
-		STATEID_VAL(stateid));
-	return 1;
 }
 
 static inline int
@@ -3416,19 +3441,20 @@ static __be32 nfsd4_lookup_stateid(stateid_t *stateid, unsigned char typemask,
 				   struct nfsd_net *nn)
 {
 	struct nfs4_client *cl;
+	__be32 status;
 
 	if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
 		return nfserr_bad_stateid;
-	if (STALE_STATEID(stateid, nn))
+	status = lookup_clientid(&stateid->si_opaque.so_clid, sessions,
+							nn, &cl);
+	if (status == nfserr_stale_clientid)
 		return nfserr_stale_stateid;
-	cl = find_confirmed_client(&stateid->si_opaque.so_clid, sessions, nn);
-	if (!cl)
-		return nfserr_expired;
+	if (status)
+		return status;
 	*s = find_stateid_by_type(cl, stateid, typemask);
 	if (!*s)
 		return nfserr_bad_stateid;
 	return nfs_ok;
-
 }
 
 /*
@@ -3819,6 +3845,7 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	nfsd4_close_open_stateid(stp);
 	release_last_closed_stateid(oo);
+	oo->oo_flags &= ~NFS4_OO_PURGE_CLOSE;
 	oo->oo_last_closed_stid = stp;
 
 	if (list_empty(&oo->oo_owner.so_stateids)) {
@@ -4602,6 +4629,8 @@ nfs4_check_open_reclaim(clientid_t *clid, bool sessions, struct nfsd_net *nn)
 
 u64 nfsd_forget_client(struct nfs4_client *clp, u64 max)
 {
+	if (mark_client_expired(clp))
+		return 0;
 	expire_client(clp);
 	return 1;
 }
@@ -4780,11 +4809,6 @@ struct nfs4_client *nfsd_find_client(struct sockaddr_storage *addr, size_t addr_
 void
 nfs4_state_init(void)
 {
-	int i;
-
-	for (i = 0; i < FILE_HASH_SIZE; i++) {
-		INIT_LIST_HEAD(&file_hashtbl[i]);
-	}
 	INIT_LIST_HEAD(&del_recall_lru);
 }
 
