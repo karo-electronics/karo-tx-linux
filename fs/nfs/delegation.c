@@ -570,11 +570,16 @@ void nfs_expire_all_delegations(struct nfs_client *clp)
 static void nfs_mark_return_unreferenced_delegations(struct nfs_server *server)
 {
 	struct nfs_delegation *delegation;
+	struct inode *inode;
 
 	list_for_each_entry_rcu(delegation, &server->delegations, super_list) {
 		if (test_and_clear_bit(NFS_DELEGATION_REFERENCED, &delegation->flags))
 			continue;
-		nfs_mark_return_delegation(server, delegation);
+		spin_lock(&delegation->lock);
+		inode = delegation->inode;
+		if (inode != NULL && list_empty(&NFS_I(inode)->open_files))
+			nfs_mark_return_delegation(server, delegation);
+		spin_unlock(&delegation->lock);
 	}
 }
 
