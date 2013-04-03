@@ -13,6 +13,7 @@
 #include <linux/stat.h>
 #include <linux/buffer_head.h>
 #include <linux/writeback.h>
+#include <linux/blkdev.h>
 #include <linux/falloc.h>
 #include <linux/types.h>
 #include <linux/compat.h>
@@ -43,7 +44,7 @@ static int f2fs_vm_page_mkwrite(struct vm_area_struct *vma,
 
 	/* block allocation */
 	set_new_dnode(&dn, inode, NULL, NULL, 0);
-	err = get_dnode_of_data(&dn, page->index, 0);
+	err = get_dnode_of_data(&dn, page->index, ALLOC_NODE);
 	if (err) {
 		mutex_unlock_op(sbi, DATA_NEW);
 		goto out;
@@ -102,28 +103,10 @@ static const struct vm_operations_struct f2fs_file_vm_ops = {
 	.remap_pages	= generic_file_remap_pages,
 };
 
-static int need_to_sync_dir(struct f2fs_sb_info *sbi, struct inode *inode)
-{
-	struct dentry *dentry;
-	nid_t pino;
-
-	inode = igrab(inode);
-	dentry = d_find_any_alias(inode);
-	if (!dentry) {
-		iput(inode);
-		return 0;
-	}
-	pino = dentry->d_parent->d_inode->i_ino;
-	dput(dentry);
-	iput(inode);
-	return !is_checkpointed_node(sbi, pino);
-}
-
 int f2fs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	struct inode *inode = file->f_mapping->host;
 	struct f2fs_sb_info *sbi = F2FS_SB(inode->i_sb);
-	unsigned long long cur_version;
 	int ret = 0;
 	bool need_cp = false;
 	struct writeback_control wbc = {
@@ -147,28 +130,18 @@ int f2fs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 	if (datasync && !(inode->i_state & I_DIRTY_DATASYNC))
 		goto out;
 
-	mutex_lock(&sbi->cp_mutex);
-	cur_version = le64_to_cpu(F2FS_CKPT(sbi)->checkpoint_ver);
-	mutex_unlock(&sbi->cp_mutex);
-
-	if (F2FS_I(inode)->data_version != cur_version &&
-					!(inode->i_state & I_DIRTY))
-		goto out;
-	F2FS_I(inode)->data_version--;
-
 	if (!S_ISREG(inode->i_mode) || inode->i_nlink != 1)
 		need_cp = true;
-	else if (is_inode_flag_set(F2FS_I(inode), FI_NEED_CP))
+	else if (is_cp_file(inode))
 		need_cp = true;
 	else if (!space_for_roll_forward(sbi))
 		need_cp = true;
-	else if (need_to_sync_dir(sbi, inode))
+	else if (!is_checkpointed_node(sbi, F2FS_I(inode)->i_pino))
 		need_cp = true;
 
 	if (need_cp) {
 		/* all the dirty node pages should be flushed for POR */
 		ret = f2fs_sync_fs(inode->i_sb, 1);
-		clear_inode_flag(F2FS_I(inode), FI_NEED_CP);
 	} else {
 		/* if there is no written node page, write its inode page */
 		while (!sync_node_pages(sbi, inode->i_ino, &wbc)) {
@@ -178,6 +151,7 @@ int f2fs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 		}
 		filemap_fdatawait_range(sbi->node_inode->i_mapping,
 							0, LONG_MAX);
+		ret = blkdev_issue_flush(inode->i_sb->s_bdev, GFP_KERNEL, NULL);
 	}
 out:
 	mutex_unlock(&inode->i_mutex);
@@ -258,7 +232,7 @@ static int truncate_blocks(struct inode *inode, u64 from)
 	mutex_lock_op(sbi, DATA_TRUNC);
 
 	set_new_dnode(&dn, inode, NULL, NULL, 0);
-	err = get_dnode_of_data(&dn, free_from, RDONLY_NODE);
+	err = get_dnode_of_data(&dn, free_from, LOOKUP_NODE);
 	if (err) {
 		if (err == -ENOENT)
 			goto free_next;
@@ -420,7 +394,7 @@ int truncate_hole(struct inode *inode, pgoff_t pg_start, pgoff_t pg_end)
 
 		mutex_lock_op(sbi, DATA_TRUNC);
 		set_new_dnode(&dn, inode, NULL, NULL, 0);
-		err = get_dnode_of_data(&dn, index, RDONLY_NODE);
+		err = get_dnode_of_data(&dn, index, LOOKUP_NODE);
 		if (err) {
 			mutex_unlock_op(sbi, DATA_TRUNC);
 			if (err == -ENOENT)
@@ -504,7 +478,7 @@ static int expand_inode_data(struct inode *inode, loff_t offset,
 		mutex_lock_op(sbi, DATA_NEW);
 
 		set_new_dnode(&dn, inode, NULL, NULL, 0);
-		ret = get_dnode_of_data(&dn, index, 0);
+		ret = get_dnode_of_data(&dn, index, ALLOC_NODE);
 		if (ret) {
 			mutex_unlock_op(sbi, DATA_NEW);
 			break;
