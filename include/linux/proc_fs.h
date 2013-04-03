@@ -72,7 +72,6 @@ struct proc_dir_entry {
 	struct proc_dir_entry *next, *parent, *subdir;
 	void *data;
 	read_proc_t *read_proc;
-	write_proc_t *write_proc;
 	atomic_t count;		/* use count */
 	int pde_users;	/* number of callers into module in progress */
 	struct completion *pde_unload_completion;
@@ -117,6 +116,7 @@ struct proc_dir_entry *proc_create_data(const char *name, umode_t mode,
 				const struct file_operations *proc_fops,
 				void *data);
 extern void remove_proc_entry(const char *name, struct proc_dir_entry *parent);
+extern int remove_proc_subtree(const char *name, struct proc_dir_entry *parent);
 
 struct pid_namespace;
 
@@ -202,6 +202,7 @@ static inline struct proc_dir_entry *proc_create_data(const char *name,
 	return NULL;
 }
 #define remove_proc_entry(name, parent) do {} while (0)
+#define remove_proc_subtree(name, parent) do {} while (0)
 
 static inline struct proc_dir_entry *proc_symlink(const char *name,
 		struct proc_dir_entry *parent,const char *dest) {return NULL;}
@@ -303,6 +304,11 @@ static inline struct proc_inode *PROC_I(const struct inode *inode)
 static inline struct proc_dir_entry *PDE(const struct inode *inode)
 {
 	return PROC_I(inode)->pde;
+}
+
+static inline void *PDE_DATA(const struct inode *inode)
+{
+	return PROC_I(inode)->pde->data;
 }
 
 static inline struct net *PDE_NET(struct proc_dir_entry *pde)

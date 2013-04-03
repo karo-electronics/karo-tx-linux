@@ -196,30 +196,6 @@ proc_file_read(struct file *file, char __user *buf, size_t nbytes,
 	return rv;
 }
 
-static ssize_t
-proc_file_write(struct file *file, const char __user *buffer,
-		size_t count, loff_t *ppos)
-{
-	struct proc_dir_entry *pde = PDE(file_inode(file));
-	ssize_t rv = -EIO;
-
-	if (pde->write_proc) {
-		spin_lock(&pde->pde_unload_lock);
-		if (!pde->proc_fops) {
-			spin_unlock(&pde->pde_unload_lock);
-			return rv;
-		}
-		pde->pde_users++;
-		spin_unlock(&pde->pde_unload_lock);
-
-		/* FIXME: does this routine need ppos?  probably... */
-		rv = pde->write_proc(file, buffer, count, pde->data);
-		pde_users_dec(pde);
-	}
-	return rv;
-}
-
-
 static loff_t
 proc_file_lseek(struct file *file, loff_t offset, int orig)
 {
@@ -239,7 +215,6 @@ proc_file_lseek(struct file *file, loff_t offset, int orig)
 static const struct file_operations proc_file_operations = {
 	.llseek		= proc_file_lseek,
 	.read		= proc_file_read,
-	.write		= proc_file_write,
 };
 
 static int proc_notify_change(struct dentry *dentry, struct iattr *iattr)
@@ -371,7 +346,7 @@ void proc_free_inum(unsigned int inum)
 
 static void *proc_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
-	nd_set_link(nd, PDE(dentry->d_inode)->data);
+	nd_set_link(nd, PDE_DATA(dentry->d_inode));
 	return NULL;
 }
 
@@ -541,19 +516,18 @@ static int proc_register(struct proc_dir_entry * dir, struct proc_dir_entry * dp
 		return ret;
 
 	if (S_ISDIR(dp->mode)) {
-		if (dp->proc_iops == NULL) {
-			dp->proc_fops = &proc_dir_operations;
-			dp->proc_iops = &proc_dir_inode_operations;
-		}
+		dp->proc_fops = &proc_dir_operations;
+		dp->proc_iops = &proc_dir_inode_operations;
 		dir->nlink++;
 	} else if (S_ISLNK(dp->mode)) {
-		if (dp->proc_iops == NULL)
-			dp->proc_iops = &proc_link_inode_operations;
+		dp->proc_iops = &proc_link_inode_operations;
 	} else if (S_ISREG(dp->mode)) {
 		if (dp->proc_fops == NULL)
 			dp->proc_fops = &proc_file_operations;
-		if (dp->proc_iops == NULL)
-			dp->proc_iops = &proc_file_inode_operations;
+		dp->proc_iops = &proc_file_inode_operations;
+	} else {
+		WARN_ON(1);
+		return -EINVAL;
 	}
 
 	spin_lock(&proc_subdir_lock);
@@ -680,21 +654,19 @@ struct proc_dir_entry *create_proc_entry(const char *name, umode_t mode,
 					 struct proc_dir_entry *parent)
 {
 	struct proc_dir_entry *ent;
-	nlink_t nlink;
 
-	if (S_ISDIR(mode)) {
-		if ((mode & S_IALLUGO) == 0)
-			mode |= S_IRUGO | S_IXUGO;
-		nlink = 2;
-	} else {
-		if ((mode & S_IFMT) == 0)
-			mode |= S_IFREG;
-		if ((mode & S_IALLUGO) == 0)
-			mode |= S_IRUGO;
-		nlink = 1;
+	if ((mode & S_IFMT) == 0)
+		mode |= S_IFREG;
+
+	if (!S_ISREG(mode)) {
+		WARN_ON(1);	/* use proc_mkdir(), damnit */
+		return NULL;
 	}
 
-	ent = __proc_create(&parent, name, mode, nlink);
+	if ((mode & S_IALLUGO) == 0)
+		mode |= S_IRUGO;
+
+	ent = __proc_create(&parent, name, mode, 1);
 	if (ent) {
 		if (proc_register(parent, ent) < 0) {
 			kfree(ent);
@@ -711,21 +683,17 @@ struct proc_dir_entry *proc_create_data(const char *name, umode_t mode,
 					void *data)
 {
 	struct proc_dir_entry *pde;
-	nlink_t nlink;
+	if ((mode & S_IFMT) == 0)
+		mode |= S_IFREG;
 
-	if (S_ISDIR(mode)) {
-		if ((mode & S_IALLUGO) == 0)
-			mode |= S_IRUGO | S_IXUGO;
-		nlink = 2;
-	} else {
-		if ((mode & S_IFMT) == 0)
-			mode |= S_IFREG;
-		if ((mode & S_IALLUGO) == 0)
-			mode |= S_IRUGO;
-		nlink = 1;
+	if (!S_ISREG(mode)) {
+		WARN_ON(1);	/* use proc_mkdir() */
+		return NULL;
 	}
 
-	pde = __proc_create(&parent, name, mode, nlink);
+	if ((mode & S_IALLUGO) == 0)
+		mode |= S_IRUGO;
+	pde = __proc_create(&parent, name, mode, 1);
 	if (!pde)
 		goto out;
 	pde->proc_fops = proc_fops;
@@ -753,6 +721,41 @@ void pde_put(struct proc_dir_entry *pde)
 {
 	if (atomic_dec_and_test(&pde->count))
 		free_proc_entry(pde);
+}
+
+static void entry_rundown(struct proc_dir_entry *de)
+{
+	spin_lock(&de->pde_unload_lock);
+	/*
+	 * Stop accepting new callers into module. If you're
+	 * dynamically allocating ->proc_fops, save a pointer somewhere.
+	 */
+	de->proc_fops = NULL;
+	/* Wait until all existing callers into module are done. */
+	if (de->pde_users > 0) {
+		DECLARE_COMPLETION_ONSTACK(c);
+
+		if (!de->pde_unload_completion)
+			de->pde_unload_completion = &c;
+
+		spin_unlock(&de->pde_unload_lock);
+
+		wait_for_completion(de->pde_unload_completion);
+
+		spin_lock(&de->pde_unload_lock);
+	}
+
+	while (!list_empty(&de->pde_openers)) {
+		struct pde_opener *pdeo;
+
+		pdeo = list_first_entry(&de->pde_openers, struct pde_opener, lh);
+		list_del(&pdeo->lh);
+		spin_unlock(&de->pde_unload_lock);
+		pdeo->release(pdeo->inode, pdeo->file);
+		kfree(pdeo);
+		spin_lock(&de->pde_unload_lock);
+	}
+	spin_unlock(&de->pde_unload_lock);
 }
 
 /*
@@ -786,37 +789,7 @@ void remove_proc_entry(const char *name, struct proc_dir_entry *parent)
 		return;
 	}
 
-	spin_lock(&de->pde_unload_lock);
-	/*
-	 * Stop accepting new callers into module. If you're
-	 * dynamically allocating ->proc_fops, save a pointer somewhere.
-	 */
-	de->proc_fops = NULL;
-	/* Wait until all existing callers into module are done. */
-	if (de->pde_users > 0) {
-		DECLARE_COMPLETION_ONSTACK(c);
-
-		if (!de->pde_unload_completion)
-			de->pde_unload_completion = &c;
-
-		spin_unlock(&de->pde_unload_lock);
-
-		wait_for_completion(de->pde_unload_completion);
-
-		spin_lock(&de->pde_unload_lock);
-	}
-
-	while (!list_empty(&de->pde_openers)) {
-		struct pde_opener *pdeo;
-
-		pdeo = list_first_entry(&de->pde_openers, struct pde_opener, lh);
-		list_del(&pdeo->lh);
-		spin_unlock(&de->pde_unload_lock);
-		pdeo->release(pdeo->inode, pdeo->file);
-		kfree(pdeo);
-		spin_lock(&de->pde_unload_lock);
-	}
-	spin_unlock(&de->pde_unload_lock);
+	entry_rundown(de);
 
 	if (S_ISDIR(de->mode))
 		parent->nlink--;
@@ -827,3 +800,57 @@ void remove_proc_entry(const char *name, struct proc_dir_entry *parent)
 	pde_put(de);
 }
 EXPORT_SYMBOL(remove_proc_entry);
+
+int remove_proc_subtree(const char *name, struct proc_dir_entry *parent)
+{
+	struct proc_dir_entry **p;
+	struct proc_dir_entry *root = NULL, *de, *next;
+	const char *fn = name;
+	unsigned int len;
+
+	spin_lock(&proc_subdir_lock);
+	if (__xlate_proc_name(name, &parent, &fn) != 0) {
+		spin_unlock(&proc_subdir_lock);
+		return -ENOENT;
+	}
+	len = strlen(fn);
+
+	for (p = &parent->subdir; *p; p=&(*p)->next ) {
+		if (proc_match(len, fn, *p)) {
+			root = *p;
+			*p = root->next;
+			root->next = NULL;
+			break;
+		}
+	}
+	if (!root) {
+		spin_unlock(&proc_subdir_lock);
+		return -ENOENT;
+	}
+	de = root;
+	while (1) {
+		next = de->subdir;
+		if (next) {
+			de->subdir = next->next;
+			next->next = NULL;
+			de = next;
+			continue;
+		}
+		spin_unlock(&proc_subdir_lock);
+
+		entry_rundown(de);
+		next = de->parent;
+		if (S_ISDIR(de->mode))
+			next->nlink--;
+		de->nlink = 0;
+		if (de == root)
+			break;
+		pde_put(de);
+
+		spin_lock(&proc_subdir_lock);
+		de = next;
+	}
+	pde_put(root);
+	return 0;
+}
+EXPORT_SYMBOL(remove_proc_subtree);
