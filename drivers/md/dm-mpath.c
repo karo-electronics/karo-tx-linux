@@ -618,12 +618,13 @@ static struct pgpath *parse_path(struct dm_arg_set *as, struct path_selector *ps
 		 */
 		r = scsi_dh_attach(q, m->hw_handler_name);
 		if (r == -EBUSY) {
-			/*
-			 * Already attached to different hw_handler:
-			 * try to reattach with correct one.
-			 */
-			scsi_dh_detach(q);
-			r = scsi_dh_attach(q, m->hw_handler_name);
+			ti->error = "a different device handler is already attached";
+			attached_handler_name = scsi_dh_attached_handler_name(q, GFP_KERNEL);
+			DMERR("%s: Device handler %s already attached. "
+			      "Deactivate device to change device handler.",
+				p->path.dev->name, attached_handler_name);
+			kfree(attached_handler_name);
+			goto bad;
 		}
 
 		if (r < 0) {
