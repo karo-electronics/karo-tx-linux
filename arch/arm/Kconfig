@@ -424,21 +424,6 @@ config ARCH_FOOTBRIDGE
 	  Support for systems based on the DC21285 companion chip
 	  ("FootBridge"), such as the Simtec CATS and the Rebel NetWinder.
 
-config ARCH_MXS
-	bool "Freescale MXS-based"
-	select ARCH_REQUIRE_GPIOLIB
-	select CLKDEV_LOOKUP
-	select CLKSRC_MMIO
-	select COMMON_CLK
-	select GENERIC_CLOCKEVENTS
-	select HAVE_CLK_PREPARE
-	select MULTI_IRQ_HANDLER
-	select PINCTRL
-	select SPARSE_IRQ
-	select USE_OF
-	help
-	  Support for Freescale MXS-based family of processors
-
 config ARCH_NETX
 	bool "Hilscher NetX based"
 	select ARM_VIC
@@ -2088,13 +2073,6 @@ menu "CPU Power Management"
 if ARCH_HAS_CPUFREQ
 
 source "drivers/cpufreq/Kconfig"
-
-config CPU_FREQ_IMX
-	tristate "CPUfreq driver for i.MX CPUs"
-	depends on ARCH_MXC && CPU_FREQ
-	select CPU_FREQ_TABLE
-	help
-	  This enables the CPUfreq driver for i.MX CPUs.
 
 config CPU_FREQ_SA1100
 	bool
