@@ -30,6 +30,7 @@
 #include <linux/platform_device.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/of_pci.h>
 #include <video/vga.h>
 
@@ -829,9 +830,24 @@ static int __init pci_v3_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
 	return irq_tab[intnr];
 }
 
+static int __init pci_v3_map_irq_dt(const struct pci_dev *dev, u8 slot, u8 pin)
+{
+	struct of_irq oirq;
+	int ret;
+
+	ret = of_irq_map_pci(dev, &oirq);
+	if (ret) {
+		dev_err(&dev->dev, "of_irq_map_pci() %d\n", ret);
+		/* Proper return code 0 == NO_IRQ */
+		return 0;
+	}
+
+	return irq_create_of_mapping(oirq.controller, oirq.specifier,
+				     oirq.size);
+}
+
 static struct hw_pci pci_v3 __initdata = {
 	.swizzle		= pci_v3_swizzle,
-	.map_irq		= pci_v3_map_irq,
 	.setup			= pci_v3_setup,
 	.nr_controllers		= 1,
 	.ops			= &pci_v3_ops,
@@ -903,6 +919,7 @@ static int __init pci_v3_dtprobe(struct platform_device *pdev,
 		return -EINVAL;
 	}
 
+	pci_v3.map_irq = pci_v3_map_irq_dt;
 	pci_common_init_dev(&pdev->dev, &pci_v3);
 
 	return 0;
@@ -958,6 +975,8 @@ static int __init pci_v3_probe(struct platform_device *pdev)
 	pre_mem.end = PHYS_PCI_MEM_BASE + PCI_BUS_PREMEM_START +
 		PCI_BUS_PREMEM_SIZE - 1;
 	pre_mem.flags = IORESOURCE_MEM | IORESOURCE_PREFETCH;
+
+	pci_v3.map_irq = pci_v3_map_irq;
 
 	pci_common_init_dev(&pdev->dev, &pci_v3);
 
