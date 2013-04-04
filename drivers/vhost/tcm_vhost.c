@@ -76,7 +76,6 @@ struct vhost_scsi {
 	/* Protected by vhost_scsi->dev.mutex */
 	struct tcm_vhost_tpg *vs_tpg[VHOST_SCSI_MAX_TARGET];
 	char vs_vhost_wwpn[TRANSPORT_IQN_LEN];
-	bool vs_endpoint;
 
 	struct vhost_dev dev;
 	struct vhost_virtqueue vqs[VHOST_SCSI_MAX_VQ];
@@ -98,6 +97,24 @@ static int iov_num_pages(struct iovec *iov)
 {
 	return (PAGE_ALIGN((unsigned long)iov->iov_base + iov->iov_len) -
 	       ((unsigned long)iov->iov_base & PAGE_MASK)) >> PAGE_SHIFT;
+}
+
+static bool tcm_vhost_check_endpoint(struct vhost_virtqueue *vq)
+{
+	bool ret = false;
+
+	/*
+	 * We can handle the vq only after the endpoint is setup by calling the
+	 * VHOST_SCSI_SET_ENDPOINT ioctl.
+	 *
+	 * TODO: Check that we are running from vhost_worker which acts
+	 * as read-side critical section for vhost kind of RCU.
+	 * See the comments in struct vhost_virtqueue in drivers/vhost/vhost.h
+	 */
+	if (rcu_dereference_check(vq->private_data, 1))
+		ret = true;
+
+	return ret;
 }
 
 static int tcm_vhost_check_true(struct se_portal_group *se_tpg)
@@ -590,8 +607,7 @@ static void vhost_scsi_handle_vq(struct vhost_scsi *vs,
 	int head, ret;
 	u8 target;
 
-	/* Must use ioctl VHOST_SCSI_SET_ENDPOINT */
-	if (unlikely(!vs->vs_endpoint))
+	if (!tcm_vhost_check_endpoint(vq))
 		return;
 
 	mutex_lock(&vq->mutex);
@@ -790,8 +806,9 @@ static int vhost_scsi_set_endpoint(
 {
 	struct tcm_vhost_tport *tv_tport;
 	struct tcm_vhost_tpg *tv_tpg;
+	struct vhost_virtqueue *vq;
 	bool match = false;
-	int index, ret;
+	int index, ret, i;
 
 	mutex_lock(&vs->dev.mutex);
 	/* Verify that ring has been setup correctly. */
@@ -835,7 +852,14 @@ static int vhost_scsi_set_endpoint(
 	if (match) {
 		memcpy(vs->vs_vhost_wwpn, t->vhost_wwpn,
 		       sizeof(vs->vs_vhost_wwpn));
-		vs->vs_endpoint = true;
+		for (i = 0; i < VHOST_SCSI_MAX_VQ; i++) {
+			vq = &vs->vqs[i];
+			/* Flushing the vhost_work acts as synchronize_rcu */
+			mutex_lock(&vq->mutex);
+			rcu_assign_pointer(vq->private_data, vs);
+			vhost_init_used(vq);
+			mutex_unlock(&vq->mutex);
+		}
 		ret = 0;
 	} else {
 		ret = -EEXIST;
@@ -851,6 +875,8 @@ static int vhost_scsi_clear_endpoint(
 {
 	struct tcm_vhost_tport *tv_tport;
 	struct tcm_vhost_tpg *tv_tpg;
+	struct vhost_virtqueue *vq;
+	bool match = false;
 	int index, ret, i;
 	u8 target;
 
@@ -886,8 +912,17 @@ static int vhost_scsi_clear_endpoint(
 		}
 		tv_tpg->tv_tpg_vhost_count--;
 		vs->vs_tpg[target] = NULL;
-		vs->vs_endpoint = false;
+		match = true;
 		mutex_unlock(&tv_tpg->tv_tpg_mutex);
+	}
+	if (match) {
+		for (i = 0; i < VHOST_SCSI_MAX_VQ; i++) {
+			vq = &vs->vqs[i];
+			/* Flushing the vhost_work acts as synchronize_rcu */
+			mutex_lock(&vq->mutex);
+			rcu_assign_pointer(vq->private_data, NULL);
+			mutex_unlock(&vq->mutex);
+		}
 	}
 	mutex_unlock(&vs->dev.mutex);
 	return 0;
