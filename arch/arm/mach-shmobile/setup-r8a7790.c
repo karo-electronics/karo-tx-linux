@@ -32,7 +32,6 @@
 
 static const struct resource pfc_resources[] = {
 	DEFINE_RES_MEM(0xe6060000, 0x250),
-	DEFINE_RES_MEM(0xe6050000, 0x5050),
 };
 
 #define R8A7790_GPIO(idx)						\
