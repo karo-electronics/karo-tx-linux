@@ -593,7 +593,7 @@ static int dma_buf_describe(struct seq_file *s)
 		if (ret) {
 			seq_printf(s,
 				  "\tERROR locking buffer object: skipping\n");
-			goto skip_buffer;
+			continue;
 		}
 
 		seq_printf(s, "\t");
@@ -618,7 +618,6 @@ static int dma_buf_describe(struct seq_file *s)
 
 		count++;
 		size += buf_obj->size;
-skip_buffer:
 		mutex_unlock(&buf_obj->lock);
 	}
 
