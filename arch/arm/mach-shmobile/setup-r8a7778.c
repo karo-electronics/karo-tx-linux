@@ -102,6 +102,19 @@ void __init r8a7778_add_ether_device(struct sh_eth_plat_data *pdata)
 					  pdata, sizeof(*pdata));
 }
 
+/* PFC */
+static struct resource pfc_resources[] = {
+	DEFINE_RES_MEM(0xfffc0000, 0x118),
+};
+
+void __init r8a7778_pinmux_init(void)
+{
+	platform_device_register_simple(
+		"pfc-r8a7778", -1,
+		pfc_resources,
+		ARRAY_SIZE(pfc_resources));
+}
+
 void __init r8a7778_add_standard_devices(void)
 {
 	int i;
