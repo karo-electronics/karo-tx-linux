@@ -165,7 +165,17 @@ struct ioat_xor_ext_descriptor {
 };
 
 struct ioat_pq_descriptor {
-	uint32_t	size;
+	union {
+		uint32_t	size;
+		uint32_t	dwbes;
+		struct {
+			unsigned int rsvd:25;
+			unsigned int p_val_err:1;
+			unsigned int q_val_err:1;
+			unsigned int rsvd1:4;
+			unsigned int wbes:1;
+		} dwbes_f;
+	};
 	union {
 		uint32_t ctl;
 		struct {
@@ -180,9 +190,14 @@ struct ioat_pq_descriptor {
 			unsigned int hint:1;
 			unsigned int p_disable:1;
 			unsigned int q_disable:1;
-			unsigned int rsvd:11;
+			unsigned int rsvd2:2;
+			unsigned int wb_en:1;
+			unsigned int prl_en:1;
+			unsigned int rsvd3:7;
 			#define IOAT_OP_PQ 0x89
 			#define IOAT_OP_PQ_VAL 0x8a
+			#define IOAT_OP_PQ_16S 0xa0
+			#define IOAT_OP_PQ_VAL_16S 0xa1
 			unsigned int op:8;
 		} ctl_f;
 	};
@@ -190,7 +205,10 @@ struct ioat_pq_descriptor {
 	uint64_t	p_addr;
 	uint64_t	next;
 	uint64_t	src_addr2;
-	uint64_t	src_addr3;
+	union {
+		uint64_t	src_addr3;
+		uint64_t	sed_addr;
+	};
 	uint8_t		coef[8];
 	uint64_t	q_addr;
 };
@@ -239,4 +257,40 @@ struct ioat_pq_update_descriptor {
 struct ioat_raw_descriptor {
 	uint64_t	field[8];
 };
+
+struct ioat_pq16a_descriptor {
+	uint8_t coef[8];
+	uint64_t src_addr3;
+	uint64_t src_addr4;
+	uint64_t src_addr5;
+	uint64_t src_addr6;
+	uint64_t src_addr7;
+	uint64_t src_addr8;
+	uint64_t src_addr9;
+};
+
+struct ioat_pq16b_descriptor {
+	uint64_t src_addr10;
+	uint64_t src_addr11;
+	uint64_t src_addr12;
+	uint64_t src_addr13;
+	uint64_t src_addr14;
+	uint64_t src_addr15;
+	uint64_t src_addr16;
+	uint64_t rsvd;
+};
+
+union ioat_sed_pq_descriptor {
+	struct ioat_pq16a_descriptor a;
+	struct ioat_pq16b_descriptor b;
+};
+
+#define SED_SIZE	64
+
+struct ioat_sed_raw_descriptor {
+	uint64_t	a[8];
+	uint64_t	b[8];
+	uint64_t	c[8];
+};
+
 #endif
