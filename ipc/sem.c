@@ -1098,7 +1098,7 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 	/* GETVAL, GETPID, GETNCTN, GETZCNT: fall-through */
 	}
 	err = -EINVAL;
-	if(semnum < 0 || semnum >= nsems) {
+	if (semnum < 0 || semnum >= nsems) {
 		rcu_read_unlock();
 		goto out_wakeup;
 	}
