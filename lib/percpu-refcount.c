@@ -124,6 +124,13 @@ void __percpu_ref_get(struct percpu_ref *ref, bool alloc)
 		v = atomic64_add_return(1 + (1ULL << PCPU_COUNT_BITS),
 					&ref->count);
 
+		/*
+		 * The high bits of the counter count the number of gets() that
+		 * have occured; we check for overflow to call
+		 * percpu_ref_alloc() every (1 << (64 - PCPU_COUNT_BITS))
+		 * iterations.
+		 */
+
 		if (!(v >> PCPU_COUNT_BITS) &&
 		    REF_STATUS(pcpu_count) == PCPU_REF_NONE && alloc)
 			percpu_ref_alloc(ref, pcpu_count);
