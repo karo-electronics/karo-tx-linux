@@ -419,7 +419,7 @@ static void __init dmi_format_ids(char *buf, size_t len)
 			    dmi_get_system_info(DMI_BIOS_DATE));
 }
 
-static int __init dmi_present(const char *buf)
+static int __init dmi_present(const u8 *buf)
 {
 	int smbios_ver;
 
