@@ -31,7 +31,9 @@ There are three components to pagemap:
    skip over unmapped regions.
 
  * /proc/pid/pagemap2.  This file provides the same info as the pagemap
-   does, but bits 55-60 are reserved for future use and thus zero
+   does, but bits 56-60 are reserved for future use and thus zero
+
+      Bit 55 means pte is soft-dirty (see Documentation/vm/soft-dirty.txt)
 
  * /proc/kpagecount.  This file contains a 64-bit count of the number of
    times each page is mapped, indexed by PFN.
