@@ -3169,16 +3169,12 @@ static int reserve_mem_notifier(struct notifier_block *nb,
 
 	switch (action) {
 	case MEM_ONLINE:
-		/*
-		 * Default max is 128MB. Leave alone if modified by operator.
- 		 */
+		/* Default max is 128MB. Leave alone if modified by operator. */
 		tmp = sysctl_user_reserve_kbytes;
 		if (0 < tmp && tmp < (1UL << 17))
 			init_user_reserve();
 
-		/*
-		 * Default max is 8MB. Leave alone if modified by operator.
- 		 */
+		/* Default max is 8MB.  Leave alone if modified by operator. */
 		tmp = sysctl_admin_reserve_kbytes;
 		if (0 < tmp && tmp < (1UL << 13))
 			init_admin_reserve();
