@@ -1091,7 +1091,7 @@ int release_mem_region_adjustable(struct resource *parent,
 						start - res->start);
 		} else {
 			/* split into two entries */
-			new = kzalloc(sizeof(struct resource), GFP_KERNEL);
+			new = kzalloc(sizeof(struct resource), GFP_ATOMIC);
 			if (!new) {
 				ret = -ENOMEM;
 				break;
