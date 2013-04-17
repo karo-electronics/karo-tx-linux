@@ -474,7 +474,7 @@ config FRONTSWAP
 
 config MEM_SOFT_DIRTY
 	bool "Track memory changes"
-	depends on CHECKPOINT_RESTORE && X86
+	depends on CHECKPOINT_RESTORE && HAVE_ARCH_SOFT_DIRTY
 	select PROC_PAGE_MONITOR
 	help
 	  This option enables memory changes tracking by introducing a
