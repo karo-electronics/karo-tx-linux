@@ -545,6 +545,7 @@ extern void r8a7740_pinmux_init(void);
 extern void r8a7740_pm_init(void);
 extern void r8a7740_resume(void);
 extern void r8a7740_shutdown(void);
+extern void r8a7740_cpuidle_init(void);
 extern void r8a7740_enter_a3sm_common(int);
 
 #ifdef CONFIG_PM

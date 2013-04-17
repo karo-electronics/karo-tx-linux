@@ -237,4 +237,5 @@ static void r8a7740_suspend_init(void) {}
 void __init r8a7740_pm_init(void)
 {
 	r8a7740_suspend_init();
+	r8a7740_cpuidle_init();
 }
