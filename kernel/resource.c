@@ -1109,10 +1109,8 @@ int release_mem_region_adjustable(struct resource *parent,
 
 			ret = __adjust_resource(res, res->start,
 						start - res->start);
-			if (ret) {
-				kfree(new_res);
+			if (ret)
 				break;
-			}
 			res->sibling = new_res;
 			new_res = NULL;
 		}
