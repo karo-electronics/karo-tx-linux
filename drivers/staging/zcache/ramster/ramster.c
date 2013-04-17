@@ -773,7 +773,7 @@ static DECLARE_DELAYED_WORK(selfshrink_worker, selfshrink_process);
 
 #ifndef CONFIG_RAMSTER_MODULE
 /* Enable/disable with kernel boot option. */
-static bool use_frontswap_selfshrink __initdata = true;
+static bool use_frontswap_selfshrink = true;
 #endif
 
 /*
