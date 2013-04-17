@@ -47,8 +47,8 @@ int string_get_size(u64 size, enum string_size_units units,
  * Returns amount of characters processed to the destination buffer excluding
  * trailing '\0'.
  *
- * Due to size of output will be the same or smaller the translation could be
- * done in place.
+ * Because the size of the output will be the same as or less than the size of
+ * the input, the transformation may be performed in place.
  *
  * Caller must provide valid source and destination pointers. Be aware that
  * destination buffer will always be NULL-terminated. Source string must be
