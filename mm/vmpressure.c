@@ -97,7 +97,7 @@ enum vmpressure_levels {
 	VMPRESSURE_NUM_LEVELS,
 };
 
-static const char *vmpressure_str_levels[] = {
+static const char * const vmpressure_str_levels[] = {
 	[VMPRESSURE_LOW] = "low",
 	[VMPRESSURE_MEDIUM] = "medium",
 	[VMPRESSURE_CRITICAL] = "critical",
