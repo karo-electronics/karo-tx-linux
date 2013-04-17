@@ -204,7 +204,8 @@ out:
 }
 
 int __swap_writepage(struct page *page, struct writeback_control *wbc,
-	void (*end_write_func)(struct bio *, int))
+	void (*end_write_func)(struct bio *bio, int err,
+			       struct batch_complete *batch))
 {
 	struct bio *bio;
 	int ret = 0, rw = WRITE;
