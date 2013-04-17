@@ -1046,13 +1046,17 @@ int release_mem_region_adjustable(struct resource *parent,
 			resource_size_t start, resource_size_t size)
 {
 	struct resource **p;
-	struct resource *res, *new;
+	struct resource *res;
+	struct resource *new_res;
 	resource_size_t end;
 	int ret = -EINVAL;
 
 	end = start + size - 1;
 	if ((start < parent->start) || (end > parent->end))
 		return ret;
+
+	/* The kzalloc() result gets checked later */
+	new_res = kzalloc(sizeof(struct resource), GFP_KERNEL);
 
 	p = &parent->child;
 	write_lock(&resource_lock);
@@ -1091,32 +1095,33 @@ int release_mem_region_adjustable(struct resource *parent,
 						start - res->start);
 		} else {
 			/* split into two entries */
-			new = kzalloc(sizeof(struct resource), GFP_ATOMIC);
-			if (!new) {
+			if (!new_res) {
 				ret = -ENOMEM;
 				break;
 			}
-			new->name = res->name;
-			new->start = end + 1;
-			new->end = res->end;
-			new->flags = res->flags;
-			new->parent = res->parent;
-			new->sibling = res->sibling;
-			new->child = NULL;
+			new_res->name = res->name;
+			new_res->start = end + 1;
+			new_res->end = res->end;
+			new_res->flags = res->flags;
+			new_res->parent = res->parent;
+			new_res->sibling = res->sibling;
+			new_res->child = NULL;
 
 			ret = __adjust_resource(res, res->start,
 						start - res->start);
 			if (ret) {
-				kfree(new);
+				kfree(new_res);
 				break;
 			}
-			res->sibling = new;
+			res->sibling = new_res;
+			new_res = NULL;
 		}
 
 		break;
 	}
 
 	write_unlock(&resource_lock);
+	kfree(new_res);
 	return ret;
 }
 #endif	/* CONFIG_MEMORY_HOTPLUG */
