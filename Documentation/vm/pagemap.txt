@@ -30,6 +30,9 @@ There are three components to pagemap:
    determine which areas of memory are actually mapped and llseek to
    skip over unmapped regions.
 
+ * /proc/pid/pagemap2.  This file provides the same info as the pagemap
+   does, but bits 55-60 are reserved for future use and thus zero
+
  * /proc/kpagecount.  This file contains a 64-bit count of the number of
    times each page is mapped, indexed by PFN.
 

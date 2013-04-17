@@ -1137,6 +1137,17 @@ const struct file_operations proc_pagemap_operations = {
 	.llseek		= mem_lseek, /* borrow this */
 	.read		= pagemap_read,
 };
+
+static ssize_t pagemap2_read(struct file *file, char __user *buf,
+			    size_t count, loff_t *ppos)
+{
+	return do_pagemap_read(file, buf, count, ppos, true);
+}
+
+const struct file_operations proc_pagemap2_operations = {
+	.llseek		= mem_lseek, /* borrow this */
+	.read		= pagemap2_read,
+};
 #endif /* CONFIG_PROC_PAGE_MONITOR */
 
 #ifdef CONFIG_NUMA
