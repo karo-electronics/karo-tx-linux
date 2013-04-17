@@ -1021,7 +1021,7 @@ void __release_region(struct resource *parent, resource_size_t start,
 }
 EXPORT_SYMBOL(__release_region);
 
-#ifdef CONFIG_MEMORY_HOTPLUG
+#ifdef CONFIG_MEMORY_HOTREMOVE
 /**
  * release_mem_region_adjustable - release a previously reserved memory region
  * @parent: parent resource descriptor
@@ -1122,7 +1122,7 @@ int release_mem_region_adjustable(struct resource *parent,
 	kfree(new_res);
 	return ret;
 }
-#endif	/* CONFIG_MEMORY_HOTPLUG */
+#endif	/* CONFIG_MEMORY_HOTREMOVE */
 
 /*
  * Managed region resource
