@@ -3147,6 +3147,13 @@ module_init(init_admin_reserve)
 /*
  * Reinititalise user and admin reserves if memory is added or removed.
  *
+ * The default user reserve max is 128MB, and the default max for the
+ * admin reserve is 8MB. These are usually, but not always, enough to
+ * enable recovery from a memory hogging process using login/sshd, a shell,
+ * and tools like top. It may make sense to increase or even disable the
+ * reserve depending on the existence of swap or variations in the recovery
+ * tools. So, the admin may have changed them.
+ *
  * If memory is added and the reserves have been eliminated or increased above
  * the default max, then we'll trust the admin.
  *
@@ -3162,10 +3169,16 @@ static int reserve_mem_notifier(struct notifier_block *nb,
 
 	switch (action) {
 	case MEM_ONLINE:
+		/*
+		 * Default max is 128MB. Leave alone if modified by operator.
+ 		 */
 		tmp = sysctl_user_reserve_kbytes;
 		if (0 < tmp && tmp < (1UL << 17))
 			init_user_reserve();
 
+		/*
+		 * Default max is 8MB. Leave alone if modified by operator.
+ 		 */
 		tmp = sysctl_admin_reserve_kbytes;
 		if (0 < tmp && tmp < (1UL << 13))
 			init_admin_reserve();
