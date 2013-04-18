@@ -287,7 +287,7 @@ static int pci_call_probe(struct pci_driver *drv, struct pci_dev *dev,
 
 		get_online_cpus();
 		cpu = cpumask_any_and(cpumask_of_node(node), cpu_online_mask);
-		if (cpu < nr_cpu_ids)
+		if (cpu != raw_smp_processor_id() && cpu < nr_cpu_ids)
 			error = work_on_cpu(cpu, local_pci_probe, &ddi);
 		else
 			error = local_pci_probe(&ddi);
