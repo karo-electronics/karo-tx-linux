@@ -347,3 +347,6 @@ late/cleanup
 		  git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.10/dss-signed
 		  depends on omap/fixes-non-critical
 		  depends on omap/boards
+	at91/soc3
+		  git://github.com/at91linux/linux-at91.git tags/at91-soc
+		  depends on at91/soc
