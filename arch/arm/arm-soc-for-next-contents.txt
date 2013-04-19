@@ -343,3 +343,7 @@ late/clksrc
 late/cleanup
 	mvebu/irqchip
 		  git://git.infradead.org/users/jcooper/linux.git tags/irqchip-3.10
+	omap/dss-cleanup
+		  git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.10/dss-signed
+		  depends on omap/fixes-non-critical
+		  depends on omap/boards
