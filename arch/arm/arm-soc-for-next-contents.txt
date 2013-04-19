@@ -350,3 +350,6 @@ late/cleanup
 	at91/soc3
 		  git://github.com/at91linux/linux-at91.git tags/at91-soc
 		  depends on at91/soc
+	spear/dwdma
+		  patches <1359395857-1235-1-git-send-email-arnd@arndb.de>
+		  depends on spear/multiplatform
