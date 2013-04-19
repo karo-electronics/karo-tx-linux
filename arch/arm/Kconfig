@@ -1056,6 +1056,7 @@ config PLAT_VERSATILE
 config ARM_TIMER_SP804
 	bool
 	select CLKSRC_MMIO
+	select CLKSRC_OF if OF
 
 source arch/arm/mm/Kconfig
 
@@ -1551,14 +1552,9 @@ config ARCH_NR_GPIO
 	int
 	default 1024 if ARCH_SHMOBILE || ARCH_TEGRA
 	default 512 if SOC_OMAP5
-<<<<<<< HEAD
 	default 392 if ARCH_U8500
-	default 288 if ARCH_VT8500 || ARCH_SUNXI
-=======
-	default 355 if ARCH_U8500
 	default 352 if ARCH_VT8500
 	default 288 if ARCH_SUNXI
->>>>>>> next/drivers
 	default 264 if MACH_H4700
 	default 0
 	help
