@@ -75,6 +75,8 @@ next/cleanup
 		  depends on depends/clk-for-3.10
 	msm/cleanup
 		  git://git.kernel.org/pub/scm/linux/kernel/git/davidb/linux-msm.git tags/msm-cleanup-3.10
+	next/spring-cleaning
+		  patches <1363299178-8241-1-git-send-email-arnd@arndb.de>
 
 next/dt
 	mvebu/dt
