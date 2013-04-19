@@ -1381,6 +1381,9 @@ static const struct pinctrl_map mackerel_pinctrl_map[] = {
 	/* ST1232 */
 	PIN_MAP_MUX_GROUP_DEFAULT("0-0055", "pfc-sh7372",
 				  "intc_irq7_0", "intc"),
+	/* TCA6416 */
+	PIN_MAP_MUX_GROUP_DEFAULT("0-0020", "pfc-sh7372",
+				  "intc_irq9_0", "intc"),
 };
 
 #define GPIO_PORT9CR	IOMEM(0xE6051009)
@@ -1458,8 +1461,7 @@ static void __init mackerel_init(void)
 		clk_put(clk);
 	}
 
-	/* enable Keypad */
-	gpio_request(GPIO_FN_IRQ9_42,	NULL);
+	/* Keypad */
 	irq_set_irq_type(IRQ9, IRQ_TYPE_LEVEL_HIGH);
 
 	/* Touchscreen */
