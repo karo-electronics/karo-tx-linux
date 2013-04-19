@@ -14,11 +14,9 @@
  * GNU General Public License for more details.
  */
 
-#ifndef __SUNXI_TIMER_H
-#define __SUNXI_TIMER_H
+#ifndef __LINUX_CLK_SUNXI_H_
+#define __LINUX_CLK_SUNXI_H_
 
-#include <asm/mach/time.h>
-
-void sunxi_timer_init(void);
+void __init sunxi_init_clocks(void);
 
 #endif
