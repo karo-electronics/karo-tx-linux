@@ -353,3 +353,6 @@ late/cleanup
 	spear/dwdma
 		  patches <1359395857-1235-1-git-send-email-arnd@arndb.de>
 		  depends on spear/multiplatform
+
+late/fixes
+	patch	<201304210002.00125.arnd@arndb.de>
