@@ -61,29 +61,16 @@ void __init sh73a0_map_io(void)
 	iotable_init(sh73a0_io_desc, ARRAY_SIZE(sh73a0_io_desc));
 }
 
-static struct resource sh73a0_pfc_resources[] = {
-	[0] = {
-		.start	= 0xe6050000,
-		.end	= 0xe6057fff,
-		.flags	= IORESOURCE_MEM,
-	},
-	[1] = {
-		.start	= 0xe605801c,
-		.end	= 0xe6058027,
-		.flags	= IORESOURCE_MEM,
-	}
-};
-
-static struct platform_device sh73a0_pfc_device = {
-	.name		= "pfc-sh73a0",
-	.id		= -1,
-	.resource	= sh73a0_pfc_resources,
-	.num_resources	= ARRAY_SIZE(sh73a0_pfc_resources),
+/* PFC */
+static const struct resource pfc_resources[] = {
+	DEFINE_RES_MEM(0xe6050000, 0x8000),
+	DEFINE_RES_MEM(0xe605801c, 0x000c),
 };
 
 void __init sh73a0_pinmux_init(void)
 {
-	platform_device_register(&sh73a0_pfc_device);
+	platform_device_register_simple("pfc-sh73a0", -1, pfc_resources,
+					ARRAY_SIZE(pfc_resources));
 }
 
 static struct plat_sci_port scif0_platform_data = {
@@ -246,37 +233,6 @@ static struct platform_device scif8_device = {
 	.dev		= {
 		.platform_data	= &scif8_platform_data,
 	},
-};
-
-static struct sh_timer_config cmt10_platform_data = {
-	.name = "CMT10",
-	.channel_offset = 0x10,
-	.timer_bit = 0,
-	.clockevent_rating = 125,
-	.clocksource_rating = 125,
-};
-
-static struct resource cmt10_resources[] = {
-	[0] = {
-		.name	= "CMT10",
-		.start	= 0xe6138010,
-		.end	= 0xe613801b,
-		.flags	= IORESOURCE_MEM,
-	},
-	[1] = {
-		.start	= gic_spi(65),
-		.flags	= IORESOURCE_IRQ,
-	},
-};
-
-static struct platform_device cmt10_device = {
-	.name		= "sh_cmt",
-	.id		= 10,
-	.dev = {
-		.platform_data	= &cmt10_platform_data,
-	},
-	.resource	= cmt10_resources,
-	.num_resources	= ARRAY_SIZE(cmt10_resources),
 };
 
 /* TMU */
@@ -943,7 +899,6 @@ static struct platform_device *sh73a0_devices_dt[] __initdata = {
 	&scif6_device,
 	&scif7_device,
 	&scif8_device,
-	&cmt10_device,
 };
 
 static struct platform_device *sh73a0_early_devices[] __initdata = {
@@ -1016,6 +971,8 @@ static const struct of_dev_auxdata sh73a0_auxdata_lookup[] __initconst = {
 
 void __init sh73a0_add_standard_devices_dt(void)
 {
+	struct platform_device_info devinfo = { .name = "cpufreq-cpu0", .id = -1, };
+
 	/* clocks are setup late during boot in the case of DT */
 	sh73a0_clock_init();
 
@@ -1023,6 +980,9 @@ void __init sh73a0_add_standard_devices_dt(void)
 			     ARRAY_SIZE(sh73a0_devices_dt));
 	of_platform_populate(NULL, of_default_bus_match_table,
 			     sh73a0_auxdata_lookup, NULL);
+
+	/* Instantiate cpufreq-cpu0 */
+	platform_device_register_full(&devinfo);
 }
 
 static const char *sh73a0_boards_compat_dt[] __initdata = {
