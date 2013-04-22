@@ -33,8 +33,11 @@
 #define THERMAL_MAX_TRIPS	12
 #define THERMAL_NAME_LENGTH	20
 
+/* invalid cooling state */
+#define THERMAL_CSTATE_INVALID -1UL
+
 /* No upper/lower limit requirement */
-#define THERMAL_NO_LIMIT	-1UL
+#define THERMAL_NO_LIMIT	THERMAL_CSTATE_INVALID
 
 /* Unit conversion macros */
 #define KELVIN_TO_CELSIUS(t)	(long)(((long)t-2732 >= 0) ?	\
@@ -184,7 +187,6 @@ struct thermal_governor {
 	char name[THERMAL_NAME_LENGTH];
 	int (*throttle)(struct thermal_zone_device *tz, int trip);
 	struct list_head	governor_list;
-	struct module		*owner;
 };
 
 /* Structure that holds binding parameters for a zone */
@@ -244,14 +246,11 @@ struct thermal_instance *get_thermal_instance(struct thermal_zone_device *,
 void thermal_cdev_update(struct thermal_cooling_device *);
 void notify_thermal_framework(struct thermal_zone_device *, int);
 
-int thermal_register_governor(struct thermal_governor *);
-void thermal_unregister_governor(struct thermal_governor *);
-
 #ifdef CONFIG_NET
 extern int thermal_generate_netlink_event(struct thermal_zone_device *tz,
 						enum events event);
 #else
-static int thermal_generate_netlink_event(struct thermal_zone_device *tz,
+static inline int thermal_generate_netlink_event(struct thermal_zone_device *tz,
 						enum events event)
 {
 	return 0;
