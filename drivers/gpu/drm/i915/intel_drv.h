@@ -171,7 +171,23 @@ struct intel_connector {
 
 	/* Cached EDID for eDP and LVDS. May hold ERR_PTR for invalid EDID. */
 	struct edid *edid;
+
+	/* since POLL and HPD connectors may use the same HPD line keep the native
+	   state of connector->polled in case hotplug storm detection changes it */
+	u8 polled;
 };
+
+typedef struct dpll {
+	/* given values */
+	int n;
+	int m1, m2;
+	int p1, p2;
+	/* derived values */
+	int	dot;
+	int	vco;
+	int	m;
+	int	p;
+} intel_clock_t;
 
 struct intel_crtc_config {
 	struct drm_display_mode requested_mode;
@@ -183,6 +199,10 @@ struct intel_crtc_config {
 	/* Whether to set up the PCH/FDI. Note that we never allow sharing
 	 * between pch encoders and cpu encoders. */
 	bool has_pch_encoder;
+
+	/* CPU Transcoder for the pipe. Currently this can only differ from the
+	 * pipe on Haswell (where we have a special eDP transcoder). */
+	enum transcoder cpu_transcoder;
 
 	/*
 	 * Use reduced/limited/broadcast rbg range, compressing from the full
@@ -200,11 +220,7 @@ struct intel_crtc_config {
 
 	/* Settings for the intel dpll used on pretty much everything but
 	 * haswell. */
-	struct dpll {
-		unsigned n;
-		unsigned m1, m2;
-		unsigned p1, p2;
-	} dpll;
+	struct dpll dpll;
 
 	int pipe_bpp;
 	struct intel_link_m_n dp_m_n;
@@ -222,7 +238,6 @@ struct intel_crtc {
 	struct drm_crtc base;
 	enum pipe pipe;
 	enum plane plane;
-	enum transcoder cpu_transcoder;
 	u8 lut_r[256], lut_g[256], lut_b[256];
 	/*
 	 * Whether the crtc and the connected output pipeline is active. Implies
@@ -258,6 +273,10 @@ struct intel_crtc {
 
 	/* reset counter value when the last flip was submitted */
 	unsigned int reset_counter;
+
+	/* Access to these should be protected by dev_priv->irq_lock. */
+	bool cpu_fifo_underrun_disabled;
+	bool pch_fifo_underrun_disabled;
 };
 
 struct intel_plane {
@@ -424,6 +443,19 @@ struct intel_digital_port {
 	struct intel_hdmi hdmi;
 };
 
+static inline int
+vlv_dport_to_channel(struct intel_digital_port *dport)
+{
+	switch (dport->port) {
+	case PORT_B:
+		return 0;
+	case PORT_C:
+		return 1;
+	default:
+		BUG();
+	}
+}
+
 static inline struct drm_crtc *
 intel_get_crtc_for_pipe(struct drm_device *dev, int pipe)
 {
@@ -467,6 +499,7 @@ int intel_ddc_get_modes(struct drm_connector *c, struct i2c_adapter *adapter);
 extern void intel_attach_force_audio_property(struct drm_connector *connector);
 extern void intel_attach_broadcast_rgb_property(struct drm_connector *connector);
 
+extern bool intel_pipe_has_type(struct drm_crtc *crtc, int type);
 extern void intel_crt_init(struct drm_device *dev);
 extern void intel_hdmi_init(struct drm_device *dev,
 			    int hdmi_reg, enum port port);
@@ -599,6 +632,7 @@ intel_pipe_to_cpu_transcoder(struct drm_i915_private *dev_priv,
 extern void intel_wait_for_vblank(struct drm_device *dev, int pipe);
 extern void intel_wait_for_pipe_off(struct drm_device *dev, int pipe);
 extern int ironlake_get_lanes_required(int target_clock, int link_bw, int bpp);
+extern void vlv_wait_port_ready(struct drm_i915_private *dev_priv, int port);
 
 struct intel_load_detect_pipe {
 	struct drm_framebuffer *release_fb;
@@ -682,6 +716,8 @@ extern int intel_sprite_get_colorkey(struct drm_device *dev, void *data,
 				     struct drm_file *file_priv);
 
 extern u32 intel_dpio_read(struct drm_i915_private *dev_priv, int reg);
+extern void intel_dpio_write(struct drm_i915_private *dev_priv, int reg,
+			     u32 val);
 
 /* Power-related functions, located in intel_pm.c */
 extern void intel_init_pm(struct drm_device *dev);
@@ -693,6 +729,7 @@ extern void intel_update_fbc(struct drm_device *dev);
 extern void intel_gpu_ips_init(struct drm_i915_private *dev_priv);
 extern void intel_gpu_ips_teardown(void);
 
+extern bool intel_using_power_well(struct drm_device *dev);
 extern void intel_init_power_well(struct drm_device *dev);
 extern void intel_set_power_well(struct drm_device *dev, bool enable);
 extern void intel_enable_gt_powersave(struct drm_device *dev);
@@ -719,5 +756,11 @@ intel_ddi_connector_get_hw_state(struct intel_connector *intel_connector);
 extern void intel_ddi_fdi_disable(struct drm_crtc *crtc);
 
 extern void intel_display_handle_reset(struct drm_device *dev);
+extern bool intel_set_cpu_fifo_underrun_reporting(struct drm_device *dev,
+						  enum pipe pipe,
+						  bool enable);
+extern bool intel_set_pch_fifo_underrun_reporting(struct drm_device *dev,
+						 enum transcoder pch_transcoder,
+						 bool enable);
 
 #endif /* __INTEL_DRV_H__ */

@@ -159,6 +159,9 @@ static void intel_pre_enable_lvds(struct intel_encoder *encoder)
 	if (HAS_PCH_SPLIT(dev) || !enc->pfit_control)
 		return;
 
+	WARN_ON(I915_READ(PFIT_CONTROL) & PFIT_ENABLE);
+	assert_pipe_disabled(dev_priv, to_intel_crtc(encoder->base.crtc)->pipe);
+
 	/*
 	 * Enable automatic panel scaling so that non-native modes
 	 * fill the screen.  The panel fitter should only be
@@ -631,7 +634,6 @@ static void intel_lvds_destroy(struct drm_connector *connector)
 	if (!IS_ERR_OR_NULL(lvds_connector->base.edid))
 		kfree(lvds_connector->base.edid);
 
-	intel_panel_destroy_backlight(connector->dev);
 	intel_panel_fini(&lvds_connector->base.panel);
 
 	drm_sysfs_connector_remove(connector);

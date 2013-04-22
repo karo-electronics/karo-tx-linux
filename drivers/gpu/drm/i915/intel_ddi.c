@@ -675,7 +675,7 @@ static void intel_ddi_mode_set(struct drm_encoder *encoder,
 	int pipe = intel_crtc->pipe;
 	int type = intel_encoder->type;
 
-	DRM_DEBUG_KMS("Preparing DDI mode for Haswell on port %c, pipe %c\n",
+	DRM_DEBUG_KMS("Preparing DDI mode on port %c, pipe %c\n",
 		      port_name(port), pipe_name(pipe));
 
 	intel_crtc->eld_vld = false;
@@ -748,8 +748,8 @@ intel_ddi_get_crtc_encoder(struct drm_crtc *crtc)
 	}
 
 	if (num_encoders != 1)
-		WARN(1, "%d encoders on crtc for pipe %d\n", num_encoders,
-		     intel_crtc->pipe);
+		WARN(1, "%d encoders on crtc for pipe %c\n", num_encoders,
+		     pipe_name(intel_crtc->pipe));
 
 	BUG_ON(ret == NULL);
 	return ret;
@@ -924,7 +924,7 @@ void intel_ddi_set_pipe_settings(struct drm_crtc *crtc)
 	struct drm_i915_private *dev_priv = crtc->dev->dev_private;
 	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
 	struct intel_encoder *intel_encoder = intel_ddi_get_crtc_encoder(crtc);
-	enum transcoder cpu_transcoder = intel_crtc->cpu_transcoder;
+	enum transcoder cpu_transcoder = intel_crtc->config.cpu_transcoder;
 	int type = intel_encoder->type;
 	uint32_t temp;
 
@@ -958,7 +958,7 @@ void intel_ddi_enable_transcoder_func(struct drm_crtc *crtc)
 	struct drm_encoder *encoder = &intel_encoder->base;
 	struct drm_i915_private *dev_priv = crtc->dev->dev_private;
 	enum pipe pipe = intel_crtc->pipe;
-	enum transcoder cpu_transcoder = intel_crtc->cpu_transcoder;
+	enum transcoder cpu_transcoder = intel_crtc->config.cpu_transcoder;
 	enum port port = intel_ddi_get_encoder_port(intel_encoder);
 	int type = intel_encoder->type;
 	uint32_t temp;
@@ -1047,8 +1047,8 @@ void intel_ddi_enable_transcoder_func(struct drm_crtc *crtc)
 		}
 
 	} else {
-		WARN(1, "Invalid encoder type %d for pipe %d\n",
-		     intel_encoder->type, pipe);
+		WARN(1, "Invalid encoder type %d for pipe %c\n",
+		     intel_encoder->type, pipe_name(pipe));
 	}
 
 	I915_WRITE(TRANS_DDI_FUNC_CTL(cpu_transcoder), temp);
@@ -1148,7 +1148,7 @@ bool intel_ddi_get_hw_state(struct intel_encoder *encoder,
 		}
 	}
 
-	DRM_DEBUG_KMS("No pipe for ddi port %i found\n", port);
+	DRM_DEBUG_KMS("No pipe for ddi port %c found\n", port_name(port));
 
 	return false;
 }
@@ -1223,7 +1223,7 @@ void intel_ddi_enable_pipe_clock(struct intel_crtc *intel_crtc)
 	struct drm_i915_private *dev_priv = crtc->dev->dev_private;
 	struct intel_encoder *intel_encoder = intel_ddi_get_crtc_encoder(crtc);
 	enum port port = intel_ddi_get_encoder_port(intel_encoder);
-	enum transcoder cpu_transcoder = intel_crtc->cpu_transcoder;
+	enum transcoder cpu_transcoder = intel_crtc->config.cpu_transcoder;
 
 	if (cpu_transcoder != TRANSCODER_EDP)
 		I915_WRITE(TRANS_CLK_SEL(cpu_transcoder),
@@ -1233,7 +1233,7 @@ void intel_ddi_enable_pipe_clock(struct intel_crtc *intel_crtc)
 void intel_ddi_disable_pipe_clock(struct intel_crtc *intel_crtc)
 {
 	struct drm_i915_private *dev_priv = intel_crtc->base.dev->dev_private;
-	enum transcoder cpu_transcoder = intel_crtc->cpu_transcoder;
+	enum transcoder cpu_transcoder = intel_crtc->config.cpu_transcoder;
 
 	if (cpu_transcoder != TRANSCODER_EDP)
 		I915_WRITE(TRANS_CLK_SEL(cpu_transcoder),

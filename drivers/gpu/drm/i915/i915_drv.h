@@ -76,6 +76,8 @@ enum plane {
 };
 #define plane_name(p) ((p) + 'A')
 
+#define sprite_name(p, s) ((p) * dev_priv->num_plane + (s) + 'A')
+
 enum port {
 	PORT_A = 0,
 	PORT_B,
@@ -195,9 +197,9 @@ struct drm_i915_master_private {
 	struct _drm_i915_sarea *sarea_priv;
 };
 #define I915_FENCE_REG_NONE -1
-#define I915_MAX_NUM_FENCES 16
-/* 16 fences + sign bit for FENCE_REG_NONE */
-#define I915_MAX_NUM_FENCE_BITS 5
+#define I915_MAX_NUM_FENCES 32
+/* 32 fences + sign bit for FENCE_REG_NONE */
+#define I915_MAX_NUM_FENCE_BITS 6
 
 struct drm_i915_fence_reg {
 	struct list_head lru_list;
@@ -449,6 +451,7 @@ struct i915_hw_ppgtt {
 			       struct sg_table *st,
 			       unsigned int pg_start,
 			       enum i915_cache_level cache_level);
+	int (*enable)(struct drm_device *dev);
 	void (*cleanup)(struct i915_hw_ppgtt *ppgtt);
 };
 
@@ -479,6 +482,7 @@ enum intel_pch {
 	PCH_IBX,	/* Ibexpeak PCH */
 	PCH_CPT,	/* Cougarpoint PCH */
 	PCH_LPT,	/* Lynxpoint PCH */
+	PCH_NOP,
 };
 
 enum intel_sbi_destination {
@@ -666,6 +670,7 @@ struct intel_gen6_power_mgmt {
 	u8 cur_delay;
 	u8 min_delay;
 	u8 max_delay;
+	u8 hw_max;
 
 	struct delayed_work delayed_resume_work;
 
@@ -929,6 +934,16 @@ typedef struct drm_i915_private {
 
 	struct work_struct hotplug_work;
 	bool enable_hotplug_processing;
+	struct {
+		unsigned long hpd_last_jiffies;
+		int hpd_cnt;
+		enum {
+			HPD_ENABLED = 0,
+			HPD_DISABLED = 1,
+			HPD_MARK_DISABLED = 2
+		} hpd_mark;
+	} hpd_stats[HPD_NUM_PINS];
+	struct timer_list hotplug_reenable_timer;
 
 	int num_pch_pll;
 	int num_plane;
@@ -963,6 +978,7 @@ typedef struct drm_i915_private {
 	unsigned int int_crt_support:1;
 	unsigned int lvds_use_ssc:1;
 	unsigned int display_clock_mode:1;
+	unsigned int fdi_rx_polarity_inverted:1;
 	int lvds_ssc_freq;
 	unsigned int bios_lvds_val; /* initial [PCH_]LVDS reg val in VBIOS */
 	struct {
@@ -1373,6 +1389,7 @@ struct drm_i915_file_private {
 #define HAS_PCH_LPT(dev) (INTEL_PCH_TYPE(dev) == PCH_LPT)
 #define HAS_PCH_CPT(dev) (INTEL_PCH_TYPE(dev) == PCH_CPT)
 #define HAS_PCH_IBX(dev) (INTEL_PCH_TYPE(dev) == PCH_IBX)
+#define HAS_PCH_NOP(dev) (INTEL_PCH_TYPE(dev) == PCH_NOP)
 #define HAS_PCH_SPLIT(dev) (INTEL_PCH_TYPE(dev) != PCH_NONE)
 
 #define HAS_FORCE_WAKE(dev) (INTEL_INFO(dev)->has_force_wake)
@@ -1640,7 +1657,6 @@ int __must_check i915_gem_init(struct drm_device *dev);
 int __must_check i915_gem_init_hw(struct drm_device *dev);
 void i915_gem_l3_remap(struct drm_device *dev);
 void i915_gem_init_swizzling(struct drm_device *dev);
-void i915_gem_init_ppgtt(struct drm_device *dev);
 void i915_gem_cleanup_ringbuffer(struct drm_device *dev);
 int __must_check i915_gpu_idle(struct drm_device *dev);
 int __must_check i915_gem_idle(struct drm_device *dev);
@@ -1840,6 +1856,9 @@ extern void intel_disable_fbc(struct drm_device *dev);
 extern bool ironlake_set_drps(struct drm_device *dev, u8 val);
 extern void intel_init_pch_refclk(struct drm_device *dev);
 extern void gen6_set_rps(struct drm_device *dev, u8 val);
+extern void valleyview_set_rps(struct drm_device *dev, u8 val);
+extern int valleyview_rps_max_freq(struct drm_i915_private *dev_priv);
+extern int valleyview_rps_min_freq(struct drm_i915_private *dev_priv);
 extern void intel_detect_pch(struct drm_device *dev);
 extern int intel_trans_dp_port_sel(struct drm_crtc *crtc);
 extern int intel_enable_rc6(const struct drm_device *dev);
@@ -1871,6 +1890,10 @@ int sandybridge_pcode_read(struct drm_i915_private *dev_priv, u8 mbox, u32 *val)
 int sandybridge_pcode_write(struct drm_i915_private *dev_priv, u8 mbox, u32 val);
 int valleyview_punit_read(struct drm_i915_private *dev_priv, u8 addr, u32 *val);
 int valleyview_punit_write(struct drm_i915_private *dev_priv, u8 addr, u32 val);
+int valleyview_nc_read(struct drm_i915_private *dev_priv, u8 addr, u32 *val);
+
+int vlv_gpu_freq(int ddr_freq, int val);
+int vlv_freq_opcode(int ddr_freq, int val);
 
 #define __i915_read(x, y) \
 	u##x i915_read##x(struct drm_i915_private *dev_priv, u32 reg);
