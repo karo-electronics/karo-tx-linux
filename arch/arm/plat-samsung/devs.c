@@ -10,6 +10,7 @@
  * published by the Free Software Foundation.
 */
 
+#include <linux/amba/pl330.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/interrupt.h>
@@ -1557,6 +1558,9 @@ void __init s3c64xx_spi0_set_platdata(int (*cfg_gpio)(void), int src_clk_nr,
 	pd.num_cs = num_cs;
 	pd.src_clk_nr = src_clk_nr;
 	pd.cfg_gpio = (cfg_gpio) ? cfg_gpio : s3c64xx_spi0_cfg_gpio;
+#ifdef CONFIG_PL330_DMA
+	pd.filter = pl330_filter;
+#endif
 
 	s3c_set_platdata(&pd, sizeof(pd), &s3c64xx_device_spi0);
 }
@@ -1595,6 +1599,9 @@ void __init s3c64xx_spi1_set_platdata(int (*cfg_gpio)(void), int src_clk_nr,
 	pd.num_cs = num_cs;
 	pd.src_clk_nr = src_clk_nr;
 	pd.cfg_gpio = (cfg_gpio) ? cfg_gpio : s3c64xx_spi1_cfg_gpio;
+#ifdef CONFIG_PL330_DMA
+	pd.filter = pl330_filter;
+#endif
 
 	s3c_set_platdata(&pd, sizeof(pd), &s3c64xx_device_spi1);
 }
@@ -1633,6 +1640,9 @@ void __init s3c64xx_spi2_set_platdata(int (*cfg_gpio)(void), int src_clk_nr,
 	pd.num_cs = num_cs;
 	pd.src_clk_nr = src_clk_nr;
 	pd.cfg_gpio = (cfg_gpio) ? cfg_gpio : s3c64xx_spi2_cfg_gpio;
+#ifdef CONFIG_PL330_DMA
+	pd.filter = pl330_filter;
+#endif
 
 	s3c_set_platdata(&pd, sizeof(pd), &s3c64xx_device_spi2);
 }
