@@ -73,11 +73,24 @@ static int team_port_set_orig_dev_addr(struct team_port *port)
 	return __set_port_dev_addr(port->dev, port->orig.dev_addr);
 }
 
-int team_port_set_team_dev_addr(struct team_port *port)
+static int team_port_set_team_dev_addr(struct team *team,
+				       struct team_port *port)
 {
-	return __set_port_dev_addr(port->dev, port->team->dev->dev_addr);
+	return __set_port_dev_addr(port->dev, team->dev->dev_addr);
 }
-EXPORT_SYMBOL(team_port_set_team_dev_addr);
+
+int team_modeop_port_enter(struct team *team, struct team_port *port)
+{
+	return team_port_set_team_dev_addr(team, port);
+}
+EXPORT_SYMBOL(team_modeop_port_enter);
+
+void team_modeop_port_change_dev_addr(struct team *team,
+				      struct team_port *port)
+{
+	team_port_set_team_dev_addr(team, port);
+}
+EXPORT_SYMBOL(team_modeop_port_change_dev_addr);
 
 static void team_refresh_port_linkup(struct team_port *port)
 {
@@ -490,9 +503,9 @@ static bool team_dummy_transmit(struct team *team, struct sk_buff *skb)
 	return false;
 }
 
-rx_handler_result_t team_dummy_receive(struct team *team,
-				       struct team_port *port,
-				       struct sk_buff *skb)
+static rx_handler_result_t team_dummy_receive(struct team *team,
+					      struct team_port *port,
+					      struct sk_buff *skb)
 {
 	return RX_HANDLER_ANOTHER;
 }
@@ -1491,8 +1504,8 @@ static void team_set_rx_mode(struct net_device *dev)
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(port, &team->port_list, list) {
-		dev_uc_sync(port->dev, dev);
-		dev_mc_sync(port->dev, dev);
+		dev_uc_sync_multiple(port->dev, dev);
+		dev_mc_sync_multiple(port->dev, dev);
 	}
 	rcu_read_unlock();
 }
