@@ -1560,10 +1560,12 @@ static int mtip_get_identify(struct mtip_port *port, void __user *user_buffer)
 	}
 #endif
 
+#ifdef MTIP_TRIM /* Disabling TRIM support temporarily */
 	/* Demux ID.DRAT & ID.RZAT to determine trim support */
 	if (port->identify[69] & (1 << 14) && port->identify[69] & (1 << 5))
 		port->dd->trim_supp = true;
 	else
+#endif
 		port->dd->trim_supp = false;
 
 	/* Set the identify buffer as valid. */
@@ -4156,25 +4158,23 @@ static int mtip_block_remove(struct driver_data *dd)
  */
 static int mtip_block_shutdown(struct driver_data *dd)
 {
-	dev_info(&dd->pdev->dev,
-		"Shutting down %s ...\n", dd->disk->disk_name);
-
 	/* Delete our gendisk structure, and cleanup the blk queue. */
 	if (dd->disk) {
-		if (dd->disk->queue)
-			del_gendisk(dd->disk);
-		else
-			put_disk(dd->disk);
-	}
+		dev_info(&dd->pdev->dev,
+			"Shutting down %s ...\n", dd->disk->disk_name);
 
+		if (dd->disk->queue) {
+			del_gendisk(dd->disk);
+			blk_cleanup_queue(dd->queue);
+		} else
+			put_disk(dd->disk);
+		dd->disk  = NULL;
+		dd->queue = NULL;
+	}
 
 	spin_lock(&rssd_index_lock);
 	ida_remove(&rssd_index_ida, dd->index);
 	spin_unlock(&rssd_index_lock);
-
-	blk_cleanup_queue(dd->queue);
-	dd->disk  = NULL;
-	dd->queue = NULL;
 
 	mtip_hw_shutdown(dd);
 	return 0;
