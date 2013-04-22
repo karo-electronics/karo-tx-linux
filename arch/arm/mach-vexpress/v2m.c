@@ -23,6 +23,8 @@
 #include <linux/regulator/fixed.h>
 #include <linux/regulator/machine.h>
 #include <linux/vexpress.h>
+#include <linux/clk-provider.h>
+#include <linux/clkdev.h>
 
 #include <asm/mach-types.h>
 #include <asm/sizes.h>
@@ -425,7 +427,7 @@ void __init v2m_dt_init_early(void)
 
 static void __init v2m_dt_timer_init(void)
 {
-	vexpress_clk_of_init();
+	of_clk_init(NULL);
 
 	clocksource_of_init();
 

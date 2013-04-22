@@ -325,6 +325,8 @@ struct clk *clk_register_mux_table(struct device *dev, const char *name,
 		void __iomem *reg, u8 shift, u32 mask,
 		u8 clk_mux_flags, u32 *table, spinlock_t *lock);
 
+void of_fixed_factor_clk_setup(struct device_node *node);
+
 /**
  * struct clk_fixed_factor - fixed multiplier and divider clock
  *
@@ -352,11 +354,11 @@ struct clk *clk_register_fixed_factor(struct device *dev, const char *name,
  * struct clk_composite - aggregate clock of mux, divider and gate clocks
  *
  * @hw:		handle between common and hardware-specific interfaces
- * @mux_hw:	handle between composite and hardware-specifix mux clock
- * @div_hw:	handle between composite and hardware-specifix divider clock
- * @gate_hw:	handle between composite and hardware-specifix gate clock
+ * @mux_hw:	handle between composite and hardware-specific mux clock
+ * @rate_hw:	handle between composite and hardware-specific rate clock
+ * @gate_hw:	handle between composite and hardware-specific gate clock
  * @mux_ops:	clock ops for mux
- * @div_ops:	clock ops for divider
+ * @rate_ops:	clock ops for rate
  * @gate_ops:	clock ops for gate
  */
 struct clk_composite {
@@ -364,18 +366,18 @@ struct clk_composite {
 	struct clk_ops	ops;
 
 	struct clk_hw	*mux_hw;
-	struct clk_hw	*div_hw;
+	struct clk_hw	*rate_hw;
 	struct clk_hw	*gate_hw;
 
 	const struct clk_ops	*mux_ops;
-	const struct clk_ops	*div_ops;
+	const struct clk_ops	*rate_ops;
 	const struct clk_ops	*gate_ops;
 };
 
 struct clk *clk_register_composite(struct device *dev, const char *name,
 		const char **parent_names, int num_parents,
 		struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
-		struct clk_hw *div_hw, const struct clk_ops *div_ops,
+		struct clk_hw *rate_hw, const struct clk_ops *rate_ops,
 		struct clk_hw *gate_hw, const struct clk_ops *gate_ops,
 		unsigned long flags);
 
