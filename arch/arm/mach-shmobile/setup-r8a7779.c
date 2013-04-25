@@ -22,6 +22,7 @@
 #include <linux/interrupt.h>
 #include <linux/irq.h>
 #include <linux/of_platform.h>
+#include <linux/platform_data/gpio-rcar.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/input.h>
@@ -63,16 +64,7 @@ void __init r8a7779_map_io(void)
 }
 
 static struct resource r8a7779_pfc_resources[] = {
-	[0] = {
-		.start	= 0xfffc0000,
-		.end	= 0xfffc023b,
-		.flags	= IORESOURCE_MEM,
-	},
-	[1] = {
-		.start	= 0xffc40000,
-		.end	= 0xffc46fff,
-		.flags	= IORESOURCE_MEM,
-	}
+	DEFINE_RES_MEM(0xfffc0000, 0x023c),
 };
 
 static struct platform_device r8a7779_pfc_device = {
@@ -82,9 +74,52 @@ static struct platform_device r8a7779_pfc_device = {
 	.num_resources	= ARRAY_SIZE(r8a7779_pfc_resources),
 };
 
+#define R8A7779_GPIO(idx, npins) \
+static struct resource r8a7779_gpio##idx##_resources[] = {		\
+	DEFINE_RES_MEM(0xffc40000 + (0x1000 * (idx)), 0x002c),		\
+	DEFINE_RES_IRQ(gic_iid(0xad + (idx))),				\
+};									\
+									\
+static struct gpio_rcar_config r8a7779_gpio##idx##_platform_data = {	\
+	.gpio_base	= 32 * (idx),					\
+	.irq_base	= 0,						\
+	.number_of_pins	= npins,					\
+	.pctl_name	= "pfc-r8a7779",				\
+};									\
+									\
+static struct platform_device r8a7779_gpio##idx##_device = {		\
+	.name		= "gpio_rcar",					\
+	.id		= idx,						\
+	.resource	= r8a7779_gpio##idx##_resources,		\
+	.num_resources	= ARRAY_SIZE(r8a7779_gpio##idx##_resources),	\
+	.dev		= {						\
+		.platform_data	= &r8a7779_gpio##idx##_platform_data,	\
+	},								\
+}
+
+R8A7779_GPIO(0, 32);
+R8A7779_GPIO(1, 32);
+R8A7779_GPIO(2, 32);
+R8A7779_GPIO(3, 32);
+R8A7779_GPIO(4, 32);
+R8A7779_GPIO(5, 32);
+R8A7779_GPIO(6, 9);
+
+static struct platform_device *r8a7779_pinctrl_devices[] __initdata = {
+	&r8a7779_pfc_device,
+	&r8a7779_gpio0_device,
+	&r8a7779_gpio1_device,
+	&r8a7779_gpio2_device,
+	&r8a7779_gpio3_device,
+	&r8a7779_gpio4_device,
+	&r8a7779_gpio5_device,
+	&r8a7779_gpio6_device,
+};
+
 void __init r8a7779_pinmux_init(void)
 {
-	platform_device_register(&r8a7779_pfc_device);
+	platform_add_devices(r8a7779_pinctrl_devices,
+			    ARRAY_SIZE(r8a7779_pinctrl_devices));
 }
 
 static struct plat_sci_port scif0_platform_data = {

@@ -24,6 +24,7 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
+#include <linux/pinctrl/machine.h>
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
 #include <linux/regulator/fixed.h>
@@ -288,6 +289,16 @@ static struct platform_device lcdc0_device = {
 	},
 };
 
+static const struct pinctrl_map lcdc0_pinctrl_map[] = {
+	/* LCD0 */
+	PIN_MAP_MUX_GROUP_DEFAULT("sh_mobile_lcdc_fb.0", "pfc-r8a7740",
+				  "lcd0_data24_1", "lcd0"),
+	PIN_MAP_MUX_GROUP_DEFAULT("sh_mobile_lcdc_fb.0", "pfc-r8a7740",
+				  "lcd0_lclk_1", "lcd0"),
+	PIN_MAP_MUX_GROUP_DEFAULT("sh_mobile_lcdc_fb.0", "pfc-r8a7740",
+				  "lcd0_sync", "lcd0"),
+};
+
 /*
  * SMSC 9221
  */
@@ -317,12 +328,6 @@ static struct platform_device smsc_device = {
 	},
 	.resource	= smsc_resources,
 	.num_resources	= ARRAY_SIZE(smsc_resources),
-};
-
-/*
- * core board devices
- */
-static struct platform_device *bonito_core_devices[] __initdata = {
 };
 
 /*
@@ -364,12 +369,37 @@ static void __init bonito_map_io(void)
 #define VCCQ1CR		IOMEM(0xE6058140)
 #define VCCQ1LCDCR	IOMEM(0xE6058186)
 
+/*
+ * HACK: The FPGA mappings should be associated with the FPGA device, but we
+ * don't have one at the moment. Associate them with the PFC device to make
+ * sure they will be applied.
+ */
+static const struct pinctrl_map fpga_pinctrl_map[] = {
+	/* FPGA */
+	PIN_MAP_MUX_GROUP_DEFAULT("pfc-r8a7740", "pfc-r8a7740",
+				  "bsc_cs5a_0", "bsc"),
+	PIN_MAP_MUX_GROUP_DEFAULT("pfc-r8a7740", "pfc-r8a7740",
+				  "bsc_cs5b", "bsc"),
+	PIN_MAP_MUX_GROUP_DEFAULT("pfc-r8a7740", "pfc-r8a7740",
+				  "bsc_cs6a", "bsc"),
+	PIN_MAP_MUX_GROUP_DEFAULT("pfc-r8a7740", "pfc-r8a7740",
+				  "intc_irq10", "intc"),
+};
+
+static const struct pinctrl_map scifa5_pinctrl_map[] = {
+	/* SCIFA5 */
+	PIN_MAP_MUX_GROUP_DEFAULT("sh-sci.5", "pfc-r8a7740",
+				  "scifa5_data_2", "scifa5"),
+};
+
 static void __init bonito_init(void)
 {
 	u16 val;
 
 	regulator_register_fixed(0, dummy_supplies, ARRAY_SIZE(dummy_supplies));
 
+	pinctrl_register_mappings(fpga_pinctrl_map,
+				  ARRAY_SIZE(fpga_pinctrl_map));
 	r8a7740_pinmux_init();
 	bonito_fpga_init();
 
@@ -386,25 +416,14 @@ static void __init bonito_init(void)
 
 	r8a7740_add_standard_devices();
 
-	platform_add_devices(bonito_core_devices,
-			     ARRAY_SIZE(bonito_core_devices));
-
 	/*
 	 * base board settings
 	 */
-	gpio_request_one(GPIO_PORT176, GPIOF_IN, NULL);
-	if (!gpio_get_value(GPIO_PORT176)) {
+	gpio_request_one(176, GPIOF_IN, NULL);
+	if (!gpio_get_value(176)) {
 		u16 bsw2;
 		u16 bsw3;
 		u16 bsw4;
-
-		/*
-		 * FPGA
-		 */
-		gpio_request(GPIO_FN_CS5B,		NULL);
-		gpio_request(GPIO_FN_CS6A,		NULL);
-		gpio_request(GPIO_FN_CS5A_PORT105,	NULL);
-		gpio_request(GPIO_FN_IRQ10,		NULL);
 
 		val = bonito_fpga_read(BVERR);
 		pr_info("bonito version: cpu %02x, base %02x\n",
@@ -421,8 +440,8 @@ static void __init bonito_init(void)
 		if (BIT_OFF(bsw2, 1) &&	/* S38.3 = ON */
 		    BIT_OFF(bsw3, 9) &&	/* S39.6 = ON */
 		    BIT_OFF(bsw4, 4)) {	/* S43.1 = ON */
-			gpio_request(GPIO_FN_SCIFA5_TXD_PORT91,	NULL);
-			gpio_request(GPIO_FN_SCIFA5_RXD_PORT92,	NULL);
+			pinctrl_register_mappings(scifa5_pinctrl_map,
+						  ARRAY_SIZE(scifa5_pinctrl_map));
 		}
 
 		/*
@@ -430,38 +449,10 @@ static void __init bonito_init(void)
 		 */
 		if (BIT_ON(bsw2, 3) &&	/* S38.1 = OFF */
 		    BIT_ON(bsw2, 2)) {	/* S38.2 = OFF */
-			gpio_request(GPIO_FN_LCDC0_SELECT,	NULL);
-			gpio_request(GPIO_FN_LCD0_D0,		NULL);
-			gpio_request(GPIO_FN_LCD0_D1,		NULL);
-			gpio_request(GPIO_FN_LCD0_D2,		NULL);
-			gpio_request(GPIO_FN_LCD0_D3,		NULL);
-			gpio_request(GPIO_FN_LCD0_D4,		NULL);
-			gpio_request(GPIO_FN_LCD0_D5,		NULL);
-			gpio_request(GPIO_FN_LCD0_D6,		NULL);
-			gpio_request(GPIO_FN_LCD0_D7,		NULL);
-			gpio_request(GPIO_FN_LCD0_D8,		NULL);
-			gpio_request(GPIO_FN_LCD0_D9,		NULL);
-			gpio_request(GPIO_FN_LCD0_D10,		NULL);
-			gpio_request(GPIO_FN_LCD0_D11,		NULL);
-			gpio_request(GPIO_FN_LCD0_D12,		NULL);
-			gpio_request(GPIO_FN_LCD0_D13,		NULL);
-			gpio_request(GPIO_FN_LCD0_D14,		NULL);
-			gpio_request(GPIO_FN_LCD0_D15,		NULL);
-			gpio_request(GPIO_FN_LCD0_D16,		NULL);
-			gpio_request(GPIO_FN_LCD0_D17,		NULL);
-			gpio_request(GPIO_FN_LCD0_D18_PORT163,	NULL);
-			gpio_request(GPIO_FN_LCD0_D19_PORT162,	NULL);
-			gpio_request(GPIO_FN_LCD0_D20_PORT161,	NULL);
-			gpio_request(GPIO_FN_LCD0_D21_PORT158,	NULL);
-			gpio_request(GPIO_FN_LCD0_D22_PORT160,	NULL);
-			gpio_request(GPIO_FN_LCD0_D23_PORT159,	NULL);
-			gpio_request(GPIO_FN_LCD0_DCK,		NULL);
-			gpio_request(GPIO_FN_LCD0_VSYN,		NULL);
-			gpio_request(GPIO_FN_LCD0_HSYN,		NULL);
-			gpio_request(GPIO_FN_LCD0_DISP,		NULL);
-			gpio_request(GPIO_FN_LCD0_LCLK_PORT165,	NULL);
+			pinctrl_register_mappings(lcdc0_pinctrl_map,
+						  ARRAY_SIZE(lcdc0_pinctrl_map));
 
-			gpio_request_one(GPIO_PORT61, GPIOF_OUT_INIT_HIGH,
+			gpio_request_one(61, GPIOF_OUT_INIT_HIGH,
 					 NULL); /* LCDDON */
 
 			/* backlight on */
