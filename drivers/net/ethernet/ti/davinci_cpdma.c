@@ -694,6 +694,11 @@ int cpdma_chan_submit(struct cpdma_chan *chan, void *token, void *data,
 	}
 
 	buffer = dma_map_single(ctlr->dev, data, len, chan->dir);
+	if (WARN_ON(dma_mapping_error(ctlr->dev, buffer))) {
+		ret = -ENOMEM;
+		goto unlock_ret;
+	}
+
 	mode = CPDMA_DESC_OWNER | CPDMA_DESC_SOP | CPDMA_DESC_EOP;
 	if ((!is_rx) && ((directed == 1) || (directed == 2)))
 		mode |= (CPDMA_DESC_TO_PORT_EN | (directed << 16));
