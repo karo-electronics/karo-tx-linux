@@ -846,7 +846,7 @@ static void volume_keys_init(int evm_id, int profile)
 * @profile - if present, else PROFILE_NONE
 * @dghtr_brd_flg - Whether Daughter board is present or not
 */
-static void _configure_device(int evm_id, struct evm_dev_cfg *dev_cfg,
+static void _configure_device(int evm_id, const struct evm_dev_cfg *dev_cfg,
 	int profile)
 {
 	int i;
@@ -2091,7 +2091,7 @@ static void __init clkout2_enable(int evm_id, int profile)
 }
 
 /* General Purpose EVM */
-static struct evm_dev_cfg gen_purp_evm_dev_cfg[] = {
+static const struct evm_dev_cfg gen_purp_evm_dev_cfg[] __initconst = {
 	{am335x_rtc_init, DEV_ON_BASEBOARD, PROFILE_ALL},
 	{clkout2_enable, DEV_ON_BASEBOARD, PROFILE_ALL},
 	{enable_ecap0,	DEV_ON_DGHTR_BRD, (PROFILE_0 | PROFILE_1 |
@@ -2128,7 +2128,7 @@ static struct evm_dev_cfg gen_purp_evm_dev_cfg[] = {
 };
 
 /* Industrial Auto Motor Control EVM */
-static struct evm_dev_cfg ind_auto_mtrl_evm_dev_cfg[] = {
+static const struct evm_dev_cfg ind_auto_mtrl_evm_dev_cfg[] __initconst = {
 	{am335x_rtc_init, DEV_ON_BASEBOARD, PROFILE_ALL},
 	{clkout2_enable, DEV_ON_BASEBOARD, PROFILE_ALL},
 	{mii1_init,	DEV_ON_DGHTR_BRD, PROFILE_ALL},
@@ -2144,7 +2144,7 @@ static struct evm_dev_cfg ind_auto_mtrl_evm_dev_cfg[] = {
 };
 
 /* Beaglebone < Rev A3 */
-static struct evm_dev_cfg beaglebone_old_dev_cfg[] = {
+static const struct evm_dev_cfg beaglebone_old_dev_cfg[] __initconst = {
 	{am335x_rtc_init, DEV_ON_BASEBOARD, PROFILE_NONE},
 	{clkout2_enable, DEV_ON_BASEBOARD, PROFILE_NONE},
 	{rmii1_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
@@ -2156,7 +2156,7 @@ static struct evm_dev_cfg beaglebone_old_dev_cfg[] = {
 };
 
 /* Beaglebone Rev A3 and after */
-static struct evm_dev_cfg beaglebone_dev_cfg[] = {
+static const struct evm_dev_cfg beaglebone_dev_cfg[] __initconst = {
 	{am335x_rtc_init, DEV_ON_BASEBOARD, PROFILE_NONE},
 	{clkout2_enable, DEV_ON_BASEBOARD, PROFILE_NONE},
 	{tps65217_init,	DEV_ON_BASEBOARD, PROFILE_NONE},
@@ -2169,7 +2169,7 @@ static struct evm_dev_cfg beaglebone_dev_cfg[] = {
 };
 
 /* EVM - Starter Kit */
-static struct evm_dev_cfg evm_sk_dev_cfg[] = {
+static const struct evm_dev_cfg evm_sk_dev_cfg[] __initconst = {
 	{am335x_rtc_init, DEV_ON_BASEBOARD, PROFILE_ALL},
 	{mmc1_wl12xx_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
 	{mmc0_init,	DEV_ON_BASEBOARD, PROFILE_ALL},
