@@ -329,9 +329,9 @@ static int __devinit davinci_mdio_probe(struct platform_device *pdev)
 	pm_runtime_get_sync(&pdev->dev);
 	data->clk = clk_get(&pdev->dev, "fck");
 	if (IS_ERR(data->clk)) {
+		ret = PTR_ERR(data->clk);
 		data->clk = NULL;
 		dev_err(dev, "failed to get device clock\n");
-		ret = PTR_ERR(data->clk);
 		goto bail_out;
 	}
 
