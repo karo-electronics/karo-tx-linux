@@ -28,8 +28,6 @@
 #include "control.h"
 #include "mux.h"
 
-#ifdef CONFIG_OMAP_MUX
-
 #define _AM33XX_MUXENTRY(M0, g, m0, m1, m2, m3, m4, m5, m6, m7)		\
 {									\
 	.reg_offset	= (AM33XX_CONTROL_PADCONF_##M0##_OFFSET),	\
@@ -1040,21 +1038,3 @@ void am33xx_standby_release(unsigned int state)
 		}
 	}
 }
-
-#else
-int __init am33xx_mux_init(struct omap_board_mux *board_subset)
-{
-	return 0;
-}
-
-void am335x_save_padconf(void)
-{
-	return;
-}
-
-void am335x_restore_padconf(void)
-{
-	return;
-}
-
-#endif
