@@ -1609,7 +1609,7 @@ static void i2c2_init(int evm_id, int profile)
 }
 
 /* Setup McASP 1 */
-static void mcasp1_init(int evm_id, int profile)
+static void __init mcasp1_init(int evm_id, int profile)
 {
 	/* Configure McASP */
 	setup_pin_mux(mcasp1_pin_mux);
@@ -1624,7 +1624,7 @@ static void mcasp1_init(int evm_id, int profile)
 	return;
 }
 
-static void mmc1_init(int evm_id, int profile)
+static void __init mmc1_init(int evm_id, int profile)
 {
 	setup_pin_mux(mmc1_common_pin_mux);
 	setup_pin_mux(mmc1_dat4_7_pin_mux);
@@ -1641,7 +1641,7 @@ static void mmc1_init(int evm_id, int profile)
 	return;
 }
 
-static void mmc1_wl12xx_init(int evm_id, int profile)
+static void __init mmc1_wl12xx_init(int evm_id, int profile)
 {
 	setup_pin_mux(mmc1_common_pin_mux);
 	am335x_mmc[1].mmc = 2;
@@ -1654,7 +1654,7 @@ static void mmc1_wl12xx_init(int evm_id, int profile)
 	am335x_mmc[1].ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34; /* 3V3 */
 }
 
-static void mmc2_wl12xx_init(int evm_id, int profile)
+static void __init mmc2_wl12xx_init(int evm_id, int profile)
 {
 	setup_pin_mux(mmc2_wl12xx_pin_mux);
 
@@ -1670,7 +1670,7 @@ static void mmc2_wl12xx_init(int evm_id, int profile)
 	return;
 }
 
-static void uart1_wl12xx_init(int evm_id, int profile)
+static void __init uart1_wl12xx_init(int evm_id, int profile)
 {
 	setup_pin_mux(uart1_wl12xx_pin_mux);
 }
@@ -1720,7 +1720,7 @@ static int wl12xx_set_power(struct device *dev, int slot, int on, int vdd)
 	return 0;
 }
 
-static void wl12xx_init(int evm_id, int profile)
+static void __init wl12xx_init(int evm_id, int profile)
 {
 	struct device *dev;
 	struct omap_mmc_platform_data *pdata;
@@ -1766,7 +1766,7 @@ out:
 	return;
 }
 
-static void d_can_init(int evm_id, int profile)
+static void __init d_can_init(int evm_id, int profile)
 {
 	switch (evm_id) {
 	case IND_AUT_MTR_EVM:
@@ -1789,7 +1789,7 @@ static void d_can_init(int evm_id, int profile)
 	}
 }
 
-static void mmc0_init(int evm_id, int profile)
+static void __init mmc0_init(int evm_id, int profile)
 {
 	switch (evm_id) {
 	case BEAGLE_BONE_A3:
@@ -1816,7 +1816,7 @@ static struct i2c_board_info tps65217_i2c_boardinfo[] = {
 	},
 };
 
-static void tps65217_init(int evm_id, int profile)
+static void __init tps65217_init(int evm_id, int profile)
 {
 	struct i2c_adapter *adapter;
 	struct i2c_client *client;
@@ -1865,7 +1865,7 @@ static void tps65217_init(int evm_id, int profile)
 	}
 }
 
-static void mmc0_no_cd_init(int evm_id, int profile)
+static void __init mmc0_no_cd_init(int evm_id, int profile)
 {
 	setup_pin_mux(mmc0_common_pin_mux);
 	setup_pin_mux(mmc0_wp_only_pin_mux);
@@ -1912,7 +1912,7 @@ static struct platform_device am335x_evm_gpio_keys = {
 	},
 };
 
-static void gpio_keys_init(int evm_id, int profile)
+static void __init gpio_keys_init(int evm_id, int profile)
 {
 	int err;
 
@@ -1956,7 +1956,7 @@ static struct platform_device leds_gpio = {
 	},
 };
 
-static void gpio_led_init(int evm_id, int profile)
+static void __init gpio_led_init(int evm_id, int profile)
 {
 	int err;
 
@@ -1967,7 +1967,7 @@ static void gpio_led_init(int evm_id, int profile)
 }
 
 /* setup spi0 */
-static void spi0_init(int evm_id, int profile)
+static void __init spi0_init(int evm_id, int profile)
 {
 	setup_pin_mux(spi0_pin_mux);
 	spi_register_board_info(am335x_spi0_slave_info,
@@ -1976,7 +1976,7 @@ static void spi0_init(int evm_id, int profile)
 }
 
 /* setup spi1 */
-static void spi1_init(int evm_id, int profile)
+static void __init spi1_init(int evm_id, int profile)
 {
 	setup_pin_mux(spi1_pin_mux);
 	spi_register_board_info(am335x_spi1_slave_info,
@@ -1985,7 +1985,7 @@ static void spi1_init(int evm_id, int profile)
 }
 
 
-static int beaglebone_phy_fixup(struct phy_device *phydev)
+static int __init beaglebone_phy_fixup(struct phy_device *phydev)
 {
 	phydev->supported &= ~(SUPPORTED_100baseT_Half |
 				SUPPORTED_100baseT_Full);
@@ -1993,7 +1993,7 @@ static int beaglebone_phy_fixup(struct phy_device *phydev)
 	return 0;
 }
 
-static void profibus_init(int evm_id, int profile)
+static void __init profibus_init(int evm_id, int profile)
 {
 	setup_pin_mux(profibus_pin_mux);
 	return;
@@ -2004,7 +2004,7 @@ static struct omap_rtc_pdata am335x_rtc_info = {
 	.wakeup_capable	= 0,
 };
 
-static void am335x_rtc_init(int evm_id, int profile)
+static void __init am335x_rtc_init(int evm_id, int profile)
 {
 	void __iomem *base;
 	struct clk *clk;
@@ -2075,7 +2075,7 @@ static struct pinmux_config clkout2_pin_mux[] = {
 	{NULL, 0},
 };
 
-static void clkout2_enable(int evm_id, int profile)
+static void __init clkout2_enable(int evm_id, int profile)
 {
 	struct clk *ck_32;
 
@@ -2188,7 +2188,7 @@ static struct evm_dev_cfg evm_sk_dev_cfg[] = {
 	{NULL, 0, 0},
 };
 
-static int am33xx_evm_tx_clk_dly_phy_fixup(struct phy_device *phydev)
+static int __init am33xx_evm_tx_clk_dly_phy_fixup(struct phy_device *phydev)
 {
 	phy_write(phydev, AR8051_PHY_DEBUG_ADDR_REG,
 		  AR8051_DEBUG_RGMII_CLK_DLY_REG);
@@ -2197,7 +2197,7 @@ static int am33xx_evm_tx_clk_dly_phy_fixup(struct phy_device *phydev)
 	return 0;
 }
 
-static void setup_general_purpose_evm(void)
+static void __init setup_general_purpose_evm(void)
 {
 	u32 prof_sel = am335x_get_profile_selection();
 	u32 boardid = GEN_PURP_EVM;
@@ -2217,7 +2217,7 @@ static void setup_general_purpose_evm(void)
 				   am33xx_evm_tx_clk_dly_phy_fixup);
 }
 
-static void setup_ind_auto_motor_ctrl_evm(void)
+static void __init setup_ind_auto_motor_ctrl_evm(void)
 {
 	u32 prof_sel = am335x_get_profile_selection();
 
@@ -2238,7 +2238,7 @@ static void setup_ind_auto_motor_ctrl_evm(void)
 }
 
 /* BeagleBone < Rev A3 */
-static void setup_beaglebone_old(void)
+static void __init setup_beaglebone_old(void)
 {
 	pr_info("The board is a AM335x Beaglebone < Rev A3.\n");
 
@@ -2255,7 +2255,7 @@ static void setup_beaglebone_old(void)
 }
 
 /* BeagleBone after Rev A3 */
-static void setup_beaglebone(void)
+static void __init setup_beaglebone(void)
 {
 	pr_info("The board is a AM335x Beaglebone.\n");
 
@@ -2271,7 +2271,7 @@ static void setup_beaglebone(void)
 }
 
 /* EVM - Starter Kit */
-static void setup_starterkit(void)
+static void __init setup_starterkit(void)
 {
 	pr_info("The board is a AM335x Starter Kit.\n");
 
@@ -2286,7 +2286,7 @@ static void setup_starterkit(void)
 				   am33xx_evm_tx_clk_dly_phy_fixup);
 }
 
-static void am335x_setup_daughter_board(struct memory_accessor *m, void *c)
+static void __init am335x_setup_daughter_board(struct memory_accessor *m, void *c)
 {
 	int ret;
 
@@ -2312,7 +2312,7 @@ static void am335x_setup_daughter_board(struct memory_accessor *m, void *c)
 		pr_err("Unknown CPLD version found\n");
 }
 
-static void am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
+static void __init am335x_evm_setup(struct memory_accessor *mem_acc, void *context)
 {
 	int ret;
 	char tmp[10];
@@ -2398,7 +2398,7 @@ out:
 	machine_halt();
 }
 
-static struct at24_platform_data am335x_daughter_board_eeprom_info = {
+static struct at24_platform_data am335x_daughter_board_eeprom_info __refdata = {
 	.byte_len       = (256*1024) / 8,
 	.page_size      = 64,
 	.flags          = AT24_FLAG_ADDR16,
@@ -2406,7 +2406,7 @@ static struct at24_platform_data am335x_daughter_board_eeprom_info = {
 	.context        = (void *)NULL,
 };
 
-static struct at24_platform_data am335x_baseboard_eeprom_info = {
+static struct at24_platform_data am335x_baseboard_eeprom_info __refdata = {
 	.byte_len       = (256*1024) / 8,
 	.page_size      = 64,
 	.flags          = AT24_FLAG_ADDR16,
@@ -2515,7 +2515,7 @@ static struct omap_musb_board_data musb_board_data = {
 	.instances	= 1,
 };
 
-static int cpld_reg_probe(struct i2c_client *client,
+static int __devinit cpld_reg_probe(struct i2c_client *client,
 	    const struct i2c_device_id *id)
 {
 	cpld_client = client;
@@ -2542,7 +2542,7 @@ static struct i2c_driver cpld_reg_driver = {
 	.id_table	= cpld_reg_id,
 };
 
-static void evm_init_cpld(void)
+static void __init evm_init_cpld(void)
 {
 	i2c_add_driver(&cpld_reg_driver);
 }
