@@ -582,6 +582,28 @@ void am33xx_push_sram_idle(void)
 					(am33xx_do_wfi, am33xx_do_wfi_sz);
 }
 
+void __iomem *am33xx_get_ram_base(void)
+{
+	static void __iomem *base;
+	if (!base) {
+		base = ioremap(AM33XX_EMIF0_BASE, SZ_32K);
+		if (base == NULL)
+			pr_err("Failed to remap EMIF registers\n");
+	}
+	return base;
+}
+
+void __iomem *am33xx_get_gpio0_base(void)
+{
+	static void __iomem *base;
+	if (!base) {
+		base = ioremap(AM33XX_GPIO0_BASE, SZ_4K);
+		if (base == NULL)
+			pr_err("Failed to remap GPIO0 registers\n");
+	}
+	return base;
+}
+
 static int __init am33xx_pm_init(void)
 {
 	int ret;
@@ -604,6 +626,9 @@ static int __init am33xx_pm_init(void)
 
 /* Read SDRAM_CONFIG register to determine Memory Type */
 	base = am33xx_get_ram_base();
+	if (base == NULL)
+		return -ENOMEM;
+
 	reg = readl(base + EMIF4_0_SDRAM_CONFIG);
 	reg = (reg & SDRAM_TYPE_MASK) >> SDRAM_TYPE_SHIFT;
 	suspend_cfg_param_list[MEMORY_TYPE] = reg;

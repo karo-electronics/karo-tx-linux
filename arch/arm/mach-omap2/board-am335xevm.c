@@ -745,7 +745,7 @@ static const uint32_t am335x_evm_matrix_keys[] = {
 	KEY(2, 1, KEY_DOWN),
 };
 
-const struct matrix_keymap_data am335x_evm_keymap_data = {
+static const struct matrix_keymap_data am335x_evm_keymap_data = {
 	.keymap      = am335x_evm_matrix_keys,
 	.keymap_size = ARRAY_SIZE(am335x_evm_matrix_keys),
 };
@@ -2558,9 +2558,9 @@ static void __init am335x_evm_i2c_init(void)
 				ARRAY_SIZE(am335x_i2c0_boardinfo));
 }
 
-void __iomem *am33xx_emif_base;
+static void __iomem *am33xx_emif_base;
 
-void __iomem * __init am33xx_get_mem_ctlr(void)
+static void __iomem *__init am33xx_get_mem_ctlr(void)
 {
 
 	am33xx_emif_base = ioremap(AM33XX_EMIF0_BASE, SZ_32K);
@@ -2569,20 +2569,6 @@ void __iomem * __init am33xx_get_mem_ctlr(void)
 		pr_warning("%s: Unable to map DDR2 controller",	__func__);
 
 	return am33xx_emif_base;
-}
-
-void __iomem *am33xx_get_ram_base(void)
-{
-	return am33xx_emif_base;
-}
-
-void __iomem *am33xx_gpio0_base;
-
-void __iomem *am33xx_get_gpio0_base(void)
-{
-	am33xx_gpio0_base = ioremap(AM33XX_GPIO0_BASE, SZ_4K);
-
-	return am33xx_gpio0_base;
 }
 
 static struct resource am33xx_cpuidle_resources[] = {

@@ -16,7 +16,6 @@
 #include "mux33xx.h"
 
 #ifndef __ASSEMBLER__
-extern void __iomem *am33xx_get_ram_base(void);
 
 /*
  * This enum is used to index the array passed to suspend routine with
