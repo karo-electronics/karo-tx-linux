@@ -189,7 +189,7 @@ static struct omap_mux am33xx_muxmodes[] = {
 		"uart5_rxd", "pr1_mii0_rxd2", "uart2_rtsn", "gpio2_15"),
 	_AM33XX_MUXENTRY(LCD_DATA10, 0,
 		"lcd_data10", "gpmc_a14", "ehrpwm1a", "mcasp0_axr0",
-		NULL, "pr1_mii0_rxd1,uart3_ctsn", "gpio2_16"),
+		NULL, "pr1_mii0_rxd1", "uart3_ctsn", "gpio2_16"),
 	_AM33XX_MUXENTRY(LCD_DATA11, 0,
 		"lcd_data11", "gpmc_a15", "ehrpwm1b", "mcasp0_ahclkr",
 		"mcasp0_axr2", "pr1_mii0_rxd0", "uart3_rtsn", "gpio2_17"),
