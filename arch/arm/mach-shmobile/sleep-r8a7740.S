@@ -32,7 +32,7 @@ ENTRY(r8a7740_shutdown)
 wfi_loop:
 	bl	cpu_v7_do_idle
 	b wfi_loop
-ENDPROC(r8a7740)
+ENDPROC(r8a7740_shutdown)
 
 	.text
 ENTRY(v7_cpu_resume)
@@ -53,5 +53,5 @@ ENDPROC(v7_cpu_resume)
 ENTRY(r8a7740_resume)
 	ldr	pc, 1f
 1:	.long	v7_cpu_resume - PAGE_OFFSET + PLAT_PHYS_OFFSET
-ENDPROC(r8a7740_resume_core_standby)
+ENDPROC(r8a7740_resume)
 #endif
