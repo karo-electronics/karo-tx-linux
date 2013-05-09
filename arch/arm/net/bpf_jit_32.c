@@ -917,7 +917,7 @@ static void __bpf_jit_compile(struct jit_ctx *out_ctx)
 
 	if (bpf_jit_enable > 1)
 		/* there are 2 passes here */
-		bpf_jit_dump(fp->len, alloc_size, 2, ctx.target);
+		bpf_jit_dump(ctx.prog_len, alloc_size, 2, ctx.target);
 out:
 	kfree(ctx.offsets);
 
