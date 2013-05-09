@@ -173,8 +173,13 @@ static inline void cpu_maps_update_done(void)
 extern void cpu_hotplug_enable(void);
 extern void cpu_hotplug_disable(void);
 #else
-#define cpu_hotplug_enable()	do { } while (0)
-#define cpu_hotplug_disable()	do { } while (0)
+static inline void cpu_hotplug_enable(void)
+{
+}
+
+static inline void cpu_hotplug_disable(void)
+{
+}
 #endif
 
 extern struct bus_type cpu_subsys;
