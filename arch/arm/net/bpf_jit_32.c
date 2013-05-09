@@ -973,6 +973,10 @@ void seccomp_jit_free(struct seccomp_filter *fp)
 	void *bpf_func = seccomp_filter_get_bpf_func(fp);
 
 	if (bpf_func != sk_run_filter) {
+		/*
+		 * seccomp_jit_free() can be called from softirq; module_free()
+		 * requires process context.
+		 */
 		work = (struct work_struct *)bpf_func;
 
 		INIT_WORK(work, bpf_jit_free_worker);
