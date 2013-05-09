@@ -548,6 +548,15 @@ load_common:
 			emit_err_ret(ARM_COND_NE, ctx);
 			emit(ARM_MOV_R(r_A, ARM_R0), ctx);
 			break;
+#ifdef CONFIG_SECCOMP_FILTER_JIT
+		case BPF_S_ANC_SECCOMP_LD_W:
+			ctx->seen |= SEEN_CALL;
+			emit_mov_i(ARM_R3, (u32)seccomp_bpf_load, ctx);
+			emit_mov_i(ARM_R0, k, ctx);
+			emit_blx_r(ARM_R3, ctx);
+			emit(ARM_MOV_R(r_A, ARM_R0), ctx);
+			break;
+#endif
 		case BPF_S_LD_W_IND:
 			load_order = 2;
 			goto load_ind;
@@ -943,3 +952,31 @@ void bpf_jit_free(struct sk_filter *fp)
 	if (fp->bpf_func != sk_run_filter)
 		module_free(NULL, fp->bpf_func);
 }
+
+#ifdef CONFIG_SECCOMP_FILTER_JIT
+void seccomp_jit_compile(struct seccomp_filter *fp)
+{
+	struct jit_ctx ctx;
+
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.prog_len = seccomp_filter_get_len(fp);
+	ctx.prog_insns = seccomp_filter_get_insns(fp);
+
+	__bpf_jit_compile(&ctx);
+	if (ctx.target)
+		seccomp_filter_set_bpf_func(fp, (void *)ctx.target);
+}
+
+void seccomp_jit_free(struct seccomp_filter *fp)
+{
+	struct work_struct *work;
+	void *bpf_func = seccomp_filter_get_bpf_func(fp);
+
+	if (bpf_func != sk_run_filter) {
+		work = (struct work_struct *)bpf_func;
+
+		INIT_WORK(work, bpf_jit_free_worker);
+		schedule_work(work);
+	}
+}
+#endif
