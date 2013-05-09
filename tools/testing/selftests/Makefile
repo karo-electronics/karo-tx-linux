@@ -7,6 +7,7 @@ TARGETS += mqueue
 TARGETS += net
 TARGETS += ptrace
 TARGETS += soft-dirty
+TARGETS += timers
 TARGETS += vm
 
 all:
