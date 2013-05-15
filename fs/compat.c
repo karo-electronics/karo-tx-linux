@@ -47,6 +47,7 @@
 #include <linux/fs_struct.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
+#include <linux/aio.h>
 
 #include <asm/uaccess.h>
 #include <asm/mmu_context.h>
@@ -66,8 +67,6 @@ int compat_printk(const char *fmt, ...)
 	va_end(ap);
 	return ret;
 }
-
-#include "read_write.h"
 
 /*
  * Not all architectures have sys_utime, so implement this in terms
