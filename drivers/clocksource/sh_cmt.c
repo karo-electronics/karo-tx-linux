@@ -34,10 +34,13 @@
 #include <linux/module.h>
 #include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
+#include <linux/of.h>
 
 struct sh_cmt_priv {
 	void __iomem *mapbase;
 	struct clk *clk;
+	long channel_offset;
+	int timer_bit;
 	unsigned long width; /* 16 or 32 bit version of hardware block */
 	unsigned long overflow_bit;
 	unsigned long clear_bits;
@@ -54,62 +57,96 @@ struct sh_cmt_priv {
 	struct clocksource cs;
 	unsigned long total_cycles;
 	bool cs_enabled;
+
+	/* callbacks for CMSTR and CMCSR access */
+	unsigned long (*read_control)(void __iomem *base, unsigned long offs);
+	void (*write_control)(void __iomem *base, unsigned long offs,
+			      unsigned long value);
+
+	/* callbacks for CMCNT and CMCOR access */
+	unsigned long (*read_count)(void __iomem *base, unsigned long offs);
+	void (*write_count)(void __iomem *base, unsigned long offs,
+			    unsigned long value);
 };
 
-static DEFINE_RAW_SPINLOCK(sh_cmt_lock);
+/* Examples of supported CMT timer register layouts and I/O access widths:
+ *
+ * "16-bit counter and 16-bit control" as found on sh7263:
+ * CMSTR 0xfffec000 16-bit
+ * CMCSR 0xfffec002 16-bit
+ * CMCNT 0xfffec004 16-bit
+ * CMCOR 0xfffec006 16-bit
+ *
+ * "32-bit counter and 16-bit control" as found on sh7372, sh73a0, r8a7740:
+ * CMSTR 0xffca0000 16-bit
+ * CMCSR 0xffca0060 16-bit
+ * CMCNT 0xffca0064 32-bit
+ * CMCOR 0xffca0068 32-bit
+ */
 
-#define CMSTR -1 /* shared register */
+static unsigned long sh_cmt_read16(void __iomem *base, unsigned long offs)
+{
+	return ioread16(base + (offs << 1));
+}
+
+static unsigned long sh_cmt_read32(void __iomem *base, unsigned long offs)
+{
+	return ioread32(base + (offs << 2));
+}
+
+static void sh_cmt_write16(void __iomem *base, unsigned long offs,
+			   unsigned long value)
+{
+	iowrite16(value, base + (offs << 1));
+}
+
+static void sh_cmt_write32(void __iomem *base, unsigned long offs,
+			   unsigned long value)
+{
+	iowrite32(value, base + (offs << 2));
+}
+
 #define CMCSR 0 /* channel register */
 #define CMCNT 1 /* channel register */
 #define CMCOR 2 /* channel register */
 
-static inline unsigned long sh_cmt_read(struct sh_cmt_priv *p, int reg_nr)
+static inline unsigned long sh_cmt_read_cmstr(struct sh_cmt_priv *p)
 {
-	struct sh_timer_config *cfg = p->pdev->dev.platform_data;
-	void __iomem *base = p->mapbase;
-	unsigned long offs;
-
-	if (reg_nr == CMSTR) {
-		offs = 0;
-		base -= cfg->channel_offset;
-	} else
-		offs = reg_nr;
-
-	if (p->width == 16)
-		offs <<= 1;
-	else {
-		offs <<= 2;
-		if ((reg_nr == CMCNT) || (reg_nr == CMCOR))
-			return ioread32(base + offs);
-	}
-
-	return ioread16(base + offs);
+	return p->read_control(p->mapbase - p->channel_offset, 0);
 }
 
-static inline void sh_cmt_write(struct sh_cmt_priv *p, int reg_nr,
-				unsigned long value)
+static inline unsigned long sh_cmt_read_cmcsr(struct sh_cmt_priv *p)
 {
-	struct sh_timer_config *cfg = p->pdev->dev.platform_data;
-	void __iomem *base = p->mapbase;
-	unsigned long offs;
+	return p->read_control(p->mapbase, CMCSR);
+}
 
-	if (reg_nr == CMSTR) {
-		offs = 0;
-		base -= cfg->channel_offset;
-	} else
-		offs = reg_nr;
+static inline unsigned long sh_cmt_read_cmcnt(struct sh_cmt_priv *p)
+{
+	return p->read_count(p->mapbase, CMCNT);
+}
 
-	if (p->width == 16)
-		offs <<= 1;
-	else {
-		offs <<= 2;
-		if ((reg_nr == CMCNT) || (reg_nr == CMCOR)) {
-			iowrite32(value, base + offs);
-			return;
-		}
-	}
+static inline void sh_cmt_write_cmstr(struct sh_cmt_priv *p,
+				      unsigned long value)
+{
+	p->write_control(p->mapbase - p->channel_offset, 0, value);
+}
 
-	iowrite16(value, base + offs);
+static inline void sh_cmt_write_cmcsr(struct sh_cmt_priv *p,
+				      unsigned long value)
+{
+	p->write_control(p->mapbase, CMCSR, value);
+}
+
+static inline void sh_cmt_write_cmcnt(struct sh_cmt_priv *p,
+				      unsigned long value)
+{
+	p->write_count(p->mapbase, CMCNT, value);
+}
+
+static inline void sh_cmt_write_cmcor(struct sh_cmt_priv *p,
+				      unsigned long value)
+{
+	p->write_count(p->mapbase, CMCOR, value);
 }
 
 static unsigned long sh_cmt_get_counter(struct sh_cmt_priv *p,
@@ -118,15 +155,15 @@ static unsigned long sh_cmt_get_counter(struct sh_cmt_priv *p,
 	unsigned long v1, v2, v3;
 	int o1, o2;
 
-	o1 = sh_cmt_read(p, CMCSR) & p->overflow_bit;
+	o1 = sh_cmt_read_cmcsr(p) & p->overflow_bit;
 
 	/* Make sure the timer value is stable. Stolen from acpi_pm.c */
 	do {
 		o2 = o1;
-		v1 = sh_cmt_read(p, CMCNT);
-		v2 = sh_cmt_read(p, CMCNT);
-		v3 = sh_cmt_read(p, CMCNT);
-		o1 = sh_cmt_read(p, CMCSR) & p->overflow_bit;
+		v1 = sh_cmt_read_cmcnt(p);
+		v2 = sh_cmt_read_cmcnt(p);
+		v3 = sh_cmt_read_cmcnt(p);
+		o1 = sh_cmt_read_cmcsr(p) & p->overflow_bit;
 	} while (unlikely((o1 != o2) || (v1 > v2 && v1 < v3)
 			  || (v2 > v3 && v2 < v1) || (v3 > v1 && v3 < v2)));
 
@@ -134,22 +171,22 @@ static unsigned long sh_cmt_get_counter(struct sh_cmt_priv *p,
 	return v2;
 }
 
+static DEFINE_RAW_SPINLOCK(sh_cmt_lock);
 
 static void sh_cmt_start_stop_ch(struct sh_cmt_priv *p, int start)
 {
-	struct sh_timer_config *cfg = p->pdev->dev.platform_data;
 	unsigned long flags, value;
 
 	/* start stop register shared by multiple timer channels */
 	raw_spin_lock_irqsave(&sh_cmt_lock, flags);
-	value = sh_cmt_read(p, CMSTR);
+	value = sh_cmt_read_cmstr(p);
 
 	if (start)
-		value |= 1 << cfg->timer_bit;
+		value |= 1 << p->timer_bit;
 	else
-		value &= ~(1 << cfg->timer_bit);
+		value &= ~(1 << p->timer_bit);
 
-	sh_cmt_write(p, CMSTR, value);
+	sh_cmt_write_cmstr(p, value);
 	raw_spin_unlock_irqrestore(&sh_cmt_lock, flags);
 }
 
@@ -173,14 +210,14 @@ static int sh_cmt_enable(struct sh_cmt_priv *p, unsigned long *rate)
 	/* configure channel, periodic mode and maximum timeout */
 	if (p->width == 16) {
 		*rate = clk_get_rate(p->clk) / 512;
-		sh_cmt_write(p, CMCSR, 0x43);
+		sh_cmt_write_cmcsr(p, 0x43);
 	} else {
 		*rate = clk_get_rate(p->clk) / 8;
-		sh_cmt_write(p, CMCSR, 0x01a4);
+		sh_cmt_write_cmcsr(p, 0x01a4);
 	}
 
-	sh_cmt_write(p, CMCOR, 0xffffffff);
-	sh_cmt_write(p, CMCNT, 0);
+	sh_cmt_write_cmcor(p, 0xffffffff);
+	sh_cmt_write_cmcnt(p, 0);
 
 	/*
 	 * According to the sh73a0 user's manual, as CMCNT can be operated
@@ -194,12 +231,12 @@ static int sh_cmt_enable(struct sh_cmt_priv *p, unsigned long *rate)
 	 * take RCLKx2 at maximum.
 	 */
 	for (k = 0; k < 100; k++) {
-		if (!sh_cmt_read(p, CMCNT))
+		if (!sh_cmt_read_cmcnt(p))
 			break;
 		udelay(1);
 	}
 
-	if (sh_cmt_read(p, CMCNT)) {
+	if (sh_cmt_read_cmcnt(p)) {
 		dev_err(&p->pdev->dev, "cannot clear CMCNT\n");
 		ret = -ETIMEDOUT;
 		goto err1;
@@ -222,7 +259,7 @@ static void sh_cmt_disable(struct sh_cmt_priv *p)
 	sh_cmt_start_stop_ch(p, 0);
 
 	/* disable interrupts in CMT block */
-	sh_cmt_write(p, CMCSR, 0);
+	sh_cmt_write_cmcsr(p, 0);
 
 	/* stop clock */
 	clk_disable(p->clk);
@@ -270,7 +307,7 @@ static void sh_cmt_clock_event_program_verify(struct sh_cmt_priv *p,
 		if (new_match > p->max_match_value)
 			new_match = p->max_match_value;
 
-		sh_cmt_write(p, CMCOR, new_match);
+		sh_cmt_write_cmcor(p, new_match);
 
 		now = sh_cmt_get_counter(p, &has_wrapped);
 		if (has_wrapped && (new_match > p->match_value)) {
@@ -346,7 +383,7 @@ static irqreturn_t sh_cmt_interrupt(int irq, void *dev_id)
 	struct sh_cmt_priv *p = dev_id;
 
 	/* clear flags */
-	sh_cmt_write(p, CMCSR, sh_cmt_read(p, CMCSR) & p->clear_bits);
+	sh_cmt_write_cmcsr(p, sh_cmt_read_cmcsr(p) & p->clear_bits);
 
 	/* update clock source counter to begin with if enabled
 	 * the wrap flag should be cleared by the timer specific
@@ -625,14 +662,6 @@ static int sh_cmt_register(struct sh_cmt_priv *p, char *name,
 			   unsigned long clockevent_rating,
 			   unsigned long clocksource_rating)
 {
-	if (p->width == (sizeof(p->max_match_value) * 8))
-		p->max_match_value = ~0;
-	else
-		p->max_match_value = (1 << p->width) - 1;
-
-	p->match_value = p->max_match_value;
-	raw_spin_lock_init(&p->lock);
-
 	if (clockevent_rating)
 		sh_cmt_register_clockevent(p, name, clockevent_rating);
 
@@ -642,22 +671,98 @@ static int sh_cmt_register(struct sh_cmt_priv *p, char *name,
 	return 0;
 }
 
-static int sh_cmt_setup(struct sh_cmt_priv *p, struct platform_device *pdev)
+static const struct of_device_id of_sh_cmt_match[] = {
+	{ .compatible = "renesas,cmt-timer" },
+	{},
+};
+MODULE_DEVICE_TABLE(of, of_sh_cmt_match);
+
+static const int sh_cmt_offset_multiplier[] = { 0x60, 0x10, 0x40, 0x40, 0x40 };
+#define CMT_MAX_CHANNELS	6
+
+static struct sh_timer_config *sh_cmt_parse_dt(struct device *dev)
 {
-	struct sh_timer_config *cfg = pdev->dev.platform_data;
+	struct sh_timer_config *cfg;
+	struct device_node *np = dev->of_node;
+	u32 timer_id, channel_id, rating;
+
+	if (!IS_ENABLED(CONFIG_OF) || !np)
+		return NULL;
+
+	cfg = devm_kzalloc(dev, sizeof(struct sh_timer_config), GFP_KERNEL);
+	if (!cfg) {
+		dev_err(dev, "failed to allocate DT config data\n");
+		return NULL;
+	}
+
+	if (of_property_read_u32(np, "renesas,device-id", &timer_id)) {
+		dev_err(dev, "device id missing\n");
+		return NULL;
+	}
+	if (timer_id >= ARRAY_SIZE(sh_cmt_offset_multiplier)) {
+		dev_err(dev, "invalid device id\n");
+		return NULL;
+	}
+
+	if (of_property_read_u32(np, "renesas,channel-id", &channel_id)) {
+		dev_err(dev, "channel id missing\n");
+		return NULL;
+	}
+	if (channel_id >= CMT_MAX_CHANNELS) {
+		dev_err(dev, "invalid channel id\n");
+		return NULL;
+	}
+
+	cfg->channel_offset = sh_cmt_offset_multiplier[timer_id] *
+							(channel_id + 1);
+	cfg->timer_bit = channel_id;
+
+	/*
+	 * We convert the {source,event}-quality DT properties to linux specific
+	 * clock{source,event}_ratings.
+	 */
+	if (!of_property_read_u32(np, "renesas,source-quality", &rating)) {
+		if (rating > 10) {
+			dev_err(dev, "invalid source-quality\n");
+			return NULL;
+		}
+		if (rating)
+			cfg->clocksource_rating = rating * 50 - 1;
+	}
+
+	if (!of_property_read_u32(np, "renesas,event-quality", &rating)) {
+		if (rating > 10) {
+			dev_err(dev, "invalid event-quality\n");
+			return NULL;
+		}
+		if (rating)
+			cfg->clockevent_rating = rating * 50 - 1;
+	}
+
+	if (!cfg->clocksource_rating && !cfg->clockevent_rating) {
+		dev_err(dev, "source- and event-quality 0, timer is unused\n");
+		return NULL;
+	}
+
+	return cfg;
+}
+
+static int sh_cmt_setup(struct sh_cmt_priv *p, struct platform_device *pdev,
+						struct sh_timer_config *cfg)
+{
 	struct resource *res;
 	int irq, ret;
 	ret = -ENXIO;
 
 	memset(p, 0, sizeof(*p));
 	p->pdev = pdev;
+	p->channel_offset = cfg->channel_offset;
+	p->timer_bit = cfg->timer_bit;
 
 	if (!cfg) {
 		dev_err(&p->pdev->dev, "missing platform data\n");
 		goto err0;
 	}
-
-	platform_set_drvdata(pdev, p);
 
 	res = platform_get_resource(p->pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -693,32 +798,51 @@ static int sh_cmt_setup(struct sh_cmt_priv *p, struct platform_device *pdev)
 		goto err1;
 	}
 
+	p->read_control = sh_cmt_read16;
+	p->write_control = sh_cmt_write16;
+
 	if (resource_size(res) == 6) {
 		p->width = 16;
+		p->read_count = sh_cmt_read16;
+		p->write_count = sh_cmt_write16;
 		p->overflow_bit = 0x80;
 		p->clear_bits = ~0x80;
 	} else {
 		p->width = 32;
+		p->read_count = sh_cmt_read32;
+		p->write_count = sh_cmt_write32;
 		p->overflow_bit = 0x8000;
 		p->clear_bits = ~0xc000;
 	}
+
+	if (p->width == (sizeof(p->max_match_value) * 8))
+		p->max_match_value = ~0;
+	else
+		p->max_match_value = (1 << p->width) - 1;
+
+	p->match_value = p->max_match_value;
+	raw_spin_lock_init(&p->lock);
 
 	ret = sh_cmt_register(p, (char *)dev_name(&p->pdev->dev),
 			      cfg->clockevent_rating,
 			      cfg->clocksource_rating);
 	if (ret) {
 		dev_err(&p->pdev->dev, "registration failed\n");
-		goto err1;
+		goto err2;
 	}
 	p->cs_enabled = false;
 
 	ret = setup_irq(irq, &p->irqaction);
 	if (ret) {
 		dev_err(&p->pdev->dev, "failed to request irq %d\n", irq);
-		goto err1;
+		goto err2;
 	}
 
+	platform_set_drvdata(pdev, p);
+
 	return 0;
+err2:
+	clk_put(p->clk);
 
 err1:
 	iounmap(p->mapbase);
@@ -729,13 +853,18 @@ err0:
 static int sh_cmt_probe(struct platform_device *pdev)
 {
 	struct sh_cmt_priv *p = platform_get_drvdata(pdev);
-	struct sh_timer_config *cfg = pdev->dev.platform_data;
+	struct sh_timer_config *cfg;
 	int ret;
 
 	if (!is_early_platform_device(pdev)) {
 		pm_runtime_set_active(&pdev->dev);
 		pm_runtime_enable(&pdev->dev);
 	}
+
+	if (pdev->dev.of_node)
+		cfg = sh_cmt_parse_dt(&pdev->dev);
+	else
+		cfg = pdev->dev.platform_data;
 
 	if (p) {
 		dev_info(&pdev->dev, "kept as earlytimer\n");
@@ -748,10 +877,9 @@ static int sh_cmt_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	ret = sh_cmt_setup(p, pdev);
+	ret = sh_cmt_setup(p, pdev, cfg);
 	if (ret) {
 		kfree(p);
-		platform_set_drvdata(pdev, NULL);
 		pm_runtime_idle(&pdev->dev);
 		return ret;
 	}
@@ -777,6 +905,7 @@ static struct platform_driver sh_cmt_device_driver = {
 	.remove		= sh_cmt_remove,
 	.driver		= {
 		.name	= "sh_cmt",
+		.of_match_table = of_match_ptr(of_sh_cmt_match),
 	}
 };
 
@@ -791,7 +920,7 @@ static void __exit sh_cmt_exit(void)
 }
 
 early_platform_init("earlytimer", &sh_cmt_device_driver);
-module_init(sh_cmt_init);
+subsys_initcall(sh_cmt_init);
 module_exit(sh_cmt_exit);
 
 MODULE_AUTHOR("Magnus Damm");
