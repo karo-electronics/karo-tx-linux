@@ -1,0 +1,59 @@
+--- drivers/thermal/rcar_thermal.c
++++ drivers/thermal/rcar_thermal.c
+@@ -421,13 +421,15 @@
+ 		priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
+ 		if (!priv) {
+ 			dev_err(dev, "Could not allocate priv\n");
+-			return -ENOMEM;
++			ret = -ENOMEM;
++			goto error_unregister;
+ 		}
+ 
+ 		priv->base = devm_request_and_ioremap(dev, res);
+ 		if (!priv->base) {
+ 			dev_err(dev, "Unable to ioremap priv register\n");
+-			return -ENOMEM;
++			ret = -ENOMEM;
++			goto error_unregister;
+ 		}
+ 
+ 		priv->common = common;
+@@ -447,10 +449,10 @@
+ 			goto error_unregister;
+ 		}
+ 
+-		list_move_tail(&priv->list, &common->head);
+-
+ 		if (rcar_has_irq_support(priv))
+ 			rcar_thermal_irq_enable(priv);
++
++		list_move_tail(&priv->list, &common->head);
+ 	}
+ 
+ 	platform_set_drvdata(pdev, common);
+@@ -460,8 +462,11 @@
+ 	return 0;
+ 
+ error_unregister:
+-	rcar_thermal_for_each_priv(priv, common)
++	rcar_thermal_for_each_priv(priv, common) {
+ 		thermal_zone_device_unregister(priv->zone);
++		if (rcar_has_irq_support(priv))
++			rcar_thermal_irq_disable(priv);
++	}
+ 
+ 	return ret;
+ }
+@@ -471,8 +476,11 @@
+ 	struct rcar_thermal_common *common = platform_get_drvdata(pdev);
+ 	struct rcar_thermal_priv *priv;
+ 
+-	rcar_thermal_for_each_priv(priv, common)
++	rcar_thermal_for_each_priv(priv, common) {
+ 		thermal_zone_device_unregister(priv->zone);
++		if (rcar_has_irq_support(priv))
++			rcar_thermal_irq_disable(priv);
++	}
+ 
+ 	platform_set_drvdata(pdev, NULL);
+ 
