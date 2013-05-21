@@ -47,6 +47,24 @@ static inline int seccomp_mode(struct seccomp *s)
 	return s->mode;
 }
 
+#ifdef CONFIG_SECCOMP_FILTER_JIT
+extern void seccomp_jit_compile(struct seccomp_filter *fp);
+extern void seccomp_jit_free(struct seccomp_filter *fp);
+
+/*
+ * accessors used by seccomp JIT code to avoid having to declare the
+ * seccomp_filter struct here.
+ */
+unsigned short seccomp_filter_get_len(struct seccomp_filter *fp);
+struct sock_filter *seccomp_filter_get_insns(struct seccomp_filter *fp);
+void seccomp_filter_set_bpf_func(struct seccomp_filter *fp, void *func);
+void *seccomp_filter_get_bpf_func(struct seccomp_filter *fp);
+
+#else
+static inline void seccomp_jit_compile(struct seccomp_filter *fp) { }
+static inline void seccomp_jit_free(struct seccomp_filter *fp) { }
+#endif
+
 #else /* CONFIG_SECCOMP */
 
 #include <linux/errno.h>

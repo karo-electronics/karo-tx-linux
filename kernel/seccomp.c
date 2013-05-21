@@ -39,6 +39,8 @@
  *         is only needed for handling filters shared across tasks.
  * @prev: points to a previously installed, or inherited, filter
  * @len: the number of instructions in the program
+ * @bpf_func: points to either sk_run_filter or the code generated
+ *         by the BPF JIT.
  * @insns: the BPF program instructions to evaluate
  *
  * seccomp_filter objects are organized in a tree linked via the @prev
@@ -55,6 +57,8 @@ struct seccomp_filter {
 	atomic_t usage;
 	struct seccomp_filter *prev;
 	unsigned short len;  /* Instruction count */
+	unsigned int (*bpf_func)(const struct sk_buff *skb,
+				 const struct sock_filter *filter);
 	struct sock_filter insns[];
 };
 
@@ -213,7 +217,7 @@ static u32 seccomp_run_filters(int syscall)
 	 * value always takes priority (ignoring the DATA).
 	 */
 	for (f = current->seccomp.filter; f; f = f->prev) {
-		u32 cur_ret = sk_run_filter(NULL, f->insns);
+		u32 cur_ret = f->bpf_func(NULL, f->insns);
 		if ((cur_ret & SECCOMP_RET_ACTION) < (ret & SECCOMP_RET_ACTION))
 			ret = cur_ret;
 	}
@@ -275,6 +279,9 @@ static long seccomp_attach_filter(struct sock_fprog *fprog)
 	if (ret)
 		goto fail;
 
+	filter->bpf_func = sk_run_filter;
+	seccomp_jit_compile(filter);
+
 	/*
 	 * If there is an existing filter, make it the prev and don't drop its
 	 * task reference.
@@ -332,8 +339,32 @@ void put_seccomp_filter(struct task_struct *tsk)
 	while (orig && atomic_dec_and_test(&orig->usage)) {
 		struct seccomp_filter *freeme = orig;
 		orig = orig->prev;
+		seccomp_jit_free(freeme);
 		kfree(freeme);
 	}
+}
+
+/*
+ * seccomp filter accessors for JIT code.
+ */
+unsigned short seccomp_filter_get_len(struct seccomp_filter *fp)
+{
+	return fp->len;
+}
+
+struct sock_filter *seccomp_filter_get_insns(struct seccomp_filter *fp)
+{
+	return fp->insns;
+}
+
+void seccomp_filter_set_bpf_func(struct seccomp_filter *fp, void *func)
+{
+	fp->bpf_func = func;
+}
+
+void *seccomp_filter_get_bpf_func(struct seccomp_filter *fp)
+{
+	return fp->bpf_func;
 }
 
 /**
