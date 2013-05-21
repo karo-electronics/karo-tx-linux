@@ -23,7 +23,7 @@
 
 static struct device *sysctrl_dev;
 
-void ab8500_power_off(void)
+static void ab8500_power_off(void)
 {
 	sigset_t old;
 	sigset_t all;
@@ -191,7 +191,9 @@ static int ab8500_sysctrl_probe(struct platform_device *pdev)
 	if (!(plat && plat->sysctrl))
 		return -EINVAL;
 
-	if (plat->pm_power_off)
+	sysctrl_dev = &pdev->dev;
+
+	if (!pm_power_off)
 		pm_power_off = ab8500_power_off;
 
 	pdata = plat->sysctrl;
@@ -226,6 +228,10 @@ static int ab8500_sysctrl_probe(struct platform_device *pdev)
 static int ab8500_sysctrl_remove(struct platform_device *pdev)
 {
 	sysctrl_dev = NULL;
+
+	if (pm_power_off == ab8500_power_off)
+		pm_power_off = NULL;
+
 	return 0;
 }
 
