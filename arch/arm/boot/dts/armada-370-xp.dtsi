@@ -33,7 +33,8 @@
 		#size-cells = <1>;
 		compatible = "simple-bus";
 		interrupt-parent = <&mpic>;
-		ranges = <0 0 0xd0000000 0x100000>;
+		ranges = <0          0 0xd0000000 0x0100000 /* internal registers */
+			  0xe0000000 0 0xe0000000 0x8100000 /* PCIe */>;
 
 		internal-regs {
 			compatible = "simple-bus";
@@ -142,6 +143,10 @@
 				reg = <0xd4000 0x200>;
 				interrupts = <54>;
 				clocks = <&gateclk 17>;
+				bus-width = <4>;
+				cap-sdio-irq;
+				cap-sd-highspeed;
+				cap-mmc-highspeed;
 				status = "disabled";
 			};
 
