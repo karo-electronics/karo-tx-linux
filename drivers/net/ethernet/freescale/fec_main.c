@@ -451,7 +451,7 @@ fec_restart(struct net_device *ndev, int duplex)
 		netif_device_detach(ndev);
 		napi_disable(&fep->napi);
 		netif_stop_queue(ndev);
-		netif_tx_lock(ndev);
+		netif_tx_lock_bh(ndev);
 	}
 
 	/* Whack a reset.  We should wait for this. */
@@ -616,10 +616,10 @@ fec_restart(struct net_device *ndev, int duplex)
 	writel(FEC_DEFAULT_IMASK, fep->hwp + FEC_IMASK);
 
 	if (netif_running(ndev)) {
-		netif_device_attach(ndev);
-		napi_enable(&fep->napi);
+		netif_tx_unlock_bh(ndev);
 		netif_wake_queue(ndev);
-		netif_tx_unlock(ndev);
+		napi_enable(&fep->napi);
+		netif_device_attach(ndev);
 	}
 }
 
