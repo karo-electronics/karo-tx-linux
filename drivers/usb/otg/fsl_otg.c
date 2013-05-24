@@ -610,6 +610,12 @@ static int fsl_otg_set_host(struct otg_transceiver *otg_p, struct usb_bus *host)
 	if (!otg_p || otg_dev != fsl_otg_dev)
 		return -ENODEV;
 
+	if (host) {
+		__module_get(THIS_MODULE);
+	} else {
+		module_put(THIS_MODULE);
+	}
+
 	otg_p->host = host;
 
 	otg_dev->fsm.a_bus_drop = 0;
