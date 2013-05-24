@@ -354,20 +354,12 @@ static void usb_hcd_fsl_remove(struct usb_hcd *hcd,
 	/*free the ehci_fsl_pre_irq  */
 	free_irq(hcd->irq, (void *)pdev);
 
-	usb_remove_hcd(hcd);
-
 	ehci_port_power(ehci, 0);
 
-	iounmap(hcd->regs);
-
 	if (ehci->transceiver) {
-		(void)otg_set_host(ehci->transceiver, 0);
+		(void)otg_set_host(ehci->transceiver, NULL);
 		otg_put_transceiver(ehci->transceiver);
-	} else {
-		release_mem_region(hcd->rsrc_start, hcd->rsrc_len);
 	}
-
-	usb_put_hcd(hcd);
 
 	fsl_usb_lowpower_mode(pdata, true);
 
@@ -383,6 +375,11 @@ static void usb_hcd_fsl_remove(struct usb_hcd *hcd,
 	 */
 	if (pdata->exit && pdata->pdev)
 		pdata->exit(pdata->pdev);
+	if (!ehci->transceiver) {
+		iounmap(hcd->regs);
+		release_mem_region(hcd->rsrc_start, hcd->rsrc_len);
+	}
+	usb_put_hcd(hcd);
 }
 
 static void fsl_setup_phy(struct ehci_hcd *ehci,
