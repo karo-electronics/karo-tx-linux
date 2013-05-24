@@ -41,9 +41,9 @@ imx6q_anatop_thermal_imx_data __initconst;
 	imx_add_anatop_thermal_imx(&imx6q_anatop_thermal_imx_data, pdata)
 
 extern const struct imx_dma_res_data imx6q_dma_res_data __initconst;
-#define imx6q_add_dma()	imx_add_dma(&imx6q_dma_res_data);
+#define imx6q_add_dma()	imx_add_dma(&imx6q_dma_res_data)
 
-#define imx6q_add_gpmi(platform_data)	imx_add_gpmi(platform_data);
+#define imx6q_add_gpmi(platform_data)	imx_add_gpmi(platform_data)
 
 extern const struct imx_fec_data imx6q_fec_data __initconst;
 #define imx6q_add_fec(pdata)	\
@@ -117,19 +117,19 @@ extern const struct imx_ipuv3_data imx6q_ipuv3_data[] __initconst;
 
 #define imx6q_add_lcdif(pdata)	\
 	platform_device_register_resndata(NULL, "mxc_lcdif",\
-			0, NULL, 0, pdata, sizeof(*pdata));
+			0, NULL, 0, pdata, sizeof(*pdata))
 
 extern const struct imx_ldb_data imx6q_ldb_data __initconst;
 #define imx6q_add_ldb(pdata) \
-	imx_add_ldb(&imx6q_ldb_data, pdata);
+	imx_add_ldb(&imx6q_ldb_data, pdata)
 
 #define imx6q_add_v4l2_output(id)	\
 	platform_device_register_resndata(NULL, "mxc_v4l2_output",\
-			id, NULL, 0, NULL, 0);
+			id, NULL, 0, NULL, 0)
 
 #define imx6q_add_v4l2_capture(id, pdata)	\
 	platform_device_register_resndata(NULL, "mxc_v4l2_capture",\
-			id, NULL, 0, pdata, sizeof(*pdata));
+			id, NULL, 0, pdata, sizeof(*pdata))
 
 extern const struct imx_mxc_hdmi_data imx6q_mxc_hdmi_data __initconst;
 #define imx6q_add_mxc_hdmi(pdata)	\
@@ -176,7 +176,7 @@ extern const struct imx_mxc_pwm_data imx6q_mxc_pwm_data[] __initconst;
 
 #define imx6q_add_mxc_pwm_backlight(id, pdata)	   \
 	platform_device_register_resndata(NULL, "pwm-backlight",\
-			id, NULL, 0, pdata, sizeof(*pdata));
+			id, NULL, 0, pdata, sizeof(*pdata))
 
 extern const struct imx_spdif_data imx6q_imx_spdif_data __initconst;
 #define imx6q_add_spdif(pdata)	imx_add_spdif(&imx6q_imx_spdif_data, pdata)
@@ -252,10 +252,10 @@ extern const struct imx_imx_keypad_data imx6sl_imx_keypad_data;
 
 extern const struct imx_dcp_data imx6sl_dcp_data __initconst;
 #define imx6sl_add_dcp() \
-	imx_add_dcp(&imx6sl_dcp_data);
+	imx_add_dcp(&imx6sl_dcp_data)
 
 extern const struct imx_rngb_data imx6sl_rngb_data __initconst;
 #define imx6sl_add_rngb() \
-	imx_add_rngb(&imx6sl_rngb_data);
+	imx_add_rngb(&imx6sl_rngb_data)
 
 #define imx6_add_armpmu() imx_add_imx_armpmu()
