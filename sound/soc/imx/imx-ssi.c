@@ -634,8 +634,8 @@ static int imx_ssi_dai_resume(struct snd_soc_dai *dai)
 	return 0;
 }
 #else
-#define imx_ssi_suspend	NULL
-#define imx_ssi_resume	NULL
+#define imx_ssi_dai_suspend	NULL
+#define imx_ssi_dai_resume	NULL
 #endif
 
 static struct snd_soc_dai_driver imx_ssi_dai = {
@@ -931,7 +931,6 @@ static int __devexit imx_ssi_remove(struct platform_device *pdev)
 
 	iounmap(ssi->base);
 	release_mem_region(res->start, resource_size(res));
-	clk_disable(ssi->clk);
 	clk_put(ssi->clk);
 	kfree(ssi);
 
