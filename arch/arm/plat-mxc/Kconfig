@@ -64,14 +64,14 @@ endmenu
 ## Freescale private USB driver support
 # set if we need the 1504 transceiver
 config ISP1504_MXC
-	bool
+	bool "Enable ISP1504 USB transceiver"
 	default y
 
 # set if we need the UTMI transceiver
 config UTMI_MXC
-	bool
+	bool "Enable USB UTMI tranceiver"
 	default y
-	depends on ARCH_MX25 || ARCH_MX35 || ARCH_MX37 || ARCH_MX5
+	depends on ARCH_MX25 || ARCH_MX35 || ARCH_MX37 || ARCH_MX5 || ARCH_MX6
 
 config MXC_IRQ_PRIOR
 	bool "Use IRQ priority"
