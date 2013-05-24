@@ -183,7 +183,11 @@
         When non-zero, FSCALE_VAL when gcvPOWER_ON can be adjusted externally.
  */
 #ifndef gcdENABLE_FSCALE_VAL_ADJUST
+#ifdef CONFIG_ANATOP_THERMAL
 #   define gcdENABLE_FSCALE_VAL_ADJUST          1
+#else
+#   define gcdENABLE_FSCALE_VAL_ADJUST          0
+#endif
 #endif
 
 /*
