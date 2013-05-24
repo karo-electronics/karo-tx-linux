@@ -185,6 +185,7 @@ static int wakeup_dev_probe(struct platform_device *pdev)
 	struct wakeup_ctrl *ctrl = NULL;
 	int status;
 	unsigned long interrupt_flag;
+	int i;
 
 	printk(KERN_INFO "IMX usb wakeup probe\n");
 
@@ -197,6 +198,12 @@ static int wakeup_dev_probe(struct platform_device *pdev)
 	ctrl->pdata = pdata;
 	init_waitqueue_head(&pdata->wq);
 	pdata->usb_wakeup_is_pending = false;
+
+	for (i = 0; i < 3; i++) {
+		if (pdata->usb_pdata[i]) {
+			spin_lock_init(&pdata->usb_pdata[i]->lock);
+		}
+	}
 
 	init_completion(&ctrl->event);
 	/* Currently, both mx5x and mx6q uses usb controller's irq
