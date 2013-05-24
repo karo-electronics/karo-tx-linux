@@ -175,7 +175,7 @@ static int asrc_set_clock_ratio(enum asrc_pair_index index,
 	unsigned long reg_val = 0;
 
 	if (output_sample_rate == 0)
-		return -1;
+		return -EINVAL;
 	while (input_sample_rate >= output_sample_rate) {
 		input_sample_rate -= output_sample_rate;
 		integ++;
@@ -247,7 +247,7 @@ static int asrc_set_process_configuration(enum asrc_pair_index index,
 		i = 12;
 		break;
 	default:
-		return -1;
+		return -EINVAL;
 	}
 
 	switch (output_sample_rate) {
@@ -276,7 +276,7 @@ static int asrc_set_process_configuration(enum asrc_pair_index index,
 		j = 7;
 		break;
 	default:
-		return -1;
+		return -EINVAL;
 	}
 
 	reg = __raw_readl(g_asrc->vaddr + ASRC_ASRCFG_REG);
@@ -1331,8 +1331,8 @@ static void mxc_asrc_submit_dma(struct asrc_pair_params *params)
  *
  * @param arg        unsigned long
  *
- * @return           0 success, ENODEV for invalid device instance,
- *                   -1 for other errors.
+ * @return           0 success, -ENODEV for invalid device instance,
+ *                   negative errno value for other errors.
  */
 static long asrc_ioctl(struct file *file,
 		      unsigned int cmd, unsigned long arg)
@@ -1918,8 +1918,9 @@ static int mxc_asrc_probe(struct platform_device *pdev)
 		g_asrc->dmarx[2] = res->start;
 
 	irq = platform_get_irq(pdev, 0);
-	if (request_irq(irq, asrc_isr, 0, "asrc", NULL))
-		return -1;
+	err = request_irq(irq, asrc_isr, 0, "asrc", NULL);
+	if (err)
+		return err;
 
 	asrc_proc_create();
 	err = mxc_init_asrc();
@@ -2003,7 +2004,6 @@ static __init int asrc_init(void)
 	asrc_p2p_hook(NULL);
 
 	platform_driver_unregister(&mxc_asrc_driver);
-	return;
 }
 
 module_init(asrc_init);
