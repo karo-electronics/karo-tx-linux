@@ -156,6 +156,19 @@ config TOUCHSCREEN_DYNAPRO
 	  To compile this driver as a module, choose M here: the
 	  module will be called dynapro.
 
+config TOUCHSCREEN_EDT_FT5X06
+	tristate "EDT FocalTech FT5x06 I2C Touchscreen support"
+	depends on I2C
+	help
+	  Say Y here if you have an EDT "Polytouch" touchscreen based
+	  on the FocalTech FT5x06 family of controllers connected to
+	  your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called edt-ft5x06.
+
 config TOUCHSCREEN_HAMPSHIRE
 	tristate "Hampshire serial touchscreen"
 	select SERIO
