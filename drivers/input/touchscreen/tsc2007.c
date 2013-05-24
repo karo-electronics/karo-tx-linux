@@ -300,7 +300,11 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 	ts->get_pendown_state = pdata->get_pendown_state;
 	ts->clear_penirq      = pdata->clear_penirq;
 
-	pdata->init_platform_hw();
+	if (pdata->init_platform_hw) {
+		err = pdata->init_platform_hw();
+		if (err)
+			goto err_no_dev;
+	}
 
 	if (tsc2007_xfer(ts, PWRDOWN) < 0) {
 		err = -ENODEV;
@@ -321,9 +325,6 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 	input_set_abs_params(input_dev, ABS_Y, 0, MAX_12BIT, pdata->fuzzy, 0);
 	input_set_abs_params(input_dev, ABS_PRESSURE, 0, MAX_12BIT,
 			pdata->fuzzz, 0);
-
-	if (pdata->init_platform_hw)
-		pdata->init_platform_hw();
 
 	err = request_irq(ts->irq, tsc2007_irq, 0,
 			client->dev.driver->name, ts);
