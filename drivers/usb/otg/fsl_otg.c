@@ -746,7 +746,9 @@ static void fsl_otg_event(struct work_struct *work)
 	pdata = og->otg.dev->platform_data;
 	BUG_ON(!pdata);
 
+#ifdef CONFIG_PM
 	mutex_lock(&pm_mutex);
+#endif
 	fsl_otg_clk_gate(true);
 	b_session_irq_enable(false);
 	otg->default_a = (fsm->id == 0);
@@ -794,7 +796,9 @@ static void fsl_otg_event(struct work_struct *work)
 			pdata->dr_discharge_line(false);
 	}
 	fsl_otg_clk_gate(false);
+#ifdef CONFIG_PM
 	mutex_unlock(&pm_mutex);
+#endif
 }
 
 /* B-device start SRP */
