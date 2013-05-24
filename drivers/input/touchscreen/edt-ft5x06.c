@@ -583,9 +583,10 @@ static int edt_ft5x06_i2c_ts_probe(struct i2c_client *client,
 
 	tsdata->factory_mode = 0;
 
-	if (edt_ft5x06_ts_readwrite(client, 1, "\xbb", 22, rdbuf) < 0) {
+	error = edt_ft5x06_ts_readwrite(client, 1, "\xbb", 22, rdbuf);
+	if (error < 0) {
 		dev_err(&client->dev, "probing failed\n");
-		error = -ENODEV;
+		mutex_unlock(&tsdata->mutex);
 		goto err_free_irq_pin;
 	}
 
