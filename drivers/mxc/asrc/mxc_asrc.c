@@ -1951,14 +1951,13 @@ static int mxc_asrc_remove(struct platform_device *pdev)
 {
 	int irq = platform_get_irq(pdev, 0);
 	free_irq(irq, NULL);
-	kfree(g_asrc);
-	g_asrc->mxc_asrc_data = NULL;
 	iounmap((unsigned long __iomem *)g_asrc->vaddr);
 	remove_proc_entry("ChSettings", g_asrc->proc_asrc);
 	remove_proc_entry(ASRC_PROC_PATH, NULL);
 	device_destroy(g_asrc->asrc_class, MKDEV(g_asrc->asrc_major, 0));
 	class_destroy(g_asrc->asrc_class);
 	unregister_chrdev(g_asrc->asrc_major, "mxc_asrc");
+	kfree(g_asrc);
 	return 0;
 }
 
