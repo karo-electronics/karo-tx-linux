@@ -180,7 +180,10 @@ static int usbotg_init_ext(struct platform_device *pdev)
 
 static void usbotg_uninit_ext(struct platform_device *pdev)
 {
+	struct fsl_usb2_platform_data *pdata = pdev->dev.platform_data;
+
 	otg_used--;
+	usbotg_uninit(pdata);
 	if (!otg_used) {
 		clk_put(usb_phy1_clk);
 		clk_put(usb_oh3_clk);
