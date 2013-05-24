@@ -297,11 +297,11 @@ config IMX_PCIE_RC_MODE_IN_EP_RC_SYS
 	depends on IMX_PCIE
 
 config USB_EHCI_ARC_H1
-	tristate "USB Host 1 support"
+	bool "USB Host 1 support"
 	depends on USB_EHCI_ARC
 
 config USB_FSL_ARC_OTG
-	tristate "FSL USB OTG support"
+	bool "FSL USB OTG support"
 
 config USB_ID_WAKEUP_ENABLE
 	bool "Enable USB ID Pin As System Wakeup Source"
