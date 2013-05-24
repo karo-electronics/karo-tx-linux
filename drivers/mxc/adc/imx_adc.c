@@ -62,8 +62,8 @@ static unsigned short ts_data_buf[16];
 static struct class *imx_adc_class;
 static struct imx_adc_data *adc_data;
 
-static DECLARE_MUTEX(general_convert_mutex);
-static DECLARE_MUTEX(ts_convert_mutex);
+static DEFINE_MUTEX(general_convert_mutex);
+static DEFINE_MUTEX(ts_convert_mutex);
 
 unsigned long tsc_base;
 
@@ -305,7 +305,7 @@ enum IMX_ADC_STATUS imx_adc_read_ts(struct t_touch_screen *touch_sample,
 		__raw_writel(reg, tsc_base + TICR);
 	} else {
 		/* FQS semaphore */
-		down(&ts_convert_mutex);
+		mutex_lock(&ts_convert_mutex);
 
 		reg = (0x1 << CC_YPLLSW_SHIFT) | (0x1 << CC_XNURSW_SHIFT) |
 		      CC_XPULSW;
@@ -373,7 +373,7 @@ enum IMX_ADC_STATUS imx_adc_read_ts(struct t_touch_screen *touch_sample,
 		touch_sample->contact_resistance = 1;
 
 	if (tsi_data == FQS_DATA)
-		up(&ts_convert_mutex);
+		mutex_unlock(&ts_convert_mutex);
 	return IMX_ADC_SUCCESS;
 }
 
@@ -802,7 +802,7 @@ enum IMX_ADC_STATUS imx_adc_convert(enum t_channel channel,
 		break;
 
 	case GER_PURPOSE_ADC0:
-		down(&general_convert_mutex);
+		mutex_lock(&general_convert_mutex);
 
 		lastitemid = 0;
 		reg = (0xf << CQCR_FIFOWATERMARK_SHIFT) |
@@ -814,11 +814,11 @@ enum IMX_ADC_STATUS imx_adc_convert(enum t_channel channel,
 		__raw_writel(reg, tsc_base + GCC0);
 
 		imx_adc_read_general(result);
-		up(&general_convert_mutex);
+		mutex_unlock(&general_convert_mutex);
 		break;
 
 	case GER_PURPOSE_ADC1:
-		down(&general_convert_mutex);
+		mutex_lock(&general_convert_mutex);
 
 		lastitemid = 0;
 		reg = (0xf << CQCR_FIFOWATERMARK_SHIFT) |
@@ -830,11 +830,11 @@ enum IMX_ADC_STATUS imx_adc_convert(enum t_channel channel,
 		__raw_writel(reg, tsc_base + GCC0);
 
 		imx_adc_read_general(result);
-		up(&general_convert_mutex);
+		mutex_unlock(&general_convert_mutex);
 		break;
 
 	case GER_PURPOSE_ADC2:
-		down(&general_convert_mutex);
+		mutex_lock(&general_convert_mutex);
 
 		lastitemid = 0;
 		reg = (0xf << CQCR_FIFOWATERMARK_SHIFT) |
@@ -846,11 +846,11 @@ enum IMX_ADC_STATUS imx_adc_convert(enum t_channel channel,
 		__raw_writel(reg, tsc_base + GCC0);
 
 		imx_adc_read_general(result);
-		up(&general_convert_mutex);
+		mutex_unlock(&general_convert_mutex);
 		break;
 
 	case GER_PURPOSE_MULTICHNNEL:
-		down(&general_convert_mutex);
+		mutex_lock(&general_convert_mutex);
 
 		reg = TSC_GENERAL_ADC_GCC0;
 		reg |= (3 << CC_NOS_SHIFT) | (16 << CC_SETTLING_TIME_SHIFT);
@@ -875,7 +875,7 @@ enum IMX_ADC_STATUS imx_adc_convert(enum t_channel channel,
 		__raw_writel(reg, tsc_base + GCQCR);
 
 		imx_adc_read_general(result);
-		up(&general_convert_mutex);
+		mutex_unlock(&general_convert_mutex);
 		break;
 	default:
 		pr_debug("%s: bad channel number\n", __func__);
@@ -915,7 +915,7 @@ EXPORT_SYMBOL(imx_adc_convert_multichnnel);
  * @param        arg         the parameter
  * @return       This function returns 0 if successful.
  */
-static int imx_adc_ioctl(struct inode *inode, struct file *file,
+static long imx_adc_ioctl(struct file *file,
 			 unsigned int cmd, unsigned long arg)
 {
 	struct t_adc_convert_param *convert_param;
@@ -996,7 +996,7 @@ static int imx_adc_ioctl(struct inode *inode, struct file *file,
 
 static struct file_operations imx_adc_fops = {
 	.owner = THIS_MODULE,
-	.ioctl = imx_adc_ioctl,
+	.compat_ioctl = imx_adc_ioctl,
 	.open = imx_adc_open,
 	.release = imx_adc_free,
 };
