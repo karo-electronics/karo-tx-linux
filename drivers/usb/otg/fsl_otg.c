@@ -75,7 +75,7 @@ const pm_message_t otg_suspend_state = {
 
 #define HA_DATA_PULSE 1
 
-volatile static struct usb_dr_mmap *usb_dr_regs;
+static struct usb_dr_mmap *usb_dr_regs;
 static struct fsl_otg *fsl_otg_dev;
 static int srp_wait_done;
 static int gpio_id;
@@ -466,7 +466,7 @@ static void b_session_irq_enable(bool enable)
 	}
 
 	osc = le32_to_cpu(usb_dr_regs->otgsc);
-	pr_debug("%s:otgsc=0x%x", __func__, osc);
+	pr_debug("%s:otgsc=0x%x\n", __func__, osc);
 	/* The other interrupts' status should not be cleared */
 	osc &= ~(OTGSC_INTSTS_USB_ID | OTGSC_INTSTS_A_VBUS_VALID
 		| OTGSC_INTSTS_A_SESSION_VALID | OTGSC_INTSTS_B_SESSION_VALID);
@@ -1004,7 +1004,7 @@ static int fsl_otg_conf(struct platform_device *pdev)
 	/* Store the otg transceiver */
 	status = otg_set_transceiver(&fsl_otg_tc->otg);
 	if (status) {
-		printk(KERN_WARNING ": unable to register OTG transceiver.\n");
+		dev_err(&pdev->dev, "unable to register OTG transceiver: %d\n", status);
 		return status;
 	}
 
@@ -1033,17 +1033,20 @@ int usb_otg_start(struct platform_device *pdev)
 	/* We don't require predefined MEM/IRQ resource index */
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
-		return -ENXIO;
+		return -ENODEV;
 
 	/* We don't request_mem_region here to enable resource sharing
 	 * with host/device */
 
 	usb_dr_regs = ioremap(res->start, sizeof(struct usb_dr_mmap));
-	p_otg->dr_mem_map = (struct usb_dr_mmap *)usb_dr_regs;
-	pdata->regs = (void *)usb_dr_regs;
+	p_otg->dr_mem_map = usb_dr_regs;
+	pdata->regs = usb_dr_regs;
 
-	if (pdata->init && pdata->init(pdev) != 0)
-		return -EINVAL;
+	if (pdata->init) {
+		int ret = pdata->init(pdev);
+		if (ret)
+			return ret;
+	}
 
 	gpio_id = pdata->id_gpio;
 	/* request irq */
@@ -1384,12 +1387,13 @@ static int __devinit fsl_otg_probe(struct platform_device *pdev)
 	status = fsl_otg_conf(pdev);
 	if (status) {
 		printk(KERN_INFO "Couldn't init OTG module\n");
-		return -status;
+		return status;
 	}
 
 	/* start OTG */
 	status = usb_otg_start(pdev);
-
+	if (status)
+		return status;
 	if (register_chrdev(FSL_OTG_MAJOR, FSL_OTG_NAME, &otg_fops)) {
 		printk(KERN_WARNING FSL_OTG_NAME
 		       ": unable to register FSL OTG device\n");
@@ -1397,7 +1401,7 @@ static int __devinit fsl_otg_probe(struct platform_device *pdev)
 	}
 
 	create_proc_file();
-	fsl_otg_clk_gate(false);
+//	fsl_otg_clk_gate(false);
 	return status;
 }
 
@@ -1405,11 +1409,14 @@ static int fsl_otg_remove(struct platform_device *pdev)
 {
 	struct fsl_usb2_platform_data *pdata = pdev->dev.platform_data;
 
+	pr_debug("%s: \n", __func__);
 	otg_set_transceiver(NULL);
 	free_irq(fsl_otg_dev->irq, fsl_otg_dev);
 
-	iounmap((void *)usb_dr_regs);
+	iounmap(usb_dr_regs);
 
+	pr_debug("%s: freeing otg_dev %p xcvr %p\n", __func__,
+		fsl_otg_dev, &fsl_otg_dev->otg);
 	kfree(fsl_otg_dev);
 
 	fsl_otg_dev = NULL;
