@@ -285,7 +285,7 @@ static void __phy_lowpower_suspend(struct fsl_usb2_platform_data *pdata, bool en
 {
 	if (enable) {
 		low_power_enable_src |= source;
-#ifdef CONFIG_USB_OTG
+#if defined(CONFIG_USB_OTG) || defined(CONFIG_USB_OTG_MODULE)
 		if (low_power_enable_src == (ENABLED_BY_HOST | ENABLED_BY_DEVICE)) {
 			pr_debug("phy lowpower enabled\n");
 			enter_phy_lowpower_suspend(pdata, enable);
@@ -334,7 +334,7 @@ static void __wakeup_irq_enable(struct fsl_usb2_platform_data *pdata, bool on, i
 	 */
 	mutex_lock(&otg_wakeup_enable_mutex);
 	if (on) {
-#ifdef CONFIG_USB_OTG
+#if defined(CONFIG_USB_OTG) || defined(CONFIG_USB_OTG_MODULE)
 		wakeup_irq_enable_src |= source;
 		if (wakeup_irq_enable_src == (ENABLED_BY_HOST | ENABLED_BY_DEVICE)) {
 			otg_wake_up_enable(pdata, on);
@@ -372,7 +372,7 @@ static void usbotg_wakeup_event_clear(void)
 
 /* End of Common operation for DR port */
 
-#ifdef CONFIG_USB_EHCI_ARC_OTG
+#if defined(CONFIG_USB_EHCI_ARC_OTG) || defined(CONFIG_USB_EHCI_ARC_OTG_MODULE)
 /* Beginning of host related operation for DR port */
 static void fsl_platform_otg_set_usb_phy_dis(
 		struct fsl_usb2_platform_data *pdata, bool enable)
@@ -567,7 +567,7 @@ static void host_wakeup_handler(struct fsl_usb2_platform_data *pdata)
 #endif /* CONFIG_USB_EHCI_ARC_OTG */
 
 
-#ifdef CONFIG_USB_GADGET_ARC
+#if defined(CONFIG_USB_GADGET_ARC) || defined(CONFIG_USB_GADGET_ARC_MODULE)
 /* Beginning of device related operation for DR port */
 static void _device_phy_lowpower_suspend(struct fsl_usb2_platform_data *pdata, bool enable)
 {
@@ -666,7 +666,7 @@ static int  __init mx6_usb_dr_init(void)
 	mx6_get_otghost_vbus_func(&mx6_set_usb_otg_vbus);
 	dr_utmi_config.platform_driver_vbus = mx6_set_usb_otg_vbus;
 
-#ifdef CONFIG_USB_OTG
+#if defined(CONFIG_USB_OTG) || defined(CONFIG_USB_OTG_MODULE)
 	/* wake_up_enable is useless, just for usb_register_remote_wakeup execution*/
 	dr_utmi_config.wake_up_enable = _device_wakeup_enable;
 	dr_utmi_config.operating_mode = FSL_USB2_DR_OTG;
@@ -675,7 +675,7 @@ static int  __init mx6_usb_dr_init(void)
 	dr_wakeup_config.usb_pdata[i] = pdev[i]->dev.platform_data;
 	i++;
 #endif
-#ifdef CONFIG_USB_EHCI_ARC_OTG
+#if defined(CONFIG_USB_EHCI_ARC_OTG) || defined(CONFIG_USB_EHCI_ARC_OTG_MODULE)
 	dr_utmi_config.operating_mode = DR_HOST_MODE;
 	dr_utmi_config.wake_up_enable = _host_wakeup_enable;
 	if (usb_icbug_swfix_need()) {
@@ -695,7 +695,7 @@ static int  __init mx6_usb_dr_init(void)
 	dr_wakeup_config.usb_pdata[i] = pdev[i]->dev.platform_data;
 	i++;
 #endif
-#ifdef CONFIG_USB_GADGET_ARC
+#if defined(CONFIG_USB_GADGET_ARC) || defined(CONFIG_USB_GADGET_ARC_MODULE)
 	dr_utmi_config.operating_mode = DR_UDC_MODE;
 	dr_utmi_config.wake_up_enable = _device_wakeup_enable;
 	dr_utmi_config.platform_rh_suspend = NULL;
