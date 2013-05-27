@@ -38,7 +38,6 @@
 #include <linux/pm_runtime.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
-#include <linux/pinctrl/consumer.h>
 
 #include <linux/spi/spi.h>
 
@@ -1186,7 +1185,6 @@ static int omap2_mcspi_probe(struct platform_device *pdev)
 	static int		bus_num = 1;
 	struct device_node	*node = pdev->dev.of_node;
 	const struct of_device_id *match;
-	struct pinctrl *pinctrl;
 
 	master = spi_alloc_master(&pdev->dev, sizeof *mcspi);
 	if (master == NULL) {
@@ -1204,7 +1202,7 @@ static int omap2_mcspi_probe(struct platform_device *pdev)
 	master->cleanup = omap2_mcspi_cleanup;
 	master->dev.of_node = node;
 
-	dev_set_drvdata(&pdev->dev, master);
+	platform_set_drvdata(pdev, master);
 
 	mcspi = spi_master_get_devdata(master);
 	mcspi->master = master;
@@ -1284,11 +1282,6 @@ static int omap2_mcspi_probe(struct platform_device *pdev)
 	if (status < 0)
 		goto dma_chnl_free;
 
-	pinctrl = devm_pinctrl_get_select_default(&pdev->dev);
-	if (IS_ERR(pinctrl))
-		dev_warn(&pdev->dev,
-				"pins are not configured from the driver\n");
-
 	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_set_autosuspend_delay(&pdev->dev, SPI_AUTOSUSPEND_TIMEOUT);
 	pm_runtime_enable(&pdev->dev);
@@ -1318,7 +1311,7 @@ static int omap2_mcspi_remove(struct platform_device *pdev)
 	struct omap2_mcspi	*mcspi;
 	struct omap2_mcspi_dma	*dma_channels;
 
-	master = dev_get_drvdata(&pdev->dev);
+	master = platform_get_drvdata(pdev);
 	mcspi = spi_master_get_devdata(master);
 	dma_channels = mcspi->dma_channels;
 
