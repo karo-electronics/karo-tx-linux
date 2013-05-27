@@ -150,8 +150,11 @@ struct sdhci_host *sdhci_pltfm_init(struct platform_device *pdev,
 		host->ops = pdata->ops;
 	else
 		host->ops = &sdhci_pltfm_ops;
-	if (pdata)
+	if (pdata) {
 		host->quirks = pdata->quirks;
+		host->quirks2 = pdata->quirks2;
+	}
+
 	host->irq = platform_get_irq(pdev, 0);
 
 	if (!request_mem_region(iomem->start, resource_size(iomem),
@@ -197,7 +200,6 @@ void sdhci_pltfm_free(struct platform_device *pdev)
 	iounmap(host->ioaddr);
 	release_mem_region(iomem->start, resource_size(iomem));
 	sdhci_free_host(host);
-	platform_set_drvdata(pdev, NULL);
 }
 EXPORT_SYMBOL_GPL(sdhci_pltfm_free);
 
