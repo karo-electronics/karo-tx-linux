@@ -1359,8 +1359,10 @@ static int i915_load_modeset_init(struct drm_device *dev)
 cleanup_gem:
 	mutex_lock(&dev->struct_mutex);
 	i915_gem_cleanup_ringbuffer(dev);
+	i915_gem_context_fini(dev);
 	mutex_unlock(&dev->struct_mutex);
 	i915_gem_cleanup_aliasing_ppgtt(dev);
+	drm_mm_takedown(&dev_priv->mm.gtt_space);
 cleanup_irq:
 	drm_irq_uninstall(dev);
 cleanup_gem_stolen:
@@ -1431,7 +1433,7 @@ static void i915_kick_out_firmware_fb(struct drm_i915_private *dev_priv)
 		return;
 
 	ap->ranges[0].base = dev_priv->gtt.mappable_base;
-	ap->ranges[0].size = dev_priv->gtt.mappable_end - dev_priv->gtt.start;
+	ap->ranges[0].size = dev_priv->gtt.mappable_end;
 
 	primary =
 		pdev->resource[PCI_ROM_RESOURCE].flags & IORESOURCE_ROM_SHADOW;
@@ -1445,15 +1447,19 @@ static void i915_dump_device_info(struct drm_i915_private *dev_priv)
 {
 	const struct intel_device_info *info = dev_priv->info;
 
-#define DEV_INFO_FLAG(name) info->name ? #name "," : ""
-#define DEV_INFO_SEP ,
+#define PRINT_S(name) "%s"
+#define SEP_EMPTY
+#define PRINT_FLAG(name) info->name ? #name "," : ""
+#define SEP_COMMA ,
 	DRM_DEBUG_DRIVER("i915 device info: gen=%i, pciid=0x%04x flags="
-			 "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+			 DEV_INFO_FOR_EACH_FLAG(PRINT_S, SEP_EMPTY),
 			 info->gen,
 			 dev_priv->dev->pdev->device,
-			 DEV_INFO_FLAGS);
-#undef DEV_INFO_FLAG
-#undef DEV_INFO_SEP
+			 DEV_INFO_FOR_EACH_FLAG(PRINT_FLAG, SEP_COMMA));
+#undef PRINT_S
+#undef SEP_EMPTY
+#undef PRINT_FLAG
+#undef SEP_COMMA
 }
 
 /**
@@ -1468,7 +1474,7 @@ static void intel_early_sanitize_regs(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
-	if (IS_HASWELL(dev))
+	if (HAS_FPGA_DBG_UNCLAIMED(dev))
 		I915_WRITE_NOTRACE(FPGA_DBG, FPGA_DBG_RM_NOCLAIM);
 }
 
@@ -1629,6 +1635,7 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 	spin_lock_init(&dev_priv->irq_lock);
 	spin_lock_init(&dev_priv->gpu_error.lock);
 	spin_lock_init(&dev_priv->rps.lock);
+	spin_lock_init(&dev_priv->backlight.lock);
 	mutex_init(&dev_priv->dpio_lock);
 
 	mutex_init(&dev_priv->rps.hw_lock);
@@ -1737,10 +1744,10 @@ int i915_driver_unload(struct drm_device *dev)
 		 * free the memory space allocated for the child device
 		 * config parsed from VBT
 		 */
-		if (dev_priv->child_dev && dev_priv->child_dev_num) {
-			kfree(dev_priv->child_dev);
-			dev_priv->child_dev = NULL;
-			dev_priv->child_dev_num = 0;
+		if (dev_priv->vbt.child_dev && dev_priv->vbt.child_dev_num) {
+			kfree(dev_priv->vbt.child_dev);
+			dev_priv->vbt.child_dev = NULL;
+			dev_priv->vbt.child_dev_num = 0;
 		}
 
 		vga_switcheroo_unregister_client(dev->pdev);
@@ -1773,6 +1780,7 @@ int i915_driver_unload(struct drm_device *dev)
 			i915_free_hws(dev);
 	}
 
+	drm_mm_takedown(&dev_priv->mm.gtt_space);
 	if (dev_priv->regs != NULL)
 		pci_iounmap(dev->pdev, dev_priv->regs);
 
