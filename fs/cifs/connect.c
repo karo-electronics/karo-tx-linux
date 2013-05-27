@@ -85,7 +85,7 @@ enum {
 	Opt_acl, Opt_noacl, Opt_locallease,
 	Opt_sign, Opt_seal, Opt_noac,
 	Opt_fsc, Opt_mfsymlinks,
-	Opt_multiuser, Opt_sloppy,
+	Opt_multiuser, Opt_sloppy, Opt_nosharesock,
 
 	/* Mount options which take numeric value */
 	Opt_backupuid, Opt_backupgid, Opt_uid,
@@ -165,6 +165,7 @@ static const match_table_t cifs_mount_option_tokens = {
 	{ Opt_mfsymlinks, "mfsymlinks" },
 	{ Opt_multiuser, "multiuser" },
 	{ Opt_sloppy, "sloppy" },
+	{ Opt_nosharesock, "nosharesock" },
 
 	{ Opt_backupuid, "backupuid=%s" },
 	{ Opt_backupgid, "backupgid=%s" },
@@ -1061,6 +1062,7 @@ static int cifs_parse_security_flavors(char *value,
 #endif
 	case Opt_sec_none:
 		vol->nullauth = 1;
+		vol->secFlg |= CIFSSEC_MAY_NTLM;
 		break;
 	default:
 		cifs_dbg(VFS, "bad security option: %s\n", value);
@@ -1257,14 +1259,18 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 	vol->backupuid_specified = false; /* no backup intent for a user */
 	vol->backupgid_specified = false; /* no backup intent for a group */
 
-	/*
-	 * For now, we ignore -EINVAL errors under the assumption that the
-	 * unc= and prefixpath= options will be usable.
-	 */
-	if (cifs_parse_devname(devname, vol) == -ENOMEM) {
-		printk(KERN_ERR "CIFS: Unable to allocate memory to parse "
-				"device string.\n");
-		goto out_nomem;
+	switch (cifs_parse_devname(devname, vol)) {
+	case 0:
+		break;
+	case -ENOMEM:
+		cifs_dbg(VFS, "Unable to allocate memory for devname.\n");
+		goto cifs_parse_mount_err;
+	case -EINVAL:
+		cifs_dbg(VFS, "Malformed UNC in devname.\n");
+		goto cifs_parse_mount_err;
+	default:
+		cifs_dbg(VFS, "Unknown error parsing devname.\n");
+		goto cifs_parse_mount_err;
 	}
 
 	while ((data = strsep(&options, separator)) != NULL) {
@@ -1449,6 +1455,9 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 			break;
 		case Opt_sloppy:
 			sloppy = true;
+			break;
+		case Opt_nosharesock:
+			vol->nosharesock = true;
 			break;
 
 		/* Numeric Values */
@@ -1826,7 +1835,7 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 	}
 #endif
 	if (!vol->UNC) {
-		cifs_dbg(VFS, "CIFS mount error: No usable UNC path provided in device string or in unc= option!\n");
+		cifs_dbg(VFS, "CIFS mount error: No usable UNC path provided in device string!\n");
 		goto cifs_parse_mount_err;
 	}
 
@@ -2021,6 +2030,9 @@ match_security(struct TCP_Server_Info *server, struct smb_vol *vol)
 static int match_server(struct TCP_Server_Info *server, struct smb_vol *vol)
 {
 	struct sockaddr *addr = (struct sockaddr *)&vol->dstaddr;
+
+	if (vol->nosharesock)
+		return 0;
 
 	if ((server->vals != vol->vals) || (server->ops != vol->ops))
 		return 0;

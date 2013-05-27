@@ -310,11 +310,10 @@ decode_unicode_ssetup(char **pbcc_area, int bleft, struct cifs_ses *ses,
 	return;
 }
 
-static int decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
-			       struct cifs_ses *ses,
-			       const struct nls_table *nls_cp)
+static void decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
+				struct cifs_ses *ses,
+				const struct nls_table *nls_cp)
 {
-	int rc = 0;
 	int len;
 	char *bcc_ptr = *pbcc_area;
 
@@ -322,7 +321,7 @@ static int decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
 
 	len = strnlen(bcc_ptr, bleft);
 	if (len >= bleft)
-		return rc;
+		return;
 
 	kfree(ses->serverOS);
 
@@ -339,7 +338,7 @@ static int decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
 
 	len = strnlen(bcc_ptr, bleft);
 	if (len >= bleft)
-		return rc;
+		return;
 
 	kfree(ses->serverNOS);
 
@@ -352,7 +351,7 @@ static int decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
 
 	len = strnlen(bcc_ptr, bleft);
 	if (len > bleft)
-		return rc;
+		return;
 
 	/* No domain field in LANMAN case. Domain is
 	   returned by old servers in the SMB negprot response */
@@ -360,8 +359,6 @@ static int decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
 	   but thus do return domain here we could add parsing
 	   for it later, but it is not very important */
 	cifs_dbg(FYI, "ascii: bytes left %d\n", bleft);
-
-	return rc;
 }
 
 int decode_ntlmssp_challenge(char *bcc_ptr, int blob_len,
@@ -579,8 +576,10 @@ CIFS_SessSetup(const unsigned int xid, struct cifs_ses *ses,
 	u16 blob_len;
 	char *ntlmsspblob = NULL;
 
-	if (ses == NULL)
+	if (ses == NULL) {
+		WARN(1, "%s: ses == NULL!", __func__);
 		return -EINVAL;
+	}
 
 	type = ses->server->secType;
 	cifs_dbg(FYI, "sess setup type %d\n", type);
@@ -938,8 +937,7 @@ ssetup_ntlmssp_authenticate:
 		}
 		decode_unicode_ssetup(&bcc_ptr, bytes_remaining, ses, nls_cp);
 	} else {
-		rc = decode_ascii_ssetup(&bcc_ptr, bytes_remaining,
-					 ses, nls_cp);
+		decode_ascii_ssetup(&bcc_ptr, bytes_remaining, ses, nls_cp);
 	}
 
 ssetup_exit:

@@ -109,12 +109,6 @@ enum securityEnum {
 	Kerberos,		/* Kerberos via SPNEGO */
 };
 
-enum protocolEnum {
-	TCP = 0,
-	SCTP
-	/* Netbios frames protocol not supported at this time */
-};
-
 struct session_key {
 	unsigned int len;
 	char *response;
@@ -441,6 +435,7 @@ struct smb_vol {
 	bool mfsymlinks:1; /* use Minshall+French Symlinks */
 	bool multiuser:1;
 	bool rwpidforward:1; /* pid forward for read/write operations */
+	bool nosharesock;
 	unsigned int rsize;
 	unsigned int wsize;
 	bool sockopt_tcp_nodelay:1;
