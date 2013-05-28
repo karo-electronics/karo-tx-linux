@@ -7,6 +7,9 @@ Format is a little different from before in an attempt to make it easier to read
 		<...>
 	<...>
 
+next/dt
+	nomadik/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik.git tags/nomadik-dt-for-arm-soc
 next/drivers
 	ux500/dma40
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-dma40-for-arm-soc
