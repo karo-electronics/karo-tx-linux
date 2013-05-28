@@ -114,8 +114,8 @@ static inline void
 flush_anon_page(struct vm_area_struct *vma, struct page *page, unsigned long vmaddr)
 {
 	if (PageAnon(page)) {
-		flush_tlb_page(vma, vmaddr);
 		preempt_disable();
+		flush_tlb_page(vma, vmaddr);
 		flush_dcache_page_asm(page_to_phys(page), vmaddr);
 		preempt_enable();
 	}

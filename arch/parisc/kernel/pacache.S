@@ -331,11 +331,10 @@ ENDPROC(flush_data_cache_local)
 
 /* Macros to serialize TLB purge operations on SMP.  */
 
-	.macro	tlb_lock	la,flags,tmp
+	.macro	tlb_lock	la,tmp
 #ifdef CONFIG_SMP
 	ldil		L%pa_tlb_lock,%r1
 	ldo		R%pa_tlb_lock(%r1),\la
-	rsm		PSW_SM_I,\flags
 1:	LDCW		0(\la),\tmp
 	cmpib,<>,n	0,\tmp,3f
 2:	ldw		0(\la),\tmp
@@ -346,11 +345,10 @@ ENDPROC(flush_data_cache_local)
 #endif
 	.endm
 
-	.macro	tlb_unlock	la,flags,tmp
+	.macro	tlb_unlock	la,tmp
 #ifdef CONFIG_SMP
 	ldi		1,\tmp
 	stw		\tmp,0(\la)
-	mtsm		\flags
 #endif
 	.endm
 
@@ -617,16 +615,22 @@ ENTRY(copy_user_page_asm)
 	depwi		1, 9,1, %r29		/* Form aliased virtual address 'from' */
 #endif
 
+	/* We need to ensure that the TLB entry is not replaced with
+	   a different value while the clear/copy loop executes.
+	   If this results in too much latency, interrupts could
+	   be re-enabled periodically.  */
+	rsm		PSW_SM_I, %r19		/* save I-bit state */
+
 	/* Purge any old translations */
 
 #ifdef CONFIG_PA20
 	pdtlb,l		0(%r28)
 	pdtlb,l		0(%r29)
 #else
-	tlb_lock	%r20,%r21,%r22
+	tlb_lock	%r20,%r22
 	pdtlb		0(%r28)
 	pdtlb		0(%r29)
-	tlb_unlock	%r20,%r21,%r22
+	tlb_unlock	%r20,%r22
 #endif
 
 #ifdef CONFIG_64BIT
@@ -736,7 +740,7 @@ ENTRY(copy_user_page_asm)
 	addib,COND(>)		-1, %r1,1b
 	ldo		64(%r29), %r29
 #endif
-
+	mtsm		%r19
 	bv		%r0(%r2)
 	nop
 	.exit
@@ -765,14 +769,20 @@ ENTRY(clear_user_page_asm)
 	depwi		0, 31,PAGE_SHIFT, %r28	/* Clear any offset bits */
 #endif
 
+	/* We need to ensure that the TLB entry is not replaced with
+	   a different value while the clear/copy loop executes.
+	   If this results in too much latency, interrupts could
+	   be re-enabled periodically.  */
+	rsm		PSW_SM_I, %r19		/* save I-bit state */
+
 	/* Purge any old translation */
 
 #ifdef CONFIG_PA20
 	pdtlb,l		0(%r28)
 #else
-	tlb_lock	%r20,%r21,%r22
+	tlb_lock	%r20,%r22
 	pdtlb		0(%r28)
-	tlb_unlock	%r20,%r21,%r22
+	tlb_unlock	%r20,%r22
 #endif
 
 #ifdef CONFIG_64BIT
@@ -823,6 +833,7 @@ ENTRY(clear_user_page_asm)
 	ldo		64(%r28), %r28
 #endif	/* CONFIG_64BIT */
 
+	mtsm		%r19
 	bv		%r0(%r2)
 	nop
 	.exit
@@ -849,18 +860,20 @@ ENTRY(flush_dcache_page_asm)
 	depwi		0, 31,PAGE_SHIFT, %r28	/* Clear any offset bits */
 #endif
 
+	rsm		PSW_SM_I, %r19		/* save I-bit state */
+
 	/* Purge any old translation */
 
 #ifdef CONFIG_PA20
 	pdtlb,l		0(%r28)
 #else
-	tlb_lock	%r20,%r21,%r22
+	tlb_lock	%r20,%r22
 	pdtlb		0(%r28)
-	tlb_unlock	%r20,%r21,%r22
+	tlb_unlock	%r20,%r22
 #endif
 
 	ldil		L%dcache_stride, %r1
-	ldw		R%dcache_stride(%r1), %r1
+	ldw		R%dcache_stride(%r1), %r23
 
 #ifdef CONFIG_64BIT
 	depdi,z		1, 63-PAGE_SHIFT,1, %r25
@@ -868,36 +881,29 @@ ENTRY(flush_dcache_page_asm)
 	depwi,z		1, 31-PAGE_SHIFT,1, %r25
 #endif
 	add		%r28, %r25, %r25
-	sub		%r25, %r1, %r25
+	sub		%r25, %r23, %r25
 
 
-1:      fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
-	fdc,m		%r1(%r28)
+1:      fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
+	fdc,m		%r23(%r28)
 	cmpb,COND(<<)		%r28, %r25,1b
-	fdc,m		%r1(%r28)
+	fdc,m		%r23(%r28)
 
+	mtsm		%r19
 	sync
-
-#ifdef CONFIG_PA20
-	pdtlb,l		0(%r25)
-#else
-	tlb_lock	%r20,%r21,%r22
-	pdtlb		0(%r25)
-	tlb_unlock	%r20,%r21,%r22
-#endif
 
 	bv		%r0(%r2)
 	nop
@@ -925,18 +931,20 @@ ENTRY(flush_icache_page_asm)
 	depwi		0, 31,PAGE_SHIFT, %r28	/* Clear any offset bits */
 #endif
 
+	rsm		PSW_SM_I, %r19		/* save I-bit state */
+
 	/* Purge any old translation */
 
 #ifdef CONFIG_PA20
 	pitlb,l         %r0(%sr4,%r28)
 #else
-	tlb_lock        %r20,%r21,%r22
+	tlb_lock        %r20,%r22
 	pitlb           (%sr4,%r28)
-	tlb_unlock      %r20,%r21,%r22
+	tlb_unlock      %r20,%r22
 #endif
 
 	ldil		L%icache_stride, %r1
-	ldw		R%icache_stride(%r1), %r1
+	ldw		R%icache_stride(%r1), %r23
 
 #ifdef CONFIG_64BIT
 	depdi,z		1, 63-PAGE_SHIFT,1, %r25
@@ -944,38 +952,31 @@ ENTRY(flush_icache_page_asm)
 	depwi,z		1, 31-PAGE_SHIFT,1, %r25
 #endif
 	add		%r28, %r25, %r25
-	sub		%r25, %r1, %r25
+	sub		%r25, %r23, %r25
 
 
 	/* fic only has the type 26 form on PA1.1, requiring an
 	 * explicit space specification, so use %sr4 */
-1:      fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
-	fic,m		%r1(%sr4,%r28)
+1:      fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
 	cmpb,COND(<<)	%r28, %r25,1b
-	fic,m		%r1(%sr4,%r28)
+	fic,m		%r23(%sr4,%r28)
 
+	mtsm		%r19
 	sync
-
-#ifdef CONFIG_PA20
-	pitlb,l         %r0(%sr4,%r25)
-#else
-	tlb_lock        %r20,%r21,%r22
-	pitlb           (%sr4,%r25)
-	tlb_unlock      %r20,%r21,%r22
-#endif
 
 	bv		%r0(%r2)
 	nop

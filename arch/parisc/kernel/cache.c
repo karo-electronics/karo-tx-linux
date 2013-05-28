@@ -397,10 +397,10 @@ void copy_user_page(void *vto, void *vfrom, unsigned long vaddr,
 	   the kernel mapping. */
 	preempt_disable();
 	flush_dcache_page_asm(__pa(vfrom), vaddr);
-	preempt_enable();
 	copy_page_asm(vto, vfrom);
 	if (!parisc_requires_coherency())
 		flush_kernel_dcache_page_asm(vto);
+	preempt_enable();
 }
 EXPORT_SYMBOL(copy_user_page);
 
@@ -619,11 +619,11 @@ void clear_user_highpage(struct page *page, unsigned long vaddr)
 	   and the write-capable translation removed from the page
 	   table and purged from the TLB."  */
 
+	preempt_disable();
 	purge_kernel_dcache_page_asm((unsigned long)vto);
 	purge_tlb_start(flags);
 	pdtlb_kernel(vto);
 	purge_tlb_end(flags);
-	preempt_disable();
 	clear_user_page_asm(vto, vaddr);
 	preempt_enable();
 
@@ -644,12 +644,12 @@ void copy_user_highpage(struct page *to, struct page *from,
 	vfrom = kmap_atomic(from);
 	vto = kmap_atomic(to);
 
+	preempt_disable();
 	purge_kernel_dcache_page_asm((unsigned long)vto);
 	purge_tlb_start(flags);
 	pdtlb_kernel(vto);
 	pdtlb_kernel(vfrom);
 	purge_tlb_end(flags);
-	preempt_disable();
 	copy_user_page_asm(vto, vfrom, vaddr);
 	flush_dcache_page_asm(__pa(vto), vaddr);
 	preempt_enable();
