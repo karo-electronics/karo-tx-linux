@@ -3,6 +3,7 @@
 
 #include <linux/percpu.h>
 #include <asm/xen/interface.h>
+#include <xen/interface/vcpu.h>
 
 DECLARE_PER_CPU(struct vcpu_info *, xen_vcpu);
 
@@ -15,6 +16,10 @@ void xen_mm_unpin_all(void);
 
 void xen_timer_resume(void);
 void xen_arch_resume(void);
+
+bool xen_vcpu_stolen(int vcpu);
+void xen_setup_runstate_info(int cpu);
+void xen_get_runstate_snapshot(struct vcpu_runstate_info *res);
 
 int xen_setup_shutdown_event(void);
 

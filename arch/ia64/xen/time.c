@@ -34,53 +34,17 @@
 
 #include "../kernel/fsyscall_gtod_data.h"
 
-static DEFINE_PER_CPU(struct vcpu_runstate_info, xen_runstate);
 static DEFINE_PER_CPU(unsigned long, xen_stolen_time);
 static DEFINE_PER_CPU(unsigned long, xen_blocked_time);
 
 /* taken from i386/kernel/time-xen.c */
 static void xen_init_missing_ticks_accounting(int cpu)
 {
-	struct vcpu_register_runstate_memory_area area;
-	struct vcpu_runstate_info *runstate = &per_cpu(xen_runstate, cpu);
-	int rc;
+	xen_setup_runstate_info(&runstate);
 
-	memset(runstate, 0, sizeof(*runstate));
-
-	area.addr.v = runstate;
-	rc = HYPERVISOR_vcpu_op(VCPUOP_register_runstate_memory_area, cpu,
-				&area);
-	WARN_ON(rc && rc != -ENOSYS);
-
-	per_cpu(xen_blocked_time, cpu) = runstate->time[RUNSTATE_blocked];
-	per_cpu(xen_stolen_time, cpu) = runstate->time[RUNSTATE_runnable]
-					    + runstate->time[RUNSTATE_offline];
-}
-
-/*
- * Runstate accounting
- */
-/* stolen from arch/x86/xen/time.c */
-static void get_runstate_snapshot(struct vcpu_runstate_info *res)
-{
-	u64 state_time;
-	struct vcpu_runstate_info *state;
-
-	BUG_ON(preemptible());
-
-	state = &__get_cpu_var(xen_runstate);
-
-	/*
-	 * The runstate info is always updated by the hypervisor on
-	 * the current CPU, so there's no need to use anything
-	 * stronger than a compiler barrier when fetching it.
-	 */
-	do {
-		state_time = state->state_entry_time;
-		rmb();
-		*res = *state;
-		rmb();
-	} while (state->state_entry_time != state_time);
+	per_cpu(xen_blocked_time, cpu) = runstate.time[RUNSTATE_blocked];
+	per_cpu(xen_stolen_time, cpu) = runstate.time[RUNSTATE_runnable]
+					    + runstate.time[RUNSTATE_offline];
 }
 
 #define NS_PER_TICK (1000000000LL/HZ)
@@ -94,7 +58,7 @@ consider_steal_time(unsigned long new_itm)
 	struct vcpu_runstate_info runstate;
 	struct task_struct *p = current;
 
-	get_runstate_snapshot(&runstate);
+	xen_get_runstate_snapshot(&runstate);
 
 	/*
 	 * Check for vcpu migration effect
@@ -202,7 +166,7 @@ static unsigned long long xen_sched_clock(void)
 	 */
 	now = ia64_native_sched_clock();
 
-	get_runstate_snapshot(&runstate);
+	xen_get_runstate_snapshot(&runstate);
 
 	WARN_ON(runstate.state != RUNSTATE_running);
 
