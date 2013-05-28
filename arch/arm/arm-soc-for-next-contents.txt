@@ -7,6 +7,10 @@ Format is a little different from before in an attempt to make it easier to read
 		<...>
 	<...>
 
+next/drivers
+	ux500/dma40
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-dma40-for-arm-soc
+
 next/mailbox:
 	mailbox/subsystem
 		git://github.com/sumananna/mailbox.git dbx500-prcmu-mailbox
