@@ -188,14 +188,11 @@ static ssize_t lio_target_np_store_iser(
 		}
 	} else {
 		tpg_np_iser = iscsit_tpg_locate_child_np(tpg_np, ISCSI_INFINIBAND);
-		if (!tpg_np_iser) {
-			rc = -EINVAL;
-			goto out;
+		if (tpg_np_iser) {
+			rc = iscsit_tpg_del_network_portal(tpg, tpg_np_iser);
+			if (rc < 0)
+				goto out;
 		}
-
-		rc = iscsit_tpg_del_network_portal(tpg, tpg_np_iser);
-		if (rc < 0)
-			goto out;
 	}
 
 	printk("lio_target_np_store_iser() done, op: %d\n", op);
