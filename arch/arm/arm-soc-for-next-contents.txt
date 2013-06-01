@@ -7,6 +7,10 @@ Format is a little different from before in an attempt to make it easier to read
 		<...>
 	<...>
 
+next/fixes-non-critical
+	mvebu/fixes-non-critical
+		git://git.infradead.org/users/jcooper/linux.git tags/fixes-non-3.11-1
+
 next/cleanup
 	at91/cleanup
 		git://github.com/at91linux/linux-at91.git tags/at91-cleanup
