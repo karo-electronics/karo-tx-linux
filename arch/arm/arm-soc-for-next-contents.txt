@@ -33,6 +33,8 @@ next/boards
 next/dt
 	nomadik/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik.git tags/nomadik-dt-for-arm-soc
+	mvebu/dt
+		git://git.infradead.org/users/jcooper/linux.git tags/dt-3.11-3
 
 next/drivers
 	ux500/dma40
