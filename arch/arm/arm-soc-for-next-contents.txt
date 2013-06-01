@@ -32,6 +32,8 @@ next/soc
 		git://git.infradead.org/users/jcooper/linux.git tags/pcie_kw-3.11
 	mvebu/pcie2
 		git://git.infradead.org/users/jcooper/linux.git tags/pcie_bridge-3.11
+	mvebu/clk-cleanup
+		git://git.infradead.org/users/jcooper/linux.git tags/seb_clk-3.11
 
 next/boards
 	mvebu/boards
