@@ -18,6 +18,8 @@ next/cleanup
 		git://github.com/mripard/linux.git tags/arm-soc-cleanups-for-3.11
 	mvebu/cleanup
 		git://git.infradead.org/users/jcooper/linux.git tags/cleanup-3.11-3
+	dt/pci-helpers
+		git://git.infradead.org/users/jcooper/linux.git tags/of_pci-3.11
 
 next/soc
 	mvebu/soc
