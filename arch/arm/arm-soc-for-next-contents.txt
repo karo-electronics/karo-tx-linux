@@ -28,6 +28,8 @@ next/soc
 		git://git.infradead.org/users/jcooper/linux.git tags/defconfig-3.11-3
 	mvebu/pcie
 		git://git.infradead.org/users/jcooper/linux.git tags/pcie-3.11-2
+	mvebu/pcie-kirkwood
+		git://git.infradead.org/users/jcooper/linux.git tags/pcie_kw-3.11
 
 next/boards
 	mvebu/boards
