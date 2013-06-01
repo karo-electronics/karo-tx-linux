@@ -7,6 +7,9 @@ Format is a little different from before in an attempt to make it easier to read
 		<...>
 	<...>
 
+depends/rmk-devel-stable
+	http://ftp.arm.linux.org.uk/pub/linux/arm/kernel/git-cur/linux-arm.git devel-stable
+
 next/fixes-non-critical
 	mvebu/fixes-non-critical
 		git://git.infradead.org/users/jcooper/linux.git tags/fixes-non-3.11-1
@@ -34,6 +37,9 @@ next/soc
 		git://git.infradead.org/users/jcooper/linux.git tags/pcie_bridge-3.11
 	mvebu/clk-cleanup
 		git://git.infradead.org/users/jcooper/linux.git tags/seb_clk-3.11
+	vexpress/dual-cluster
+		git://git.linaro.org/people/nico/linux VExpress_DCSCB
+		depends on depends/rmk-devel-stable
 
 next/boards
 	mvebu/boards
