@@ -16,6 +16,9 @@ next/cleanup
 		git://github.com/at91linux/linux-at91.git tags/at91-cleanup
 	machdesc/cleanup
 		git://github.com/mripard/linux.git tags/arm-soc-cleanups-for-3.11
+	mvebu/cleanup
+		git://git.infradead.org/users/jcooper/linux.git tags/cleanup-3.11-3
+
 next/dt
 	nomadik/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik.git tags/nomadik-dt-for-arm-soc
