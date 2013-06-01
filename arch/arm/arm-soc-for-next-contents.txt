@@ -26,6 +26,8 @@ next/soc
 		git://git.infradead.org/users/jcooper/linux.git tags/soc-3.11-2
 	mvebu/defconfig
 		git://git.infradead.org/users/jcooper/linux.git tags/defconfig-3.11-3
+	mvebu/pcie
+		git://git.infradead.org/users/jcooper/linux.git tags/pcie-3.11-2
 
 next/boards
 	mvebu/boards
