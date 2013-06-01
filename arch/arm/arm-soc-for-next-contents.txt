@@ -53,6 +53,9 @@ next/dt
 		git://git.infradead.org/users/jcooper/linux.git tags/dt-3.11-3
 	patch
 		"ARM: nomadik: fix clocksource warning"
+	at91/dt
+		git://github.com/at91linux/linux-at91.git tags/at91-dt
+
 
 next/drivers
 	ux500/dma40
