@@ -19,6 +19,10 @@ next/cleanup
 	mvebu/cleanup
 		git://git.infradead.org/users/jcooper/linux.git tags/cleanup-3.11-3
 
+next/soc
+	mvebu/soc
+		git://git.infradead.org/users/jcooper/linux.git tags/soc-3.11-2
+
 next/dt
 	nomadik/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik.git tags/nomadik-dt-for-arm-soc
