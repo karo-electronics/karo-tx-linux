@@ -10,6 +10,8 @@ Format is a little different from before in an attempt to make it easier to read
 next/cleanup
 	at91/cleanup
 		git://github.com/at91linux/linux-at91.git tags/at91-cleanup
+	machdesc/cleanup
+		git://github.com/mripard/linux.git tags/arm-soc-cleanups-for-3.11
 next/dt
 	nomadik/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik.git tags/nomadik-dt-for-arm-soc
