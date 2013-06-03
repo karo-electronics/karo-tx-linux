@@ -40,6 +40,7 @@ next/soc
 	vexpress/dual-cluster
 		git://git.linaro.org/people/nico/linux VExpress_DCSCB
 		depends on depends/rmk-devel-stable
+		+patch "drivers/bus: arm-cci: fix combined ARMv6+v7 build"
 
 next/boards
 	mvebu/boards
