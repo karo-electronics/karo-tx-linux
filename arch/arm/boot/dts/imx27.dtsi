@@ -25,6 +25,9 @@
 		gpio3 = &gpio4;
 		gpio4 = &gpio5;
 		gpio5 = &gpio6;
+		spi0 = &cspi1;
+		spi1 = &cspi2;
+		spi2 = &cspi3;
 	};
 
 	avic: avic-interrupt-controller@e0000000 {
@@ -89,6 +92,14 @@
 				clock-names = "ipg", "per";
 			};
 
+			pwm0: pwm@10006000 {
+				compatible = "fsl,imx27-pwm";
+				reg = <0x10006000 0x1000>;
+				interrupts = <23>;
+				clocks = <&clks 34>, <&clks 61>;
+				clock-names = "ipg", "per";
+			};
+
 			uart1: serial@1000a000 {
 				compatible = "fsl,imx27-uart", "fsl,imx21-uart";
 				reg = <0x1000a000 0x1000>;
@@ -131,7 +142,7 @@
 				compatible = "fsl,imx27-cspi";
 				reg = <0x1000e000 0x1000>;
 				interrupts = <16>;
-				clocks = <&clks 53>, <&clks 0>;
+				clocks = <&clks 53>, <&clks 53>;
 				clock-names = "ipg", "per";
 				status = "disabled";
 			};
@@ -142,7 +153,7 @@
 				compatible = "fsl,imx27-cspi";
 				reg = <0x1000f000 0x1000>;
 				interrupts = <15>;
-				clocks = <&clks 52>, <&clks 0>;
+				clocks = <&clks 52>, <&clks 52>;
 				clock-names = "ipg", "per";
 				status = "disabled";
 			};
@@ -223,7 +234,7 @@
 				compatible = "fsl,imx27-cspi";
 				reg = <0x10017000 0x1000>;
 				interrupts = <6>;
-				clocks = <&clks 51>, <&clks 0>;
+				clocks = <&clks 51>, <&clks 51>;
 				clock-names = "ipg", "per";
 				status = "disabled";
 			};
