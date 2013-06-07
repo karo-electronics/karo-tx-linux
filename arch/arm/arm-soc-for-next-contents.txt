@@ -1,0 +1,69 @@
+for-next contents for 3.11: 
+Format is a little different from before in an attempt to make it easier to read:
+
+<next/* branch>
+	<topic branch>
+		<contents>
+		<...>
+	<...>
+
+depends/rmk-devel-stable
+	http://ftp.arm.linux.org.uk/pub/linux/arm/kernel/git-cur/linux-arm.git devel-stable
+
+next/fixes-non-critical
+	mvebu/fixes-non-critical
+		git://git.infradead.org/users/jcooper/linux.git tags/fixes-non-3.11-1
+
+next/cleanup
+	at91/cleanup
+		git://github.com/at91linux/linux-at91.git tags/at91-cleanup
+	machdesc/cleanup
+		git://github.com/mripard/linux.git tags/arm-soc-cleanups-for-3.11
+	mvebu/cleanup
+		git://git.infradead.org/users/jcooper/linux.git tags/cleanup-3.11-3
+	dt/pci-helpers
+		git://git.infradead.org/users/jcooper/linux.git tags/of_pci-3.11
+
+next/soc
+	mvebu/soc
+		git://git.infradead.org/users/jcooper/linux.git tags/soc-3.11-2
+	mvebu/defconfig
+		git://git.infradead.org/users/jcooper/linux.git tags/defconfig-3.11-3
+	mvebu/pcie
+		git://git.infradead.org/users/jcooper/linux.git tags/pcie-3.11-2
+	mvebu/pcie-kirkwood
+		git://git.infradead.org/users/jcooper/linux.git tags/pcie_kw-3.11
+	mvebu/pcie2
+		git://git.infradead.org/users/jcooper/linux.git tags/pcie_bridge-3.11
+	mvebu/clk-cleanup
+		git://git.infradead.org/users/jcooper/linux.git tags/seb_clk-3.11
+	vexpress/dual-cluster
+		git://git.linaro.org/people/nico/linux VExpress_DCSCB
+		depends on depends/rmk-devel-stable
+		+patch "drivers/bus: arm-cci: fix combined ARMv6+v7 build"
+
+next/boards
+	mvebu/boards
+		  git://git.infradead.org/users/jcooper/linux.git tags/boards-3.11-2
+
+
+next/dt
+	nomadik/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik.git tags/nomadik-dt-for-arm-soc
+	mvebu/dt
+		git://git.infradead.org/users/jcooper/linux.git tags/dt-3.11-3
+	patch
+		"ARM: nomadik: fix clocksource warning"
+	at91/dt
+		git://github.com/at91linux/linux-at91.git tags/at91-dt
+
+
+next/drivers
+	ux500/dma40
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-dma40-for-arm-soc
+
+next/mailbox:
+	mailbox/subsystem
+		git://github.com/sumananna/mailbox.git dbx500-prcmu-mailbox
+
+
