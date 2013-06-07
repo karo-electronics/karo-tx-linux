@@ -275,6 +275,12 @@ int __cpuinit register_cpu(struct cpu *cpu, int num)
 {
 	int error;
 
+#ifdef CONFIG_SMP
+	/* return when cpu number greater than maximum number of CPUs */
+	if (num >= setup_max_cpus)
+		return 0;
+#endif
+
 	cpu->node_id = cpu_to_node(num);
 	memset(&cpu->dev, 0x00, sizeof(struct device));
 	cpu->dev.id = num;
