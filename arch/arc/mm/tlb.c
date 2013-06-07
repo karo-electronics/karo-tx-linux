@@ -432,8 +432,13 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddr_unaligned,
 {
 	unsigned long vaddr = vaddr_unaligned & PAGE_MASK;
 	unsigned long paddr = pte_val(*ptep) & PAGE_MASK;
+	struct page *page = pfn_to_page(pte_pfn(*ptep));
 
 	create_tlb(vma, vaddr, ptep);
+
+	if (page == ZERO_PAGE(0)) {
+		return;
+	}
 
 	/*
 	 * Exec page : Independent of aliasing/page-color considerations,
@@ -446,9 +451,8 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddr_unaligned,
 	 */
 	if ((vma->vm_flags & VM_EXEC) ||
 	     addr_not_cache_congruent(paddr, vaddr)) {
-		struct page *page = pfn_to_page(pte_pfn(*ptep));
 
-		int dirty = test_and_clear_bit(PG_arch_1, &page->flags);
+		int dirty = !test_and_set_bit(PG_dc_clean, &page->flags);
 		if (dirty) {
 			/* wback + inv dcache lines */
 			__flush_dcache_page(paddr, paddr);
@@ -505,7 +509,7 @@ char *arc_mmu_mumbojumbo(int cpu_id, char *buf, int len)
 		       "J-TLB %d (%dx%d), uDTLB %d, uITLB %d, %s\n",
 		       p_mmu->num_tlb, p_mmu->sets, p_mmu->ways,
 		       p_mmu->u_dtlb, p_mmu->u_itlb,
-		       __CONFIG_ARC_MMU_SASID_VAL ? "SASID" : "");
+		       IS_ENABLED(CONFIG_ARC_MMU_SASID) ? "SASID" : "");
 
 	return buf;
 }
