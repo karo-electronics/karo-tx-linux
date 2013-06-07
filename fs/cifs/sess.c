@@ -310,11 +310,10 @@ decode_unicode_ssetup(char **pbcc_area, int bleft, struct cifs_ses *ses,
 	return;
 }
 
-static int decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
-			       struct cifs_ses *ses,
-			       const struct nls_table *nls_cp)
+static void decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
+				struct cifs_ses *ses,
+				const struct nls_table *nls_cp)
 {
-	int rc = 0;
 	int len;
 	char *bcc_ptr = *pbcc_area;
 
@@ -322,24 +321,22 @@ static int decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
 
 	len = strnlen(bcc_ptr, bleft);
 	if (len >= bleft)
-		return rc;
+		return;
 
 	kfree(ses->serverOS);
 
 	ses->serverOS = kzalloc(len + 1, GFP_KERNEL);
 	if (ses->serverOS)
 		strncpy(ses->serverOS, bcc_ptr, len);
-	if (strncmp(ses->serverOS, "OS/2", 4) == 0) {
+	if (strncmp(ses->serverOS, "OS/2", 4) == 0)
 		cifs_dbg(FYI, "OS/2 server\n");
-			ses->flags |= CIFS_SES_OS2;
-	}
 
 	bcc_ptr += len + 1;
 	bleft -= len + 1;
 
 	len = strnlen(bcc_ptr, bleft);
 	if (len >= bleft)
-		return rc;
+		return;
 
 	kfree(ses->serverNOS);
 
@@ -352,7 +349,7 @@ static int decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
 
 	len = strnlen(bcc_ptr, bleft);
 	if (len > bleft)
-		return rc;
+		return;
 
 	/* No domain field in LANMAN case. Domain is
 	   returned by old servers in the SMB negprot response */
@@ -360,8 +357,6 @@ static int decode_ascii_ssetup(char **pbcc_area, __u16 bleft,
 	   but thus do return domain here we could add parsing
 	   for it later, but it is not very important */
 	cifs_dbg(FYI, "ascii: bytes left %d\n", bleft);
-
-	return rc;
 }
 
 int decode_ntlmssp_challenge(char *bcc_ptr, int blob_len,
@@ -579,8 +574,10 @@ CIFS_SessSetup(const unsigned int xid, struct cifs_ses *ses,
 	u16 blob_len;
 	char *ntlmsspblob = NULL;
 
-	if (ses == NULL)
+	if (ses == NULL) {
+		WARN(1, "%s: ses == NULL!", __func__);
 		return -EINVAL;
+	}
 
 	type = ses->server->secType;
 	cifs_dbg(FYI, "sess setup type %d\n", type);
@@ -643,8 +640,6 @@ ssetup_ntlmssp_authenticate:
 	}
 	bcc_ptr = str_area;
 
-	ses->flags &= ~CIFS_SES_LANMAN;
-
 	iov[1].iov_base = NULL;
 	iov[1].iov_len = 0;
 
@@ -668,7 +663,6 @@ ssetup_ntlmssp_authenticate:
 				 ses->server->sec_mode & SECMODE_PW_ENCRYPT ?
 					true : false, lnm_session_key);
 
-		ses->flags |= CIFS_SES_LANMAN;
 		memcpy(bcc_ptr, (char *)lnm_session_key, CIFS_AUTH_RESP_SIZE);
 		bcc_ptr += CIFS_AUTH_RESP_SIZE;
 
@@ -938,8 +932,7 @@ ssetup_ntlmssp_authenticate:
 		}
 		decode_unicode_ssetup(&bcc_ptr, bytes_remaining, ses, nls_cp);
 	} else {
-		rc = decode_ascii_ssetup(&bcc_ptr, bytes_remaining,
-					 ses, nls_cp);
+		decode_ascii_ssetup(&bcc_ptr, bytes_remaining, ses, nls_cp);
 	}
 
 ssetup_exit:

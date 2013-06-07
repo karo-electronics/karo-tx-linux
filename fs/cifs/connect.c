@@ -85,7 +85,7 @@ enum {
 	Opt_acl, Opt_noacl, Opt_locallease,
 	Opt_sign, Opt_seal, Opt_noac,
 	Opt_fsc, Opt_mfsymlinks,
-	Opt_multiuser, Opt_sloppy,
+	Opt_multiuser, Opt_sloppy, Opt_nosharesock,
 
 	/* Mount options which take numeric value */
 	Opt_backupuid, Opt_backupgid, Opt_uid,
@@ -165,6 +165,7 @@ static const match_table_t cifs_mount_option_tokens = {
 	{ Opt_mfsymlinks, "mfsymlinks" },
 	{ Opt_multiuser, "multiuser" },
 	{ Opt_sloppy, "sloppy" },
+	{ Opt_nosharesock, "nosharesock" },
 
 	{ Opt_backupuid, "backupuid=%s" },
 	{ Opt_backupgid, "backupgid=%s" },
@@ -1455,6 +1456,9 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 		case Opt_sloppy:
 			sloppy = true;
 			break;
+		case Opt_nosharesock:
+			vol->nosharesock = true;
+			break;
 
 		/* Numeric Values */
 		case Opt_backupuid:
@@ -2026,6 +2030,9 @@ match_security(struct TCP_Server_Info *server, struct smb_vol *vol)
 static int match_server(struct TCP_Server_Info *server, struct smb_vol *vol)
 {
 	struct sockaddr *addr = (struct sockaddr *)&vol->dstaddr;
+
+	if (vol->nosharesock)
+		return 0;
 
 	if ((server->vals != vol->vals) || (server->ops != vol->ops))
 		return 0;
@@ -3279,8 +3286,8 @@ build_unc_path_to_root(const struct smb_vol *vol,
 	pos = full_path + unc_len;
 
 	if (pplen) {
-		*pos++ = CIFS_DIR_SEP(cifs_sb);
-		strncpy(pos, vol->prepath, pplen);
+		*pos = CIFS_DIR_SEP(cifs_sb);
+		strncpy(pos + 1, vol->prepath, pplen);
 		pos += pplen;
 	}
 
@@ -3827,7 +3834,6 @@ cifs_setup_session(const unsigned int xid, struct cifs_ses *ses,
 	int rc = -ENOSYS;
 	struct TCP_Server_Info *server = ses->server;
 
-	ses->flags = 0;
 	ses->capabilities = server->capabilities;
 	if (linuxExtEnabled == 0)
 		ses->capabilities &= (~server->vals->cap_unix);
