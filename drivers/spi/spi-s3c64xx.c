@@ -1314,7 +1314,8 @@ static int s3c64xx_spi_probe(struct platform_device *pdev)
 	master->unprepare_transfer_hardware = s3c64xx_spi_unprepare_transfer;
 	master->num_chipselect = sci->num_cs;
 	master->dma_alignment = 8;
-	master->bits_per_word_mask = BIT(32 - 1) | BIT(16 - 1) | BIT(8 - 1);
+	master->bits_per_word_mask = SPI_BPW_MASK(32) | SPI_BPW_MASK(16) |
+					SPI_BPW_MASK(8);
 	/* the spi->mode bits understood by this driver: */
 	master->mode_bits = SPI_CPOL | SPI_CPHA | SPI_CS_HIGH;
 
@@ -1399,7 +1400,6 @@ err3:
 err2:
 	clk_disable_unprepare(sdd->clk);
 err0:
-	platform_set_drvdata(pdev, NULL);
 	spi_master_put(master);
 
 	return ret;
@@ -1420,7 +1420,6 @@ static int s3c64xx_spi_remove(struct platform_device *pdev)
 
 	clk_disable_unprepare(sdd->clk);
 
-	platform_set_drvdata(pdev, NULL);
 	spi_master_put(master);
 
 	return 0;
