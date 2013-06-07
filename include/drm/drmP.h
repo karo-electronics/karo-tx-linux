@@ -55,16 +55,13 @@
 #include <linux/mm.h>
 #include <linux/cdev.h>
 #include <linux/mutex.h>
+#include <linux/io.h>
 #include <linux/slab.h>
 #if defined(__alpha__) || defined(__powerpc__)
 #include <asm/pgtable.h>	/* For pte_wrprotect */
 #endif
-#include <asm/io.h>
 #include <asm/mman.h>
 #include <asm/uaccess.h>
-#ifdef CONFIG_MTRR
-#include <asm/mtrr.h>
-#endif
 #if defined(CONFIG_AGP) || defined(CONFIG_AGP_MODULE)
 #include <linux/types.h>
 #include <linux/agp_backend.h>
@@ -1250,37 +1247,8 @@ static inline int drm_core_has_MTRR(struct drm_device *dev)
 {
 	return drm_core_check_feature(dev, DRIVER_USE_MTRR);
 }
-
-#define DRM_MTRR_WC		MTRR_TYPE_WRCOMB
-
-static inline int drm_mtrr_add(unsigned long offset, unsigned long size,
-			       unsigned int flags)
-{
-	return mtrr_add(offset, size, flags, 1);
-}
-
-static inline int drm_mtrr_del(int handle, unsigned long offset,
-			       unsigned long size, unsigned int flags)
-{
-	return mtrr_del(handle, offset, size);
-}
-
 #else
 #define drm_core_has_MTRR(dev) (0)
-
-#define DRM_MTRR_WC		0
-
-static inline int drm_mtrr_add(unsigned long offset, unsigned long size,
-			       unsigned int flags)
-{
-	return 0;
-}
-
-static inline int drm_mtrr_del(int handle, unsigned long offset,
-			       unsigned long size, unsigned int flags)
-{
-	return 0;
-}
 #endif
 
 static inline void drm_device_set_unplugged(struct drm_device *dev)
