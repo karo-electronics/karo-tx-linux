@@ -1198,9 +1198,7 @@ static int __dev_open(struct net_device *dev)
 	 * If we don't do this there is a chance ndo_poll_controller
 	 * or ndo_poll may be running while we open the device
 	 */
-	ret = netpoll_rx_disable(dev);
-	if (ret)
-		return ret;
+	netpoll_rx_disable(dev);
 
 	ret = call_netdevice_notifiers(NETDEV_PRE_UP, dev);
 	ret = notifier_to_errno(ret);
@@ -1309,9 +1307,7 @@ static int __dev_close(struct net_device *dev)
 	LIST_HEAD(single);
 
 	/* Temporarily disable netpoll until the interface is down */
-	retval = netpoll_rx_disable(dev);
-	if (retval)
-		return retval;
+	netpoll_rx_disable(dev);
 
 	list_add(&dev->unreg_list, &single);
 	retval = __dev_close_many(&single);
@@ -1353,14 +1349,11 @@ static int dev_close_many(struct list_head *head)
  */
 int dev_close(struct net_device *dev)
 {
-	int ret = 0;
 	if (dev->flags & IFF_UP) {
 		LIST_HEAD(single);
 
 		/* Block netpoll rx while the interface is going down */
-		ret = netpoll_rx_disable(dev);
-		if (ret)
-			return ret;
+		netpoll_rx_disable(dev);
 
 		list_add(&dev->unreg_list, &single);
 		dev_close_many(&single);
@@ -1368,7 +1361,7 @@ int dev_close(struct net_device *dev)
 
 		netpoll_rx_enable(dev);
 	}
-	return ret;
+	return 0;
 }
 EXPORT_SYMBOL(dev_close);
 
@@ -1398,6 +1391,14 @@ void dev_disable_lro(struct net_device *dev)
 }
 EXPORT_SYMBOL(dev_disable_lro);
 
+static int call_netdevice_notifier(struct notifier_block *nb, unsigned long val,
+				   struct net_device *dev)
+{
+	struct netdev_notifier_info info;
+
+	netdev_notifier_info_init(&info, dev);
+	return nb->notifier_call(nb, val, &info);
+}
 
 static int dev_boot_phase = 1;
 
@@ -1430,7 +1431,7 @@ int register_netdevice_notifier(struct notifier_block *nb)
 		goto unlock;
 	for_each_net(net) {
 		for_each_netdev(net, dev) {
-			err = nb->notifier_call(nb, NETDEV_REGISTER, dev);
+			err = call_netdevice_notifier(nb, NETDEV_REGISTER, dev);
 			err = notifier_to_errno(err);
 			if (err)
 				goto rollback;
@@ -1438,7 +1439,7 @@ int register_netdevice_notifier(struct notifier_block *nb)
 			if (!(dev->flags & IFF_UP))
 				continue;
 
-			nb->notifier_call(nb, NETDEV_UP, dev);
+			call_netdevice_notifier(nb, NETDEV_UP, dev);
 		}
 	}
 
@@ -1454,10 +1455,11 @@ rollback:
 				goto outroll;
 
 			if (dev->flags & IFF_UP) {
-				nb->notifier_call(nb, NETDEV_GOING_DOWN, dev);
-				nb->notifier_call(nb, NETDEV_DOWN, dev);
+				call_netdevice_notifier(nb, NETDEV_GOING_DOWN,
+							dev);
+				call_netdevice_notifier(nb, NETDEV_DOWN, dev);
 			}
-			nb->notifier_call(nb, NETDEV_UNREGISTER, dev);
+			call_netdevice_notifier(nb, NETDEV_UNREGISTER, dev);
 		}
 	}
 
@@ -1495,10 +1497,11 @@ int unregister_netdevice_notifier(struct notifier_block *nb)
 	for_each_net(net) {
 		for_each_netdev(net, dev) {
 			if (dev->flags & IFF_UP) {
-				nb->notifier_call(nb, NETDEV_GOING_DOWN, dev);
-				nb->notifier_call(nb, NETDEV_DOWN, dev);
+				call_netdevice_notifier(nb, NETDEV_GOING_DOWN,
+							dev);
+				call_netdevice_notifier(nb, NETDEV_DOWN, dev);
 			}
-			nb->notifier_call(nb, NETDEV_UNREGISTER, dev);
+			call_netdevice_notifier(nb, NETDEV_UNREGISTER, dev);
 		}
 	}
 unlock:
@@ -1506,6 +1509,25 @@ unlock:
 	return err;
 }
 EXPORT_SYMBOL(unregister_netdevice_notifier);
+
+/**
+ *	call_netdevice_notifiers_info - call all network notifier blocks
+ *	@val: value passed unmodified to notifier function
+ *	@dev: net_device pointer passed unmodified to notifier function
+ *	@info: notifier information data
+ *
+ *	Call all network notifier blocks.  Parameters and return value
+ *	are as for raw_notifier_call_chain().
+ */
+
+int call_netdevice_notifiers_info(unsigned long val, struct net_device *dev,
+				  struct netdev_notifier_info *info)
+{
+	ASSERT_RTNL();
+	netdev_notifier_info_init(info, dev);
+	return raw_notifier_call_chain(&netdev_chain, val, info);
+}
+EXPORT_SYMBOL(call_netdevice_notifiers_info);
 
 /**
  *	call_netdevice_notifiers - call all network notifier blocks
@@ -1518,8 +1540,9 @@ EXPORT_SYMBOL(unregister_netdevice_notifier);
 
 int call_netdevice_notifiers(unsigned long val, struct net_device *dev)
 {
-	ASSERT_RTNL();
-	return raw_notifier_call_chain(&netdev_chain, val, dev);
+	struct netdev_notifier_info info;
+
+	return call_netdevice_notifiers_info(val, dev, &info);
 }
 EXPORT_SYMBOL(call_netdevice_notifiers);
 
@@ -1629,7 +1652,6 @@ int dev_forward_skb(struct net_device *dev, struct sk_buff *skb)
 		return NET_RX_DROP;
 	}
 	skb->skb_iif = 0;
-	skb->dev = dev;
 	skb_dst_drop(skb);
 	skb->tstamp.tv64 = 0;
 	skb->pkt_type = PACKET_HOST;
@@ -1702,7 +1724,7 @@ static void dev_queue_xmit_nit(struct sk_buff *skb, struct net_device *dev)
 			skb_reset_mac_header(skb2);
 
 			if (skb_network_header(skb2) < skb2->data ||
-			    skb2->network_header > skb2->tail) {
+			    skb_network_header(skb2) > skb_tail_pointer(skb2)) {
 				net_crit_ratelimited("protocol %04x is buggy, dev %s\n",
 						     ntohs(skb2->protocol),
 						     dev->name);
@@ -3065,6 +3087,46 @@ static int rps_ipi_queued(struct softnet_data *sd)
 	return 0;
 }
 
+#ifdef CONFIG_NET_FLOW_LIMIT
+int netdev_flow_limit_table_len __read_mostly = (1 << 12);
+#endif
+
+static bool skb_flow_limit(struct sk_buff *skb, unsigned int qlen)
+{
+#ifdef CONFIG_NET_FLOW_LIMIT
+	struct sd_flow_limit *fl;
+	struct softnet_data *sd;
+	unsigned int old_flow, new_flow;
+
+	if (qlen < (netdev_max_backlog >> 1))
+		return false;
+
+	sd = &__get_cpu_var(softnet_data);
+
+	rcu_read_lock();
+	fl = rcu_dereference(sd->flow_limit);
+	if (fl) {
+		new_flow = skb_get_rxhash(skb) & (fl->num_buckets - 1);
+		old_flow = fl->history[fl->history_head];
+		fl->history[fl->history_head] = new_flow;
+
+		fl->history_head++;
+		fl->history_head &= FLOW_LIMIT_HISTORY - 1;
+
+		if (likely(fl->buckets[old_flow]))
+			fl->buckets[old_flow]--;
+
+		if (++fl->buckets[new_flow] > (FLOW_LIMIT_HISTORY >> 1)) {
+			fl->count++;
+			rcu_read_unlock();
+			return true;
+		}
+	}
+	rcu_read_unlock();
+#endif
+	return false;
+}
+
 /*
  * enqueue_to_backlog is called to queue an skb to a per CPU backlog
  * queue (may be a remote CPU queue).
@@ -3074,13 +3136,15 @@ static int enqueue_to_backlog(struct sk_buff *skb, int cpu,
 {
 	struct softnet_data *sd;
 	unsigned long flags;
+	unsigned int qlen;
 
 	sd = &per_cpu(softnet_data, cpu);
 
 	local_irq_save(flags);
 
 	rps_lock(sd);
-	if (skb_queue_len(&sd->input_pkt_queue) <= netdev_max_backlog) {
+	qlen = skb_queue_len(&sd->input_pkt_queue);
+	if (qlen <= netdev_max_backlog && !skb_flow_limit(skb, qlen)) {
 		if (skb_queue_len(&sd->input_pkt_queue)) {
 enqueue:
 			__skb_queue_tail(&sd->input_pkt_queue, skb);
@@ -3828,7 +3892,7 @@ static void skb_gro_reset_offset(struct sk_buff *skb)
 	NAPI_GRO_CB(skb)->frag0 = NULL;
 	NAPI_GRO_CB(skb)->frag0_len = 0;
 
-	if (skb->mac_header == skb->tail &&
+	if (skb_mac_header(skb) == skb_tail_pointer(skb) &&
 	    pinfo->nr_frags &&
 	    !PageHighMem(skb_frag_page(frag0))) {
 		NAPI_GRO_CB(skb)->frag0 = skb_frag_address(frag0);
@@ -4370,7 +4434,7 @@ static int __netdev_upper_dev_link(struct net_device *dev,
 	else
 		list_add_tail_rcu(&upper->list, &dev->upper_dev_list);
 	dev_hold(upper_dev);
-
+	call_netdevice_notifiers(NETDEV_CHANGEUPPER, dev);
 	return 0;
 }
 
@@ -4430,6 +4494,7 @@ void netdev_upper_dev_unlink(struct net_device *dev,
 	list_del_rcu(&upper->list);
 	dev_put(upper_dev);
 	kfree_rcu(upper, rcu);
+	call_netdevice_notifiers(NETDEV_CHANGEUPPER, dev);
 }
 EXPORT_SYMBOL(netdev_upper_dev_unlink);
 
@@ -4700,8 +4765,13 @@ void __dev_notify_flags(struct net_device *dev, unsigned int old_flags)
 	}
 
 	if (dev->flags & IFF_UP &&
-	    (changes & ~(IFF_UP | IFF_PROMISC | IFF_ALLMULTI | IFF_VOLATILE)))
-		call_netdevice_notifiers(NETDEV_CHANGE, dev);
+	    (changes & ~(IFF_UP | IFF_PROMISC | IFF_ALLMULTI | IFF_VOLATILE))) {
+		struct netdev_notifier_change_info change_info;
+
+		change_info.flags_changed = changes;
+		call_netdevice_notifiers_info(NETDEV_CHANGE, dev,
+					      &change_info.info);
+	}
 }
 
 /**
@@ -5234,6 +5304,10 @@ int register_netdevice(struct net_device *dev)
 	/* Make NETIF_F_SG inheritable to tunnel devices.
 	 */
 	dev->hw_enc_features |= NETIF_F_SG;
+
+	/* Make NETIF_F_SG inheritable to MPLS.
+	 */
+	dev->mpls_features |= NETIF_F_SG;
 
 	ret = call_netdevice_notifiers(NETDEV_POST_INIT, dev);
 	ret = notifier_to_errno(ret);
@@ -6014,7 +6088,7 @@ netdev_features_t netdev_increment_features(netdev_features_t all,
 }
 EXPORT_SYMBOL(netdev_increment_features);
 
-static struct hlist_head *netdev_create_hash(void)
+static struct hlist_head * __net_init netdev_create_hash(void)
 {
 	int i;
 	struct hlist_head *hash;
@@ -6270,6 +6344,10 @@ static int __init net_dev_init(void)
 		sd->backlog.weight = weight_p;
 		sd->backlog.gro_list = NULL;
 		sd->backlog.gro_count = 0;
+
+#ifdef CONFIG_NET_FLOW_LIMIT
+		sd->flow_limit = NULL;
+#endif
 	}
 
 	dev_boot_phase = 0;

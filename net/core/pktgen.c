@@ -1921,7 +1921,7 @@ static void pktgen_change_name(const struct pktgen_net *pn, struct net_device *d
 static int pktgen_device_event(struct notifier_block *unused,
 			       unsigned long event, void *ptr)
 {
-	struct net_device *dev = ptr;
+	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 	struct pktgen_net *pn = net_generic(dev_net(dev), pg_net_id);
 
 	if (pn->pktgen_exiting)
@@ -2708,14 +2708,14 @@ static struct sk_buff *fill_packet_ipv4(struct net_device *odev,
 		*vlan_encapsulated_proto = htons(ETH_P_IP);
 	}
 
-	skb->network_header = skb->tail;
-	skb->transport_header = skb->network_header + sizeof(struct iphdr);
-	skb_put(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
+	skb_set_mac_header(skb, 0);
+	skb_set_network_header(skb, skb->len);
+	iph = (struct iphdr *) skb_put(skb, sizeof(struct iphdr));
+
+	skb_set_transport_header(skb, skb->len);
+	udph = (struct udphdr *) skb_put(skb, sizeof(struct udphdr));
 	skb_set_queue_mapping(skb, queue_map);
 	skb->priority = pkt_dev->skb_priority;
-
-	iph = ip_hdr(skb);
-	udph = udp_hdr(skb);
 
 	memcpy(eth, pkt_dev->hh, 12);
 	*(__be16 *) & eth[12] = protocol;
@@ -2746,8 +2746,6 @@ static struct sk_buff *fill_packet_ipv4(struct net_device *odev,
 	iph->check = 0;
 	iph->check = ip_fast_csum((void *)iph, iph->ihl);
 	skb->protocol = protocol;
-	skb->mac_header = (skb->network_header - ETH_HLEN -
-			   pkt_dev->pkt_overhead);
 	skb->dev = odev;
 	skb->pkt_type = PACKET_HOST;
 	pktgen_finalize_skb(pkt_dev, skb, datalen);
@@ -2822,13 +2820,14 @@ static struct sk_buff *fill_packet_ipv6(struct net_device *odev,
 		*vlan_encapsulated_proto = htons(ETH_P_IPV6);
 	}
 
-	skb->network_header = skb->tail;
-	skb->transport_header = skb->network_header + sizeof(struct ipv6hdr);
-	skb_put(skb, sizeof(struct ipv6hdr) + sizeof(struct udphdr));
+	skb_set_mac_header(skb, 0);
+	skb_set_network_header(skb, skb->len);
+	iph = (struct ipv6hdr *) skb_put(skb, sizeof(struct ipv6hdr));
+
+	skb_set_transport_header(skb, skb->len);
+	udph = (struct udphdr *) skb_put(skb, sizeof(struct udphdr));
 	skb_set_queue_mapping(skb, queue_map);
 	skb->priority = pkt_dev->skb_priority;
-	iph = ipv6_hdr(skb);
-	udph = udp_hdr(skb);
 
 	memcpy(eth, pkt_dev->hh, 12);
 	*(__be16 *) &eth[12] = protocol;
@@ -2863,8 +2862,6 @@ static struct sk_buff *fill_packet_ipv6(struct net_device *odev,
 	iph->daddr = pkt_dev->cur_in6_daddr;
 	iph->saddr = pkt_dev->cur_in6_saddr;
 
-	skb->mac_header = (skb->network_header - ETH_HLEN -
-			   pkt_dev->pkt_overhead);
 	skb->protocol = protocol;
 	skb->dev = odev;
 	skb->pkt_type = PACKET_HOST;

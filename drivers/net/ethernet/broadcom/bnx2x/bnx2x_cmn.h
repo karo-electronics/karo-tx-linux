@@ -22,7 +22,6 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 
-
 #include "bnx2x.h"
 #include "bnx2x_sriov.h"
 
@@ -50,13 +49,15 @@ extern int int_mode;
 		} \
 	} while (0)
 
-#define BNX2X_PCI_ALLOC(x, y, size)				\
-do {								\
-	x = dma_alloc_coherent(&bp->pdev->dev, size, y,		\
-			       GFP_KERNEL | __GFP_ZERO);	\
-	if (x == NULL)						\
-		goto alloc_mem_err;				\
-} while (0)
+#define BNX2X_PCI_ALLOC(x, y, size) \
+	do { \
+		x = dma_alloc_coherent(&bp->pdev->dev, size, y, \
+				       GFP_KERNEL | __GFP_ZERO); \
+		if (x == NULL) \
+			goto alloc_mem_err; \
+		DP(NETIF_MSG_HW, "BNX2X_PCI_ALLOC: Physical %Lx Virtual %p\n", \
+		   (unsigned long long)(*y), x); \
+	} while (0)
 
 #define BNX2X_ALLOC(x, size) \
 	do { \
@@ -493,9 +494,6 @@ int bnx2x_set_power_state(struct bnx2x *bp, pci_power_t state);
 void bnx2x_update_max_mf_config(struct bnx2x *bp, u32 value);
 /* Error handling */
 void bnx2x_fw_dump_lvl(struct bnx2x *bp, const char *lvl);
-
-/* validate currect fw is loaded */
-bool bnx2x_test_firmware_version(struct bnx2x *bp, bool is_err);
 
 /* dev_close main block */
 int bnx2x_nic_unload(struct bnx2x *bp, int unload_mode, bool keep_link);
@@ -1171,7 +1169,6 @@ static inline u8 bnx2x_cnic_eth_cl_id(struct bnx2x *bp, u8 cl_idx)
 
 static inline u8 bnx2x_cnic_fw_sb_id(struct bnx2x *bp)
 {
-
 	/* the 'first' id is allocated for the cnic */
 	return bp->base_fw_ndsb;
 }
@@ -1180,7 +1177,6 @@ static inline u8 bnx2x_cnic_igu_sb_id(struct bnx2x *bp)
 {
 	return bp->igu_base_sb;
 }
-
 
 static inline void bnx2x_init_fcoe_fp(struct bnx2x *bp)
 {
@@ -1334,8 +1330,8 @@ static inline bool bnx2x_mtu_allows_gro(int mtu)
 	int fpp = SGE_PAGE_SIZE / (mtu - ETH_MAX_TPA_HEADER_SIZE);
 
 	/*
-	 * 1. number of frags should not grow above MAX_SKB_FRAGS
-	 * 2. frag must fit the page
+	 * 1. Number of frags should not grow above MAX_SKB_FRAGS
+	 * 2. Frag must fit the page
 	 */
 	return mtu <= SGE_PAGE_SIZE && (U_ETH_SGL_SIZE * fpp) <= MAX_SKB_FRAGS;
 }

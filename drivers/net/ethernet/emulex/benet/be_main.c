@@ -834,32 +834,39 @@ static int be_vlan_tag_tx_chk(struct be_adapter *adapter, struct sk_buff *skb)
 	return vlan_tx_tag_present(skb) || adapter->pvid || adapter->qnq_vid;
 }
 
-static int be_ipv6_tx_stall_chk(struct be_adapter *adapter, struct sk_buff *skb)
+static int be_ipv6_tx_stall_chk(struct be_adapter *adapter,
+				struct sk_buff *skb)
 {
-	return BE3_chip(adapter) &&
-		be_ipv6_exthdr_check(skb);
+	return BE3_chip(adapter) && be_ipv6_exthdr_check(skb);
 }
 
-static netdev_tx_t be_xmit(struct sk_buff *skb,
-			struct net_device *netdev)
+static struct sk_buff *be_xmit_workarounds(struct be_adapter *adapter,
+					   struct sk_buff *skb,
+					   bool *skip_hw_vlan)
 {
-	struct be_adapter *adapter = netdev_priv(netdev);
-	struct be_tx_obj *txo = &adapter->tx_obj[skb_get_queue_mapping(skb)];
-	struct be_queue_info *txq = &txo->q;
-	struct iphdr *ip = NULL;
-	u32 wrb_cnt = 0, copied = 0;
-	u32 start = txq->head, eth_hdr_len;
-	bool dummy_wrb, stopped = false;
-	bool skip_hw_vlan = false;
 	struct vlan_ethhdr *veh = (struct vlan_ethhdr *)skb->data;
+	unsigned int eth_hdr_len;
+	struct iphdr *ip;
 
-	eth_hdr_len = ntohs(skb->protocol) == ETH_P_8021Q ?
-		VLAN_ETH_HLEN : ETH_HLEN;
+	/* Lancer ASIC has a bug wherein packets that are 32 bytes or less
+	 * may cause a transmit stall on that port. So the work-around is to
+	 * pad such packets to a 36-byte length.
+	 */
+	if (unlikely(lancer_chip(adapter) && skb->len <= 32)) {
+		if (skb_padto(skb, 36))
+			goto tx_drop;
+		skb->len = 36;
+	}
 
 	/* For padded packets, BE HW modifies tot_len field in IP header
 	 * incorrecly when VLAN tag is inserted by HW.
+	 * For padded packets, Lancer computes incorrect checksum.
 	 */
-	if (skb->len <= 60 && vlan_tx_tag_present(skb) && is_ipv4_pkt(skb)) {
+	eth_hdr_len = ntohs(skb->protocol) == ETH_P_8021Q ?
+						VLAN_ETH_HLEN : ETH_HLEN;
+	if (skb->len <= 60 &&
+	    (lancer_chip(adapter) || vlan_tx_tag_present(skb)) &&
+	    is_ipv4_pkt(skb)) {
 		ip = (struct iphdr *)ip_hdr(skb);
 		pskb_trim(skb, eth_hdr_len + ntohs(ip->tot_len));
 	}
@@ -869,15 +876,15 @@ static netdev_tx_t be_xmit(struct sk_buff *skb,
 	 */
 	if ((adapter->function_mode & UMC_ENABLED) &&
 	    veh->h_vlan_proto == htons(ETH_P_8021Q))
-			skip_hw_vlan = true;
+			*skip_hw_vlan = true;
 
 	/* HW has a bug wherein it will calculate CSUM for VLAN
 	 * pkts even though it is disabled.
 	 * Manually insert VLAN in pkt.
 	 */
 	if (skb->ip_summed != CHECKSUM_PARTIAL &&
-			vlan_tx_tag_present(skb)) {
-		skb = be_insert_vlan_in_pkt(adapter, skb, &skip_hw_vlan);
+	    vlan_tx_tag_present(skb)) {
+		skb = be_insert_vlan_in_pkt(adapter, skb, skip_hw_vlan);
 		if (unlikely(!skb))
 			goto tx_drop;
 	}
@@ -887,8 +894,8 @@ static netdev_tx_t be_xmit(struct sk_buff *skb,
 	 * skip HW tagging is not enabled by FW.
 	 */
 	if (unlikely(be_ipv6_tx_stall_chk(adapter, skb) &&
-		     (adapter->pvid || adapter->qnq_vid) &&
-		     !qnq_async_evt_rcvd(adapter)))
+	    (adapter->pvid || adapter->qnq_vid) &&
+	    !qnq_async_evt_rcvd(adapter)))
 		goto tx_drop;
 
 	/* Manual VLAN tag insertion to prevent:
@@ -899,10 +906,30 @@ static netdev_tx_t be_xmit(struct sk_buff *skb,
 	 */
 	if (be_ipv6_tx_stall_chk(adapter, skb) &&
 	    be_vlan_tag_tx_chk(adapter, skb)) {
-		skb = be_insert_vlan_in_pkt(adapter, skb, &skip_hw_vlan);
+		skb = be_insert_vlan_in_pkt(adapter, skb, skip_hw_vlan);
 		if (unlikely(!skb))
 			goto tx_drop;
 	}
+
+	return skb;
+tx_drop:
+	dev_kfree_skb_any(skb);
+	return NULL;
+}
+
+static netdev_tx_t be_xmit(struct sk_buff *skb, struct net_device *netdev)
+{
+	struct be_adapter *adapter = netdev_priv(netdev);
+	struct be_tx_obj *txo = &adapter->tx_obj[skb_get_queue_mapping(skb)];
+	struct be_queue_info *txq = &txo->q;
+	bool dummy_wrb, stopped = false;
+	u32 wrb_cnt = 0, copied = 0;
+	bool skip_hw_vlan = false;
+	u32 start = txq->head;
+
+	skb = be_xmit_workarounds(adapter, skb, &skip_hw_vlan);
+	if (!skb)
+		return NETDEV_TX_OK;
 
 	wrb_cnt = wrb_cnt_for_skb(adapter, skb, &dummy_wrb);
 
@@ -933,7 +960,6 @@ static netdev_tx_t be_xmit(struct sk_buff *skb,
 		txq->head = start;
 		dev_kfree_skb_any(skb);
 	}
-tx_drop:
 	return NETDEV_TX_OK;
 }
 
@@ -3184,7 +3210,7 @@ static int be_setup(struct be_adapter *adapter)
 	if (status)
 		goto err;
 
-	be_cmd_get_fw_ver(adapter, adapter->fw_ver, NULL);
+	be_cmd_get_fw_ver(adapter, adapter->fw_ver, adapter->fw_on_flash);
 
 	if (adapter->vlans_added)
 		be_vid_config(adapter);
@@ -3530,40 +3556,6 @@ static int be_flash_skyhawk(struct be_adapter *adapter,
 	return 0;
 }
 
-static int lancer_wait_idle(struct be_adapter *adapter)
-{
-#define SLIPORT_IDLE_TIMEOUT 30
-	u32 reg_val;
-	int status = 0, i;
-
-	for (i = 0; i < SLIPORT_IDLE_TIMEOUT; i++) {
-		reg_val = ioread32(adapter->db + PHYSDEV_CONTROL_OFFSET);
-		if ((reg_val & PHYSDEV_CONTROL_INP_MASK) == 0)
-			break;
-
-		ssleep(1);
-	}
-
-	if (i == SLIPORT_IDLE_TIMEOUT)
-		status = -1;
-
-	return status;
-}
-
-static int lancer_fw_reset(struct be_adapter *adapter)
-{
-	int status = 0;
-
-	status = lancer_wait_idle(adapter);
-	if (status)
-		return status;
-
-	iowrite32(PHYSDEV_CONTROL_FW_RESET_MASK, adapter->db +
-		  PHYSDEV_CONTROL_OFFSET);
-
-	return status;
-}
-
 static int lancer_fw_download(struct be_adapter *adapter,
 				const struct firmware *fw)
 {
@@ -3641,7 +3633,8 @@ static int lancer_fw_download(struct be_adapter *adapter,
 	}
 
 	if (change_status == LANCER_FW_RESET_NEEDED) {
-		status = lancer_fw_reset(adapter);
+		status = lancer_physdev_ctrl(adapter,
+					     PHYSDEV_CONTROL_FW_RESET_MASK);
 		if (status) {
 			dev_err(&adapter->pdev->dev,
 				"Adapter busy for FW reset.\n"
@@ -3775,6 +3768,10 @@ int be_load_fw(struct be_adapter *adapter, u8 *fw_file)
 		status = lancer_fw_download(adapter, fw);
 	else
 		status = be_fw_download(adapter, fw);
+
+	if (!status)
+		be_cmd_get_fw_ver(adapter, adapter->fw_ver,
+				  adapter->fw_on_flash);
 
 fw_exit:
 	release_firmware(fw);

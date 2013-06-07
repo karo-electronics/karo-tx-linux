@@ -1088,6 +1088,8 @@ struct net_device {
 	 * need to set them appropriately.
 	 */
 	netdev_features_t	hw_enc_features;
+	/* mask of fetures inheritable by MPLS */
+	netdev_features_t	mpls_features;
 
 	/* Interface index. Unique device identifier	*/
 	int			ifindex;
@@ -1593,9 +1595,34 @@ struct packet_offload {
 #define NETDEV_RELEASE		0x0012
 #define NETDEV_NOTIFY_PEERS	0x0013
 #define NETDEV_JOIN		0x0014
+#define NETDEV_CHANGEUPPER	0x0015
 
 extern int register_netdevice_notifier(struct notifier_block *nb);
 extern int unregister_netdevice_notifier(struct notifier_block *nb);
+
+struct netdev_notifier_info {
+	struct net_device *dev;
+};
+
+struct netdev_notifier_change_info {
+	struct netdev_notifier_info info; /* must be first */
+	unsigned int flags_changed;
+};
+
+static inline void netdev_notifier_info_init(struct netdev_notifier_info *info,
+					     struct net_device *dev)
+{
+	info->dev = dev;
+}
+
+static inline struct net_device *
+netdev_notifier_info_to_dev(const struct netdev_notifier_info *info)
+{
+	return info->dev;
+}
+
+extern int call_netdevice_notifiers_info(unsigned long val, struct net_device *dev,
+					 struct netdev_notifier_info *info);
 extern int call_netdevice_notifiers(unsigned long val, struct net_device *dev);
 
 
@@ -1778,6 +1805,19 @@ static inline int unregister_gifconf(unsigned int family)
 	return register_gifconf(family, NULL);
 }
 
+#ifdef CONFIG_NET_FLOW_LIMIT
+#define FLOW_LIMIT_HISTORY	(1 << 8)	/* must be ^2 */
+struct sd_flow_limit {
+	u64			count;
+	unsigned int		num_buckets;
+	unsigned int		history_head;
+	u16			history[FLOW_LIMIT_HISTORY];
+	u8			buckets[];
+};
+
+extern int netdev_flow_limit_table_len;
+#endif /* CONFIG_NET_FLOW_LIMIT */
+
 /*
  * Incoming packets are placed on per-cpu queues
  */
@@ -1807,6 +1847,10 @@ struct softnet_data {
 	unsigned int		dropped;
 	struct sk_buff_head	input_pkt_queue;
 	struct napi_struct	backlog;
+
+#ifdef CONFIG_NET_FLOW_LIMIT
+	struct sd_flow_limit	*flow_limit;
+#endif
 };
 
 static inline void input_queue_head_incr(struct softnet_data *sd)
