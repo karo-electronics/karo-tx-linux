@@ -275,7 +275,7 @@ static void pl2303_set_termios(struct tty_struct *tty,
 	u8 control;
 	const int baud_sup[] = { 75, 150, 300, 600, 1200, 1800, 2400, 3600,
 	                         4800, 7200, 9600, 14400, 19200, 28800, 38400,
-	                         57600, 115200, 230400, 460800, 614400,
+	                         57600, 115200, 230400, 460800, 500000, 614400,
 	                         921600, 1228800, 2457600, 3000000, 6000000 };
 	int baud_floor, baud_ceil;
 	int k;
@@ -300,8 +300,7 @@ static void pl2303_set_termios(struct tty_struct *tty,
 	i = usb_control_msg(serial->dev, usb_rcvctrlpipe(serial->dev, 0),
 			    GET_LINE_REQUEST, GET_LINE_REQUEST_TYPE,
 			    0, 0, buf, 7, 100);
-	dev_dbg(&port->dev, "0xa1:0x21:0:0  %d - %x %x %x %x %x %x %x\n", i,
-	    buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]);
+	dev_dbg(&port->dev, "0xa1:0x21:0:0  %d - %7ph\n", i, buf);
 
 	if (cflag & CSIZE) {
 		switch (cflag & CSIZE) {
@@ -448,8 +447,7 @@ static void pl2303_set_termios(struct tty_struct *tty,
 	i = usb_control_msg(serial->dev, usb_rcvctrlpipe(serial->dev, 0),
 			    GET_LINE_REQUEST, GET_LINE_REQUEST_TYPE,
 			    0, 0, buf, 7, 100);
-	dev_dbg(&port->dev, "0xa1:0x21:0:0  %d - %x %x %x %x %x %x %x\n", i,
-	     buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]);
+	dev_dbg(&port->dev, "0xa1:0x21:0:0  %d - %7ph\n", i, buf);
 
 	if (cflag & CRTSCTS) {
 		if (spriv->type == HX)
