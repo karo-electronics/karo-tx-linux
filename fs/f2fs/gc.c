@@ -76,7 +76,9 @@ static int gc_thread_func(void *data)
 		else
 			wait_ms = increase_sleep_time(wait_ms);
 
+#ifdef CONFIG_F2FS_STAT_FS
 		sbi->bg_gc++;
+#endif
 
 		/* if return value is not zero, no victim was selected */
 		if (f2fs_gc(sbi))
@@ -89,23 +91,28 @@ int start_gc_thread(struct f2fs_sb_info *sbi)
 {
 	struct f2fs_gc_kthread *gc_th;
 	dev_t dev = sbi->sb->s_bdev->bd_dev;
+	int err = 0;
 
 	if (!test_opt(sbi, BG_GC))
-		return 0;
+		goto out;
 	gc_th = kmalloc(sizeof(struct f2fs_gc_kthread), GFP_KERNEL);
-	if (!gc_th)
-		return -ENOMEM;
+	if (!gc_th) {
+		err = -ENOMEM;
+		goto out;
+	}
 
 	sbi->gc_thread = gc_th;
 	init_waitqueue_head(&sbi->gc_thread->gc_wait_queue_head);
 	sbi->gc_thread->f2fs_gc_task = kthread_run(gc_thread_func, sbi,
 			"f2fs_gc-%u:%u", MAJOR(dev), MINOR(dev));
 	if (IS_ERR(gc_th->f2fs_gc_task)) {
+		err = PTR_ERR(gc_th->f2fs_gc_task);
 		kfree(gc_th);
 		sbi->gc_thread = NULL;
-		return -ENOMEM;
 	}
-	return 0;
+
+out:
+	return err;
 }
 
 void stop_gc_thread(struct f2fs_sb_info *sbi)
