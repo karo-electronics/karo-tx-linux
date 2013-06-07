@@ -306,6 +306,8 @@ struct drm_i915_error_state {
 
 struct intel_crtc_config;
 struct intel_crtc;
+struct intel_limit;
+struct dpll;
 
 struct drm_i915_display_funcs {
 	bool (*fbc_enabled)(struct drm_device *dev);
@@ -313,11 +315,28 @@ struct drm_i915_display_funcs {
 	void (*disable_fbc)(struct drm_device *dev);
 	int (*get_display_clock_speed)(struct drm_device *dev);
 	int (*get_fifo_size)(struct drm_device *dev, int plane);
+	/**
+	 * find_dpll() - Find the best values for the PLL
+	 * @limit: limits for the PLL
+	 * @crtc: current CRTC
+	 * @target: target frequency in kHz
+	 * @refclk: reference clock frequency in kHz
+	 * @match_clock: if provided, @best_clock P divider must
+	 *               match the P divider from @match_clock
+	 *               used for LVDS downclocking
+	 * @best_clock: best PLL values found
+	 *
+	 * Returns true on success, false on failure.
+	 */
+	bool (*find_dpll)(const struct intel_limit *limit,
+			  struct drm_crtc *crtc,
+			  int target, int refclk,
+			  struct dpll *match_clock,
+			  struct dpll *best_clock);
 	void (*update_wm)(struct drm_device *dev);
 	void (*update_sprite_wm)(struct drm_device *dev, int pipe,
-				 uint32_t sprite_width, int pixel_size);
-	void (*update_linetime_wm)(struct drm_device *dev, int pipe,
-				 struct drm_display_mode *mode);
+				 uint32_t sprite_width, int pixel_size,
+				 bool enable);
 	void (*modeset_global_resources)(struct drm_device *dev);
 	/* Returns the active state of the crtc, and if the crtc is active,
 	 * fills out the pipe-config with the hw state. */
@@ -375,6 +394,7 @@ struct drm_i915_gt_funcs {
 	func(supports_tv) sep \
 	func(has_bsd_ring) sep \
 	func(has_blt_ring) sep \
+	func(has_vebox_ring) sep \
 	func(has_llc) sep \
 	func(has_ddi) sep \
 	func(has_fpga_dbg)
@@ -720,6 +740,15 @@ struct intel_ilk_power_mgmt {
 	struct drm_i915_gem_object *renderctx;
 };
 
+/* Power well structure for haswell */
+struct i915_power_well {
+	struct drm_device *device;
+	spinlock_t lock;
+	/* power well enable/disable usage count */
+	int count;
+	int i915_request;
+};
+
 struct i915_dri1_state {
 	unsigned allow_batchbuffer : 1;
 	u32 __iomem *gfx_hws_cpu_addr;
@@ -828,14 +857,20 @@ struct i915_gem_mm {
 	u32 object_count;
 };
 
+struct drm_i915_error_state_buf {
+	unsigned bytes;
+	unsigned size;
+	int err;
+	u8 *buf;
+	loff_t start;
+	loff_t pos;
+};
+
 struct i915_gpu_error {
 	/* For hangcheck timer */
 #define DRM_I915_HANGCHECK_PERIOD 1500 /* in ms */
 #define DRM_I915_HANGCHECK_JIFFIES msecs_to_jiffies(DRM_I915_HANGCHECK_PERIOD)
 	struct timer_list hangcheck_timer;
-	int hangcheck_count;
-	uint32_t last_acthd[I915_NUM_RINGS];
-	uint32_t prev_instdone[I915_NUM_INSTDONE_REG];
 
 	/* For reset and error_state handling. */
 	spinlock_t lock;
@@ -1073,6 +1108,9 @@ typedef struct drm_i915_private {
 	 * mchdev_lock in intel_pm.c */
 	struct intel_ilk_power_mgmt ips;
 
+	/* Haswell power well */
+	struct i915_power_well power_well;
+
 	enum no_fbc_reason no_fbc_reason;
 
 	struct drm_mm_node *compressed_fb;
@@ -1147,7 +1185,7 @@ struct drm_i915_gem_object {
 	struct drm_mm_node *gtt_space;
 	/** Stolen memory for this object, instead of being backed by shmem. */
 	struct drm_mm_node *stolen;
-	struct list_head gtt_list;
+	struct list_head global_list;
 
 	/** This object's place on the active/inactive lists */
 	struct list_head ring_list;
@@ -1367,6 +1405,7 @@ struct drm_i915_file_private {
 
 #define HAS_BSD(dev)            (INTEL_INFO(dev)->has_bsd_ring)
 #define HAS_BLT(dev)            (INTEL_INFO(dev)->has_blt_ring)
+#define HAS_VEBOX(dev)          (INTEL_INFO(dev)->has_vebox_ring)
 #define HAS_LLC(dev)            (INTEL_INFO(dev)->has_llc)
 #define I915_NEED_GFX_HWS(dev)	(INTEL_INFO(dev)->need_gfx_hws)
 
@@ -1462,6 +1501,7 @@ extern bool i915_enable_hangcheck __read_mostly;
 extern int i915_enable_ppgtt __read_mostly;
 extern unsigned int i915_preliminary_hw_support __read_mostly;
 extern int i915_disable_power_well __read_mostly;
+extern int i915_enable_ips __read_mostly;
 
 extern int i915_suspend(struct drm_device *dev, pm_message_t state);
 extern int i915_resume(struct drm_device *dev);
@@ -1820,6 +1860,8 @@ void i915_gem_dump_object(struct drm_i915_gem_object *obj, int len,
 /* i915_debugfs.c */
 int i915_debugfs_init(struct drm_minor *minor);
 void i915_debugfs_cleanup(struct drm_minor *minor);
+__printf(2, 3)
+void i915_error_printf(struct drm_i915_error_state_buf *e, const char *f, ...);
 
 /* i915_suspend.c */
 extern int i915_save_state(struct drm_device *dev);
@@ -1901,10 +1943,11 @@ int i915_reg_read_ioctl(struct drm_device *dev, void *data,
 /* overlay */
 #ifdef CONFIG_DEBUG_FS
 extern struct intel_overlay_error_state *intel_overlay_capture_error_state(struct drm_device *dev);
-extern void intel_overlay_print_error_state(struct seq_file *m, struct intel_overlay_error_state *error);
+extern void intel_overlay_print_error_state(struct drm_i915_error_state_buf *e,
+					    struct intel_overlay_error_state *error);
 
 extern struct intel_display_error_state *intel_display_capture_error_state(struct drm_device *dev);
-extern void intel_display_print_error_state(struct seq_file *m,
+extern void intel_display_print_error_state(struct drm_i915_error_state_buf *e,
 					    struct drm_device *dev,
 					    struct intel_display_error_state *error);
 #endif
@@ -1919,9 +1962,17 @@ int __gen6_gt_wait_for_fifo(struct drm_i915_private *dev_priv);
 
 int sandybridge_pcode_read(struct drm_i915_private *dev_priv, u8 mbox, u32 *val);
 int sandybridge_pcode_write(struct drm_i915_private *dev_priv, u8 mbox, u32 val);
-int valleyview_punit_read(struct drm_i915_private *dev_priv, u8 addr, u32 *val);
-int valleyview_punit_write(struct drm_i915_private *dev_priv, u8 addr, u32 val);
-int valleyview_nc_read(struct drm_i915_private *dev_priv, u8 addr, u32 *val);
+
+/* intel_sideband.c */
+u32 vlv_punit_read(struct drm_i915_private *dev_priv, u8 addr);
+void vlv_punit_write(struct drm_i915_private *dev_priv, u8 addr, u32 val);
+u32 vlv_nc_read(struct drm_i915_private *dev_priv, u8 addr);
+u32 vlv_dpio_read(struct drm_i915_private *dev_priv, int reg);
+void vlv_dpio_write(struct drm_i915_private *dev_priv, int reg, u32 val);
+u32 intel_sbi_read(struct drm_i915_private *dev_priv, u16 reg,
+		   enum intel_sbi_destination destination);
+void intel_sbi_write(struct drm_i915_private *dev_priv, u16 reg, u32 value,
+		     enum intel_sbi_destination destination);
 
 int vlv_gpu_freq(int ddr_freq, int val);
 int vlv_freq_opcode(int ddr_freq, int val);
