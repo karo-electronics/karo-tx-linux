@@ -854,9 +854,8 @@ static int cmos_resume(struct device *dev)
 		}
 
 		spin_lock_irq(&rtc_lock);
-		if (device_may_wakeup(dev)) {
+		if (device_may_wakeup(dev))
 			hpet_rtc_timer_init();
-		}
 
 		do {
 			CMOS_WRITE(tmp, RTC_CONTROL);
