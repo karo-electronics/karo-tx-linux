@@ -878,20 +878,26 @@ int ext4_es_zeroout(struct inode *inode, struct ext4_extent *ex)
 				     EXTENT_STATUS_WRITTEN);
 }
 
-static int ext4_es_shrink(struct shrinker *shrink, struct shrink_control *sc)
+
+static long ext4_es_count(struct shrinker *shrink, struct shrink_control *sc)
+{
+	long nr;
+	struct ext4_sb_info *sbi = container_of(shrink,
+					struct ext4_sb_info, s_es_shrinker);
+
+	nr = percpu_counter_read_positive(&sbi->s_extent_cache_cnt);
+	trace_ext4_es_shrink_enter(sbi->s_sb, sc->nr_to_scan, nr);
+	return nr;
+}
+
+static long ext4_es_scan(struct shrinker *shrink, struct shrink_control *sc)
 {
 	struct ext4_sb_info *sbi = container_of(shrink,
 					struct ext4_sb_info, s_es_shrinker);
 	struct ext4_inode_info *ei;
 	struct list_head *cur, *tmp, scanned;
 	int nr_to_scan = sc->nr_to_scan;
-	int ret, nr_shrunk = 0;
-
-	ret = percpu_counter_read_positive(&sbi->s_extent_cache_cnt);
-	trace_ext4_es_shrink_enter(sbi->s_sb, nr_to_scan, ret);
-
-	if (!nr_to_scan)
-		return ret;
+	int ret = 0, nr_shrunk = 0;
 
 	INIT_LIST_HEAD(&scanned);
 
@@ -920,9 +926,8 @@ static int ext4_es_shrink(struct shrinker *shrink, struct shrink_control *sc)
 	list_splice_tail(&scanned, &sbi->s_es_lru);
 	spin_unlock(&sbi->s_es_lru_lock);
 
-	ret = percpu_counter_read_positive(&sbi->s_extent_cache_cnt);
 	trace_ext4_es_shrink_exit(sbi->s_sb, nr_shrunk, ret);
-	return ret;
+	return nr_shrunk;
 }
 
 void ext4_es_register_shrinker(struct super_block *sb)
@@ -932,7 +937,8 @@ void ext4_es_register_shrinker(struct super_block *sb)
 	sbi = EXT4_SB(sb);
 	INIT_LIST_HEAD(&sbi->s_es_lru);
 	spin_lock_init(&sbi->s_es_lru_lock);
-	sbi->s_es_shrinker.shrink = ext4_es_shrink;
+	sbi->s_es_shrinker.scan_objects = ext4_es_scan;
+	sbi->s_es_shrinker.count_objects = ext4_es_count;
 	sbi->s_es_shrinker.seeks = DEFAULT_SEEKS;
 	register_shrinker(&sbi->s_es_shrinker);
 }
@@ -973,7 +979,7 @@ static int __es_try_to_reclaim_extents(struct ext4_inode_info *ei,
 	struct ext4_es_tree *tree = &ei->i_es_tree;
 	struct rb_node *node;
 	struct extent_status *es;
-	int nr_shrunk = 0;
+	long nr_shrunk = 0;
 
 	if (ei->i_es_lru_nr == 0)
 		return 0;
