@@ -41,6 +41,9 @@ next/soc
 		git://git.linaro.org/people/nico/linux VExpress_DCSCB
 		depends on depends/rmk-devel-stable
 		+patch "drivers/bus: arm-cci: fix combined ARMv6+v7 build"
+	zynq/clk
+		git://git.xilinx.com/linux-xlnx tags/zynq-clk-for-3.11
+
 
 next/boards
 	mvebu/boards
