@@ -13,6 +13,8 @@ depends/rmk-devel-stable
 next/fixes-non-critical
 	mvebu/fixes-non-critical
 		git://git.infradead.org/users/jcooper/linux.git tags/fixes-non-3.11-1
+	sirf/fixes-non-critical
+		git://gitorious.org/sirfprima2-kernel/sirfprima2-kernel.git tags/sirf-arm-soc-v3.10-fixes
 
 next/cleanup
 	at91/cleanup
