@@ -61,7 +61,12 @@ next/dt
 		"ARM: nomadik: fix clocksource warning"
 	at91/dt
 		git://github.com/at91linux/linux-at91.git tags/at91-dt
-
+	vt8500/dt
+		git://github.com/linux-wmt/linux-vtwm vt8500/dts-3.11
+	cleanup/dts-cpus
+		git://linux-arm.org/linux-2.6-lp dts-cpus-updates
+	patch
+		"ARM: dts: add missing cpu #address-cell values"
 
 next/drivers
 	ux500/dma40
