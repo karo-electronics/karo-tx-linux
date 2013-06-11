@@ -495,7 +495,7 @@ tracesys_exit:
 trap_with_param:
 
 	; stop_pc info by gdb needs this info
-	stw orig_r8_IS_BRKPT, [sp, PT_orig_r8]
+	st event_BRKPT, [sp, PT_event]
 
 	mov r0, r12
 	lr  r1, [efa]
@@ -705,8 +705,8 @@ not_exception:
 	; things to what they were, before returning from L2 context
 	;----------------------------------------------------------------
 
-	ldw  r9, [sp, PT_orig_r8]      ; get orig_r8 to make sure it is
-	brne r9, orig_r8_IS_IRQ2, 149f ; infact a L2 ISR ret path
+	ld  r9, [sp, PT_event]         ; Ensure L2 ISR ret path
+	brne r9, event_IRQ2, 149f
 
 	ld r9, [sp, PT_status32]       ; get statu32_l2 (saved in pt_regs)
 	bbit0 r9, STATUS_A1_BIT, 149f  ; L1 not active when L2 IRQ, so normal

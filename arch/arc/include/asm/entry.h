@@ -309,7 +309,7 @@
 #endif
 
 	/* Save Pre Intr/Exception User SP on kernel stack */
-	st.a    sp, [r9, -16]	; Make room for orig_r0, orig_r8, user_r25
+	st.a    sp, [r9, -16]	; Make room for orig_r0, event, user_r25
 
 	/* CAUTION:
 	 * SP should be set at the very end when we are done with everything
@@ -393,7 +393,7 @@
  *-------------------------------------------------------------*/
 .macro SAVE_ALL_EXCEPTION   marker
 
-	st      \marker, [sp, 8]	/* orig_r8 */
+	st      \marker, [sp, 8]	/* event */
 	st      r0, [sp, 4]    /* orig_r0, needed only for sys calls */
 
 	/* Restore r9 used to code the early prologue */
@@ -415,25 +415,14 @@
  * Save scratch regs for exceptions
  *-------------------------------------------------------------*/
 .macro SAVE_ALL_SYS
-	SAVE_ALL_EXCEPTION  orig_r8_IS_EXCPN
+	SAVE_ALL_EXCEPTION  event_EXCPN
 .endm
 
 /*--------------------------------------------------------------
  * Save scratch regs for sys calls
  *-------------------------------------------------------------*/
 .macro SAVE_ALL_TRAP
-	/*
-	 * Setup pt_regs->orig_r8.
-	 * Encode syscall number (r8) in upper short word of event type (r9)
-	 * N.B. #1: This is already endian safe (see ptrace.h)
-	 *      #2: Only r9 can be used as scratch as it is already clobbered
-	 *          and it's contents are no longer needed by the latter part
-	 *          of exception prologue
-	 */
-	lsl  r9, r8, 16
-	or   r9, r9, orig_r8_IS_SCALL
-
-	SAVE_ALL_EXCEPTION  r9
+	SAVE_ALL_EXCEPTION  event_SCALL
 .endm
 
 /*--------------------------------------------------------------
@@ -463,7 +452,7 @@
 	RESTORE_R12_TO_R0
 
 	ld  sp, [sp] /* restore original sp */
-	/* orig_r0, orig_r8, user_r25 skipped automatically */
+	/* orig_r0, event, user_r25 skipped automatically */
 .endm
 
 
@@ -480,7 +469,7 @@
 #endif
 
 	/* now we are ready to save the remaining context :) */
-	st      orig_r8_IS_IRQ1, [sp, 8]    /* Event Type */
+	st      event_IRQ1, [sp, 8]    /* Event Type */
 	st      0, [sp, 4]    /* orig_r0 , N/A for IRQ */
 
 	SAVE_R0_TO_R12
@@ -505,7 +494,7 @@
 	ld  r9, [@int2_saved_reg]
 
 	/* now we are ready to save the remaining context :) */
-	st      orig_r8_IS_IRQ2, [sp, 8]    /* Event Type */
+	st      event_IRQ2, [sp, 8]    /* Event Type */
 	st      0, [sp, 4]    /* orig_r0 , N/A for IRQ */
 
 	SAVE_R0_TO_R12
@@ -546,7 +535,7 @@
 	RESTORE_R12_TO_R0
 
 	ld  sp, [sp] /* restore original sp */
-	/* orig_r0, orig_r8, user_r25 skipped automatically */
+	/* orig_r0, event, user_r25 skipped automatically */
 .endm
 
 .macro RESTORE_ALL_INT2
@@ -565,7 +554,7 @@
 	RESTORE_R12_TO_R0
 
 	ld  sp, [sp] /* restore original sp */
-	/* orig_r0, orig_r8, user_r25 skipped automatically */
+	/* orig_r0, event, user_r25 skipped automatically */
 .endm
 
 

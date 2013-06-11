@@ -45,15 +45,7 @@ struct pt_regs {
 	long orig_r0;
 
 	/*to distinguish bet excp, syscall, irq */
-	union {
-#ifdef CONFIG_CPU_BIG_ENDIAN
-		/* so that assembly code is same for LE/BE */
-		unsigned long orig_r8:16, event:16;
-#else
-		unsigned long event:16, orig_r8:16;
-#endif
-		long orig_r8_word;
-	};
+	unsigned long event;
 
 	long user_r25;
 };
@@ -94,11 +86,11 @@ struct callee_regs {
 /* return 1 if PC in delay slot */
 #define delay_mode(regs) ((regs->status32 & STATUS_DE_MASK) == STATUS_DE_MASK)
 
-#define in_syscall(regs)    (regs->event & orig_r8_IS_SCALL)
-#define in_brkpt_trap(regs) (regs->event & orig_r8_IS_BRKPT)
+#define in_syscall(regs)    (regs->event & event_SCALL)
+#define in_brkpt_trap(regs) (regs->event & event_BRKPT)
 
-#define syscall_wont_restart(regs) (regs->event |= orig_r8_IS_SCALL_RESTARTED)
-#define syscall_restartable(regs) !(regs->event &  orig_r8_IS_SCALL_RESTARTED)
+#define syscall_wont_restart(regs) (regs->event |= event_SCALL_RESTARTED)
+#define syscall_restartable(regs) !(regs->event &  event_SCALL_RESTARTED)
 
 #define current_pt_regs()					\
 ({								\
@@ -115,11 +107,11 @@ static inline long regs_return_value(struct pt_regs *regs)
 
 #endif /* !__ASSEMBLY__ */
 
-#define orig_r8_IS_SCALL		0x0001
-#define orig_r8_IS_SCALL_RESTARTED	0x0002
-#define orig_r8_IS_BRKPT		0x0004
-#define orig_r8_IS_EXCPN		0x0008
-#define orig_r8_IS_IRQ1			0x0010
-#define orig_r8_IS_IRQ2			0x0020
+#define event_SCALL		0x0001
+#define event_SCALL_RESTARTED	0x0002
+#define event_BRKPT		0x0004
+#define event_EXCPN		0x0008
+#define event_IRQ1		0x0010
+#define event_IRQ2		0x0020
 
 #endif /* __ASM_PTRACE_H */
