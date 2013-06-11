@@ -67,6 +67,8 @@ next/dt
 		git://linux-arm.org/linux-2.6-lp dts-cpus-updates
 	patch
 		"ARM: dts: add missing cpu #address-cell values"
+	mvebu/dt4
+		git://git.infradead.org/users/jcooper/linux.git tags/dt-3.11-4
 
 next/drivers
 	ux500/dma40
