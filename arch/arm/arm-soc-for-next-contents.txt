@@ -71,6 +71,9 @@ next/soc
 			ARM: clps711x: edb7211: Control LCD backlight via PWM
 			ARM: clps711x: Add support for SYSCON driver
 			ARM: clps711x: Update defconfig
+	patches
+		ARM: socfpga: Add support to gate peripheral clocks
+		ARM: socfpga: Add syscon to be part of socfpga
 
 next/boards
 	mvebu/boards
@@ -101,6 +104,9 @@ next/dt
 		git://git.infradead.org/users/jcooper/linux.git tags/dt-3.11-4
 	renesas/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-dt-for-v3.11
+	patches
+		ARM: socfpga: dts: Add ethernet bindings for SOCFPGA
+		ARM: socfpga: dts: Add gate-clock bindings
 
 next/drivers
 	ux500/dma40
