@@ -47,7 +47,10 @@ next/soc
 		git://git.xilinx.com/linux-xlnx tags/zynq-clk-for-3.11
 	mvebu/pcie-kirkwood2
 		git://git.infradead.org/users/jcooper/linux.git tags/pcie_kw-3.11-2
-
+	renesas/pinmux-gpio
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-pinmux-for-v3.11
+	renesas/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-soc-for-v3.11
 
 next/boards
 	mvebu/boards
