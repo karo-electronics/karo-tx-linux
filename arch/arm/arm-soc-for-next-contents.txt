@@ -72,6 +72,8 @@ next/dt
 		"ARM: dts: add missing cpu #address-cell values"
 	mvebu/dt4
 		git://git.infradead.org/users/jcooper/linux.git tags/dt-3.11-4
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-dt-for-v3.11
 
 next/drivers
 	ux500/dma40
