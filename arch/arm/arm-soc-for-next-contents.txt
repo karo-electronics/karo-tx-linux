@@ -45,6 +45,8 @@ next/soc
 		+patch "drivers/bus: arm-cci: fix combined ARMv6+v7 build"
 	zynq/clk
 		git://git.xilinx.com/linux-xlnx tags/zynq-clk-for-3.11
+	mvebu/pcie-kirkwood2
+		git://git.infradead.org/users/jcooper/linux.git tags/pcie_kw-3.11-2
 
 
 next/boards
