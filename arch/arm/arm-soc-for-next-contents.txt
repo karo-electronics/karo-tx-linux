@@ -51,6 +51,26 @@ next/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-pinmux-for-v3.11
 	renesas/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-soc-for-v3.11
+	clps711x/soc
+		patches
+			GPIO: clps711x: Rewrite driver for using generic GPIO cod
+			GPIO: clps711x: Add DT support
+			ARM: clps711x: Re-add GPIO support
+			ARM: clps711x: Remove NEED_MACH_MEMORY_H dependency
+			ARM: clps711x: Set PLL clock to zero if we work from 13 mHz sourc
+			ARM: clps711x: autcpu12: Move LCD DPOT definitions to board file
+			ARM: clps711x: autcpu12: Add support for NOR flash
+			ARM: clps711x: autcpu12: Special driver for handling memory is re
+			ARM: clps711x: autcpu12: Move remaining specific definitions to b
+			ARM: clps711x: p720t: Define PLD registers as GPIOs
+			ARM: clps711x: Move specific definitions from hardware.h to board
+			ARM: clps711x: Replace "arch_initcall" in common code with ".init
+			ARM: clps711x: Add clocksource framework
+			ARM: clps711x: Optimize interrupt handling
+			ARM: clps711x: edb7211: Add support for I2C
+			ARM: clps711x: edb7211: Control LCD backlight via PWM
+			ARM: clps711x: Add support for SYSCON driver
+			ARM: clps711x: Update defconfig
 
 next/boards
 	mvebu/boards
