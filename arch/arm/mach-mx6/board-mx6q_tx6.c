@@ -896,6 +896,32 @@ static int __init early_enable_lcd_ldb(char *p)
 }
 early_param("enable_lcd_ldb", early_enable_lcd_ldb);
 
+void tx6_set_system_rev(void)
+{
+	void __iomem *anatop_base = ioremap(ANATOP_BASE_ADDR, SZ_4K);
+	u32 sys_rev;
+
+	if (anatop_base == NULL) {
+		pr_err("%s: Failed to remap ANATOP_BASE\n", __func__);
+		return;
+	}
+
+	/* Freescale's VPU code interprets the 'Revision' entry in
+	 * /proc/cpuinfo (populated from 'system_rev') to determine which
+	 * firmware version to load. On Freescale platforms this entry contains
+	 * a munged value comprising base board and CPU revision information.
+	 * Fake this entry to allow the broken Freescale VPU library to work on
+	 * this hardware.
+	 */
+	sys_rev = readl(anatop_base + 0x260);
+	iounmap(anatop_base);
+
+	system_rev = ((sys_rev >> 16) & 0xff) << 12;
+	system_rev |= ((sys_rev >> 8) & 0xff) << 4;
+	system_rev += 0x10;
+	system_rev |= sys_rev & 0xf;
+}
+
 /*!
  * Board specific initialization.
  */
@@ -905,6 +931,8 @@ static void __init tx6_board_init(void)
 
 	mxc_iomux_v3_setup_multiple_pads(mx6q_tx6_pads,
 		ARRAY_SIZE(mx6q_tx6_pads));
+
+	tx6_set_system_rev();
 
 	gp_reg_id  = tx6_dvfscore_data.reg_id;
 	soc_reg_id = tx6_dvfscore_data.soc_id;
