@@ -109,6 +109,8 @@ next/dt
 	patches
 		ARM: socfpga: dts: Add ethernet bindings for SOCFPGA
 		ARM: socfpga: dts: Add gate-clock bindings
+	samsung/s3c24xx-dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/s3c24xx-dt-1
 
 next/drivers
 	ux500/dma40
