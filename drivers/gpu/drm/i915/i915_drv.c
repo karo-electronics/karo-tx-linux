@@ -867,6 +867,7 @@ int i915_reset(struct drm_device *dev)
 {
 	drm_i915_private_t *dev_priv = dev->dev_private;
 	bool simulated;
+	bool ctx_banned;
 	int ret;
 
 	if (!i915_try_reset)
@@ -874,11 +875,12 @@ int i915_reset(struct drm_device *dev)
 
 	mutex_lock(&dev->struct_mutex);
 
-	i915_gem_reset(dev);
+	ctx_banned = i915_gem_reset(dev);
 
 	simulated = dev_priv->gpu_error.stop_rings != 0;
 
-	if (!simulated && get_seconds() - dev_priv->gpu_error.last_reset < 5) {
+	if (!(simulated || ctx_banned) &&
+	    get_seconds() - dev_priv->gpu_error.last_reset < 5) {
 		DRM_ERROR("GPU hanging too fast, declaring wedged!\n");
 		ret = -ENODEV;
 	} else {

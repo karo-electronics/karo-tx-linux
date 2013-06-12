@@ -2159,15 +2159,15 @@ static bool i915_request_guilty(struct drm_i915_gem_request *request,
 	return false;
 }
 
-static void i915_set_reset_status(struct intel_ring_buffer *ring,
+static bool i915_set_reset_status(struct intel_ring_buffer *ring,
 				  struct drm_i915_gem_request *request,
 				  u32 acthd)
 {
 	struct i915_ctx_hang_stats *hs = NULL;
-	bool inside, guilty;
+	bool inside, guilty, banned;
 
 	/* Innocent until proven guilty */
-	guilty = false;
+	guilty = banned = false;
 
 	if (ring->hangcheck.action != wait &&
 	    i915_request_guilty(request, acthd, &inside)) {
@@ -2191,11 +2191,20 @@ static void i915_set_reset_status(struct intel_ring_buffer *ring,
 		hs = &request->file_priv->hang_stats;
 
 	if (hs) {
-		if (guilty)
+		if (guilty) {
+			if (!hs->banned &&
+			    get_seconds() - hs->batch_active_reset_ts < 15) {
+				hs->banned = banned = true;
+				DRM_ERROR("context hanging too fast, declaring banned\n");
+			}
 			hs->batch_active++;
-		else
+			hs->batch_active_reset_ts = get_seconds();
+		} else {
 			hs->batch_pending++;
+		}
 	}
+
+	return banned;
 }
 
 static void i915_gem_free_request(struct drm_i915_gem_request *request)
@@ -2209,11 +2218,12 @@ static void i915_gem_free_request(struct drm_i915_gem_request *request)
 	kfree(request);
 }
 
-static void i915_gem_reset_ring_lists(struct drm_i915_private *dev_priv,
+static bool i915_gem_reset_ring_lists(struct drm_i915_private *dev_priv,
 				      struct intel_ring_buffer *ring)
 {
 	u32 completed_seqno;
 	u32 acthd;
+	bool ctx_banned = false;
 
 	acthd = intel_ring_get_active_head(ring);
 	completed_seqno = ring->get_seqno(ring, false);
@@ -2226,7 +2236,8 @@ static void i915_gem_reset_ring_lists(struct drm_i915_private *dev_priv,
 					   list);
 
 		if (request->seqno > completed_seqno)
-			i915_set_reset_status(ring, request, acthd);
+			ctx_banned |= i915_set_reset_status(ring,
+							    request, acthd);
 
 		i915_gem_free_request(request);
 	}
@@ -2240,6 +2251,8 @@ static void i915_gem_reset_ring_lists(struct drm_i915_private *dev_priv,
 
 		i915_gem_object_move_to_inactive(obj);
 	}
+
+	return ctx_banned;
 }
 
 static void i915_gem_reset_fences(struct drm_device *dev)
@@ -2263,15 +2276,16 @@ static void i915_gem_reset_fences(struct drm_device *dev)
 	INIT_LIST_HEAD(&dev_priv->mm.fence_list);
 }
 
-void i915_gem_reset(struct drm_device *dev)
+bool i915_gem_reset(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct drm_i915_gem_object *obj;
 	struct intel_ring_buffer *ring;
 	int i;
+	bool ctx_banned = false;
 
 	for_each_ring(ring, dev_priv, i)
-		i915_gem_reset_ring_lists(dev_priv, ring);
+		ctx_banned |= i915_gem_reset_ring_lists(dev_priv, ring);
 
 	/* Move everything out of the GPU domains to ensure we do any
 	 * necessary invalidation upon reuse.
@@ -2285,6 +2299,8 @@ void i915_gem_reset(struct drm_device *dev)
 
 	/* The fence registers are invalidated so clear them out */
 	i915_gem_reset_fences(dev);
+
+	return ctx_banned;
 }
 
 /**
