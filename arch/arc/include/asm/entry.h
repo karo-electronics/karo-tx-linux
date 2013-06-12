@@ -391,9 +391,10 @@
  * Note that syscalls are implemented via TRAP which is also a exception
  * from CPU's point of view
  *-------------------------------------------------------------*/
-.macro SAVE_ALL_EXCEPTION   marker
+.macro SAVE_ALL_SYS
 
-	st      \marker, [sp, 8]	/* event */
+	lr	r9, [ecr]
+	st      r9, [sp, 8]    /* event */
 	st      r0, [sp, 4]    /* orig_r0, needed only for sys calls */
 
 	/* Restore r9 used to code the early prologue */
@@ -409,20 +410,6 @@
 	PUSHAX	lp_end
 	PUSHAX	lp_start
 	PUSHAX	erbta
-.endm
-
-/*--------------------------------------------------------------
- * Save scratch regs for exceptions
- *-------------------------------------------------------------*/
-.macro SAVE_ALL_SYS
-	SAVE_ALL_EXCEPTION  event_EXCPN
-.endm
-
-/*--------------------------------------------------------------
- * Save scratch regs for sys calls
- *-------------------------------------------------------------*/
-.macro SAVE_ALL_TRAP
-	SAVE_ALL_EXCEPTION  event_SCALL
 .endm
 
 /*--------------------------------------------------------------
