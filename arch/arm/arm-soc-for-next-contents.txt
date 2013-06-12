@@ -111,6 +111,8 @@ next/dt
 next/drivers
 	ux500/dma40
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-dma40-for-arm-soc
+	timer/dw_apb_timer_of
+		git://github.com/mmind/linux-rockchip.git tags/dw_apb_timer_of
 
 next/mailbox:
 	mailbox/subsystem
