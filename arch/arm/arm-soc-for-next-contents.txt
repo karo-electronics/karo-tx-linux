@@ -74,6 +74,8 @@ next/soc
 	patches
 		ARM: socfpga: Add support to gate peripheral clocks
 		ARM: socfpga: Add syscon to be part of socfpga
+	samsung/s3c24xx-arch
+		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/s3c24xx-arch-1
 
 next/boards
 	mvebu/boards
