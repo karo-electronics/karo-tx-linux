@@ -119,6 +119,8 @@ next/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-dma40-for-arm-soc
 	timer/dw_apb_timer_of
 		git://github.com/mmind/linux-rockchip.git tags/dw_apb_timer_of
+	samsung/s3c24xx-drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/s3c24xx-driver-1
 
 next/mailbox:
 	mailbox/subsystem
