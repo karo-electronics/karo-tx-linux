@@ -3466,6 +3466,16 @@ int ext4_can_truncate(struct inode *inode)
 	return 0;
 }
 
+static inline int ext4_begin_ordered_punch_hole(struct inode *inode,
+					       loff_t start, loff_t length)
+{
+	if (!EXT4_I(inode)->jinode)
+		return 0;
+	return jbd2_journal_begin_ordered_punch_hole(EXT4_JOURNAL(inode),
+						    EXT4_I(inode)->jinode,
+						    start, start+length-1);
+}
+
 /*
  * ext4_punch_hole: punches a hole in a file by releaseing the blocks
  * associated with the given offset and length
@@ -3482,7 +3492,6 @@ int ext4_punch_hole(struct file *file, loff_t offset, loff_t length)
 	struct inode *inode = file_inode(file);
 	struct super_block *sb = inode->i_sb;
 	ext4_lblk_t first_block, stop_block;
-	struct address_space *mapping = inode->i_mapping;
 	loff_t first_block_offset, last_block_offset;
 	handle_t *handle;
 	unsigned int credits;
@@ -3497,17 +3506,6 @@ int ext4_punch_hole(struct file *file, loff_t offset, loff_t length)
 	}
 
 	trace_ext4_punch_hole(inode, offset, length);
-
-	/*
-	 * Write out all dirty pages to avoid race conditions
-	 * Then release them.
-	 */
-	if (mapping->nrpages && mapping_tagged(mapping, PAGECACHE_TAG_DIRTY)) {
-		ret = filemap_write_and_wait_range(mapping, offset,
-						   offset + length - 1);
-		if (ret)
-			return ret;
-	}
 
 	mutex_lock(&inode->i_mutex);
 	/* It's not possible punch hole on append only file */
@@ -3536,6 +3534,12 @@ int ext4_punch_hole(struct file *file, loff_t offset, loff_t length)
 
 	first_block_offset = round_up(offset, sb->s_blocksize);
 	last_block_offset = round_down((offset + length), sb->s_blocksize) - 1;
+
+	if (ext4_should_order_data(inode)) {
+		ret = ext4_begin_ordered_punch_hole(inode, offset, length);
+		if (ret)
+			goto out_mutex;
+	}
 
 	/* Now release the pages and zero block aligned part of pages*/
 	if (last_block_offset > first_block_offset)
