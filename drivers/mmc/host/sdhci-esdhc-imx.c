@@ -881,22 +881,34 @@ static int esdhc_pltfm_init(struct sdhci_host *host, struct sdhci_pltfm_data *pd
 		if (boarddata->always_present) {
 			/* remove BROKEN_CD to disable card polling */
 			host->quirks &= ~SDHCI_QUIRK_BROKEN_CARD_DETECTION;
-			/* if it is always present, invalid cd_gpio */
-			boarddata->cd_gpio = ARCH_NR_GPIOS + 1;
+			/* if it is always present, invalidate cd_gpio */
+			boarddata->cd_gpio = -EINVAL;
 			if (host->clk_mgr_en)
 				clk_disable(pltfm_host->clk);
 			return 0;
 		}
 
-		err = gpio_request_one(boarddata->wp_gpio, GPIOF_IN, "ESDHC_WP");
-		if (err) {
+		if (gpio_is_valid(boarddata->wp_gpio)) {
+			err = gpio_request_one(boarddata->wp_gpio, GPIOF_IN, "ESDHC_WP");
+			if (err) {
+				dev_err(mmc_dev(host->mmc),
+					"failed to request write-protect pin: %d!\n",
+					err);
+			}
+		} else {
 			dev_warn(mmc_dev(host->mmc),
 				"no write-protect pin available!\n");
-			boarddata->wp_gpio = err;
 		}
 
-		err = gpio_request_one(boarddata->cd_gpio, GPIOF_IN, "ESDHC_CD");
-		if (err) {
+		if (gpio_is_valid(boarddata->cd_gpio)) {
+			err = gpio_request_one(boarddata->cd_gpio, GPIOF_IN, "ESDHC_CD");
+			if (err) {
+				dev_err(mmc_dev(host->mmc),
+					"failed to request card-detect pin: %d!\n",
+					err);
+				goto no_card_detect_pin;
+			}
+		} else {
 			dev_warn(mmc_dev(host->mmc),
 				"no card-detect pin available!\n");
 			goto no_card_detect_pin;
@@ -926,7 +938,6 @@ static int esdhc_pltfm_init(struct sdhci_host *host, struct sdhci_pltfm_data *pd
  no_card_detect_irq:
 	gpio_free(boarddata->cd_gpio);
  no_card_detect_pin:
-	boarddata->cd_gpio = err;
 	kfree(imx_data);
 	if (host->clk_mgr_en)
 		clk_disable(pltfm_host->clk);
