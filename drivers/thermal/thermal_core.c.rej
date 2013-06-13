@@ -1,0 +1,10 @@
+--- drivers/thermal/thermal_core.c
++++ drivers/thermal/thermal_core.c
+@@ -1884,6 +1898,7 @@
+ 		mutex_destroy(&thermal_list_lock);
+ 		return result;
+ 	}
++
+ 	result = genetlink_init();
+ 	return result;
+ }
