@@ -2419,29 +2419,10 @@ done:
 	return 0;
 }
 
-/*
- * File truncate and transaction commit interact with each other in a
- * non-trivial way.  If a transaction writing data block A is
- * committing, we cannot discard the data by truncate until we have
- * written them.  Otherwise if we crashed after the transaction with
- * write has committed but before the transaction with truncate has
- * committed, we could see stale data in block A.  This function is a
- * helper to solve this problem.  It starts writeout of the truncated
- * part in case it is in the committing transaction.
- *
- * Filesystem code must call this function when inode is journaled in
- * ordered mode before truncation happens and after the inode has been
- * placed on orphan list with the new inode size. The second condition
- * avoids the race that someone writes new data and we start
- * committing the transaction after this function has been called but
- * before a transaction for truncate is started (and furthermore it
- * allows us to optimize the case where the addition to orphan list
- * happens in the same transaction as write --- we don't have to write
- * any data in such case).
- */
-int jbd2_journal_begin_ordered_truncate(journal_t *journal,
+
+int jbd2_journal_begin_ordered_punch_hole(journal_t *journal,
 					struct jbd2_inode *jinode,
-					loff_t new_size)
+					loff_t start, loff_t end)
 {
 	transaction_t *inode_trans, *commit_trans;
 	int ret = 0;
@@ -2460,10 +2441,12 @@ int jbd2_journal_begin_ordered_truncate(journal_t *journal,
 	spin_unlock(&journal->j_list_lock);
 	if (inode_trans == commit_trans) {
 		ret = filemap_fdatawrite_range(jinode->i_vfs_inode->i_mapping,
-			new_size, LLONG_MAX);
+			start, end);
 		if (ret)
 			jbd2_journal_abort(journal, ret);
 	}
 out:
 	return ret;
 }
+
+
