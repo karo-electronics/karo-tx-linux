@@ -563,6 +563,25 @@ static const struct pinmux_ops rockchip_pmx_ops = {
  * Pinconf_ops handling
  */
 
+static bool rockchip_pinconf_pull_valid(struct rockchip_pin_ctrl *ctrl,
+					enum pin_config_param pull)
+{
+	/* rk3066b does support any pulls */
+	if (!ctrl->pull_offset)
+		return pull ? false : true;
+
+	if (ctrl->pull_auto) {
+		if (pull != PIN_CONFIG_BIAS_PULL_PIN_DEFAULT &&
+					pull != PIN_CONFIG_BIAS_DISABLE)
+			return false;
+	} else {
+		if (pull == PIN_CONFIG_BIAS_PULL_PIN_DEFAULT)
+			return false;
+	}
+
+	return true;
+}
+
 /* set the pin config settings for a specified pin */
 static int rockchip_pinconf_set(struct pinctrl_dev *pctldev, unsigned int pin,
 							unsigned long config)
@@ -570,12 +589,21 @@ static int rockchip_pinconf_set(struct pinctrl_dev *pctldev, unsigned int pin,
 	struct rockchip_pinctrl *info = pinctrl_dev_get_drvdata(pctldev);
 	struct rockchip_pin_bank *bank = pin_to_bank(info, pin);
 	enum pin_config_param param = pinconf_to_config_param(config);
+	u16 arg = pinconf_to_config_argument(config);
 
 	switch (param) {
 	case PIN_CONFIG_BIAS_DISABLE:
+		return rockchip_set_pull(bank, pin - bank->pin_base, param);
+		break;
 	case PIN_CONFIG_BIAS_PULL_UP:
 	case PIN_CONFIG_BIAS_PULL_DOWN:
 	case PIN_CONFIG_BIAS_PULL_PIN_DEFAULT:
+		if (!rockchip_pinconf_pull_valid(info->ctrl, param))
+			return -ENOTSUPP;
+
+		if (!arg)
+			param = PIN_CONFIG_BIAS_DISABLE;
+
 		return rockchip_set_pull(bank, pin - bank->pin_base, param);
 		break;
 	default:
@@ -600,12 +628,11 @@ static int rockchip_pinconf_get(struct pinctrl_dev *pctldev, unsigned int pin,
 	case PIN_CONFIG_BIAS_PULL_UP:
 	case PIN_CONFIG_BIAS_PULL_DOWN:
 	case PIN_CONFIG_BIAS_PULL_PIN_DEFAULT:
+		if (!rockchip_pinconf_pull_valid(info->ctrl, param))
+			return -ENOTSUPP;
+
 		pull = rockchip_get_pull(bank, pin - bank->pin_base);
-
-		if (pull != param)
-			return -EINVAL;
-
-		*config = 0;
+		*config = (pull == param) ? 1 : 0;
 		break;
 	default:
 		return -ENOTSUPP;
