@@ -126,6 +126,8 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/s3c24xx-dt-1
 	samsung/exynos-dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/exynos-dt-1
+	mvebu/dt5
+		git://git.infradead.org/users/jcooper/linux.git tags/dt-3.11-5
 
 next/drivers
 	ux500/dma40
