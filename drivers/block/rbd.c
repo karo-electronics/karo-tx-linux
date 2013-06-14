@@ -495,7 +495,7 @@ static int rbd_open(struct block_device *bdev, fmode_t mode)
 	return 0;
 }
 
-static int rbd_release(struct gendisk *disk, fmode_t mode)
+static void rbd_release(struct gendisk *disk, fmode_t mode)
 {
 	struct rbd_device *rbd_dev = disk->private_data;
 	unsigned long open_count_before;
@@ -1192,7 +1192,7 @@ static struct bio *bio_clone_range(struct bio *bio_src,
 	/* Find first affected segment... */
 
 	resid = offset;
-	__bio_for_each_segment(bv, bio_src, idx, 0) {
+	bio_for_each_segment(bv, bio_src, idx) {
 		if (resid < bv->bv_len)
 			break;
 		resid -= bv->bv_len;
