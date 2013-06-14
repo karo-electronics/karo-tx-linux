@@ -81,6 +81,12 @@ next/soc
 		ARM: socfpga: Add syscon to be part of socfpga
 	samsung/s3c24xx-arch
 		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/s3c24xx-arch-1
+	omap/pm
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.11/pm-signed
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.11/gpmc-signed
+	omap/omap5
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.11/soc-signed
 
 next/boards
 	mvebu/boards
