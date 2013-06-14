@@ -132,6 +132,8 @@ next/drivers
 		git://github.com/mmind/linux-rockchip.git tags/dw_apb_timer_of
 	samsung/s3c24xx-drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/s3c24xx-driver-1
+	omap/gpmc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.11/gpmc-signed
 
 next/mailbox:
 	mailbox/subsystem
