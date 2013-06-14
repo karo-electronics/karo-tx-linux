@@ -374,7 +374,6 @@ int sm_interrupt_dsp(struct bridge_dev_context *dev_context, u16 mb_val)
 	struct omap_dsp_platform_data *pdata =
 		omap_dspbridge_dev->dev.platform_data;
 	struct cfg_hostres *resources = dev_context->resources;
-	struct mailbox_msg msg;
 	int status = 0;
 	u32 temp;
 
@@ -417,7 +416,7 @@ int sm_interrupt_dsp(struct bridge_dev_context *dev_context, u16 mb_val)
 				OMAP3430_IVA2_MOD, OMAP3430_CM_CLKEN_PLL);
 
 		/* Restore mailbox settings */
-		mailbox_restore_ctx(dev_context->mbox);
+		omap_mbox_restore_ctx(dev_context->mbox);
 
 		/* Access MMU SYS CONFIG register to generate a short wakeup */
 		temp = readl(resources->dmmu_base + 0x10);
@@ -428,12 +427,10 @@ int sm_interrupt_dsp(struct bridge_dev_context *dev_context, u16 mb_val)
 		dsp_clock_enable_all(dev_context->dsp_per_clks);
 	}
 
-	temp = mb_val;
-	MAILBOX_FILL_MSG(msg, 0, temp, 0);
-	status = mailbox_msg_send(dev_context->mbox, &msg);
+	status = omap_mbox_msg_send(dev_context->mbox, mb_val);
 
 	if (status) {
-		pr_err("mailbox_msg_send Fail and status = %d\n", status);
+		pr_err("omap_mbox_msg_send Fail and status = %d\n", status);
 		status = -EPERM;
 	}
 
