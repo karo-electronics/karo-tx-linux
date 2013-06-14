@@ -1772,6 +1772,11 @@ static int ux500_cryp_resume(struct device *dev)
 
 static SIMPLE_DEV_PM_OPS(ux500_cryp_pm, ux500_cryp_suspend, ux500_cryp_resume);
 
+static const struct of_device_id ux500_cryp_match[] = {
+        { .compatible = "stericsson,ux500-cryp" },
+        { },
+};
+
 static struct platform_driver cryp_driver = {
 	.probe  = ux500_cryp_probe,
 	.remove = ux500_cryp_remove,
@@ -1779,6 +1784,7 @@ static struct platform_driver cryp_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name  = "cryp1",
+		.of_match_table = ux500_cryp_match,
 		.pm    = &ux500_cryp_pm,
 	}
 };

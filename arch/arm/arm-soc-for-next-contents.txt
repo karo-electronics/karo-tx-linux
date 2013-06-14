@@ -138,6 +138,8 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/exynos-dt-1
 	mvebu/dt5
 		git://git.infradead.org/users/jcooper/linux.git tags/dt-3.11-5
+	ux500/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-dt-for-arm-soc
 
 next/drivers
 	ux500/dma40
