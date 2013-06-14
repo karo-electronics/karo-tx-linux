@@ -93,55 +93,8 @@ next/soc
 	mvebu/regmap
 		git://git.infradead.org/users/jcooper/linux.git tags/regmap-3.11
 			depends on cleanup and fixes-non-critical branches
-> 
-> thx,
-> 
-> Jason.
-> 
-> 
-> The following changes since commit fdc0b43fbb0e0958f13d3453dfb9df707c0af904:
-> 
->   Merge tag 'tags/cleanup-3.11-3' into mvebu/regmap (2013-06-13 17:47:57 +0000)
-> 
-> are available in the git repository at:
-> 
-> 
->   git://git.infradead.org/users/jcooper/linux.git tags/regmap-3.11
-> 
-> for you to fetch changes up to 5fb2038d61ce94e7c9224db2aaff5633ca224953:
-> 
->   arm: mvebu: disable DEBUG_LL/EARLY_PRINTK in defconfig (2013-06-13 17:48:59 +0000)
-> 
-> ----------------------------------------------------------------
-> mvebu register map changes for v3.11
-> 
-> This series removes the hardcoded register base address for mvebu.
-> 
-> Depends:
->  - mvebu/fixes-non-critical (up to tags/fixes-non-3.11-1)
->  - mvebu/cleanup (up to tags/cleanup-3.11-3)
-> 
-> ----------------------------------------------------------------
-> Thomas Petazzoni (8):
->       arm: mvebu: remove dependency of SMP init on static I/O mapping
->       arm: mvebu: avoid hardcoded virtual address in coherency code
->       arm: mvebu: move cache and mvebu-mbus initialization later
->       arm: mvebu: remove hardcoded static I/O mapping
->       arm: mvebu: don't hardcode a physical address in headsmp.S
->       arm: mvebu: don't hardcode the physical address for mvebu-mbus
->       arm: mvebu: add another earlyprintk Kconfig option
->       arm: mvebu: disable DEBUG_LL/EARLY_PRINTK in defconfig
-> 
->  arch/arm/Kconfig.debug              | 30 ++++++++++++++++++++--
->  arch/arm/configs/mvebu_defconfig    |  2 --
->  arch/arm/include/debug/mvebu.S      |  5 ++++
->  arch/arm/mach-mvebu/armada-370-xp.c | 51 ++++++++++++++++++++-----------------
->  arch/arm/mach-mvebu/armada-370-xp.h | 10 --------
->  arch/arm/mach-mvebu/coherency.c     | 44 ++++++++++++++++----------------
->  arch/arm/mach-mvebu/coherency.h     |  4 ---
->  arch/arm/mach-mvebu/common.h        |  2 ++
->  arch/arm/mach-mvebu/headsmp.S       | 16 ++++++------
->  arch/arm/mach-mvebu/platsmp.c       | 10 +++++++-
+	integrator/pci
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator.git tags/integrator-pci-for-arm-soc
 
 next/boards
 	mvebu/boards
