@@ -150,6 +150,10 @@ next/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/s3c24xx-driver-1
 	omap/gpmc
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.11/gpmc-signed
+	ux500/clksrc
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-clksrc-for-arm-soc
+	ux500/dma540_2
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-dma40-for-arm-soc-2
 
 next/mailbox:
 	mailbox/subsystem
