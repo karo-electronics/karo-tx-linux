@@ -30,6 +30,8 @@ next/cleanup
 		git://git.infradead.org/users/jcooper/linux.git tags/of_pci-3.11
 	omap/cleanup
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.11/cleanup-signed
+	mvebu/cleanup4
+		git://git.infradead.org/users/jcooper/linux.git tags/cleanup-3.11-4
 
 next/soc
 	mvebu/soc
