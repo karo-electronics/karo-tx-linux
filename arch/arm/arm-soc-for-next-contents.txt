@@ -119,6 +119,8 @@ next/boards
 		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-rpi.git bcm2835-for-3.11-defconfig
 	renesas/defconfig2
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-defconfig2-for-v3.11
+	tegra/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.11-defconfig
 
 next/dt
 	nomadik/dt
