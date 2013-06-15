@@ -162,6 +162,9 @@ next/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-clksrc-for-arm-soc
 	ux500/dma540_2
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-dma40-for-arm-soc-2
+	renesas/rcar-gpio
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-gpio-rcar-for-v3.11
+		depends on renesas/pinmux-gpio
 
 next/mailbox:
 	mailbox/subsystem
