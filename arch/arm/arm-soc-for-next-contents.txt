@@ -93,8 +93,6 @@ next/soc
 	mvebu/regmap
 		git://git.infradead.org/users/jcooper/linux.git tags/regmap-3.11
 			depends on cleanup and fixes-non-critical branches
-	integrator/pci
-		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator.git tags/integrator-pci-for-arm-soc
 
 next/boards
 	mvebu/boards
