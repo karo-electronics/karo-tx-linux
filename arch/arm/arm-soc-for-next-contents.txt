@@ -93,6 +93,8 @@ next/soc
 	mvebu/regmap
 		git://git.infradead.org/users/jcooper/linux.git tags/regmap-3.11
 			depends on cleanup and fixes-non-critical branches
+	renesas/usb
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-phy-rcar-usb-for-v3.11
 
 next/boards
 	mvebu/boards
