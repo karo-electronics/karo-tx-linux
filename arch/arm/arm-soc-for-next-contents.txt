@@ -185,9 +185,3 @@ next/drivers
 		depends on renesas/pinmux-gpio
 	at91/drivers
 		git://github.com/at91linux/linux-at91.git tags/at91-drivers
-
-next/mailbox:
-	mailbox/subsystem
-		git://github.com/sumananna/mailbox.git dbx500-prcmu-mailbox
-
-
