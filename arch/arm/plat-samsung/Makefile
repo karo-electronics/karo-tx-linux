@@ -58,5 +58,5 @@ obj-$(CONFIG_SAMSUNG_PM_CHECK)	+= pm-check.o
 obj-$(CONFIG_SAMSUNG_WAKEMASK)	+= wakeup-mask.o
 
 obj-$(CONFIG_S5P_PM)		+= s5p-pm.o
-obj-$(CONFIG_S5P_PM)		+= s5p-irq-pm.o
+obj-$(CONFIG_S5P_IRQ_PM)	+= s5p-irq-pm.o
 obj-$(CONFIG_S5P_SLEEP)		+= s5p-sleep.o
