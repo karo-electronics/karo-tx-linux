@@ -107,6 +107,8 @@ next/boards
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-core-for-arm-soc
 	ux500/pinctrl
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-pinctrl-for-arm-soc
+	patch
+		"ARM: ux500: board-mop500: remove unused pin modes"
 
 next/dt
 	nomadik/dt
