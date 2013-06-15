@@ -164,6 +164,8 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.11-dt
 	sunxi/dt
 		git://github.com/mripard/linux.git tags/sunxi-dt-for-3.11
+	renesas/dt
+		git://github.com/at91linux/linux-at91.git tags/at91-dt
 
 next/drivers
 	ux500/dma40
