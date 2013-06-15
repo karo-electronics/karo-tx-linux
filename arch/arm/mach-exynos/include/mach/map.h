@@ -23,6 +23,10 @@
 
 #include <plat/map-s5p.h>
 
+/*
+ * FIXME: go through the list and remove from iotable
+ * all that are not essential
+ */
 #define EXYNOS4_PA_SYSRAM0		0x02025000
 #define EXYNOS4_PA_SYSRAM1		0x02020000
 #define EXYNOS5_PA_SYSRAM		0x02020000

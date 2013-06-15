@@ -60,8 +60,6 @@ static void exynos5_map_io(void);
 static void exynos5440_map_io(void);
 static int exynos_init(void);
 
-unsigned long xxti_f = 0, xusbxti_f = 0;
-
 static struct cpu_table cpu_ids[] __initdata = {
 	{
 		.idcode		= EXYNOS4210_CPU_ID,
@@ -322,7 +320,7 @@ void __init exynos_init_late(void)
 	exynos_pm_late_initcall();
 }
 
-int __init exynos_fdt_map_chipid(unsigned long node, const char *uname,
+static int __init exynos_fdt_map_chipid(unsigned long node, const char *uname,
 					int depth, void *data)
 {
 	struct map_desc iodesc;
@@ -351,14 +349,11 @@ int __init exynos_fdt_map_chipid(unsigned long node, const char *uname,
  * register the standard cpu IO areas
  */
 
-void __init exynos_init_io(struct map_desc *mach_desc, int size)
+void __init exynos_init_io(void)
 {
 	debug_ll_io_init();
 
 	of_scan_flat_dt(exynos_fdt_map_chipid, NULL);
-
-	if (mach_desc)
-		iotable_init(mach_desc, size);
 
 	/* detect cpu id and rev. */
 	s5p_init_cpu(S5P_VA_CHIPID);
@@ -400,12 +395,7 @@ void __init exynos_init_time(void)
 	clocksource_of_init();
 }
 
-void __init exynos4_init_irq(void)
-{
-	irqchip_init();
-}
-
-void __init exynos5_init_irq(void)
+void __init exynos_init_irq(void)
 {
 	irqchip_init();
 }
@@ -425,7 +415,6 @@ static int __init exynos_core_init(void)
 }
 core_initcall(exynos_core_init);
 
-#ifdef CONFIG_CACHE_L2X0
 static int __init exynos4_l2x0_cache_init(void)
 {
 	int ret;
@@ -437,47 +426,10 @@ static int __init exynos4_l2x0_cache_init(void)
 	if (!ret) {
 		l2x0_regs_phys = virt_to_phys(&l2x0_saved_regs);
 		clean_dcache_area(&l2x0_regs_phys, sizeof(unsigned long));
-		return 0;
 	}
-
-	if (!(__raw_readl(S5P_VA_L2CC + L2X0_CTRL) & 0x1)) {
-		l2x0_saved_regs.phy_base = EXYNOS4_PA_L2CC;
-		/* TAG, Data Latency Control: 2 cycles */
-		l2x0_saved_regs.tag_latency = 0x110;
-
-		if (soc_is_exynos4212() || soc_is_exynos4412())
-			l2x0_saved_regs.data_latency = 0x120;
-		else
-			l2x0_saved_regs.data_latency = 0x110;
-
-		l2x0_saved_regs.prefetch_ctrl = 0x30000007;
-		l2x0_saved_regs.pwr_ctrl =
-			(L2X0_DYNAMIC_CLK_GATING_EN | L2X0_STNDBY_MODE_EN);
-
-		l2x0_regs_phys = virt_to_phys(&l2x0_saved_regs);
-
-		__raw_writel(l2x0_saved_regs.tag_latency,
-				S5P_VA_L2CC + L2X0_TAG_LATENCY_CTRL);
-		__raw_writel(l2x0_saved_regs.data_latency,
-				S5P_VA_L2CC + L2X0_DATA_LATENCY_CTRL);
-
-		/* L2X0 Prefetch Control */
-		__raw_writel(l2x0_saved_regs.prefetch_ctrl,
-				S5P_VA_L2CC + L2X0_PREFETCH_CTRL);
-
-		/* L2X0 Power Control */
-		__raw_writel(l2x0_saved_regs.pwr_ctrl,
-				S5P_VA_L2CC + L2X0_POWER_CTRL);
-
-		clean_dcache_area(&l2x0_regs_phys, sizeof(unsigned long));
-		clean_dcache_area(&l2x0_saved_regs, sizeof(struct l2x0_regs));
-	}
-
-	l2x0_init(S5P_VA_L2CC, L2_AUX_VAL, L2_AUX_MASK);
-	return 0;
+	return ret;
 }
 early_initcall(exynos4_l2x0_cache_init);
-#endif
 
 static int __init exynos_init(void)
 {
