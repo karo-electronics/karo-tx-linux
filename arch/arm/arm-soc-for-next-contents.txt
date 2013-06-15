@@ -150,6 +150,8 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-dt-for-arm-soc
 	bcm2835/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-rpi.git bcm2835-for-3.11-dt
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git tegra-for-3.11-dt
 
 next/drivers
 	ux500/dma40
