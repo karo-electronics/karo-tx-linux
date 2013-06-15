@@ -183,6 +183,8 @@ next/drivers
 	renesas/rcar-gpio
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-gpio-rcar-for-v3.11
 		depends on renesas/pinmux-gpio
+	at91/drivers
+		git://github.com/at91linux/linux-at91.git tags/at91-drivers
 
 next/mailbox:
 	mailbox/subsystem
