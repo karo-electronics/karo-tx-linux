@@ -95,6 +95,8 @@ next/soc
 			depends on cleanup and fixes-non-critical branches
 	renesas/usb
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-phy-rcar-usb-for-v3.11
+	renesas/soc2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-soc2-for-v3.11
 
 next/boards
 	mvebu/boards
