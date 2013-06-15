@@ -111,6 +111,8 @@ next/boards
 		"ARM: ux500: board-mop500: remove unused pin modes"
 	bcm2835/defconfig
 		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-rpi.git bcm2835-for-3.11-defconfig
+	renesas/defconfig2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-defconfig2-for-v3.11
 
 next/dt
 	nomadik/dt
