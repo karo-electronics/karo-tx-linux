@@ -95,7 +95,7 @@ static int minix_readdir(struct file * filp, void * dirent, filldir_t filldir)
 	char *name;
 	__u32 inumber;
 
-	pos = (pos + chunk_size-1) & ~(chunk_size-1);
+	pos = ALIGN(pos, chunk_size);
 	if (pos >= inode->i_size)
 		goto done;
 
