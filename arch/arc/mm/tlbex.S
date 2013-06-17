@@ -277,8 +277,8 @@ ARC_ENTRY EV_TLBMissI
 	;----------------------------------------------------------------
 	; VERIFY_PTE: Check if PTE permissions approp for executing code
 	cmp_s   r2, VMALLOC_START
-	mov.lo  r2, (_PAGE_PRESENT | _PAGE_U_READ | _PAGE_U_EXECUTE)
-	mov.hs  r2, (_PAGE_PRESENT | _PAGE_K_READ | _PAGE_K_EXECUTE)
+	mov.lo  r2, (_PAGE_PRESENT | _PAGE_U_EXECUTE)
+	mov.hs  r2, (_PAGE_PRESENT | _PAGE_K_EXECUTE)
 
 	and     r3, r0, r2  ; Mask out NON Flag bits from PTE
 	xor.f   r3, r3, r2  ; check ( ( pte & flags_test ) == flags_test )
