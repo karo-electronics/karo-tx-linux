@@ -285,8 +285,8 @@ ARC_ENTRY EV_TLBMissI
 	bnz     do_slow_path_pf
 
 	; Let Linux VM know that the page was accessed
-	or      r0, r0, (_PAGE_PRESENT | _PAGE_ACCESSED)  ; set Accessed Bit
-	st_s    r0, [r1]                                  ; Write back PTE
+	or      r0, r0, _PAGE_ACCESSED  ; set Accessed Bit
+	st_s    r0, [r1]                ; Write back PTE
 
 	CONV_PTE_TO_TLB
 	COMMIT_ENTRY_TO_MMU
@@ -345,7 +345,7 @@ ARC_ENTRY EV_TLBMissD
 	;----------------------------------------------------------------
 	; UPDATE_PTE: Let Linux VM know that page was accessed/dirty
 	lr      r3, [ecr]
-	or      r0, r0, (_PAGE_PRESENT | _PAGE_ACCESSED) ; Accessed bit always
+	or      r0, r0, _PAGE_ACCESSED        ; Accessed bit always
 	btst_s  r3,  ECR_C_BIT_DTLB_ST_MISS   ; See if it was a Write Access ?
 	or.nz   r0, r0, _PAGE_MODIFIED        ; if Write, set Dirty bit as well
 	st_s    r0, [r1]                      ; Write back PTE
