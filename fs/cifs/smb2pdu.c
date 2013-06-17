@@ -119,8 +119,7 @@ smb2_hdr_assemble(struct smb2_hdr *hdr, __le16 smb2_cmd /* command */ ,
 	/* BB how does SMB2 do case sensitive? */
 	/* if (tcon->nocase)
 		hdr->Flags |= SMBFLG_CASELESS; */
-	if (tcon->ses && tcon->ses->server &&
-	    (tcon->ses->server->sec_mode & SECMODE_SIGN_REQUIRED))
+	if (tcon->ses && tcon->ses->server && tcon->ses->server->sign)
 		hdr->Flags |= SMB2_FLAGS_SIGNED;
 out:
 	pdu->StructureSize2 = cpu_to_le16(parmsize);
@@ -328,33 +327,21 @@ SMB2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 	struct kvec iov[1];
 	int rc = 0;
 	int resp_buftype;
-	struct TCP_Server_Info *server;
-	unsigned int sec_flags;
-	u16 temp = 0;
+	struct TCP_Server_Info *server = ses->server;
 	int blob_offset, blob_length;
 	char *security_blob;
 	int flags = CIFS_NEG_OP;
 
 	cifs_dbg(FYI, "Negotiate protocol\n");
 
-	if (ses->server)
-		server = ses->server;
-	else {
-		rc = -EIO;
-		return rc;
+	if (!server) {
+		WARN(1, "%s: server is NULL!\n", __func__);
+		return -EIO;
 	}
 
 	rc = small_smb2_init(SMB2_NEGOTIATE, NULL, (void **) &req);
 	if (rc)
 		return rc;
-
-	/* if any of auth flags (ie not sign or seal) are overriden use them */
-	if (ses->overrideSecFlg & (~(CIFSSEC_MUST_SIGN | CIFSSEC_MUST_SEAL)))
-		sec_flags = ses->overrideSecFlg;  /* BB FIXME fix sign flags?*/
-	else /* if override flags set only sign/seal OR them with global auth */
-		sec_flags = global_secflags | ses->overrideSecFlg;
-
-	cifs_dbg(FYI, "sec_flags 0x%x\n", sec_flags);
 
 	req->hdr.SessionId = 0;
 
@@ -364,12 +351,12 @@ SMB2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 	inc_rfc1001_len(req, 2);
 
 	/* only one of SMB2 signing flags may be set in SMB2 request */
-	if ((sec_flags & CIFSSEC_MUST_SIGN) == CIFSSEC_MUST_SIGN)
-		temp = SMB2_NEGOTIATE_SIGNING_REQUIRED;
-	else if (sec_flags & CIFSSEC_MAY_SIGN) /* MAY_SIGN is a single flag */
-		temp = SMB2_NEGOTIATE_SIGNING_ENABLED;
-
-	req->SecurityMode = cpu_to_le16(temp);
+	if (ses->sign)
+		req->SecurityMode = cpu_to_le16(SMB2_NEGOTIATE_SIGNING_REQUIRED);
+	else if (global_secflags & CIFSSEC_MAY_SIGN)
+		req->SecurityMode = cpu_to_le16(SMB2_NEGOTIATE_SIGNING_ENABLED);
+	else
+		req->SecurityMode = 0;
 
 	req->Capabilities = cpu_to_le32(ses->server->vals->req_capabilities);
 
@@ -399,6 +386,8 @@ SMB2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 		cifs_dbg(FYI, "negotiated smb2.1 dialect\n");
 	else if (rsp->DialectRevision == cpu_to_le16(SMB30_PROT_ID))
 		cifs_dbg(FYI, "negotiated smb3.0 dialect\n");
+	else if (rsp->DialectRevision == cpu_to_le16(SMB302_PROT_ID))
+		cifs_dbg(FYI, "negotiated smb3.02 dialect\n");
 	else {
 		cifs_dbg(VFS, "Illegal dialect returned by server %d\n",
 			 le16_to_cpu(rsp->DialectRevision));
@@ -407,6 +396,8 @@ SMB2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 	}
 	server->dialect = le16_to_cpu(rsp->DialectRevision);
 
+	/* SMB2 only has an extended negflavor */
+	server->negflavor = CIFS_NEGFLAVOR_EXTENDED;
 	server->maxBuf = le32_to_cpu(rsp->MaxTransactSize);
 	server->max_read = le32_to_cpu(rsp->MaxReadSize);
 	server->max_write = le32_to_cpu(rsp->MaxWriteSize);
@@ -424,37 +415,11 @@ SMB2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 		goto neg_exit;
 	}
 
-	cifs_dbg(FYI, "sec_flags 0x%x\n", sec_flags);
-	if ((sec_flags & CIFSSEC_MUST_SIGN) == CIFSSEC_MUST_SIGN) {
-		cifs_dbg(FYI, "Signing required\n");
-		if (!(server->sec_mode & (SMB2_NEGOTIATE_SIGNING_REQUIRED |
-		      SMB2_NEGOTIATE_SIGNING_ENABLED))) {
-			cifs_dbg(VFS, "signing required but server lacks support\n");
-			rc = -EOPNOTSUPP;
-			goto neg_exit;
-		}
-		server->sec_mode |= SECMODE_SIGN_REQUIRED;
-	} else if (sec_flags & CIFSSEC_MAY_SIGN) {
-		cifs_dbg(FYI, "Signing optional\n");
-		if (server->sec_mode & SMB2_NEGOTIATE_SIGNING_REQUIRED) {
-			cifs_dbg(FYI, "Server requires signing\n");
-			server->sec_mode |= SECMODE_SIGN_REQUIRED;
-		} else {
-			server->sec_mode &=
-				~(SECMODE_SIGN_ENABLED | SECMODE_SIGN_REQUIRED);
-		}
-	} else {
-		cifs_dbg(FYI, "Signing disabled\n");
-		if (server->sec_mode & SMB2_NEGOTIATE_SIGNING_REQUIRED) {
-			cifs_dbg(VFS, "Server requires packet signing to be enabled in /proc/fs/cifs/SecurityFlags\n");
-			rc = -EOPNOTSUPP;
-			goto neg_exit;
-		}
-		server->sec_mode &=
-			~(SECMODE_SIGN_ENABLED | SECMODE_SIGN_REQUIRED);
-	}
-
+	rc = cifs_enable_signing(server, ses->sign);
 #ifdef CONFIG_SMB2_ASN1  /* BB REMOVEME when updated asn1.c ready */
+	if (rc)
+		goto neg_exit;
+
 	rc = decode_neg_token_init(security_blob, blob_length,
 				   &server->sec_type);
 	if (rc == 1)
@@ -480,9 +445,7 @@ SMB2_sess_setup(const unsigned int xid, struct cifs_ses *ses,
 	int rc = 0;
 	int resp_buftype;
 	__le32 phase = NtLmNegotiate; /* NTLMSSP, if needed, is multistage */
-	struct TCP_Server_Info *server;
-	unsigned int sec_flags;
-	u8 temp = 0;
+	struct TCP_Server_Info *server = ses->server;
 	u16 blob_length = 0;
 	char *security_blob;
 	char *ntlmssp_blob = NULL;
@@ -490,11 +453,9 @@ SMB2_sess_setup(const unsigned int xid, struct cifs_ses *ses,
 
 	cifs_dbg(FYI, "Session Setup\n");
 
-	if (ses->server)
-		server = ses->server;
-	else {
-		rc = -EIO;
-		return rc;
+	if (!server) {
+		WARN(1, "%s: server is NULL!\n", __func__);
+		return -EIO;
 	}
 
 	/*
@@ -505,7 +466,8 @@ SMB2_sess_setup(const unsigned int xid, struct cifs_ses *ses,
 	if (!ses->ntlmssp)
 		return -ENOMEM;
 
-	ses->server->secType = RawNTLMSSP;
+	/* FIXME: allow for other auth types besides NTLMSSP (e.g. krb5) */
+	ses->sectype = RawNTLMSSP;
 
 ssetup_ntlmssp_authenticate:
 	if (phase == NtLmChallenge)
@@ -515,28 +477,19 @@ ssetup_ntlmssp_authenticate:
 	if (rc)
 		return rc;
 
-	/* if any of auth flags (ie not sign or seal) are overriden use them */
-	if (ses->overrideSecFlg & (~(CIFSSEC_MUST_SIGN | CIFSSEC_MUST_SEAL)))
-		sec_flags = ses->overrideSecFlg;  /* BB FIXME fix sign flags?*/
-	else /* if override flags set only sign/seal OR them with global auth */
-		sec_flags = global_secflags | ses->overrideSecFlg;
-
-	cifs_dbg(FYI, "sec_flags 0x%x\n", sec_flags);
-
 	req->hdr.SessionId = 0; /* First session, not a reauthenticate */
 	req->VcNumber = 0; /* MBZ */
 	/* to enable echos and oplocks */
 	req->hdr.CreditRequest = cpu_to_le16(3);
 
 	/* only one of SMB2 signing flags may be set in SMB2 request */
-	if ((sec_flags & CIFSSEC_MUST_SIGN) == CIFSSEC_MUST_SIGN)
-		temp = SMB2_NEGOTIATE_SIGNING_REQUIRED;
-	else if (ses->server->sec_mode & SMB2_NEGOTIATE_SIGNING_REQUIRED)
-		temp = SMB2_NEGOTIATE_SIGNING_REQUIRED;
-	else if (sec_flags & CIFSSEC_MAY_SIGN) /* MAY_SIGN is a single flag */
-		temp = SMB2_NEGOTIATE_SIGNING_ENABLED;
+	if (server->sign)
+		req->SecurityMode = SMB2_NEGOTIATE_SIGNING_REQUIRED;
+	else if (global_secflags & CIFSSEC_MAY_SIGN) /* one flag unlike MUST_ */
+		req->SecurityMode = SMB2_NEGOTIATE_SIGNING_ENABLED;
+	else
+		req->SecurityMode = 0;
 
-	req->SecurityMode = temp;
 	req->Capabilities = 0;
 	req->Channel = 0; /* MBZ */
 
@@ -679,7 +632,7 @@ SMB2_logoff(const unsigned int xid, struct cifs_ses *ses)
 
 	 /* since no tcon, smb2_init can not do this, so do here */
 	req->hdr.SessionId = ses->Suid;
-	if (server->sec_mode & SECMODE_SIGN_REQUIRED)
+	if (server->sign)
 		req->hdr.Flags |= SMB2_FLAGS_SIGNED;
 
 	rc = SendReceiveNoRsp(xid, ses, (char *) &req->hdr, 0);
@@ -1384,8 +1337,7 @@ smb2_readv_callback(struct mid_q_entry *mid)
 	case MID_RESPONSE_RECEIVED:
 		credits_received = le16_to_cpu(buf->CreditRequest);
 		/* result already set, check signature */
-		if (server->sec_mode &
-		    (SECMODE_SIGN_REQUIRED | SECMODE_SIGN_ENABLED)) {
+		if (server->sign) {
 			int rc;
 
 			rc = smb2_verify_signature(&rqst, server);
