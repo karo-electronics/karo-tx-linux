@@ -2157,44 +2157,42 @@ static int mpage_map_and_submit_extent(handle_t *handle,
 
 	mpd->io_submit.io_end->offset =
 				((loff_t)map->m_lblk) << inode->i_blkbits;
-	while (map->m_len) {
-		err = mpage_map_one_extent(handle, mpd);
-		if (err < 0) {
-			struct super_block *sb = inode->i_sb;
+	err = mpage_map_one_extent(handle, mpd);
+	if (err < 0) {
+		struct super_block *sb = inode->i_sb;
 
-			/*
-			 * Need to commit transaction to free blocks. Let upper
-			 * layers sort it out.
-			 */
-			if (err == -ENOSPC && ext4_count_free_clusters(sb))
-				return -ENOSPC;
-
-			if (!(EXT4_SB(sb)->s_mount_flags & EXT4_MF_FS_ABORTED)) {
-				ext4_msg(sb, KERN_CRIT,
-					 "Delayed block allocation failed for "
-					 "inode %lu at logical offset %llu with"
-					 " max blocks %u with error %d",
-					 inode->i_ino,
-					 (unsigned long long)map->m_lblk,
-					 (unsigned)map->m_len, err);
-				ext4_msg(sb, KERN_CRIT,
-					 "This should not happen!! Data will "
-					 "be lost\n");
-				if (err == -ENOSPC)
-					ext4_print_free_blocks(inode);
-			}
-			/* invalidate all the pages */
-			mpage_release_unused_pages(mpd, true);
-			return err;
-		}
 		/*
-		 * Update buffer state, submit mapped pages, and get us new
-		 * extent to map
+		 * Need to commit transaction to free blocks. Let upper
+		 * layers sort it out.
 		 */
-		err = mpage_map_and_submit_buffers(mpd);
-		if (err < 0)
-			return err;
+		if (err == -ENOSPC && ext4_count_free_clusters(sb))
+			return -ENOSPC;
+
+		if (!(EXT4_SB(sb)->s_mount_flags & EXT4_MF_FS_ABORTED)) {
+			ext4_msg(sb, KERN_CRIT,
+				 "Delayed block allocation failed for "
+				 "inode %lu at logical offset %llu with"
+				 " max blocks %u with error %d",
+				 inode->i_ino,
+				 (unsigned long long)map->m_lblk,
+				 (unsigned)map->m_len, err);
+			ext4_msg(sb, KERN_CRIT,
+				 "This should not happen!! Data will "
+				 "be lost\n");
+			if (err == -ENOSPC)
+				ext4_print_free_blocks(inode);
+		}
+		/* invalidate all the pages */
+		mpage_release_unused_pages(mpd, true);
+		return err;
 	}
+	/*
+	 * Update buffer state, submit mapped pages, and get us new
+	 * extent to map
+	 */
+	err = mpage_map_and_submit_buffers(mpd);
+	if (err < 0)
+		return err;
 
 	/* Update on-disk size after IO is submitted */
 	disksize = ((loff_t)mpd->first_page) << PAGE_CACHE_SHIFT;
