@@ -565,7 +565,21 @@ static void zpci_map_resources(struct zpci_dev *zdev)
 		pr_debug("BAR%i: -> start: %Lx  end: %Lx\n",
 			i, pdev->resource[i].start, pdev->resource[i].end);
 	}
-};
+}
+
+static void zpci_unmap_resources(struct zpci_dev *zdev)
+{
+	struct pci_dev *pdev = zdev->pdev;
+	resource_size_t len;
+	int i;
+
+	for (i = 0; i < PCI_BAR_COUNT; i++) {
+		len = pci_resource_len(pdev, i);
+		if (!len)
+			continue;
+		pci_iounmap(pdev, (void *) pdev->resource[i].start);
+	}
+}
 
 struct zpci_dev *zpci_alloc_device(void)
 {
@@ -810,6 +824,16 @@ int pcibios_add_device(struct pci_dev *pdev)
 	return 0;
 }
 
+void pcibios_release_device(struct pci_dev *pdev)
+{
+	struct zpci_dev *zdev = get_zdev(pdev);
+
+	zpci_unmap_resources(zdev);
+	zpci_fmb_disable_device(zdev);
+	zpci_debug_exit_device(zdev);
+	zdev->pdev = NULL;
+}
+
 static int zpci_scan_bus(struct zpci_dev *zdev)
 {
 	struct resource *res;
@@ -949,25 +973,6 @@ void zpci_stop_device(struct zpci_dev *zdev)
 	 */
 }
 EXPORT_SYMBOL_GPL(zpci_stop_device);
-
-int zpci_scan_device(struct zpci_dev *zdev)
-{
-	zdev->pdev = pci_scan_single_device(zdev->bus, ZPCI_DEVFN);
-	if (!zdev->pdev) {
-		pr_err("pci_scan_single_device failed for fid: 0x%x\n",
-			zdev->fid);
-		goto out;
-	}
-
-	pci_bus_add_devices(zdev->bus);
-
-	return 0;
-out:
-	zpci_dma_exit_device(zdev);
-	clp_disable_fh(zdev);
-	return -EIO;
-}
-EXPORT_SYMBOL_GPL(zpci_scan_device);
 
 static inline int barsize(u8 size)
 {
