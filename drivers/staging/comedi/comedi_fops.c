@@ -14,11 +14,6 @@
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-
 */
 
 #undef DEBUG
@@ -665,7 +660,7 @@ static int do_bufconfig_ioctl(struct comedi_device *dev,
 	if (copy_from_user(&bc, arg, sizeof(bc)))
 		return -EFAULT;
 
-	if (bc.subdevice >= dev->n_subdevices || bc.subdevice < 0)
+	if (bc.subdevice >= dev->n_subdevices)
 		return -EINVAL;
 
 	s = &dev->subdevices[bc.subdevice];
@@ -918,7 +913,7 @@ static int do_bufinfo_ioctl(struct comedi_device *dev,
 	if (copy_from_user(&bi, arg, sizeof(bi)))
 		return -EFAULT;
 
-	if (bi.subdevice >= dev->n_subdevices || bi.subdevice < 0)
+	if (bi.subdevice >= dev->n_subdevices)
 		return -EINVAL;
 
 	s = &dev->subdevices[bi.subdevice];

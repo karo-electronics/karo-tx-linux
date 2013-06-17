@@ -14,11 +14,6 @@
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-
 */
 
 #ifndef _COMEDIDEV_H
@@ -312,6 +307,18 @@ struct comedi_lrange {
 	struct comedi_krange range[GCC_ZERO_LENGTH_ARRAY];
 };
 
+static inline bool comedi_range_is_bipolar(struct comedi_subdevice *s,
+					   unsigned int range)
+{
+	return s->range_table->range[range].min < 0;
+}
+
+static inline bool comedi_range_is_unipolar(struct comedi_subdevice *s,
+					    unsigned int range)
+{
+	return s->range_table->range[range].min >= 0;
+}
+
 /* some silly little inline functions */
 
 static inline unsigned int bytes_per_sample(const struct comedi_subdevice *subd)
@@ -350,6 +357,13 @@ void comedi_buf_memcpy_from(struct comedi_async *async, unsigned int offset,
 int comedi_alloc_subdevices(struct comedi_device *, int);
 
 void comedi_spriv_free(struct comedi_device *, int subdev_num);
+
+int comedi_load_firmware(struct comedi_device *, struct device *,
+			 const char *name,
+			 int (*cb)(struct comedi_device *,
+				   const u8 *data, size_t size,
+				   unsigned long context),
+			 unsigned long context);
 
 int __comedi_request_region(struct comedi_device *,
 			    unsigned long start, unsigned long len);
@@ -489,6 +503,7 @@ struct usb_driver;
 struct usb_interface;
 
 struct usb_interface *comedi_to_usb_interface(struct comedi_device *);
+struct usb_device *comedi_to_usb_dev(struct comedi_device *);
 
 int comedi_usb_auto_config(struct usb_interface *, struct comedi_driver *,
 			   unsigned long context);
