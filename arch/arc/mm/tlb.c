@@ -341,8 +341,8 @@ void local_flush_tlb_page(struct vm_area_struct *vma, unsigned long page)
 void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
 {
 	unsigned long flags;
-	unsigned int idx, asid_or_sasid;
-	unsigned long pd0_flags;
+	unsigned int idx, asid_or_sasid, rwx;
+	unsigned long pd0_flags, pte, pfn_etc;
 
 	/*
 	 * create_tlb() assumes that current->mm == vma->mm, since
@@ -393,8 +393,17 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
 
 	write_aux_reg(ARC_REG_TLBPD0, address | pd0_flags | asid_or_sasid);
 
+	pte = pte_val(*ptep);
+	rwx = pte & PTE_BITS_RWX;
+	pfn_etc = pte & PTE_BITS_NON_RWX_IN_PD1;
+
+	if (pte & _PAGE_GLOBAL)
+		rwx <<= 3;		/* r w x => Kr Kw Kx 0 0 0 */
+	else
+		rwx |= (rwx << 3);	/* r w x => Kr Kw Kx Ur Uw Ux */
+
 	/* Load remaining info in PD1 (Page Frame Addr and Kx/Kw/Kr Flags) */
-	write_aux_reg(ARC_REG_TLBPD1, (pte_val(*ptep) & PTE_BITS_IN_PD1));
+	write_aux_reg(ARC_REG_TLBPD1, rwx | pfn_etc);
 
 	/* First verify if entry for this vaddr+ASID already exists */
 	write_aux_reg(ARC_REG_TLBCOMMAND, TLBProbe);
