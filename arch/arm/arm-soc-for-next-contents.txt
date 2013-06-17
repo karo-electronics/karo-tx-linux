@@ -21,6 +21,8 @@ next/fixes-non-critical
 		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci.git tags/davinci-for-v3.11/board
 	msm/fixes
 		git://git.kernel.org/pub/scm/linux/kernel/git/davidb/linux-msm.git tags/msm-fix-for-3.11
+	patch
+		MAINTAINERS: ARM: SIRF: add the source code tree path
 
 next/cleanup
 	at91/cleanup
