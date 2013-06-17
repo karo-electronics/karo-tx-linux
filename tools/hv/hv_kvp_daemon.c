@@ -257,12 +257,15 @@ static int kvp_file_init(void)
 
 
 		filep = fopen(fname, "re");
-		if (!filep)
+		if (!filep) {
+			close(fd);
 			return 1;
+		}
 
 		record = malloc(alloc_unit * num_blocks);
 		if (record == NULL) {
 			fclose(filep);
+			close(fd);
 			return 1;
 		}
 		for (;;) {
@@ -286,6 +289,7 @@ static int kvp_file_init(void)
 						num_blocks);
 				if (record == NULL) {
 					fclose(filep);
+					close(fd);
 					return 1;
 				}
 				continue;
@@ -765,7 +769,9 @@ static void kvp_process_ipconfig_file(char *cmd,
 			break;
 
 		x = strchr(p, '\n');
-		*x = '\0';
+		if (x)
+			*x = '\0';
+
 		strcat(config_buf, p);
 		strcat(config_buf, ";");
 	}
@@ -1457,7 +1463,13 @@ int main(void)
 		exit(EXIT_FAILURE);
 	}
 	nl_group = CN_KVP_IDX;
-	setsockopt(fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP, &nl_group, sizeof(nl_group));
+
+	if (setsockopt(fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP, &nl_group, sizeof(nl_group)) < 0) {
+		syslog(LOG_ERR, "setsockopt failed; error: %d %s", errno, strerror(errno));
+		close(fd);
+		exit(EXIT_FAILURE);
+	}
+
 	/*
 	 * Register ourselves with the kernel.
 	 */
@@ -1484,7 +1496,16 @@ int main(void)
 		socklen_t addr_l = sizeof(addr);
 		pfd.events = POLLIN;
 		pfd.revents = 0;
-		poll(&pfd, 1, -1);
+
+		if (poll(&pfd, 1, -1) < 0) {
+			syslog(LOG_ERR, "poll failed; error: %d %s", errno, strerror(errno));
+			if (errno == EINVAL) {
+				close(fd);
+				exit(EXIT_FAILURE);
+			}
+			else
+				continue;
+		}
 
 		len = recvfrom(fd, kvp_recv_buffer, sizeof(kvp_recv_buffer), 0,
 				addr_p, &addr_l);
