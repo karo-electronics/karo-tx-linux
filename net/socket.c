@@ -104,6 +104,12 @@
 #include <linux/route.h>
 #include <linux/sockios.h>
 #include <linux/atalk.h>
+#include <net/ll_poll.h>
+
+#ifdef CONFIG_NET_LL_RX_POLL
+unsigned long sysctl_net_ll_poll __read_mostly;
+EXPORT_SYMBOL_GPL(sysctl_net_ll_poll);
+#endif
 
 static int sock_no_open(struct inode *irrelevant, struct file *dontcare);
 static ssize_t sock_aio_read(struct kiocb *iocb, const struct iovec *iov,
@@ -2635,7 +2641,9 @@ static int __init sock_init(void)
 	 */
 
 #ifdef CONFIG_NETFILTER
-	netfilter_init();
+	err = netfilter_init();
+	if (err)
+		goto out;
 #endif
 
 #ifdef CONFIG_NETWORK_PHY_TIMESTAMPING

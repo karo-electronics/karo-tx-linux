@@ -53,7 +53,6 @@
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
 #include <linux/of_net.h>
-#include <linux/pinctrl/consumer.h>
 #include <linux/regulator/consumer.h>
 
 #include <asm/cacheflush.h>
@@ -243,7 +242,7 @@ static void *swap_buffer(void *bufaddr, int len)
 	int i;
 	unsigned int *buf = bufaddr;
 
-	for (i = 0; i < (len + 3) / 4; i++, buf++)
+	for (i = 0; i < DIV_ROUND_UP(len, 4); i++, buf++)
 		*buf = cpu_to_be32(*buf);
 
 	return bufaddr;
@@ -1853,8 +1852,6 @@ fec_probe(struct platform_device *pdev)
 	struct resource *r;
 	const struct of_device_id *of_id;
 	static int dev_id;
-	struct pinctrl *pinctrl;
-	struct regulator *reg_phy;
 
 	of_id = of_match_device(fec_dt_ids, &pdev->dev);
 	if (of_id)
@@ -1879,16 +1876,16 @@ fec_probe(struct platform_device *pdev)
 	    (pdev->id_entry->driver_data & FEC_QUIRK_HAS_GBIT))
 		fep->pause_flag |= FEC_PAUSE_FLAG_AUTONEG;
 
-	fep->hwp = devm_request_and_ioremap(&pdev->dev, r);
+	fep->hwp = devm_ioremap_resource(&pdev->dev, r);
+	if (IS_ERR(fep->hwp)) {
+		ret = PTR_ERR(fep->hwp);
+		goto failed_ioremap;
+	}
+
 	fep->pdev = pdev;
 	fep->dev_id = dev_id++;
 
 	fep->bufdesc_ex = 0;
-
-	if (!fep->hwp) {
-		ret = -ENOMEM;
-		goto failed_ioremap;
-	}
 
 	platform_set_drvdata(pdev, ndev);
 
@@ -1901,12 +1898,6 @@ fec_probe(struct platform_device *pdev)
 			fep->phy_interface = PHY_INTERFACE_MODE_MII;
 	} else {
 		fep->phy_interface = ret;
-	}
-
-	pinctrl = devm_pinctrl_get_select_default(&pdev->dev);
-	if (IS_ERR(pinctrl)) {
-		ret = PTR_ERR(pinctrl);
-		goto failed_pin;
 	}
 
 	fep->clk_ipg = devm_clk_get(&pdev->dev, "ipg");
@@ -1939,20 +1930,22 @@ fec_probe(struct platform_device *pdev)
 	clk_prepare_enable(fep->clk_enet_out);
 	clk_prepare_enable(fep->clk_ptp);
 
-	reg_phy = devm_regulator_get(&pdev->dev, "phy");
-	if (!IS_ERR(reg_phy)) {
-		ret = regulator_enable(reg_phy);
+	fep->reg_phy = devm_regulator_get(&pdev->dev, "phy");
+	if (!IS_ERR(fep->reg_phy)) {
+		ret = regulator_enable(fep->reg_phy);
 		if (ret) {
 			dev_err(&pdev->dev,
 				"Failed to enable phy regulator: %d\n", ret);
 			goto failed_regulator;
 		}
+	} else {
+		fep->reg_phy = NULL;
 	}
 
 	fec_reset_phy(pdev);
 
 	if (fep->bufdesc_ex)
-		fec_ptp_init(ndev, pdev);
+		fec_ptp_init(pdev);
 
 	ret = fec_enet_init(ndev);
 	if (ret)
@@ -1996,19 +1989,20 @@ fec_probe(struct platform_device *pdev)
 failed_register:
 	fec_enet_mii_remove(fep);
 failed_mii_init:
-failed_init:
+failed_irq:
 	for (i = 0; i < FEC_IRQ_NUM; i++) {
 		irq = platform_get_irq(pdev, i);
 		if (irq > 0)
 			free_irq(irq, ndev);
 	}
-failed_irq:
+failed_init:
+	if (fep->reg_phy)
+		regulator_disable(fep->reg_phy);
 failed_regulator:
 	clk_disable_unprepare(fep->clk_ahb);
 	clk_disable_unprepare(fep->clk_ipg);
 	clk_disable_unprepare(fep->clk_enet_out);
 	clk_disable_unprepare(fep->clk_ptp);
-failed_pin:
 failed_clk:
 failed_ioremap:
 	free_netdev(ndev);
@@ -2027,20 +2021,20 @@ fec_drv_remove(struct platform_device *pdev)
 	unregister_netdev(ndev);
 	fec_enet_mii_remove(fep);
 	del_timer_sync(&fep->time_keep);
+	for (i = 0; i < FEC_IRQ_NUM; i++) {
+		int irq = platform_get_irq(pdev, i);
+		if (irq > 0)
+			free_irq(irq, ndev);
+	}
+	if (fep->reg_phy)
+		regulator_disable(fep->reg_phy);
 	clk_disable_unprepare(fep->clk_ptp);
 	if (fep->ptp_clock)
 		ptp_clock_unregister(fep->ptp_clock);
 	clk_disable_unprepare(fep->clk_enet_out);
 	clk_disable_unprepare(fep->clk_ahb);
 	clk_disable_unprepare(fep->clk_ipg);
-	for (i = 0; i < FEC_IRQ_NUM; i++) {
-		int irq = platform_get_irq(pdev, i);
-		if (irq > 0)
-			free_irq(irq, ndev);
-	}
 	free_netdev(ndev);
-
-	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }
@@ -2060,6 +2054,9 @@ fec_suspend(struct device *dev)
 	clk_disable_unprepare(fep->clk_ahb);
 	clk_disable_unprepare(fep->clk_ipg);
 
+	if (fep->reg_phy)
+		regulator_disable(fep->reg_phy);
+
 	return 0;
 }
 
@@ -2068,6 +2065,13 @@ fec_resume(struct device *dev)
 {
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fec_enet_private *fep = netdev_priv(ndev);
+	int ret;
+
+	if (fep->reg_phy) {
+		ret = regulator_enable(fep->reg_phy);
+		if (ret)
+			return ret;
+	}
 
 	clk_prepare_enable(fep->clk_enet_out);
 	clk_prepare_enable(fep->clk_ahb);

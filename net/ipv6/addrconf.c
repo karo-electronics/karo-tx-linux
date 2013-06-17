@@ -1126,8 +1126,7 @@ retry:
 
 	ift = !max_addresses ||
 	      ipv6_count_addresses(idev) < max_addresses ?
-		ipv6_add_addr(idev, &addr, tmp_plen,
-			      ipv6_addr_type(&addr)&IPV6_ADDR_SCOPE_MASK,
+		ipv6_add_addr(idev, &addr, tmp_plen, ipv6_addr_scope(&addr),
 			      addr_flags) : NULL;
 	if (IS_ERR_OR_NULL(ift)) {
 		in6_ifa_put(ifp);
@@ -2402,6 +2401,7 @@ err_exit:
  *	Manual configuration of address on an interface
  */
 static int inet6_addr_add(struct net *net, int ifindex, const struct in6_addr *pfx,
+			  const struct in6_addr *peer_pfx,
 			  unsigned int plen, __u8 ifa_flags, __u32 prefered_lft,
 			  __u32 valid_lft)
 {
@@ -2457,6 +2457,8 @@ static int inet6_addr_add(struct net *net, int ifindex, const struct in6_addr *p
 		ifp->valid_lft = valid_lft;
 		ifp->prefered_lft = prefered_lft;
 		ifp->tstamp = jiffies;
+		if (peer_pfx)
+			ifp->peer_addr = *peer_pfx;
 		spin_unlock_bh(&ifp->lock);
 
 		addrconf_prefix_route(&ifp->addr, ifp->prefix_len, dev,
@@ -2526,7 +2528,7 @@ int addrconf_add_ifaddr(struct net *net, void __user *arg)
 		return -EFAULT;
 
 	rtnl_lock();
-	err = inet6_addr_add(net, ireq.ifr6_ifindex, &ireq.ifr6_addr,
+	err = inet6_addr_add(net, ireq.ifr6_ifindex, &ireq.ifr6_addr, NULL,
 			     ireq.ifr6_prefixlen, IFA_F_PERMANENT,
 			     INFINITY_LIFE_TIME, INFINITY_LIFE_TIME);
 	rtnl_unlock();
@@ -2826,9 +2828,9 @@ static void addrconf_ip6_tnl_config(struct net_device *dev)
 }
 
 static int addrconf_notify(struct notifier_block *this, unsigned long event,
-			   void *data)
+			   void *ptr)
 {
-	struct net_device *dev = (struct net_device *) data;
+	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 	struct inet6_dev *idev = __in6_dev_get(dev);
 	int run_pending = 0;
 	int err;
@@ -3612,18 +3614,20 @@ restart:
 	rcu_read_unlock_bh();
 }
 
-static struct in6_addr *extract_addr(struct nlattr *addr, struct nlattr *local)
+static struct in6_addr *extract_addr(struct nlattr *addr, struct nlattr *local,
+				     struct in6_addr **peer_pfx)
 {
 	struct in6_addr *pfx = NULL;
+
+	*peer_pfx = NULL;
 
 	if (addr)
 		pfx = nla_data(addr);
 
 	if (local) {
 		if (pfx && nla_memcmp(local, pfx, sizeof(*pfx)))
-			pfx = NULL;
-		else
-			pfx = nla_data(local);
+			*peer_pfx = pfx;
+		pfx = nla_data(local);
 	}
 
 	return pfx;
@@ -3641,7 +3645,7 @@ inet6_rtm_deladdr(struct sk_buff *skb, struct nlmsghdr *nlh)
 	struct net *net = sock_net(skb->sk);
 	struct ifaddrmsg *ifm;
 	struct nlattr *tb[IFA_MAX+1];
-	struct in6_addr *pfx;
+	struct in6_addr *pfx, *peer_pfx;
 	int err;
 
 	err = nlmsg_parse(nlh, sizeof(*ifm), tb, IFA_MAX, ifa_ipv6_policy);
@@ -3649,7 +3653,7 @@ inet6_rtm_deladdr(struct sk_buff *skb, struct nlmsghdr *nlh)
 		return err;
 
 	ifm = nlmsg_data(nlh);
-	pfx = extract_addr(tb[IFA_ADDRESS], tb[IFA_LOCAL]);
+	pfx = extract_addr(tb[IFA_ADDRESS], tb[IFA_LOCAL], &peer_pfx);
 	if (pfx == NULL)
 		return -EINVAL;
 
@@ -3707,7 +3711,7 @@ inet6_rtm_newaddr(struct sk_buff *skb, struct nlmsghdr *nlh)
 	struct net *net = sock_net(skb->sk);
 	struct ifaddrmsg *ifm;
 	struct nlattr *tb[IFA_MAX+1];
-	struct in6_addr *pfx;
+	struct in6_addr *pfx, *peer_pfx;
 	struct inet6_ifaddr *ifa;
 	struct net_device *dev;
 	u32 valid_lft = INFINITY_LIFE_TIME, preferred_lft = INFINITY_LIFE_TIME;
@@ -3719,7 +3723,7 @@ inet6_rtm_newaddr(struct sk_buff *skb, struct nlmsghdr *nlh)
 		return err;
 
 	ifm = nlmsg_data(nlh);
-	pfx = extract_addr(tb[IFA_ADDRESS], tb[IFA_LOCAL]);
+	pfx = extract_addr(tb[IFA_ADDRESS], tb[IFA_LOCAL], &peer_pfx);
 	if (pfx == NULL)
 		return -EINVAL;
 
@@ -3747,7 +3751,7 @@ inet6_rtm_newaddr(struct sk_buff *skb, struct nlmsghdr *nlh)
 		 * It would be best to check for !NLM_F_CREATE here but
 		 * userspace alreay relies on not having to provide this.
 		 */
-		return inet6_addr_add(net, ifm->ifa_index, pfx,
+		return inet6_addr_add(net, ifm->ifa_index, pfx, peer_pfx,
 				      ifm->ifa_prefixlen, ifa_flags,
 				      preferred_lft, valid_lft);
 	}
@@ -3804,6 +3808,7 @@ static inline int rt_scope(int ifa_scope)
 static inline int inet6_ifaddr_msgsize(void)
 {
 	return NLMSG_ALIGN(sizeof(struct ifaddrmsg))
+	       + nla_total_size(16) /* IFA_LOCAL */
 	       + nla_total_size(16) /* IFA_ADDRESS */
 	       + nla_total_size(sizeof(struct ifa_cacheinfo));
 }
@@ -3842,13 +3847,22 @@ static int inet6_fill_ifaddr(struct sk_buff *skb, struct inet6_ifaddr *ifa,
 		valid = INFINITY_LIFE_TIME;
 	}
 
-	if (nla_put(skb, IFA_ADDRESS, 16, &ifa->addr) < 0 ||
-	    put_cacheinfo(skb, ifa->cstamp, ifa->tstamp, preferred, valid) < 0) {
-		nlmsg_cancel(skb, nlh);
-		return -EMSGSIZE;
-	}
+	if (!ipv6_addr_any(&ifa->peer_addr)) {
+		if (nla_put(skb, IFA_LOCAL, 16, &ifa->addr) < 0 ||
+		    nla_put(skb, IFA_ADDRESS, 16, &ifa->peer_addr) < 0)
+			goto error;
+	} else
+		if (nla_put(skb, IFA_ADDRESS, 16, &ifa->addr) < 0)
+			goto error;
+
+	if (put_cacheinfo(skb, ifa->cstamp, ifa->tstamp, preferred, valid) < 0)
+		goto error;
 
 	return nlmsg_end(skb, nlh);
+
+error:
+	nlmsg_cancel(skb, nlh);
+	return -EMSGSIZE;
 }
 
 static int inet6_fill_ifmcaddr(struct sk_buff *skb, struct ifmcaddr6 *ifmca,
@@ -4048,7 +4062,7 @@ static int inet6_rtm_getaddr(struct sk_buff *in_skb, struct nlmsghdr *nlh)
 	struct net *net = sock_net(in_skb->sk);
 	struct ifaddrmsg *ifm;
 	struct nlattr *tb[IFA_MAX+1];
-	struct in6_addr *addr = NULL;
+	struct in6_addr *addr = NULL, *peer;
 	struct net_device *dev = NULL;
 	struct inet6_ifaddr *ifa;
 	struct sk_buff *skb;
@@ -4058,7 +4072,7 @@ static int inet6_rtm_getaddr(struct sk_buff *in_skb, struct nlmsghdr *nlh)
 	if (err < 0)
 		goto errout;
 
-	addr = extract_addr(tb[IFA_ADDRESS], tb[IFA_LOCAL]);
+	addr = extract_addr(tb[IFA_ADDRESS], tb[IFA_LOCAL], &peer);
 	if (addr == NULL) {
 		err = -EINVAL;
 		goto errout;
@@ -4566,11 +4580,26 @@ static void __ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 			ip6_ins_rt(ifp->rt);
 		if (ifp->idev->cnf.forwarding)
 			addrconf_join_anycast(ifp);
+		if (!ipv6_addr_any(&ifp->peer_addr))
+			addrconf_prefix_route(&ifp->peer_addr, 128,
+					      ifp->idev->dev, 0, 0);
 		break;
 	case RTM_DELADDR:
 		if (ifp->idev->cnf.forwarding)
 			addrconf_leave_anycast(ifp);
 		addrconf_leave_solict(ifp->idev, &ifp->addr);
+		if (!ipv6_addr_any(&ifp->peer_addr)) {
+			struct rt6_info *rt;
+			struct net_device *dev = ifp->idev->dev;
+
+			rt = rt6_lookup(dev_net(dev), &ifp->peer_addr, NULL,
+					dev->ifindex, 1);
+			if (rt) {
+				dst_hold(&rt->dst);
+				if (ip6_del_rt(rt))
+					dst_free(&rt->dst);
+			}
+		}
 		dst_hold(&ifp->rt->dst);
 
 		if (ip6_del_rt(ifp->rt))
@@ -4591,13 +4620,13 @@ static void ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 #ifdef CONFIG_SYSCTL
 
 static
-int addrconf_sysctl_forward(ctl_table *ctl, int write,
+int addrconf_sysctl_forward(struct ctl_table *ctl, int write,
 			   void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int *valp = ctl->data;
 	int val = *valp;
 	loff_t pos = *ppos;
-	ctl_table lctl;
+	struct ctl_table lctl;
 	int ret;
 
 	/*
@@ -4618,13 +4647,16 @@ int addrconf_sysctl_forward(ctl_table *ctl, int write,
 
 static void dev_disable_change(struct inet6_dev *idev)
 {
+	struct netdev_notifier_info info;
+
 	if (!idev || !idev->dev)
 		return;
 
+	netdev_notifier_info_init(&info, idev->dev);
 	if (idev->cnf.disable_ipv6)
-		addrconf_notify(NULL, NETDEV_DOWN, idev->dev);
+		addrconf_notify(NULL, NETDEV_DOWN, &info);
 	else
-		addrconf_notify(NULL, NETDEV_UP, idev->dev);
+		addrconf_notify(NULL, NETDEV_UP, &info);
 }
 
 static void addrconf_disable_change(struct net *net, __s32 newf)
@@ -4673,13 +4705,13 @@ static int addrconf_disable_ipv6(struct ctl_table *table, int *p, int newf)
 }
 
 static
-int addrconf_sysctl_disable(ctl_table *ctl, int write,
+int addrconf_sysctl_disable(struct ctl_table *ctl, int write,
 			    void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int *valp = ctl->data;
 	int val = *valp;
 	loff_t pos = *ppos;
-	ctl_table lctl;
+	struct ctl_table lctl;
 	int ret;
 
 	/*
@@ -4701,7 +4733,7 @@ int addrconf_sysctl_disable(ctl_table *ctl, int write,
 static struct addrconf_sysctl_table
 {
 	struct ctl_table_header *sysctl_header;
-	ctl_table addrconf_vars[DEVCONF_MAX+1];
+	struct ctl_table addrconf_vars[DEVCONF_MAX+1];
 } addrconf_sysctl __read_mostly = {
 	.sysctl_header = NULL,
 	.addrconf_vars = {
