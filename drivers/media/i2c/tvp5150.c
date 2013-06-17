@@ -1054,8 +1054,6 @@ static int tvp5150_g_register(struct v4l2_subdev *sd, struct v4l2_dbg_register *
 
 	if (!v4l2_chip_match_i2c_client(client, &reg->match))
 		return -EINVAL;
-	if (!capable(CAP_SYS_ADMIN))
-		return -EPERM;
 	res = tvp5150_read(sd, reg->reg & 0xff);
 	if (res < 0) {
 		v4l2_err(sd, "%s: failed with error = %d\n", __func__, res);
@@ -1073,8 +1071,6 @@ static int tvp5150_s_register(struct v4l2_subdev *sd, const struct v4l2_dbg_regi
 
 	if (!v4l2_chip_match_i2c_client(client, &reg->match))
 		return -EINVAL;
-	if (!capable(CAP_SYS_ADMIN))
-		return -EPERM;
 	tvp5150_write(sd, reg->reg & 0xff, reg->val & 0xff);
 	return 0;
 }
@@ -1152,10 +1148,9 @@ static int tvp5150_probe(struct i2c_client *c,
 	     I2C_FUNC_SMBUS_READ_BYTE | I2C_FUNC_SMBUS_WRITE_BYTE_DATA))
 		return -EIO;
 
-	core = kzalloc(sizeof(struct tvp5150), GFP_KERNEL);
-	if (!core) {
+	core = devm_kzalloc(&c->dev, sizeof(*core), GFP_KERNEL);
+	if (!core)
 		return -ENOMEM;
-	}
 	sd = &core->sd;
 	v4l2_i2c_subdev_init(sd, c, &tvp5150_ops);
 
@@ -1166,7 +1161,7 @@ static int tvp5150_probe(struct i2c_client *c,
 	for (i = 0; i < 4; i++) {
 		res = tvp5150_read(sd, TVP5150_MSB_DEV_ID + i);
 		if (res < 0)
-			goto free_core;
+			return res;
 		tvp5150_id[i] = res;
 	}
 
@@ -1209,7 +1204,7 @@ static int tvp5150_probe(struct i2c_client *c,
 	if (core->hdl.error) {
 		res = core->hdl.error;
 		v4l2_ctrl_handler_free(&core->hdl);
-		goto free_core;
+		return res;
 	}
 	v4l2_ctrl_handler_setup(&core->hdl);
 
@@ -1225,10 +1220,6 @@ static int tvp5150_probe(struct i2c_client *c,
 	if (debug > 1)
 		tvp5150_log_status(sd);
 	return 0;
-
-free_core:
-	kfree(core);
-	return res;
 }
 
 static int tvp5150_remove(struct i2c_client *c)
@@ -1242,7 +1233,6 @@ static int tvp5150_remove(struct i2c_client *c)
 
 	v4l2_device_unregister_subdev(sd);
 	v4l2_ctrl_handler_free(&decoder->hdl);
-	kfree(to_tvp5150(sd));
 	return 0;
 }
 
