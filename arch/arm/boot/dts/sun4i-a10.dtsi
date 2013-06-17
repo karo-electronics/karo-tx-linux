@@ -16,8 +16,12 @@
 	interrupt-parent = <&intc>;
 
 	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
 		cpu@0 {
+			device_type = "cpu";
 			compatible = "arm,cortex-a8";
+			reg = <0x0>;
 		};
 	};
 
@@ -189,8 +193,10 @@
 		pio: pinctrl@01c20800 {
 			compatible = "allwinner,sun4i-a10-pinctrl";
 			reg = <0x01c20800 0x400>;
+			interrupts = <28>;
 			clocks = <&apb0_gates 5>;
 			gpio-controller;
+			interrupt-controller;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			#gpio-cells = <3>;
