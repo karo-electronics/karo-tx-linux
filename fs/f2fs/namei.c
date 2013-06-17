@@ -149,8 +149,7 @@ static int f2fs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	alloc_nid_done(sbi, ino);
 
-	if (!sbi->por_doing)
-		d_instantiate(dentry, inode);
+	d_instantiate(dentry, inode);
 	unlock_new_inode(inode);
 	return 0;
 out:
@@ -173,7 +172,7 @@ static int f2fs_link(struct dentry *old_dentry, struct inode *dir,
 	f2fs_balance_fs(sbi);
 
 	inode->i_ctime = CURRENT_TIME;
-	atomic_inc(&inode->i_count);
+	ihold(inode);
 
 	set_inode_flag(F2FS_I(inode), FI_INC_LINK);
 	ilock = mutex_lock_op(sbi);
@@ -182,17 +181,10 @@ static int f2fs_link(struct dentry *old_dentry, struct inode *dir,
 	if (err)
 		goto out;
 
-	/*
-	 * This file should be checkpointed during fsync.
-	 * We lost i_pino from now on.
-	 */
-	set_cp_file(inode);
-
 	d_instantiate(dentry, inode);
 	return 0;
 out:
 	clear_inode_flag(F2FS_I(inode), FI_INC_LINK);
-	make_bad_inode(inode);
 	iput(inode);
 	return err;
 }
@@ -498,6 +490,7 @@ const struct inode_operations f2fs_dir_inode_operations = {
 	.rmdir		= f2fs_rmdir,
 	.mknod		= f2fs_mknod,
 	.rename		= f2fs_rename,
+	.getattr	= f2fs_getattr,
 	.setattr	= f2fs_setattr,
 	.get_acl	= f2fs_get_acl,
 #ifdef CONFIG_F2FS_FS_XATTR
@@ -512,6 +505,7 @@ const struct inode_operations f2fs_symlink_inode_operations = {
 	.readlink       = generic_readlink,
 	.follow_link    = page_follow_link_light,
 	.put_link       = page_put_link,
+	.getattr	= f2fs_getattr,
 	.setattr	= f2fs_setattr,
 #ifdef CONFIG_F2FS_FS_XATTR
 	.setxattr	= generic_setxattr,
@@ -522,6 +516,7 @@ const struct inode_operations f2fs_symlink_inode_operations = {
 };
 
 const struct inode_operations f2fs_special_inode_operations = {
+	.getattr	= f2fs_getattr,
 	.setattr        = f2fs_setattr,
 	.get_acl	= f2fs_get_acl,
 #ifdef CONFIG_F2FS_FS_XATTR
