@@ -73,6 +73,33 @@
 #include <asm/cachectl.h>
 #include <asm/setup.h>
 
+/* Instruction cache related Auxiliary registers */
+#define ARC_REG_IC_BCR		0x77	/* Build Config reg */
+#define ARC_REG_IC_IVIC		0x10
+#define ARC_REG_IC_CTRL		0x11
+#define ARC_REG_IC_IVIL		0x19
+#if (CONFIG_ARC_MMU_VER > 2)
+#define ARC_REG_IC_PTAG		0x1E
+#endif
+
+/* Bit val in IC_CTRL */
+#define IC_CTRL_CACHE_DISABLE   0x1
+
+/* Data cache related Auxiliary registers */
+#define ARC_REG_DC_BCR		0x72	/* Build Config reg */
+#define ARC_REG_DC_IVDC		0x47
+#define ARC_REG_DC_CTRL		0x48
+#define ARC_REG_DC_IVDL		0x4A
+#define ARC_REG_DC_FLSH		0x4B
+#define ARC_REG_DC_FLDL		0x4C
+#if (CONFIG_ARC_MMU_VER > 2)
+#define ARC_REG_DC_PTAG		0x5C
+#endif
+
+/* Bit val in DC_CTRL */
+#define DC_CTRL_INV_MODE_FLUSH  0x40
+#define DC_CTRL_FLUSH_STATUS    0x100
+
 char *arc_cache_mumbojumbo(int cpu_id, char *buf, int len)
 {
 	int n = 0;
@@ -89,8 +116,10 @@ char *arc_cache_mumbojumbo(int cpu_id, char *buf, int len)
 			enb ?  "" : "DISABLED (kernel-build)");		\
 }
 
-	PR_CACHE(&cpuinfo_arc700[c].icache, __CONFIG_ARC_HAS_ICACHE, "I-Cache");
-	PR_CACHE(&cpuinfo_arc700[c].dcache, __CONFIG_ARC_HAS_DCACHE, "D-Cache");
+	PR_CACHE(&cpuinfo_arc700[c].icache, IS_ENABLED(CONFIG_ARC_HAS_ICACHE),
+			"I-Cache");
+	PR_CACHE(&cpuinfo_arc700[c].dcache, IS_ENABLED(CONFIG_ARC_HAS_DCACHE),
+			"D-Cache");
 
 	return buf;
 }
@@ -102,9 +131,15 @@ char *arc_cache_mumbojumbo(int cpu_id, char *buf, int len)
  */
 void __cpuinit read_decode_cache_bcr(void)
 {
-	struct bcr_cache ibcr, dbcr;
 	struct cpuinfo_arc_cache *p_ic, *p_dc;
 	unsigned int cpu = smp_processor_id();
+	struct bcr_cache {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+		unsigned int pad:12, line_len:4, sz:4, config:4, ver:8;
+#else
+		unsigned int ver:8, config:4, sz:4, line_len:4, pad:12;
+#endif
+	} ibcr, dbcr;
 
 	p_ic = &cpuinfo_arc700[cpu].icache;
 	READ_BCR(ARC_REG_IC_BCR, ibcr);
@@ -134,12 +169,10 @@ void __cpuinit read_decode_cache_bcr(void)
  */
 void __cpuinit arc_cache_init(void)
 {
-	unsigned int temp;
 	unsigned int cpu = smp_processor_id();
 	struct cpuinfo_arc_cache *ic = &cpuinfo_arc700[cpu].icache;
 	struct cpuinfo_arc_cache *dc = &cpuinfo_arc700[cpu].dcache;
-	int way_pg_ratio = way_pg_ratio;
-	int dcache_does_alias;
+	unsigned int dcache_does_alias, temp;
 	char str[256];
 
 	printk(arc_cache_mumbojumbo(0, str, sizeof(str)));
@@ -487,7 +520,7 @@ void flush_dcache_page(struct page *page)
 	struct address_space *mapping;
 
 	if (!cache_is_vipt_aliasing()) {
-		set_bit(PG_arch_1, &page->flags);
+		clear_bit(PG_dc_clean, &page->flags);
 		return;
 	}
 
@@ -501,7 +534,7 @@ void flush_dcache_page(struct page *page)
 	 * Make a note that K-mapping is dirty
 	 */
 	if (!mapping_mapped(mapping)) {
-		set_bit(PG_arch_1, &page->flags);
+		clear_bit(PG_dc_clean, &page->flags);
 	} else if (page_mapped(page)) {
 
 		/* kernel reading from page with U-mapping */
@@ -667,7 +700,12 @@ void flush_cache_page(struct vm_area_struct *vma, unsigned long u_vaddr,
 {
 	unsigned int paddr = pfn << PAGE_SHIFT;
 
-	__sync_icache_dcache(paddr, u_vaddr, PAGE_SIZE);
+	u_vaddr &= PAGE_MASK;
+
+	___flush_dcache_page(paddr, u_vaddr);
+
+	if (vma->vm_flags & VM_EXEC)
+		__inv_icache_page(paddr, u_vaddr);
 }
 
 void flush_cache_range(struct vm_area_struct *vma, unsigned long start,
@@ -717,7 +755,7 @@ void copy_user_highpage(struct page *to, struct page *from,
 	 * non copied user pages (e.g. read faults which wire in pagecache page
 	 * directly).
 	 */
-	set_bit(PG_arch_1, &to->flags);
+	clear_bit(PG_dc_clean, &to->flags);
 
 	/*
 	 * if SRC was already usermapped and non-congruent to kernel mapping
@@ -725,15 +763,16 @@ void copy_user_highpage(struct page *to, struct page *from,
 	 */
 	if (clean_src_k_mappings) {
 		__flush_dcache_page(kfrom, kfrom);
+		set_bit(PG_dc_clean, &from->flags);
 	} else {
-		set_bit(PG_arch_1, &from->flags);
+		clear_bit(PG_dc_clean, &from->flags);
 	}
 }
 
 void clear_user_page(void *to, unsigned long u_vaddr, struct page *page)
 {
 	clear_page(to);
-	set_bit(PG_arch_1, &page->flags);
+	clear_bit(PG_dc_clean, &page->flags);
 }
 
 

@@ -34,6 +34,13 @@
 #define is_not_cache_aligned(p)	((unsigned long)p & (~DCACHE_LINE_MASK))
 #endif
 
+/*
+ * ARC700 doesn't cache any access in top 256M.
+ * Ideal for wiring memory mapped peripherals as we don't need to do
+ * explicit uncached accesses (LD.di/ST.di) hence more portable drivers
+ */
+#define ARC_UNCACHED_ADDR_SPACE	0xc0000000
+
 #ifndef __ASSEMBLY__
 
 /* Uncached access macros */
@@ -57,16 +64,10 @@
 
 #define ARCH_DMA_MINALIGN      L1_CACHE_BYTES
 
-/*
- * ARC700 doesn't cache any access in top 256M.
- * Ideal for wiring memory mapped peripherals as we don't need to do
- * explicit uncached accesses (LD.di/ST.di) hence more portable drivers
- */
-#define ARC_UNCACHED_ADDR_SPACE	0xc0000000
-
 extern void arc_cache_init(void);
 extern char *arc_cache_mumbojumbo(int cpu_id, char *buf, int len);
 extern void __init read_decode_cache_bcr(void);
-#endif
+
+#endif	/* !__ASSEMBLY__ */
 
 #endif /* _ASM_CACHE_H */
