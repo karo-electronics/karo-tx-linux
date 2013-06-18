@@ -162,7 +162,7 @@ static inline struct irq_domain *irq_domain_add_tree(struct device_node *of_node
 					 const struct irq_domain_ops *ops,
 					 void *host_data)
 {
-	return irq_domain_add_linear(of_node, 0, ops, host_data);
+	return __irq_domain_add(of_node, 0, ~0, 0, ops, host_data);
 }
 
 extern void irq_domain_remove(struct irq_domain *host);
