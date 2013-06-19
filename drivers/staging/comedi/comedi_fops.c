@@ -14,11 +14,6 @@
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-
 */
 
 #undef DEBUG
@@ -536,6 +531,21 @@ static bool comedi_is_subdevice_idle(struct comedi_subdevice *s)
 	return (runflags & (SRF_ERROR | SRF_RUNNING)) ? false : true;
 }
 
+/**
+ * comedi_set_spriv() - Set the subdevice private data pointer.
+ * @s: comedi_subdevice struct
+ * @data: pointer to the private data
+ *
+ * This also sets the subdevice runflags to allow the core to automatically
+ * free the private data during the detach.
+ */
+void comedi_set_spriv(struct comedi_subdevice *s, void *data)
+{
+	s->private = data;
+	comedi_set_subdevice_runflags(s, ~0, SRF_FREE_SPRIV);
+}
+EXPORT_SYMBOL_GPL(comedi_set_spriv);
+
 /*
    This function restores a subdevice to an idle state.
  */
@@ -665,7 +675,7 @@ static int do_bufconfig_ioctl(struct comedi_device *dev,
 	if (copy_from_user(&bc, arg, sizeof(bc)))
 		return -EFAULT;
 
-	if (bc.subdevice >= dev->n_subdevices || bc.subdevice < 0)
+	if (bc.subdevice >= dev->n_subdevices)
 		return -EINVAL;
 
 	s = &dev->subdevices[bc.subdevice];
@@ -918,7 +928,7 @@ static int do_bufinfo_ioctl(struct comedi_device *dev,
 	if (copy_from_user(&bi, arg, sizeof(bi)))
 		return -EFAULT;
 
-	if (bi.subdevice >= dev->n_subdevices || bi.subdevice < 0)
+	if (bi.subdevice >= dev->n_subdevices)
 		return -EINVAL;
 
 	s = &dev->subdevices[bi.subdevice];
