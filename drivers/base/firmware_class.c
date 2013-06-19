@@ -812,7 +812,7 @@ static void firmware_class_timeout_work(struct work_struct *work)
 			struct firmware_priv, timeout_work.work);
 
 	mutex_lock(&fw_lock);
-	fw_load_abort(fw_priv);
+	fw_load_abort(fw_priv->buf);
 	mutex_unlock(&fw_lock);
 }
 
