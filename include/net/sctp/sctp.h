@@ -99,14 +99,6 @@
 #define SCTP_PROTOSW_FLAG INET_PROTOSW_PERMANENT
 #endif
 
-
-/* Certain internal static functions need to be exported when
- * compiled into the test frame.
- */
-#ifndef SCTP_STATIC
-#define SCTP_STATIC static
-#endif
-
 /*
  * Function declarations.
  */
@@ -574,9 +566,6 @@ for (pos = chunk->subh.fwdtsn_hdr->skip;\
 
 /* Round an int up to the next multiple of 4.  */
 #define WORD_ROUND(s) (((s)+3)&~3)
-
-/* Make a new instance of type.  */
-#define t_new(type, flags)	kzalloc(sizeof(type), flags)
 
 /* Compare two timevals.  */
 #define tv_lt(s, t) \

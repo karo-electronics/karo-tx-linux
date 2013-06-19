@@ -1056,7 +1056,7 @@ static int alb_set_slave_mac_addr(struct slave *slave, u8 addr[])
  *
  */
 
-static void alb_swap_mac_addr(struct bonding *bond, struct slave *slave1, struct slave *slave2)
+static void alb_swap_mac_addr(struct slave *slave1, struct slave *slave2)
 {
 	u8 tmp_mac_addr[ETH_ALEN];
 
@@ -1149,7 +1149,7 @@ static void alb_change_hw_addr_on_detach(struct bonding *bond, struct slave *sla
 
 		if (found) {
 			/* locking: needs RTNL and nothing else */
-			alb_swap_mac_addr(bond, slave, tmp_slave);
+			alb_swap_mac_addr(slave, tmp_slave);
 			alb_fasten_mac_swap(bond, slave, tmp_slave);
 		}
 	}
@@ -1175,16 +1175,13 @@ static void alb_change_hw_addr_on_detach(struct bonding *bond, struct slave *sla
  * @slave.
  *
  * assumption: this function is called before @slave is attached to the
- * 	       bond slave list.
- *
- * caller must hold the bond lock for write since the mac addresses are compared
- * and may be swapped.
+ *	       bond slave list.
  */
 static int alb_handle_addr_collision_on_attach(struct bonding *bond, struct slave *slave)
 {
-	struct slave *tmp_slave1, *tmp_slave2, *free_mac_slave;
+	struct slave *tmp_slave1, *free_mac_slave = NULL;
 	struct slave *has_bond_addr = bond->curr_active_slave;
-	int i, j, found = 0;
+	int i;
 
 	if (bond->slave_cnt == 0) {
 		/* this is the first slave */
@@ -1196,15 +1193,7 @@ static int alb_handle_addr_collision_on_attach(struct bonding *bond, struct slav
 	 * slaves in the bond.
 	 */
 	if (!ether_addr_equal_64bits(slave->perm_hwaddr, bond->dev->dev_addr)) {
-		bond_for_each_slave(bond, tmp_slave1, i) {
-			if (ether_addr_equal_64bits(tmp_slave1->dev->dev_addr,
-						    slave->dev->dev_addr)) {
-				found = 1;
-				break;
-			}
-		}
-
-		if (!found)
+		if (!bond_slave_has_mac(bond, slave->dev->dev_addr))
 			return 0;
 
 		/* Try setting slave mac to bond address and fall-through
@@ -1215,19 +1204,8 @@ static int alb_handle_addr_collision_on_attach(struct bonding *bond, struct slav
 	/* The slave's address is equal to the address of the bond.
 	 * Search for a spare address in the bond for this slave.
 	 */
-	free_mac_slave = NULL;
-
 	bond_for_each_slave(bond, tmp_slave1, i) {
-		found = 0;
-		bond_for_each_slave(bond, tmp_slave2, j) {
-			if (ether_addr_equal_64bits(tmp_slave1->perm_hwaddr,
-						    tmp_slave2->dev->dev_addr)) {
-				found = 1;
-				break;
-			}
-		}
-
-		if (!found) {
+		if (!bond_slave_has_mac(bond, tmp_slave1->perm_hwaddr)) {
 			/* no slave has tmp_slave1's perm addr
 			 * as its curr addr
 			 */
@@ -1607,15 +1585,7 @@ int bond_alb_init_slave(struct bonding *bond, struct slave *slave)
 		return res;
 	}
 
-	/* caller must hold the bond lock for write since the mac addresses
-	 * are compared and may be swapped.
-	 */
-	read_lock(&bond->lock);
-
 	res = alb_handle_addr_collision_on_attach(bond, slave);
-
-	read_unlock(&bond->lock);
-
 	if (res) {
 		return res;
 	}
@@ -1750,7 +1720,7 @@ void bond_alb_handle_active_change(struct bonding *bond, struct slave *new_slave
 	/* curr_active_slave must be set before calling alb_swap_mac_addr */
 	if (swap_slave) {
 		/* swap mac address */
-		alb_swap_mac_addr(bond, swap_slave, new_slave);
+		alb_swap_mac_addr(swap_slave, new_slave);
 	} else {
 		/* set the new_slave to the bond mac address */
 		alb_set_slave_mac_addr(new_slave, bond->dev->dev_addr);
@@ -1810,7 +1780,7 @@ int bond_alb_set_mac_address(struct net_device *bond_dev, void *addr)
 	}
 
 	if (swap_slave) {
-		alb_swap_mac_addr(bond, swap_slave, bond->curr_active_slave);
+		alb_swap_mac_addr(swap_slave, bond->curr_active_slave);
 		alb_fasten_mac_swap(bond, swap_slave, bond->curr_active_slave);
 	} else {
 		alb_set_slave_mac_addr(bond->curr_active_slave, bond_dev->dev_addr);

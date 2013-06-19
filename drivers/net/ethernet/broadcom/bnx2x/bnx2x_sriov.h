@@ -197,7 +197,7 @@ struct bnx2x_virtf {
 
 	u8 state;
 #define VF_FREE		0	/* VF ready to be acquired holds no resc */
-#define VF_ACQUIRED	1	/* VF aquired, but not initalized */
+#define VF_ACQUIRED	1	/* VF acquired, but not initialized */
 #define VF_ENABLED	2	/* VF Enabled */
 #define VF_RESET	3	/* VF FLR'd, pending cleanup */
 
@@ -496,7 +496,7 @@ enum {
 		else if ((next) == VFOP_VERIFY_PEND)			\
 			BNX2X_ERR("expected pending\n");		\
 		else {							\
-			DP(BNX2X_MSG_IOV, "no ramrod. scheduling\n");	\
+			DP(BNX2X_MSG_IOV, "no ramrod. Scheduling\n");	\
 			atomic_set(&vf->op_in_progress, 1);		\
 			queue_delayed_work(bnx2x_wq, &bp->sp_task, 0);  \
 			return;						\
@@ -721,7 +721,6 @@ bool bnx2x_tlv_supported(u16 tlvtype);
 u32 bnx2x_crc_vf_bulletin(struct bnx2x *bp,
 			  struct pf_vf_bulletin_content *bulletin);
 int bnx2x_post_vf_bulletin(struct bnx2x *bp, int vf);
-
 
 enum sample_bulletin_result bnx2x_sample_bulletin(struct bnx2x *bp);
 

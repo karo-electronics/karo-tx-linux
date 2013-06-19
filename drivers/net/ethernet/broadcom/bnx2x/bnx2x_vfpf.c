@@ -233,7 +233,7 @@ int bnx2x_vfpf_acquire(struct bnx2x *bp, u8 tx_count, u8 rx_count)
 
 		attempts++;
 
-		/* test whether the PF accepted our request. If not, humble the
+		/* test whether the PF accepted our request. If not, humble
 		 * the request and try again.
 		 */
 		if (bp->acquire_resp.hdr.status == PFVF_STATUS_SUCCESS) {
@@ -333,7 +333,7 @@ int bnx2x_vfpf_release(struct bnx2x *bp)
 		DP(BNX2X_MSG_SP, "vf released\n");
 	} else {
 		/* PF reports error */
-		BNX2X_ERR("PF failed our release request - are we out of sync? response status: %d\n",
+		BNX2X_ERR("PF failed our release request - are we out of sync? Response status: %d\n",
 			  resp->hdr.status);
 		rc = -EAGAIN;
 		goto out;
@@ -787,7 +787,7 @@ static inline void bnx2x_set_vf_mbxs_valid(struct bnx2x *bp)
 		storm_memset_vf_mbx_valid(bp, bnx2x_vf(bp, i, abs_vfid));
 }
 
-/* enable vf_pf mailbox (aka vf-pf-chanell) */
+/* enable vf_pf mailbox (aka vf-pf-channel) */
 void bnx2x_vf_enable_mbx(struct bnx2x *bp, u8 abs_vfid)
 {
 	bnx2x_vf_flr_clnup_epilog(bp, abs_vfid);
@@ -844,7 +844,6 @@ static int bnx2x_copy32_vf_dmae(struct bnx2x *bp, u8 from_vf,
 		dmae.dst_addr_hi = vf_addr_hi;
 	}
 	dmae.len = len32;
-	bnx2x_dp_dmae(bp, &dmae, BNX2X_MSG_DMAE);
 
 	/* issue the command and wait for completion */
 	return bnx2x_issue_dmae_with_comp(bp, &dmae);
@@ -1072,7 +1071,7 @@ static void bnx2x_vf_mbx_set_q_flags(struct bnx2x *bp, u32 mbx_q_flags,
 	if (mbx_q_flags & VFPF_QUEUE_FLG_DHC)
 		__set_bit(BNX2X_Q_FLG_DHC, sp_q_flags);
 
-	/* outer vlan removal is set according to the PF's multi fuction mode */
+	/* outer vlan removal is set according to PF's multi function mode */
 	if (IS_MF_SD(bp))
 		__set_bit(BNX2X_Q_FLG_OV, sp_q_flags);
 }
@@ -1104,7 +1103,7 @@ static void bnx2x_vf_mbx_setup_q(struct bnx2x *bp, struct bnx2x_virtf *vf,
 		struct bnx2x_queue_init_params *init_p;
 		struct bnx2x_queue_setup_params *setup_p;
 
-		/* reinit the VF operation context */
+		/* re-init the VF operation context */
 		memset(&vf->op_params.qctor, 0 , sizeof(vf->op_params.qctor));
 		setup_p = &vf->op_params.qctor.prep_qsetup;
 		init_p =  &vf->op_params.qctor.qstate.params.init;
@@ -1588,8 +1587,9 @@ static void bnx2x_vf_mbx_request(struct bnx2x *bp, struct bnx2x_virtf *vf,
 		 * support them. Or this may be because someone wrote a crappy
 		 * VF driver and is sending garbage over the channel.
 		 */
-		BNX2X_ERR("unknown TLV. type %d length %d. first 20 bytes of mailbox buffer:\n",
-			  mbx->first_tlv.tl.type, mbx->first_tlv.tl.length);
+		BNX2X_ERR("unknown TLV. type %d length %d vf->state was %d. first 20 bytes of mailbox buffer:\n",
+			  mbx->first_tlv.tl.type, mbx->first_tlv.tl.length,
+			  vf->state);
 		for (i = 0; i < 20; i++)
 			DP_CONT(BNX2X_MSG_IOV, "%x ",
 				mbx->msg->req.tlv_buf_size.tlv_buffer[i]);
@@ -1605,8 +1605,11 @@ static void bnx2x_vf_mbx_request(struct bnx2x *bp, struct bnx2x_virtf *vf,
 			bnx2x_vf_mbx_resp(bp, vf);
 		} else {
 			/* can't send a response since this VF is unknown to us
-			 * just unlock the channel and be done with.
+			 * just ack the FW to release the mailbox and unlock
+			 * the channel.
 			 */
+			storm_memset_vf_mbx_ack(bp, vf->abs_vfid);
+			mmiowb();
 			bnx2x_unlock_vf_pf_channel(bp, vf,
 						   mbx->first_tlv.tl.type);
 		}

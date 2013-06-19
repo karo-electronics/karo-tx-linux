@@ -65,6 +65,10 @@ static int htb_hysteresis __read_mostly = 0; /* whether to use mode hysteresis f
 module_param    (htb_hysteresis, int, 0640);
 MODULE_PARM_DESC(htb_hysteresis, "Hysteresis mode, less CPU load, less accurate");
 
+static int htb_rate_est = 0; /* htb classes have a default rate estimator */
+module_param(htb_rate_est, int, 0640);
+MODULE_PARM_DESC(htb_rate_est, "setup a default rate estimator (4sec 16sec) for htb classes");
+
 /* used internaly to keep status of single class */
 enum htb_cmode {
 	HTB_CANT_SEND,		/* class can't send and can't borrow */
@@ -72,23 +76,39 @@ enum htb_cmode {
 	HTB_CAN_SEND		/* class can send */
 };
 
-/* interior & leaf nodes; props specific to leaves are marked L: */
+/* interior & leaf nodes; props specific to leaves are marked L:
+ * To reduce false sharing, place mostly read fields at beginning,
+ * and mostly written ones at the end.
+ */
 struct htb_class {
 	struct Qdisc_class_common common;
-	/* general class parameters */
+	struct psched_ratecfg	rate;
+	struct psched_ratecfg	ceil;
+	s64			buffer, cbuffer;/* token bucket depth/rate */
+	s64			mbuffer;	/* max wait time */
+	int			prio;		/* these two are used only by leaves... */
+	int			quantum;	/* but stored for parent-to-leaf return */
+
+	struct tcf_proto	*filter_list;	/* class attached filters */
+	int			filter_cnt;
+	int			refcnt;		/* usage count of this class */
+
+	int			level;		/* our level (see above) */
+	unsigned int		children;
+	struct htb_class	*parent;	/* parent class */
+
+	struct gnet_stats_rate_est64 rate_est;
+
+	/*
+	 * Written often fields
+	 */
 	struct gnet_stats_basic_packed bstats;
-	struct gnet_stats_queue qstats;
-	struct gnet_stats_rate_est rate_est;
-	struct tc_htb_xstats xstats;	/* our special stats */
-	int refcnt;		/* usage count of this class */
+	struct gnet_stats_queue	qstats;
+	struct tc_htb_xstats	xstats;	/* our special stats */
 
-	/* topology */
-	int level;		/* our level (see above) */
-	unsigned int children;
-	struct htb_class *parent;	/* parent class */
-
-	int prio;		/* these two are used only by leaves... */
-	int quantum;		/* but stored for parent-to-leaf return */
+	/* token bucket parameters */
+	s64			tokens, ctokens;/* current number of tokens */
+	s64			t_c;		/* checkpoint time */
 
 	union {
 		struct htb_class_leaf {
@@ -107,24 +127,12 @@ struct htb_class {
 			u32 last_ptr_id[TC_HTB_NUMPRIO];
 		} inner;
 	} un;
-	struct rb_node node[TC_HTB_NUMPRIO];	/* node for self or feed tree */
-	struct rb_node pq_node;	/* node for event queue */
-	s64	pq_key;
+	s64			pq_key;
 
-	int prio_activity;	/* for which prios are we active */
-	enum htb_cmode cmode;	/* current mode of the class */
-
-	/* class attached filters */
-	struct tcf_proto *filter_list;
-	int filter_cnt;
-
-	/* token bucket parameters */
-	struct psched_ratecfg rate;
-	struct psched_ratecfg ceil;
-	s64	buffer, cbuffer;	/* token bucket depth/rate */
-	s64	mbuffer;		/* max wait time */
-	s64	tokens, ctokens;	/* current number of tokens */
-	s64	t_c;			/* checkpoint time */
+	int			prio_activity;	/* for which prios are we active */
+	enum htb_cmode		cmode;		/* current mode of the class */
+	struct rb_node		pq_node;	/* node for event queue */
+	struct rb_node		node[TC_HTB_NUMPRIO];	/* node for self or feed tree */
 };
 
 struct htb_sched {
@@ -1366,12 +1374,14 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 		if (!cl)
 			goto failure;
 
-		err = gen_new_estimator(&cl->bstats, &cl->rate_est,
-					qdisc_root_sleeping_lock(sch),
-					tca[TCA_RATE] ? : &est.nla);
-		if (err) {
-			kfree(cl);
-			goto failure;
+		if (htb_rate_est || tca[TCA_RATE]) {
+			err = gen_new_estimator(&cl->bstats, &cl->rate_est,
+						qdisc_root_sleeping_lock(sch),
+						tca[TCA_RATE] ? : &est.nla);
+			if (err) {
+				kfree(cl);
+				goto failure;
+			}
 		}
 
 		cl->refcnt = 1;
