@@ -109,13 +109,15 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx27-apf27.dtb \
 	imx27-apf27dev.dtb \
 	imx27-pdk.dtb \
-	imx27-phytec-phycore.dtb \
+	imx27-phytec-phycore-som.dtb \
+	imx27-phytec-phycore-rdk.dtb \
 	imx31-bug.dtb \
 	imx51-apf51.dtb \
 	imx51-apf51dev.dtb \
 	imx51-babbage.dtb \
 	imx53-ard.dtb \
 	imx53-evk.dtb \
+	imx53-m53evk.dtb \
 	imx53-mba53.dtb \
 	imx53-qsb.dtb \
 	imx53-smd.dtb \
@@ -123,10 +125,13 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx6dl-sabresd.dtb \
 	imx6dl-wandboard.dtb \
 	imx6q-arm2.dtb \
+	imx6q-phytec-pbab01.dtb \
 	imx6q-sabreauto.dtb \
 	imx6q-sabrelite.dtb \
 	imx6q-sabresd.dtb \
-	imx6q-sbc6x.dtb
+	imx6q-sbc6x.dtb \
+	imx6sl-evk.dtb \
+	vf610-twr.dtb
 dtb-$(CONFIG_ARCH_MXS) += imx23-evk.dtb \
 	imx23-olinuxino.dtb \
 	imx23-stmp378x_devb.dtb \
@@ -136,6 +141,8 @@ dtb-$(CONFIG_ARCH_MXS) += imx23-evk.dtb \
 	imx28-cfa10036.dtb \
 	imx28-cfa10037.dtb \
 	imx28-cfa10049.dtb \
+	imx28-cfa10055.dtb \
+	imx28-cfa10057.dtb \
 	imx28-evk.dtb \
 	imx28-m28evk.dtb \
 	imx28-sps1.dtb \
