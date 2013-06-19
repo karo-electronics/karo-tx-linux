@@ -55,7 +55,7 @@
 #include <asm/arcregs.h>
 #include <asm/setup.h>
 #include <asm/mmu_context.h>
-#include <asm/tlb.h>
+#include <asm/mmu.h>
 
 /*			Need for ARC MMU v2
  *
@@ -96,6 +96,7 @@
  * corner cases when TLBWrite was not executed at all because the corresp
  * J-TLB entry got evicted/replaced.
  */
+
 
 /* A copy of the ASID from the PID reg is kept in asid_cache */
 int asid_cache = FIRST_ASID;
@@ -340,8 +341,8 @@ void local_flush_tlb_page(struct vm_area_struct *vma, unsigned long page)
 void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
 {
 	unsigned long flags;
-	unsigned int idx, asid_or_sasid;
-	unsigned long pd0_flags;
+	unsigned int idx, asid_or_sasid, rwx;
+	unsigned long pd0_flags, pte, pfn_etc;
 
 	/*
 	 * create_tlb() assumes that current->mm == vma->mm, since
@@ -392,8 +393,17 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
 
 	write_aux_reg(ARC_REG_TLBPD0, address | pd0_flags | asid_or_sasid);
 
+	pte = pte_val(*ptep);
+	rwx = pte & PTE_BITS_RWX;
+	pfn_etc = pte & PTE_BITS_NON_RWX_IN_PD1;
+
+	if (pte & _PAGE_GLOBAL)
+		rwx <<= 3;		/* r w x => Kr Kw Kx 0 0 0 */
+	else
+		rwx |= (rwx << 3);	/* r w x => Kr Kw Kx Ur Uw Ux */
+
 	/* Load remaining info in PD1 (Page Frame Addr and Kx/Kw/Kr Flags) */
-	write_aux_reg(ARC_REG_TLBPD1, (pte_val(*ptep) & PTE_BITS_IN_PD1));
+	write_aux_reg(ARC_REG_TLBPD1, rwx | pfn_etc);
 
 	/* First verify if entry for this vaddr+ASID already exists */
 	write_aux_reg(ARC_REG_TLBCOMMAND, TLBProbe);
@@ -432,8 +442,13 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddr_unaligned,
 {
 	unsigned long vaddr = vaddr_unaligned & PAGE_MASK;
 	unsigned long paddr = pte_val(*ptep) & PAGE_MASK;
+	struct page *page = pfn_to_page(pte_pfn(*ptep));
 
 	create_tlb(vma, vaddr, ptep);
+
+	if (page == ZERO_PAGE(0)) {
+		return;
+	}
 
 	/*
 	 * Exec page : Independent of aliasing/page-color considerations,
@@ -446,9 +461,8 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddr_unaligned,
 	 */
 	if ((vma->vm_flags & VM_EXEC) ||
 	     addr_not_cache_congruent(paddr, vaddr)) {
-		struct page *page = pfn_to_page(pte_pfn(*ptep));
 
-		int dirty = test_and_clear_bit(PG_arch_1, &page->flags);
+		int dirty = !test_and_set_bit(PG_dc_clean, &page->flags);
 		if (dirty) {
 			/* wback + inv dcache lines */
 			__flush_dcache_page(paddr, paddr);
@@ -466,10 +480,25 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddr_unaligned,
  */
 void __cpuinit read_decode_mmu_bcr(void)
 {
-	unsigned int tmp;
-	struct bcr_mmu_1_2 *mmu2;	/* encoded MMU2 attr */
-	struct bcr_mmu_3 *mmu3;		/* encoded MMU3 attr */
 	struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[smp_processor_id()].mmu;
+	unsigned int tmp;
+	struct bcr_mmu_1_2 {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+		unsigned int ver:8, ways:4, sets:4, u_itlb:8, u_dtlb:8;
+#else
+		unsigned int u_dtlb:8, u_itlb:8, sets:4, ways:4, ver:8;
+#endif
+	} *mmu2;
+
+	struct bcr_mmu_3 {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	unsigned int ver:8, ways:4, sets:4, osm:1, reserv:3, pg_sz:4,
+		     u_itlb:4, u_dtlb:4;
+#else
+	unsigned int u_dtlb:4, u_itlb:4, pg_sz:4, reserv:3, osm:1, sets:4,
+		     ways:4, ver:8;
+#endif
+	} *mmu3;
 
 	tmp = read_aux_reg(ARC_REG_MMU_BCR);
 	mmu->ver = (tmp >> 24);
@@ -505,7 +534,7 @@ char *arc_mmu_mumbojumbo(int cpu_id, char *buf, int len)
 		       "J-TLB %d (%dx%d), uDTLB %d, uITLB %d, %s\n",
 		       p_mmu->num_tlb, p_mmu->sets, p_mmu->ways,
 		       p_mmu->u_dtlb, p_mmu->u_itlb,
-		       __CONFIG_ARC_MMU_SASID_VAL ? "SASID" : "");
+		       IS_ENABLED(CONFIG_ARC_MMU_SASID) ? "SASID" : "");
 
 	return buf;
 }

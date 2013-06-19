@@ -39,7 +39,7 @@
 
 #include <linux/linkage.h>
 #include <asm/entry.h>
-#include <asm/tlb.h>
+#include <asm/mmu.h>
 #include <asm/pgtable.h>
 #include <asm/arcregs.h>
 #include <asm/cache.h>
@@ -147,9 +147,9 @@ ex_saved_reg1:
 #ifdef CONFIG_ARC_DBG_TLB_MISS_COUNT
 	and.f 0, r0, _PAGE_PRESENT
 	bz   1f
-	ld   r2, [num_pte_not_present]
-	add  r2, r2, 1
-	st   r2, [num_pte_not_present]
+	ld   r3, [num_pte_not_present]
+	add  r3, r3, 1
+	st   r3, [num_pte_not_present]
 1:
 #endif
 
@@ -161,8 +161,15 @@ ex_saved_reg1:
 ; IN: r0 = PTE, r1 = ptr to PTE
 
 .macro CONV_PTE_TO_TLB
-	and r3, r0, PTE_BITS_IN_PD1 ; Extract permission flags+PFN from PTE
-	sr  r3, [ARC_REG_TLBPD1]    ; these go in PD1
+	and    r3, r0, PTE_BITS_RWX	;       r w x
+	lsl    r2, r3, 3		; r w x 0 0 0
+	and.f  0,  r0, _PAGE_GLOBAL
+	or.z   r2, r2, r3		; r w x r w x
+
+	and r3, r0, PTE_BITS_NON_RWX_IN_PD1 ; Extract PFN+cache bits from PTE
+	or  r3, r3, r2
+
+	sr  r3, [ARC_REG_TLBPD1]    	; these go in PD1
 
 	and r2, r0, PTE_BITS_IN_PD0 ; Extract other PTE flags: (V)alid, (G)lb
 #if (CONFIG_ARC_MMU_VER <= 2)   /* Neednot be done with v3 onwards */
@@ -271,22 +278,22 @@ ARC_ENTRY EV_TLBMissI
 #endif
 
 	;----------------------------------------------------------------
-	; Get the PTE corresponding to V-addr accessed
+	; Get the PTE corresponding to V-addr accessed, r2 is setup with EFA
 	LOAD_FAULT_PTE
 
 	;----------------------------------------------------------------
 	; VERIFY_PTE: Check if PTE permissions approp for executing code
 	cmp_s   r2, VMALLOC_START
-	mov.lo  r2, (_PAGE_PRESENT | _PAGE_U_READ | _PAGE_U_EXECUTE)
-	mov.hs  r2, (_PAGE_PRESENT | _PAGE_K_READ | _PAGE_K_EXECUTE)
+	mov_s   r2, (_PAGE_PRESENT | _PAGE_EXECUTE)
+	or.hs   r2, r2, _PAGE_GLOBAL
 
 	and     r3, r0, r2  ; Mask out NON Flag bits from PTE
 	xor.f   r3, r3, r2  ; check ( ( pte & flags_test ) == flags_test )
 	bnz     do_slow_path_pf
 
 	; Let Linux VM know that the page was accessed
-	or      r0, r0, (_PAGE_PRESENT | _PAGE_ACCESSED)  ; set Accessed Bit
-	st_s    r0, [r1]                                  ; Write back PTE
+	or      r0, r0, _PAGE_ACCESSED  ; set Accessed Bit
+	st_s    r0, [r1]                ; Write back PTE
 
 	CONV_PTE_TO_TLB
 	COMMIT_ENTRY_TO_MMU
@@ -311,32 +318,27 @@ ARC_ENTRY EV_TLBMissD
 
 	;----------------------------------------------------------------
 	; Get the PTE corresponding to V-addr accessed
-	; If PTE exists, it will setup, r0 = PTE, r1 = Ptr to PTE
+	; If PTE exists, it will setup, r0 = PTE, r1 = Ptr to PTE, r2 = EFA
 	LOAD_FAULT_PTE
 
 	;----------------------------------------------------------------
 	; VERIFY_PTE: Chk if PTE permissions approp for data access (R/W/R+W)
 
-	mov_s   r2, 0
+	cmp_s	r2, VMALLOC_START
+	mov_s   r2, _PAGE_PRESENT	; common bit for K/U PTE
+	or.hs	r2, r2, _PAGE_GLOBAL	; kernel PTE only
+
+	; Linux PTE [RWX] bits are semantically overloaded:
+	; -If PAGE_GLOBAL set, they refer to kernel-only flags (vmalloc)
+	; -Otherwise they are user-mode permissions, and those are exactly
+	;  same for kernel mode as well (e.g. copy_(to|from)_user)
+
 	lr      r3, [ecr]
 	btst_s  r3, ECR_C_BIT_DTLB_LD_MISS	; Read Access
-	or.nz   r2, r2, _PAGE_U_READ      	; chk for Read flag in PTE
+	or.nz   r2, r2, _PAGE_READ      	; chk for Read flag in PTE
 	btst_s  r3, ECR_C_BIT_DTLB_ST_MISS	; Write Access
-	or.nz   r2, r2, _PAGE_U_WRITE     	; chk for Write flag in PTE
-	; Above laddering takes care of XCHG access
-	;   which is both Read and Write
-
-	; If kernel mode access, ; make _PAGE_xx flags as _PAGE_K_xx
-	; For copy_(to|from)_user, despite exception taken in kernel mode,
-	; this code is not hit, because EFA would still be the user mode
-	; address (EFA < 0x6000_0000).
-	; This code is for legit kernel mode faults, vmalloc specifically
-	; (EFA: 0x7000_0000 to 0x7FFF_FFFF)
-
-	lr      r3, [efa]
-	cmp     r3, VMALLOC_START - 1   ; If kernel mode access
-	asl.hi  r2, r2, 3               ; make _PAGE_xx flags as _PAGE_K_xx
-	or      r2, r2, _PAGE_PRESENT   ; Common flag for K/U mode
+	or.nz   r2, r2, _PAGE_WRITE     	; chk for Write flag in PTE
+	; Above laddering takes care of XCHG access (both R and W)
 
 	; By now, r2 setup with all the Flags we need to check in PTE
 	and     r3, r0, r2              ; Mask out NON Flag bits from PTE
@@ -345,7 +347,7 @@ ARC_ENTRY EV_TLBMissD
 	;----------------------------------------------------------------
 	; UPDATE_PTE: Let Linux VM know that page was accessed/dirty
 	lr      r3, [ecr]
-	or      r0, r0, (_PAGE_PRESENT | _PAGE_ACCESSED) ; Accessed bit always
+	or      r0, r0, _PAGE_ACCESSED        ; Accessed bit always
 	btst_s  r3,  ECR_C_BIT_DTLB_ST_MISS   ; See if it was a Write Access ?
 	or.nz   r0, r0, _PAGE_MODIFIED        ; if Write, set Dirty bit as well
 	st_s    r0, [r1]                      ; Write back PTE
@@ -381,18 +383,7 @@ do_slow_path_pf:
 
 	; ------- setup args for Linux Page fault Hanlder ---------
 	mov_s r0, sp
-	lr  r2, [efa]
-	lr  r3, [ecr]
-
-	; Both st and ex imply WRITE access of some sort, hence do_page_fault( )
-	; invoked with write=1 for DTLB-st/ex Miss and write=0 for ITLB miss or
-	; DTLB-ld Miss
-	; DTLB Miss Cause code is ld = 0x01 , st = 0x02, ex = 0x03
-	; Following code uses that fact that st/ex have one bit in common
-
-	btst_s r3,  ECR_C_BIT_DTLB_ST_MISS
-	mov.z  r1, 0
-	mov.nz r1, 1
+	lr  r1, [efa]
 
 	; We don't want exceptions to be disabled while the fault is handled.
 	; Now that we have saved the context we return from exception hence
