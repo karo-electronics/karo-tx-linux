@@ -168,8 +168,6 @@ static int upd64031a_g_register(struct v4l2_subdev *sd, struct v4l2_dbg_register
 
 	if (!v4l2_chip_match_i2c_client(client, &reg->match))
 		return -EINVAL;
-	if (!capable(CAP_SYS_ADMIN))
-		return -EPERM;
 	reg->val = upd64031a_read(sd, reg->reg & 0xff);
 	reg->size = 1;
 	return 0;
@@ -181,8 +179,6 @@ static int upd64031a_s_register(struct v4l2_subdev *sd, const struct v4l2_dbg_re
 
 	if (!v4l2_chip_match_i2c_client(client, &reg->match))
 		return -EINVAL;
-	if (!capable(CAP_SYS_ADMIN))
-		return -EPERM;
 	upd64031a_write(sd, reg->reg & 0xff, reg->val & 0xff);
 	return 0;
 }
@@ -230,7 +226,7 @@ static int upd64031a_probe(struct i2c_client *client,
 	v4l_info(client, "chip found @ 0x%x (%s)\n",
 			client->addr << 1, client->adapter->name);
 
-	state = kzalloc(sizeof(struct upd64031a_state), GFP_KERNEL);
+	state = devm_kzalloc(&client->dev, sizeof(*state), GFP_KERNEL);
 	if (state == NULL)
 		return -ENOMEM;
 	sd = &state->sd;
@@ -249,7 +245,6 @@ static int upd64031a_remove(struct i2c_client *client)
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 
 	v4l2_device_unregister_subdev(sd);
-	kfree(to_state(sd));
 	return 0;
 }
 
