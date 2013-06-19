@@ -619,7 +619,7 @@ static int ahci_p5wdh_hardreset(struct ata_link *link, unsigned int *class,
 #ifdef CONFIG_PM
 static int ahci_pci_device_suspend(struct pci_dev *pdev, pm_message_t mesg)
 {
-	struct ata_host *host = dev_get_drvdata(&pdev->dev);
+	struct ata_host *host = pci_get_drvdata(pdev);
 	struct ahci_host_priv *hpriv = host->private_data;
 	void __iomem *mmio = hpriv->mmio;
 	u32 ctl;
@@ -647,7 +647,7 @@ static int ahci_pci_device_suspend(struct pci_dev *pdev, pm_message_t mesg)
 
 static int ahci_pci_device_resume(struct pci_dev *pdev)
 {
-	struct ata_host *host = dev_get_drvdata(&pdev->dev);
+	struct ata_host *host = pci_get_drvdata(pdev);
 	int rc;
 
 	rc = ata_pci_device_do_resume(pdev);
@@ -1145,9 +1145,11 @@ int ahci_host_activate(struct ata_host *host, int irq, unsigned int n_msis)
 		return rc;
 
 	for (i = 0; i < host->n_ports; i++) {
+		struct ahci_port_priv *pp = host->ports[i]->private_data;
+
 		rc = devm_request_threaded_irq(host->dev,
 			irq + i, ahci_hw_interrupt, ahci_thread_fn, IRQF_SHARED,
-			dev_driver_string(host->dev), host->ports[i]);
+			pp->irq_desc, host->ports[i]);
 		if (rc)
 			goto out_free_irqs;
 	}
