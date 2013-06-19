@@ -20,7 +20,6 @@
 #include <linux/usb/chipidea.h>
 #include <linux/clk.h>
 #include <linux/regulator/consumer.h>
-#include <linux/pinctrl/consumer.h>
 
 #include "ci.h"
 #include "ci13xxx_imx.h"
@@ -29,7 +28,6 @@
 	((struct usb_phy *)platform_get_drvdata(pdev))
 
 struct ci13xxx_imx_data {
-	struct device_node *phy_np;
 	struct usb_phy *phy;
 	struct platform_device *ci_pdev;
 	struct clk *clk;
@@ -88,23 +86,19 @@ EXPORT_SYMBOL_GPL(usbmisc_get_init_data);
 
 /* End of common functions shared by usbmisc drivers*/
 
-static struct ci13xxx_platform_data ci13xxx_imx_platdata  = {
-	.name			= "ci13xxx_imx",
-	.flags			= CI13XXX_REQUIRE_TRANSCEIVER |
-				  CI13XXX_PULLUP_ON_VBUS |
-				  CI13XXX_DISABLE_STREAMING,
-	.capoffset		= DEF_CAPOFFSET,
-};
-
 static int ci13xxx_imx_probe(struct platform_device *pdev)
 {
 	struct ci13xxx_imx_data *data;
-	struct platform_device *plat_ci, *phy_pdev;
-	struct device_node *phy_np;
+	struct ci13xxx_platform_data pdata = {
+		.name		= "ci13xxx_imx",
+		.capoffset	= DEF_CAPOFFSET,
+		.flags		= CI13XXX_REQUIRE_TRANSCEIVER |
+				  CI13XXX_PULLUP_ON_VBUS |
+				  CI13XXX_DISABLE_STREAMING,
+	};
 	struct resource *res;
-	struct regulator *reg_vbus;
-	struct pinctrl *pinctrl;
 	int ret;
+	struct usb_phy *phy;
 
 	if (of_find_property(pdev->dev.of_node, "fsl,usbmisc", NULL)
 		&& !usbmisc_ops)
@@ -122,11 +116,6 @@ static int ci13xxx_imx_probe(struct platform_device *pdev)
 		return -ENOENT;
 	}
 
-	pinctrl = devm_pinctrl_get_select_default(&pdev->dev);
-	if (IS_ERR(pinctrl))
-		dev_warn(&pdev->dev, "pinctrl get/select failed, err=%ld\n",
-			PTR_ERR(pinctrl));
-
 	data->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(data->clk)) {
 		dev_err(&pdev->dev,
@@ -141,37 +130,33 @@ static int ci13xxx_imx_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	phy_np = of_parse_phandle(pdev->dev.of_node, "fsl,usbphy", 0);
-	if (phy_np) {
-		data->phy_np = phy_np;
-		phy_pdev = of_find_device_by_node(phy_np);
-		if (phy_pdev) {
-			struct usb_phy *phy;
-			phy = pdev_to_phy(phy_pdev);
-			if (phy &&
-			    try_module_get(phy_pdev->dev.driver->owner)) {
-				usb_phy_init(phy);
-				data->phy = phy;
-			}
+	phy = devm_usb_get_phy_by_phandle(&pdev->dev, "fsl,usbphy", 0);
+	if (!IS_ERR(phy)) {
+		ret = usb_phy_init(phy);
+		if (ret) {
+			dev_err(&pdev->dev, "unable to init phy: %d\n", ret);
+			goto err_clk;
 		}
+	} else if (PTR_ERR(phy) == -EPROBE_DEFER) {
+		ret = -EPROBE_DEFER;
+		goto err_clk;
 	}
 
 	/* we only support host now, so enable vbus here */
-	reg_vbus = devm_regulator_get(&pdev->dev, "vbus");
-	if (!IS_ERR(reg_vbus)) {
-		ret = regulator_enable(reg_vbus);
+	data->reg_vbus = devm_regulator_get(&pdev->dev, "vbus");
+	if (!IS_ERR(data->reg_vbus)) {
+		ret = regulator_enable(data->reg_vbus);
 		if (ret) {
 			dev_err(&pdev->dev,
 				"Failed to enable vbus regulator, err=%d\n",
 				ret);
-			goto put_np;
+			goto err_clk;
 		}
-		data->reg_vbus = reg_vbus;
 	} else {
-		reg_vbus = NULL;
+		data->reg_vbus = NULL;
 	}
 
-	ci13xxx_imx_platdata.phy = data->phy;
+	pdata.phy = data->phy;
 
 	if (!pdev->dev.dma_mask)
 		pdev->dev.dma_mask = &pdev->dev.coherent_dma_mask;
@@ -187,11 +172,11 @@ static int ci13xxx_imx_probe(struct platform_device *pdev)
 		}
 	}
 
-	plat_ci = ci13xxx_add_device(&pdev->dev,
+	data->ci_pdev = ci13xxx_add_device(&pdev->dev,
 				pdev->resource, pdev->num_resources,
-				&ci13xxx_imx_platdata);
-	if (IS_ERR(plat_ci)) {
-		ret = PTR_ERR(plat_ci);
+				&pdata);
+	if (IS_ERR(data->ci_pdev)) {
+		ret = PTR_ERR(data->ci_pdev);
 		dev_err(&pdev->dev,
 			"Can't register ci_hdrc platform device, err=%d\n",
 			ret);
@@ -203,11 +188,10 @@ static int ci13xxx_imx_probe(struct platform_device *pdev)
 		if (ret) {
 			dev_err(&pdev->dev,
 				"usbmisc post failed, ret=%d\n", ret);
-			goto put_np;
+			goto disable_device;
 		}
 	}
 
-	data->ci_pdev = plat_ci;
 	platform_set_drvdata(pdev, data);
 
 	pm_runtime_no_callbacks(&pdev->dev);
@@ -215,12 +199,12 @@ static int ci13xxx_imx_probe(struct platform_device *pdev)
 
 	return 0;
 
+disable_device:
+	ci13xxx_remove_device(data->ci_pdev);
 err:
-	if (reg_vbus)
-		regulator_disable(reg_vbus);
-put_np:
-	if (phy_np)
-		of_node_put(phy_np);
+	if (data->reg_vbus)
+		regulator_disable(data->reg_vbus);
+err_clk:
 	clk_disable_unprepare(data->clk);
 	return ret;
 }
@@ -240,11 +224,7 @@ static int ci13xxx_imx_remove(struct platform_device *pdev)
 		module_put(data->phy->dev->driver->owner);
 	}
 
-	of_node_put(data->phy_np);
-
 	clk_disable_unprepare(data->clk);
-
-	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }

@@ -14,12 +14,13 @@ struct ci13xxx_platform_data {
 	uintptr_t	 capoffset;
 	unsigned	 power_budget;
 	struct usb_phy	*phy;
+	enum usb_phy_interface phy_mode;
 	unsigned long	 flags;
 #define CI13XXX_REGS_SHARED		BIT(0)
 #define CI13XXX_REQUIRE_TRANSCEIVER	BIT(1)
 #define CI13XXX_PULLUP_ON_VBUS		BIT(2)
 #define CI13XXX_DISABLE_STREAMING	BIT(3)
-
+	enum usb_dr_mode	dr_mode;
 #define CI13XXX_CONTROLLER_RESET_EVENT		0
 #define CI13XXX_CONTROLLER_STOPPED_EVENT	1
 	void	(*notify_event) (struct ci13xxx *ci, unsigned event);

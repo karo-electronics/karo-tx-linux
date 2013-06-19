@@ -577,7 +577,7 @@ static struct hc_driver hwahc_hc_driver = {
 	.product_desc = "Wireless USB HWA host controller",
 	.hcd_priv_size = sizeof(struct hwahc) - sizeof(struct usb_hcd),
 	.irq = NULL,			/* FIXME */
-	.flags = HCD_USB2,		/* FIXME */
+	.flags = HCD_USB25,
 	.reset = hwahc_op_reset,
 	.start = hwahc_op_start,
 	.stop = hwahc_op_stop,
@@ -588,8 +588,6 @@ static struct hc_driver hwahc_hc_driver = {
 
 	.hub_status_data = wusbhc_rh_status_data,
 	.hub_control = wusbhc_rh_control,
-	.bus_suspend = wusbhc_rh_suspend,
-	.bus_resume = wusbhc_rh_resume,
 	.start_port_reset = wusbhc_rh_start_port_reset,
 };
 
@@ -776,6 +774,7 @@ static int hwahc_probe(struct usb_interface *usb_iface,
 		goto error_alloc;
 	}
 	usb_hcd->wireless = 1;
+	usb_hcd->self.sg_tablesize = ~0;
 	wusbhc = usb_hcd_to_wusbhc(usb_hcd);
 	hwahc = container_of(wusbhc, struct hwahc, wusbhc);
 	hwahc_init(hwahc);
