@@ -11,6 +11,7 @@
 #include <linux/irq.h>
 #include <linux/irqchip.h>
 #include <linux/irqdomain.h>
+#include <linux/reboot.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
@@ -69,7 +70,7 @@ static const char *picoxcell_dt_match[] = {
 	NULL
 };
 
-static void picoxcell_wdt_restart(char mode, const char *cmd)
+static void picoxcell_wdt_restart(enum reboot_mode mode, const char *cmd)
 {
 	/*
 	 * Configure the watchdog to reset with the shortest possible timeout
