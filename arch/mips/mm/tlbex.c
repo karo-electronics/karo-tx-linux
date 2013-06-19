@@ -136,7 +136,7 @@ static int scratchpad_offset(int i)
  * why; it's not an issue caused by the core RTL.
  *
  */
-static int __cpuinit m4kc_tlbp_war(void)
+static int m4kc_tlbp_war(void)
 {
 	return (current_cpu_data.processor_id & 0xffff00) ==
 	       (PRID_COMP_MIPS | PRID_IMP_4KC);
@@ -181,11 +181,9 @@ UASM_L_LA(_large_segbits_fault)
 UASM_L_LA(_tlb_huge_update)
 #endif
 
-static int __cpuinitdata hazard_instance;
+static int hazard_instance;
 
-static void __cpuinit uasm_bgezl_hazard(u32 **p,
-					struct uasm_reloc **r,
-					int instance)
+static void uasm_bgezl_hazard(u32 **p, struct uasm_reloc **r, int instance)
 {
 	switch (instance) {
 	case 0 ... 7:
@@ -196,9 +194,7 @@ static void __cpuinit uasm_bgezl_hazard(u32 **p,
 	}
 }
 
-static void __cpuinit uasm_bgezl_label(struct uasm_label **l,
-				       u32 **p,
-				       int instance)
+static void uasm_bgezl_label(struct uasm_label **l, u32 **p, int instance)
 {
 	switch (instance) {
 	case 0 ... 7:
@@ -295,17 +291,28 @@ static inline void dump_handler(const char *symbol, const u32 *handler, int coun
  * We deliberately chose a buffer size of 128, so we won't scribble
  * over anything important on overflow before we panic.
  */
-static u32 tlb_handler[128] __cpuinitdata;
+static u32 tlb_handler[128];
 
 /* simply assume worst case size for labels and relocs */
-static struct uasm_label labels[128] __cpuinitdata;
-static struct uasm_reloc relocs[128] __cpuinitdata;
+static struct uasm_label labels[128];
+static struct uasm_reloc relocs[128];
 
-static int check_for_high_segbits __cpuinitdata;
+static int check_for_high_segbits;
 
-static unsigned int kscratch_used_mask __cpuinitdata;
+static unsigned int kscratch_used_mask;
 
-static int __cpuinit allocate_kscratch(void)
+static inline int __maybe_unused c0_kscratch(void)
+{
+	switch (current_cpu_type()) {
+	case CPU_XLP:
+	case CPU_XLR:
+		return 22;
+	default:
+		return 31;
+	}
+}
+
+static int allocate_kscratch(void)
 {
 	int r;
 	unsigned int a = cpu_data[0].kscratch_mask & ~kscratch_used_mask;
@@ -322,21 +329,17 @@ static int __cpuinit allocate_kscratch(void)
 	return r;
 }
 
-static int scratch_reg __cpuinitdata;
-static int pgd_reg __cpuinitdata;
+static int scratch_reg;
+static int pgd_reg;
 enum vmalloc64_mode {not_refill, refill_scratch, refill_noscratch};
 
-static struct work_registers __cpuinit build_get_work_registers(u32 **p)
+static struct work_registers build_get_work_registers(u32 **p)
 {
 	struct work_registers r;
 
-	int smp_processor_id_reg;
-	int smp_processor_id_sel;
-	int smp_processor_id_shift;
-
-	if (scratch_reg > 0) {
+	if (scratch_reg >= 0) {
 		/* Save in CPU local C0_KScratch? */
-		UASM_i_MTC0(p, 1, 31, scratch_reg);
+		UASM_i_MTC0(p, 1, c0_kscratch(), scratch_reg);
 		r.r1 = K0;
 		r.r2 = K1;
 		r.r3 = 1;
@@ -344,25 +347,9 @@ static struct work_registers __cpuinit build_get_work_registers(u32 **p)
 	}
 
 	if (num_possible_cpus() > 1) {
-#ifdef CONFIG_MIPS_PGD_C0_CONTEXT
-		smp_processor_id_shift = 51;
-		smp_processor_id_reg = 20; /* XContext */
-		smp_processor_id_sel = 0;
-#else
-# ifdef CONFIG_32BIT
-		smp_processor_id_shift = 25;
-		smp_processor_id_reg = 4; /* Context */
-		smp_processor_id_sel = 0;
-# endif
-# ifdef CONFIG_64BIT
-		smp_processor_id_shift = 26;
-		smp_processor_id_reg = 4; /* Context */
-		smp_processor_id_sel = 0;
-# endif
-#endif
 		/* Get smp_processor_id */
-		UASM_i_MFC0(p, K0, smp_processor_id_reg, smp_processor_id_sel);
-		UASM_i_SRL_SAFE(p, K0, K0, smp_processor_id_shift);
+		UASM_i_CPUID_MFC0(p, K0, SMP_CPUID_REG);
+		UASM_i_SRL_SAFE(p, K0, K0, SMP_CPUID_REGSHIFT);
 
 		/* handler_reg_save index in K0 */
 		UASM_i_SLL(p, K0, K0, ilog2(sizeof(struct tlb_reg_save)));
@@ -382,10 +369,10 @@ static struct work_registers __cpuinit build_get_work_registers(u32 **p)
 	return r;
 }
 
-static void __cpuinit build_restore_work_registers(u32 **p)
+static void build_restore_work_registers(u32 **p)
 {
-	if (scratch_reg > 0) {
-		UASM_i_MFC0(p, 1, 31, scratch_reg);
+	if (scratch_reg >= 0) {
+		UASM_i_MFC0(p, 1, c0_kscratch(), scratch_reg);
 		return;
 	}
 	/* K0 already points to save area, restore $1 and $2  */
@@ -407,7 +394,7 @@ extern unsigned long pgd_current[];
 /*
  * The R3000 TLB handler is simple.
  */
-static void __cpuinit build_r3000_tlb_refill_handler(void)
+static void build_r3000_tlb_refill_handler(void)
 {
 	long pgdc = (long)pgd_current;
 	u32 *p;
@@ -452,7 +439,7 @@ static void __cpuinit build_r3000_tlb_refill_handler(void)
  * other one.To keep things simple, we first assume linear space,
  * then we relocate it to the final handler layout as needed.
  */
-static u32 final_handler[64] __cpuinitdata;
+static u32 final_handler[64];
 
 /*
  * Hazards
@@ -476,7 +463,7 @@ static u32 final_handler[64] __cpuinitdata;
  *
  * As if we MIPS hackers wouldn't know how to nop pipelines happy ...
  */
-static void __cpuinit __maybe_unused build_tlb_probe_entry(u32 **p)
+static void __maybe_unused build_tlb_probe_entry(u32 **p)
 {
 	switch (current_cpu_type()) {
 	/* Found by experiment: R4600 v2.0/R4700 needs this, too.  */
@@ -500,9 +487,9 @@ static void __cpuinit __maybe_unused build_tlb_probe_entry(u32 **p)
  */
 enum tlb_write_entry { tlb_random, tlb_indexed };
 
-static void __cpuinit build_tlb_write_entry(u32 **p, struct uasm_label **l,
-					 struct uasm_reloc **r,
-					 enum tlb_write_entry wmode)
+static void build_tlb_write_entry(u32 **p, struct uasm_label **l,
+				  struct uasm_reloc **r,
+				  enum tlb_write_entry wmode)
 {
 	void(*tlbw)(u32 **) = NULL;
 
@@ -636,8 +623,8 @@ static void __cpuinit build_tlb_write_entry(u32 **p, struct uasm_label **l,
 	}
 }
 
-static __cpuinit __maybe_unused void build_convert_pte_to_entrylo(u32 **p,
-								  unsigned int reg)
+static __maybe_unused void build_convert_pte_to_entrylo(u32 **p,
+							unsigned int reg)
 {
 	if (cpu_has_rixi) {
 		UASM_i_ROTR(p, reg, reg, ilog2(_PAGE_GLOBAL));
@@ -652,11 +639,9 @@ static __cpuinit __maybe_unused void build_convert_pte_to_entrylo(u32 **p,
 
 #ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
 
-static __cpuinit void build_restore_pagemask(u32 **p,
-					     struct uasm_reloc **r,
-					     unsigned int tmp,
-					     enum label_id lid,
-					     int restore_scratch)
+static void build_restore_pagemask(u32 **p, struct uasm_reloc **r,
+				   unsigned int tmp, enum label_id lid,
+				   int restore_scratch)
 {
 	if (restore_scratch) {
 		/* Reset default page size */
@@ -673,8 +658,8 @@ static __cpuinit void build_restore_pagemask(u32 **p,
 			uasm_i_mtc0(p, 0, C0_PAGEMASK);
 			uasm_il_b(p, r, lid);
 		}
-		if (scratch_reg > 0)
-			UASM_i_MFC0(p, 1, 31, scratch_reg);
+		if (scratch_reg >= 0)
+			UASM_i_MFC0(p, 1, c0_kscratch(), scratch_reg);
 		else
 			UASM_i_LW(p, 1, scratchpad_offset(0), 0);
 	} else {
@@ -695,12 +680,11 @@ static __cpuinit void build_restore_pagemask(u32 **p,
 	}
 }
 
-static __cpuinit void build_huge_tlb_write_entry(u32 **p,
-						 struct uasm_label **l,
-						 struct uasm_reloc **r,
-						 unsigned int tmp,
-						 enum tlb_write_entry wmode,
-						 int restore_scratch)
+static void build_huge_tlb_write_entry(u32 **p, struct uasm_label **l,
+				       struct uasm_reloc **r,
+				       unsigned int tmp,
+				       enum tlb_write_entry wmode,
+				       int restore_scratch)
 {
 	/* Set huge page tlb entry size */
 	uasm_i_lui(p, tmp, PM_HUGE_MASK >> 16);
@@ -715,9 +699,9 @@ static __cpuinit void build_huge_tlb_write_entry(u32 **p,
 /*
  * Check if Huge PTE is present, if so then jump to LABEL.
  */
-static void __cpuinit
+static void
 build_is_huge_pte(u32 **p, struct uasm_reloc **r, unsigned int tmp,
-		unsigned int pmd, int lid)
+		  unsigned int pmd, int lid)
 {
 	UASM_i_LW(p, tmp, 0, pmd);
 	if (use_bbit_insns()) {
@@ -728,9 +712,8 @@ build_is_huge_pte(u32 **p, struct uasm_reloc **r, unsigned int tmp,
 	}
 }
 
-static __cpuinit void build_huge_update_entries(u32 **p,
-						unsigned int pte,
-						unsigned int tmp)
+static void build_huge_update_entries(u32 **p, unsigned int pte,
+				      unsigned int tmp)
 {
 	int small_sequence;
 
@@ -760,11 +743,10 @@ static __cpuinit void build_huge_update_entries(u32 **p,
 	UASM_i_MTC0(p, pte, C0_ENTRYLO1); /* load it */
 }
 
-static __cpuinit void build_huge_handler_tail(u32 **p,
-					      struct uasm_reloc **r,
-					      struct uasm_label **l,
-					      unsigned int pte,
-					      unsigned int ptr)
+static void build_huge_handler_tail(u32 **p, struct uasm_reloc **r,
+				    struct uasm_label **l,
+				    unsigned int pte,
+				    unsigned int ptr)
 {
 #ifdef CONFIG_SMP
 	UASM_i_SC(p, pte, 0, ptr);
@@ -783,7 +765,7 @@ static __cpuinit void build_huge_handler_tail(u32 **p,
  * TMP and PTR are scratch.
  * TMP will be clobbered, PTR will hold the pmd entry.
  */
-static void __cpuinit
+static void
 build_get_pmde64(u32 **p, struct uasm_label **l, struct uasm_reloc **r,
 		 unsigned int tmp, unsigned int ptr)
 {
@@ -814,11 +796,11 @@ build_get_pmde64(u32 **p, struct uasm_label **l, struct uasm_reloc **r,
 	}
 	/* No uasm_i_nop needed here, since the next insn doesn't touch TMP. */
 
-#ifdef CONFIG_MIPS_PGD_C0_CONTEXT
 	if (pgd_reg != -1) {
 		/* pgd is in pgd_reg */
-		UASM_i_MFC0(p, ptr, 31, pgd_reg);
+		UASM_i_MFC0(p, ptr, c0_kscratch(), pgd_reg);
 	} else {
+#if defined(CONFIG_MIPS_PGD_C0_CONTEXT)
 		/*
 		 * &pgd << 11 stored in CONTEXT [23..63].
 		 */
@@ -830,30 +812,18 @@ build_get_pmde64(u32 **p, struct uasm_label **l, struct uasm_reloc **r,
 		/* 1 0	1 0 1  << 6  xkphys cached */
 		uasm_i_ori(p, ptr, ptr, 0x540);
 		uasm_i_drotr(p, ptr, ptr, 11);
-	}
 #elif defined(CONFIG_SMP)
-# ifdef	 CONFIG_MIPS_MT_SMTC
-	/*
-	 * SMTC uses TCBind value as "CPU" index
-	 */
-	uasm_i_mfc0(p, ptr, C0_TCBIND);
-	uasm_i_dsrl_safe(p, ptr, ptr, 19);
-# else
-	/*
-	 * 64 bit SMP running in XKPHYS has smp_processor_id() << 3
-	 * stored in CONTEXT.
-	 */
-	uasm_i_dmfc0(p, ptr, C0_CONTEXT);
-	uasm_i_dsrl_safe(p, ptr, ptr, 23);
-# endif
-	UASM_i_LA_mostly(p, tmp, pgdc);
-	uasm_i_daddu(p, ptr, ptr, tmp);
-	uasm_i_dmfc0(p, tmp, C0_BADVADDR);
-	uasm_i_ld(p, ptr, uasm_rel_lo(pgdc), ptr);
+		UASM_i_CPUID_MFC0(p, ptr, SMP_CPUID_REG);
+		uasm_i_dsrl_safe(p, ptr, ptr, SMP_CPUID_PTRSHIFT);
+		UASM_i_LA_mostly(p, tmp, pgdc);
+		uasm_i_daddu(p, ptr, ptr, tmp);
+		uasm_i_dmfc0(p, tmp, C0_BADVADDR);
+		uasm_i_ld(p, ptr, uasm_rel_lo(pgdc), ptr);
 #else
-	UASM_i_LA_mostly(p, ptr, pgdc);
-	uasm_i_ld(p, ptr, uasm_rel_lo(pgdc), ptr);
+		UASM_i_LA_mostly(p, ptr, pgdc);
+		uasm_i_ld(p, ptr, uasm_rel_lo(pgdc), ptr);
 #endif
+	}
 
 	uasm_l_vmalloc_done(l, *p);
 
@@ -875,7 +845,7 @@ build_get_pmde64(u32 **p, struct uasm_label **l, struct uasm_reloc **r,
  * BVADDR is the faulting address, PTR is scratch.
  * PTR will hold the pgd for vmalloc.
  */
-static void __cpuinit
+static void
 build_get_pgd_vmalloc64(u32 **p, struct uasm_label **l, struct uasm_reloc **r,
 			unsigned int bvaddr, unsigned int ptr,
 			enum vmalloc64_mode mode)
@@ -929,8 +899,8 @@ build_get_pgd_vmalloc64(u32 **p, struct uasm_label **l, struct uasm_reloc **r,
 		uasm_i_jr(p, ptr);
 
 		if (mode == refill_scratch) {
-			if (scratch_reg > 0)
-				UASM_i_MFC0(p, 1, 31, scratch_reg);
+			if (scratch_reg >= 0)
+				UASM_i_MFC0(p, 1, c0_kscratch(), scratch_reg);
 			else
 				UASM_i_LW(p, 1, scratchpad_offset(0), 0);
 		} else {
@@ -945,34 +915,28 @@ build_get_pgd_vmalloc64(u32 **p, struct uasm_label **l, struct uasm_reloc **r,
  * TMP and PTR are scratch.
  * TMP will be clobbered, PTR will hold the pgd entry.
  */
-static void __cpuinit __maybe_unused
+static void __maybe_unused
 build_get_pgde32(u32 **p, unsigned int tmp, unsigned int ptr)
 {
-	long pgdc = (long)pgd_current;
+	if (pgd_reg != -1) {
+		/* pgd is in pgd_reg */
+		uasm_i_mfc0(p, ptr, c0_kscratch(), pgd_reg);
+		uasm_i_mfc0(p, tmp, C0_BADVADDR); /* get faulting address */
+	} else {
+		long pgdc = (long)pgd_current;
 
-	/* 32 bit SMP has smp_processor_id() stored in CONTEXT. */
+		/* 32 bit SMP has smp_processor_id() stored in CONTEXT. */
 #ifdef CONFIG_SMP
-#ifdef	CONFIG_MIPS_MT_SMTC
-	/*
-	 * SMTC uses TCBind value as "CPU" index
-	 */
-	uasm_i_mfc0(p, ptr, C0_TCBIND);
-	UASM_i_LA_mostly(p, tmp, pgdc);
-	uasm_i_srl(p, ptr, ptr, 19);
+		uasm_i_mfc0(p, ptr, SMP_CPUID_REG);
+		UASM_i_LA_mostly(p, tmp, pgdc);
+		uasm_i_srl(p, ptr, ptr, SMP_CPUID_PTRSHIFT);
+		uasm_i_addu(p, ptr, tmp, ptr);
 #else
-	/*
-	 * smp_processor_id() << 3 is stored in CONTEXT.
-	 */
-	uasm_i_mfc0(p, ptr, C0_CONTEXT);
-	UASM_i_LA_mostly(p, tmp, pgdc);
-	uasm_i_srl(p, ptr, ptr, 23);
+		UASM_i_LA_mostly(p, ptr, pgdc);
 #endif
-	uasm_i_addu(p, ptr, tmp, ptr);
-#else
-	UASM_i_LA_mostly(p, ptr, pgdc);
-#endif
-	uasm_i_mfc0(p, tmp, C0_BADVADDR); /* get faulting address */
-	uasm_i_lw(p, ptr, uasm_rel_lo(pgdc), ptr);
+		uasm_i_mfc0(p, tmp, C0_BADVADDR); /* get faulting address */
+		uasm_i_lw(p, ptr, uasm_rel_lo(pgdc), ptr);
+	}
 	uasm_i_srl(p, tmp, tmp, PGDIR_SHIFT); /* get pgd only bits */
 	uasm_i_sll(p, tmp, tmp, PGD_T_LOG2);
 	uasm_i_addu(p, ptr, ptr, tmp); /* add in pgd offset */
@@ -980,7 +944,7 @@ build_get_pgde32(u32 **p, unsigned int tmp, unsigned int ptr)
 
 #endif /* !CONFIG_64BIT */
 
-static void __cpuinit build_adjust_context(u32 **p, unsigned int ctx)
+static void build_adjust_context(u32 **p, unsigned int ctx)
 {
 	unsigned int shift = 4 - (PTE_T_LOG2 + 1) + PAGE_SHIFT - 12;
 	unsigned int mask = (PTRS_PER_PTE / 2 - 1) << (PTE_T_LOG2 + 1);
@@ -1006,7 +970,7 @@ static void __cpuinit build_adjust_context(u32 **p, unsigned int ctx)
 	uasm_i_andi(p, ctx, ctx, mask);
 }
 
-static void __cpuinit build_get_ptep(u32 **p, unsigned int tmp, unsigned int ptr)
+static void build_get_ptep(u32 **p, unsigned int tmp, unsigned int ptr)
 {
 	/*
 	 * Bug workaround for the Nevada. It seems as if under certain
@@ -1031,8 +995,7 @@ static void __cpuinit build_get_ptep(u32 **p, unsigned int tmp, unsigned int ptr
 	UASM_i_ADDU(p, ptr, ptr, tmp); /* add in offset */
 }
 
-static void __cpuinit build_update_entries(u32 **p, unsigned int tmp,
-					unsigned int ptep)
+static void build_update_entries(u32 **p, unsigned int tmp, unsigned int ptep)
 {
 	/*
 	 * 64bit address support (36bit on a 32bit CPU) in a 32bit
@@ -1093,10 +1056,10 @@ struct mips_huge_tlb_info {
 	int restore_scratch;
 };
 
-static struct mips_huge_tlb_info __cpuinit
+static struct mips_huge_tlb_info
 build_fast_tlb_refill_handler (u32 **p, struct uasm_label **l,
 			       struct uasm_reloc **r, unsigned int tmp,
-			       unsigned int ptr, int c0_scratch)
+			       unsigned int ptr, int c0_scratch_reg)
 {
 	struct mips_huge_tlb_info rv;
 	unsigned int even, odd;
@@ -1110,12 +1073,12 @@ build_fast_tlb_refill_handler (u32 **p, struct uasm_label **l,
 		UASM_i_MFC0(p, tmp, C0_BADVADDR);
 
 		if (pgd_reg != -1)
-			UASM_i_MFC0(p, ptr, 31, pgd_reg);
+			UASM_i_MFC0(p, ptr, c0_kscratch(), pgd_reg);
 		else
 			UASM_i_MFC0(p, ptr, C0_CONTEXT);
 
-		if (c0_scratch >= 0)
-			UASM_i_MTC0(p, scratch, 31, c0_scratch);
+		if (c0_scratch_reg >= 0)
+			UASM_i_MTC0(p, scratch, c0_kscratch(), c0_scratch_reg);
 		else
 			UASM_i_SW(p, scratch, scratchpad_offset(0), 0);
 
@@ -1130,14 +1093,14 @@ build_fast_tlb_refill_handler (u32 **p, struct uasm_label **l,
 		}
 	} else {
 		if (pgd_reg != -1)
-			UASM_i_MFC0(p, ptr, 31, pgd_reg);
+			UASM_i_MFC0(p, ptr, c0_kscratch(), pgd_reg);
 		else
 			UASM_i_MFC0(p, ptr, C0_CONTEXT);
 
 		UASM_i_MFC0(p, tmp, C0_BADVADDR);
 
-		if (c0_scratch >= 0)
-			UASM_i_MTC0(p, scratch, 31, c0_scratch);
+		if (c0_scratch_reg >= 0)
+			UASM_i_MTC0(p, scratch, c0_kscratch(), c0_scratch_reg);
 		else
 			UASM_i_SW(p, scratch, scratchpad_offset(0), 0);
 
@@ -1242,8 +1205,8 @@ build_fast_tlb_refill_handler (u32 **p, struct uasm_label **l,
 	}
 	UASM_i_MTC0(p, odd, C0_ENTRYLO1); /* load it */
 
-	if (c0_scratch >= 0) {
-		UASM_i_MFC0(p, scratch, 31, c0_scratch);
+	if (c0_scratch_reg >= 0) {
+		UASM_i_MFC0(p, scratch, c0_kscratch(), c0_scratch_reg);
 		build_tlb_write_entry(p, l, r, tlb_random);
 		uasm_l_leave(l, *p);
 		rv.restore_scratch = 1;
@@ -1271,7 +1234,7 @@ build_fast_tlb_refill_handler (u32 **p, struct uasm_label **l,
  */
 #define MIPS64_REFILL_INSNS 32
 
-static void __cpuinit build_r4000_tlb_refill_handler(void)
+static void build_r4000_tlb_refill_handler(void)
 {
 	u32 *p = tlb_handler;
 	struct uasm_label *l = labels;
@@ -1286,7 +1249,7 @@ static void __cpuinit build_r4000_tlb_refill_handler(void)
 	memset(relocs, 0, sizeof(relocs));
 	memset(final_handler, 0, sizeof(final_handler));
 
-	if ((scratch_reg > 0 || scratchpad_available()) && use_bbit_insns()) {
+	if ((scratch_reg >= 0 || scratchpad_available()) && use_bbit_insns()) {
 		htlb_info = build_fast_tlb_refill_handler(&p, &l, &r, K0, K1,
 							  scratch_reg);
 		vmalloc_mode = refill_scratch;
@@ -1453,16 +1416,17 @@ static void __cpuinit build_r4000_tlb_refill_handler(void)
 u32 handle_tlbl[FASTPATH_SIZE] __cacheline_aligned;
 u32 handle_tlbs[FASTPATH_SIZE] __cacheline_aligned;
 u32 handle_tlbm[FASTPATH_SIZE] __cacheline_aligned;
-#ifdef CONFIG_MIPS_PGD_C0_CONTEXT
 u32 tlbmiss_handler_setup_pgd_array[16] __cacheline_aligned;
 
-static void __cpuinit build_r4000_setup_pgd(void)
+static void build_setup_pgd(void)
 {
 	const int a0 = 4;
-	const int a1 = 5;
+	const int __maybe_unused a1 = 5;
+	const int __maybe_unused a2 = 6;
 	u32 *p = tlbmiss_handler_setup_pgd_array;
-	struct uasm_label *l = labels;
-	struct uasm_reloc *r = relocs;
+#ifndef CONFIG_MIPS_PGD_C0_CONTEXT
+	long pgdc = (long)pgd_current;
+#endif
 
 	memset(tlbmiss_handler_setup_pgd_array, 0, sizeof(tlbmiss_handler_setup_pgd_array));
 	memset(labels, 0, sizeof(labels));
@@ -1470,7 +1434,11 @@ static void __cpuinit build_r4000_setup_pgd(void)
 
 	pgd_reg = allocate_kscratch();
 
+#ifdef CONFIG_MIPS_PGD_C0_CONTEXT
 	if (pgd_reg == -1) {
+		struct uasm_label *l = labels;
+		struct uasm_reloc *r = relocs;
+
 		/* PGD << 11 in c0_Context */
 		/*
 		 * If it is a ckseg0 address, convert to a physical
@@ -1490,8 +1458,28 @@ static void __cpuinit build_r4000_setup_pgd(void)
 	} else {
 		/* PGD in c0_KScratch */
 		uasm_i_jr(&p, 31);
-		UASM_i_MTC0(&p, a0, 31, pgd_reg);
+		UASM_i_MTC0(&p, a0, c0_kscratch(), pgd_reg);
 	}
+#else
+#ifdef CONFIG_SMP
+	/* Save PGD to pgd_current[smp_processor_id()] */
+	UASM_i_CPUID_MFC0(&p, a1, SMP_CPUID_REG);
+	UASM_i_SRL_SAFE(&p, a1, a1, SMP_CPUID_PTRSHIFT);
+	UASM_i_LA_mostly(&p, a2, pgdc);
+	UASM_i_ADDU(&p, a2, a2, a1);
+	UASM_i_SW(&p, a0, uasm_rel_lo(pgdc), a2);
+#else
+	UASM_i_LA_mostly(&p, a2, pgdc);
+	UASM_i_SW(&p, a0, uasm_rel_lo(pgdc), a2);
+#endif /* SMP */
+	uasm_i_jr(&p, 31);
+
+	/* if pgd_reg is allocated, save PGD also to scratch register */
+	if (pgd_reg != -1)
+		UASM_i_MTC0(&p, a0, c0_kscratch(), pgd_reg);
+	else
+		uasm_i_nop(&p);
+#endif
 	if (p - tlbmiss_handler_setup_pgd_array > ARRAY_SIZE(tlbmiss_handler_setup_pgd_array))
 		panic("tlbmiss_handler_setup_pgd_array space exceeded");
 	uasm_resolve_relocs(relocs, labels);
@@ -1502,9 +1490,8 @@ static void __cpuinit build_r4000_setup_pgd(void)
 		     tlbmiss_handler_setup_pgd_array,
 		     ARRAY_SIZE(tlbmiss_handler_setup_pgd_array));
 }
-#endif
 
-static void __cpuinit
+static void
 iPTE_LW(u32 **p, unsigned int pte, unsigned int ptr)
 {
 #ifdef CONFIG_SMP
@@ -1524,7 +1511,7 @@ iPTE_LW(u32 **p, unsigned int pte, unsigned int ptr)
 #endif
 }
 
-static void __cpuinit
+static void
 iPTE_SW(u32 **p, struct uasm_reloc **r, unsigned int pte, unsigned int ptr,
 	unsigned int mode)
 {
@@ -1584,7 +1571,7 @@ iPTE_SW(u32 **p, struct uasm_reloc **r, unsigned int pte, unsigned int ptr,
  * the page table where this PTE is located, PTE will be re-loaded
  * with it's original value.
  */
-static void __cpuinit
+static void
 build_pte_present(u32 **p, struct uasm_reloc **r,
 		  int pte, int ptr, int scratch, enum label_id lid)
 {
@@ -1612,7 +1599,7 @@ build_pte_present(u32 **p, struct uasm_reloc **r,
 }
 
 /* Make PTE valid, store result in PTR. */
-static void __cpuinit
+static void
 build_make_valid(u32 **p, struct uasm_reloc **r, unsigned int pte,
 		 unsigned int ptr)
 {
@@ -1625,7 +1612,7 @@ build_make_valid(u32 **p, struct uasm_reloc **r, unsigned int pte,
  * Check if PTE can be written to, if not branch to LABEL. Regardless
  * restore PTE with value from PTR when done.
  */
-static void __cpuinit
+static void
 build_pte_writable(u32 **p, struct uasm_reloc **r,
 		   unsigned int pte, unsigned int ptr, int scratch,
 		   enum label_id lid)
@@ -1645,7 +1632,7 @@ build_pte_writable(u32 **p, struct uasm_reloc **r,
 /* Make PTE writable, update software status bits as well, then store
  * at PTR.
  */
-static void __cpuinit
+static void
 build_make_write(u32 **p, struct uasm_reloc **r, unsigned int pte,
 		 unsigned int ptr)
 {
@@ -1659,7 +1646,7 @@ build_make_write(u32 **p, struct uasm_reloc **r, unsigned int pte,
  * Check if PTE can be modified, if not branch to LABEL. Regardless
  * restore PTE with value from PTR when done.
  */
-static void __cpuinit
+static void
 build_pte_modifiable(u32 **p, struct uasm_reloc **r,
 		     unsigned int pte, unsigned int ptr, int scratch,
 		     enum label_id lid)
@@ -1688,7 +1675,7 @@ build_pte_modifiable(u32 **p, struct uasm_reloc **r,
  * This places the pte into ENTRYLO0 and writes it with tlbwi.
  * Then it returns.
  */
-static void __cpuinit
+static void
 build_r3000_pte_reload_tlbwi(u32 **p, unsigned int pte, unsigned int tmp)
 {
 	uasm_i_mtc0(p, pte, C0_ENTRYLO0); /* cp0 delay */
@@ -1704,7 +1691,7 @@ build_r3000_pte_reload_tlbwi(u32 **p, unsigned int pte, unsigned int tmp)
  * may have the probe fail bit set as a result of a trap on a
  * kseg2 access, i.e. without refill.  Then it returns.
  */
-static void __cpuinit
+static void
 build_r3000_tlb_reload_write(u32 **p, struct uasm_label **l,
 			     struct uasm_reloc **r, unsigned int pte,
 			     unsigned int tmp)
@@ -1722,7 +1709,7 @@ build_r3000_tlb_reload_write(u32 **p, struct uasm_label **l,
 	uasm_i_rfe(p); /* branch delay */
 }
 
-static void __cpuinit
+static void
 build_r3000_tlbchange_handler_head(u32 **p, unsigned int pte,
 				   unsigned int ptr)
 {
@@ -1742,7 +1729,7 @@ build_r3000_tlbchange_handler_head(u32 **p, unsigned int pte,
 	uasm_i_tlbp(p); /* load delay */
 }
 
-static void __cpuinit build_r3000_tlb_load_handler(void)
+static void build_r3000_tlb_load_handler(void)
 {
 	u32 *p = handle_tlbl;
 	struct uasm_label *l = labels;
@@ -1772,7 +1759,7 @@ static void __cpuinit build_r3000_tlb_load_handler(void)
 	dump_handler("r3000_tlb_load", handle_tlbl, ARRAY_SIZE(handle_tlbl));
 }
 
-static void __cpuinit build_r3000_tlb_store_handler(void)
+static void build_r3000_tlb_store_handler(void)
 {
 	u32 *p = handle_tlbs;
 	struct uasm_label *l = labels;
@@ -1802,7 +1789,7 @@ static void __cpuinit build_r3000_tlb_store_handler(void)
 	dump_handler("r3000_tlb_store", handle_tlbs, ARRAY_SIZE(handle_tlbs));
 }
 
-static void __cpuinit build_r3000_tlb_modify_handler(void)
+static void build_r3000_tlb_modify_handler(void)
 {
 	u32 *p = handle_tlbm;
 	struct uasm_label *l = labels;
@@ -1836,7 +1823,7 @@ static void __cpuinit build_r3000_tlb_modify_handler(void)
 /*
  * R4000 style TLB load/store/modify handlers.
  */
-static struct work_registers __cpuinit
+static struct work_registers
 build_r4000_tlbchange_handler_head(u32 **p, struct uasm_label **l,
 				   struct uasm_reloc **r)
 {
@@ -1872,7 +1859,7 @@ build_r4000_tlbchange_handler_head(u32 **p, struct uasm_label **l,
 	return wr;
 }
 
-static void __cpuinit
+static void
 build_r4000_tlbchange_handler_tail(u32 **p, struct uasm_label **l,
 				   struct uasm_reloc **r, unsigned int tmp,
 				   unsigned int ptr)
@@ -1890,7 +1877,7 @@ build_r4000_tlbchange_handler_tail(u32 **p, struct uasm_label **l,
 #endif
 }
 
-static void __cpuinit build_r4000_tlb_load_handler(void)
+static void build_r4000_tlb_load_handler(void)
 {
 	u32 *p = handle_tlbl;
 	struct uasm_label *l = labels;
@@ -2046,7 +2033,7 @@ static void __cpuinit build_r4000_tlb_load_handler(void)
 	dump_handler("r4000_tlb_load", handle_tlbl, ARRAY_SIZE(handle_tlbl));
 }
 
-static void __cpuinit build_r4000_tlb_store_handler(void)
+static void build_r4000_tlb_store_handler(void)
 {
 	u32 *p = handle_tlbs;
 	struct uasm_label *l = labels;
@@ -2100,7 +2087,7 @@ static void __cpuinit build_r4000_tlb_store_handler(void)
 	dump_handler("r4000_tlb_store", handle_tlbs, ARRAY_SIZE(handle_tlbs));
 }
 
-static void __cpuinit build_r4000_tlb_modify_handler(void)
+static void build_r4000_tlb_modify_handler(void)
 {
 	u32 *p = handle_tlbm;
 	struct uasm_label *l = labels;
@@ -2155,7 +2142,7 @@ static void __cpuinit build_r4000_tlb_modify_handler(void)
 	dump_handler("r4000_tlb_modify", handle_tlbm, ARRAY_SIZE(handle_tlbm));
 }
 
-void __cpuinit build_tlb_refill_handler(void)
+void build_tlb_refill_handler(void)
 {
 	/*
 	 * The refill handler is generated per-CPU, multi-node systems
@@ -2184,6 +2171,7 @@ void __cpuinit build_tlb_refill_handler(void)
 		if (!run_once) {
 			if (!cpu_has_local_ebase)
 				build_r3000_tlb_refill_handler();
+			build_setup_pgd();
 			build_r3000_tlb_load_handler();
 			build_r3000_tlb_store_handler();
 			build_r3000_tlb_modify_handler();
@@ -2206,9 +2194,7 @@ void __cpuinit build_tlb_refill_handler(void)
 	default:
 		if (!run_once) {
 			scratch_reg = allocate_kscratch();
-#ifdef CONFIG_MIPS_PGD_C0_CONTEXT
-			build_r4000_setup_pgd();
-#endif
+			build_setup_pgd();
 			build_r4000_tlb_load_handler();
 			build_r4000_tlb_store_handler();
 			build_r4000_tlb_modify_handler();
@@ -2221,7 +2207,7 @@ void __cpuinit build_tlb_refill_handler(void)
 	}
 }
 
-void __cpuinit flush_tlb_handlers(void)
+void flush_tlb_handlers(void)
 {
 	local_flush_icache_range((unsigned long)handle_tlbl,
 			   (unsigned long)handle_tlbl + sizeof(handle_tlbl));
@@ -2229,8 +2215,6 @@ void __cpuinit flush_tlb_handlers(void)
 			   (unsigned long)handle_tlbs + sizeof(handle_tlbs));
 	local_flush_icache_range((unsigned long)handle_tlbm,
 			   (unsigned long)handle_tlbm + sizeof(handle_tlbm));
-#ifdef CONFIG_MIPS_PGD_C0_CONTEXT
 	local_flush_icache_range((unsigned long)tlbmiss_handler_setup_pgd_array,
 			   (unsigned long)tlbmiss_handler_setup_pgd_array + sizeof(handle_tlbm));
-#endif
 }

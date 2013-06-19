@@ -57,7 +57,29 @@ struct dw8250_data {
 	int		last_lcr;
 	int		line;
 	struct clk	*clk;
+	u8		usr_reg;
+	bool		no_ucv;
 };
+
+static unsigned int dw8250_serial_inq(struct uart_port *p, int offset)
+{
+	offset <<= p->regshift;
+
+	return (u8)__raw_readq(p->membase + offset);
+}
+
+static void dw8250_serial_outq(struct uart_port *p, int offset, int value)
+{
+	struct dw8250_data *d = p->private_data;
+
+	if (offset == UART_LCR)
+		d->last_lcr = value;
+
+	offset <<= p->regshift;
+	__raw_writeq(value, p->membase + offset);
+	dw8250_serial_inq(p, UART_LCR);
+}
+
 
 static void dw8250_serial_out(struct uart_port *p, int offset, int value)
 {
@@ -104,7 +126,7 @@ static int dw8250_handle_irq(struct uart_port *p)
 		return 1;
 	} else if ((iir & UART_IIR_BUSY) == UART_IIR_BUSY) {
 		/* Clear the USR and write the LCR again. */
-		(void)p->serial_in(p, DW_UART_USR);
+		(void)p->serial_in(p, d->usr_reg);
 		p->serial_out(p, UART_LCR, d->last_lcr);
 
 		return 1;
@@ -125,12 +147,20 @@ dw8250_do_pm(struct uart_port *port, unsigned int state, unsigned int old)
 		pm_runtime_put_sync_suspend(port->dev);
 }
 
-static int dw8250_probe_of(struct uart_port *p)
+static int dw8250_probe_of(struct uart_port *p,
+			   struct dw8250_data *data)
 {
 	struct device_node	*np = p->dev->of_node;
 	u32			val;
 
-	if (!of_property_read_u32(np, "reg-io-width", &val)) {
+	if (of_device_is_compatible(np, "cavium,octeon-3860-uart")) {
+		p->serial_in = dw8250_serial_inq;
+		p->serial_out = dw8250_serial_outq;
+		p->flags = ASYNC_SKIP_TEST | UPF_SHARE_IRQ | UPF_FIXED_TYPE;
+		p->type = PORT_OCTEON;
+		data->usr_reg = 0x27;
+		data->no_ucv = true;
+	} else if (!of_property_read_u32(np, "reg-io-width", &val)) {
 		switch (val) {
 		case 1:
 			break;
@@ -259,6 +289,7 @@ static int dw8250_probe(struct platform_device *pdev)
 	if (!data)
 		return -ENOMEM;
 
+	data->usr_reg = DW_UART_USR;
 	data->clk = devm_clk_get(&pdev->dev, NULL);
 	if (!IS_ERR(data->clk)) {
 		clk_prepare_enable(data->clk);
@@ -270,10 +301,8 @@ static int dw8250_probe(struct platform_device *pdev)
 	uart.port.serial_out = dw8250_serial_out;
 	uart.port.private_data = data;
 
-	dw8250_setup_port(&uart);
-
 	if (pdev->dev.of_node) {
-		err = dw8250_probe_of(&uart.port);
+		err = dw8250_probe_of(&uart.port, data);
 		if (err)
 			return err;
 	} else if (ACPI_HANDLE(&pdev->dev)) {
@@ -283,6 +312,9 @@ static int dw8250_probe(struct platform_device *pdev)
 	} else {
 		return -ENODEV;
 	}
+
+	if (!data->no_ucv)
+		dw8250_setup_port(&uart);
 
 	data->line = serial8250_register_8250_port(&uart);
 	if (data->line < 0)
@@ -362,6 +394,7 @@ static const struct dev_pm_ops dw8250_pm_ops = {
 
 static const struct of_device_id dw8250_of_match[] = {
 	{ .compatible = "snps,dw-apb-uart" },
+	{ .compatible = "cavium,octeon-3860-uart" },
 	{ /* Sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, dw8250_of_match);
