@@ -908,11 +908,10 @@ func_end:
  *      Calls the Bridge's CHNL_ISR to determine if this interrupt is ours, then
  *      schedules a DPC to dispatch I/O.
  */
-int io_mbox_msg(struct notifier_block *self, unsigned long len, void *data)
+int io_mbox_msg(struct notifier_block *self, unsigned long len, void *msg)
 {
 	struct io_mgr *pio_mgr;
 	struct dev_object *dev_obj;
-	u32 msg = (u32)((struct mailbox_msg *)data)->pdata;
 	unsigned long flags;
 
 	dev_obj = dev_get_first();
@@ -921,7 +920,7 @@ int io_mbox_msg(struct notifier_block *self, unsigned long len, void *data)
 	if (!pio_mgr)
 		return NOTIFY_BAD;
 
-	pio_mgr->intr_val = (u16)(msg);
+	pio_mgr->intr_val = (u16)((u32)msg);
 	if (pio_mgr->intr_val & MBX_PM_CLASS)
 		io_dispatch_pm(pio_mgr);
 

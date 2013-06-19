@@ -369,11 +369,12 @@ config ARCH_CLPS711X
 	select ARCH_REQUIRE_GPIOLIB
 	select AUTO_ZRELADDR
 	select CLKDEV_LOOKUP
+	select CLKSRC_MMIO
 	select COMMON_CLK
 	select CPU_ARM720T
 	select GENERIC_CLOCKEVENTS
+	select MFD_SYSCON
 	select MULTI_IRQ_HANDLER
-	select NEED_MACH_MEMORY_H
 	select SPARSE_IRQ
 	help
 	  Support for Cirrus Logic 711x/721x/731x based boards.
@@ -505,6 +506,7 @@ config ARCH_DOVE
 
 config ARCH_KIRKWOOD
 	bool "Marvell Kirkwood"
+	select ARCH_HAS_CPUFREQ
 	select ARCH_REQUIRE_GPIOLIB
 	select CPU_FEROCEON
 	select GENERIC_CLOCKEVENTS
@@ -648,7 +650,7 @@ config ARCH_SHMOBILE
 	select MULTI_IRQ_HANDLER
 	select NEED_MACH_MEMORY_H
 	select NO_IOPORT
-	select PINCTRL if ARCH_WANT_OPTIONAL_GPIOLIB
+	select PINCTRL
 	select PM_GENERIC_DOMAINS if PM
 	select SPARSE_IRQ
 	help
@@ -950,6 +952,8 @@ source "arch/arm/mach-iop33x/Kconfig"
 source "arch/arm/mach-iop13xx/Kconfig"
 
 source "arch/arm/mach-ixp4xx/Kconfig"
+
+source "arch/arm/mach-keystone/Kconfig"
 
 source "arch/arm/mach-kirkwood/Kconfig"
 
@@ -1573,6 +1577,7 @@ config ARCH_NR_GPIO
 	int
 	default 1024 if ARCH_SHMOBILE || ARCH_TEGRA
 	default 512 if SOC_OMAP5
+	default 512 if ARCH_KEYSTONE
 	default 392 if ARCH_U8500
 	default 352 if ARCH_VT8500
 	default 288 if ARCH_SUNXI
@@ -2095,53 +2100,6 @@ menu "CPU Power Management"
 
 if ARCH_HAS_CPUFREQ
 source "drivers/cpufreq/Kconfig"
-
-config CPU_FREQ_S3C
-	bool
-	help
-	  Internal configuration node for common cpufreq on Samsung SoC
-
-config CPU_FREQ_S3C24XX
-	bool "CPUfreq driver for Samsung S3C24XX series CPUs (EXPERIMENTAL)"
-	depends on ARCH_S3C24XX && CPU_FREQ
-	select CPU_FREQ_S3C
-	help
-	  This enables the CPUfreq driver for the Samsung S3C24XX family
-	  of CPUs.
-
-	  For details, take a look at <file:Documentation/cpu-freq>.
-
-	  If in doubt, say N.
-
-config CPU_FREQ_S3C24XX_PLL
-	bool "Support CPUfreq changing of PLL frequency (EXPERIMENTAL)"
-	depends on CPU_FREQ_S3C24XX
-	help
-	  Compile in support for changing the PLL frequency from the
-	  S3C24XX series CPUfreq driver. The PLL takes time to settle
-	  after a frequency change, so by default it is not enabled.
-
-	  This also means that the PLL tables for the selected CPU(s) will
-	  be built which may increase the size of the kernel image.
-
-config CPU_FREQ_S3C24XX_DEBUG
-	bool "Debug CPUfreq Samsung driver core"
-	depends on CPU_FREQ_S3C24XX
-	help
-	  Enable s3c_freq_dbg for the Samsung S3C CPUfreq core
-
-config CPU_FREQ_S3C24XX_IODEBUG
-	bool "Debug CPUfreq Samsung driver IO timing"
-	depends on CPU_FREQ_S3C24XX
-	help
-	  Enable s3c_freq_iodbg for the Samsung S3C CPUfreq core
-
-config CPU_FREQ_S3C24XX_DEBUGFS
-	bool "Export debugfs for CPUFreq"
-	depends on CPU_FREQ_S3C24XX && DEBUG_FS
-	help
-	  Export status information via debugfs.
-
 endif
 
 source "drivers/cpuidle/Kconfig"
