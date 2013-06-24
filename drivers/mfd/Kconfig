@@ -1024,6 +1024,7 @@ config MFD_TC6393XB
 config MFD_VX855
 	tristate "VIA VX855/VX875 integrated south bridge"
 	depends on PCI && GENERIC_HARDIRQS
+	select IRQ_DOMAIN
 	select MFD_CORE
 	help
 	  Say yes here to enable support for various functions of the
