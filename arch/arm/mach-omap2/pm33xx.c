@@ -610,8 +610,7 @@ static int __init am33xx_pm_init(void)
 #ifdef CONFIG_SUSPEND
 	void __iomem *base;
 	u32 reg;
-	u32 evm_id;
-
+	u32 evm_id = -EINVAL;
 #endif
 	if (!cpu_is_am33xx())
 		return -ENODEV;
@@ -643,8 +642,10 @@ static int __init am33xx_pm_init(void)
 		suspend_cfg_param_list[SUSP_VTP_CTRL_VAL] = SUSP_VTP_CTRL_DDR3;
 
 
+#ifdef CONFIG_MACH_AM335XEVM
 	/* Get Board Id */
 	evm_id = am335x_evm_get_id();
+#endif
 	if (evm_id != -EINVAL)
 		suspend_cfg_param_list[EVM_ID] = evm_id;
 	else
