@@ -271,13 +271,11 @@ static int am33xx_pm_begin(suspend_state_t state)
 	if (ret) {
 		pr_err("A8<->CM3 MSG for LP failed\n");
 		am33xx_m3_state_machine_reset();
-		ret = -1;
 	}
 
 	if (!wait_for_completion_timeout(&a8_m3_sync, msecs_to_jiffies(5000))) {
 		pr_err("A8<->CM3 sync failure\n");
 		am33xx_m3_state_machine_reset();
-		ret = -1;
 	} else {
 		pr_debug("Message sent for entering %s\n",
 			(DS_MODE == DS0_ID ? "DS0" : "DS1"));
@@ -362,7 +360,7 @@ static int am33xx_verify_lp_state(int core_suspend_stat)
 
 	if (core_suspend_stat) {
 		pr_err("Kernel core reported suspend failure\n");
-		ret = -1;
+		ret = -EINVAL;
 		goto clear_old_status;
 	}
 
@@ -377,12 +375,12 @@ static int am33xx_verify_lp_state(int core_suspend_stat)
 	} else if (status == 0x10000) {
 		pr_err("Could not enter low power state\n"
 			"Please check for active clocks in PER domain\n");
-		ret = -1;
+		ret = -EINVAL;
 		goto clear_old_status;
 	} else {
 		pr_err("Something is terribly wrong :(\nStatus = %0x\n",
 				status);
-		ret = -1;
+		ret = -EIO;
 	}
 
 clear_old_status:
