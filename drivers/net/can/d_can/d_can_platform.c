@@ -88,7 +88,7 @@ static int __devinit d_can_plat_probe(struct platform_device *pdev)
 	fck = clk_get(&pdev->dev, "fck");
 	if (IS_ERR(fck)) {
 		dev_err(&pdev->dev, "fck is not found\n");
-		ret = -ENODEV;
+		ret = PTR_ERR(fck);
 		goto exit_free_ndev;
 	}
 
@@ -117,6 +117,7 @@ static int __devinit d_can_plat_probe(struct platform_device *pdev)
 	/* IRQ specific to Error and status & can be used for Message Object */
 	ndev->irq = platform_get_irq_byname(pdev, "d_can_ms");
 	if (!ndev->irq) {
+		ret = -ENODEV;
 		dev_err(&pdev->dev, "No irq0 resource\n");
 		goto exit_iounmap;
 	}
@@ -124,6 +125,7 @@ static int __devinit d_can_plat_probe(struct platform_device *pdev)
 	/* IRQ specific for Message Object */
 	priv->irq_obj = platform_get_irq_byname(pdev, "d_can_mo");
 	if (!priv->irq_obj) {
+		ret = -ENODEV;
 		dev_err(&pdev->dev, "No irq1 resource\n");
 		goto exit_iounmap;
 	}
