@@ -540,6 +540,21 @@ static int davinci_mcasp_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 	return 0;
 }
 
+static int davinci_mcasp_set_dai_sysclk(struct snd_soc_dai *cpu_dai,
+					int clk_id, unsigned int freq, int dir)
+{
+	switch (clk_id) {
+	case 0:
+		printk(KERN_DEBUG "%s: Setting sysclk to %u (%s)\n", __func__,
+			freq, dir == SND_SOC_CLOCK_OUT ? "OUT" : "IN");
+		break;
+
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static int davinci_config_channel_size(struct davinci_audio_dev *dev,
 				       int channel_size)
 {
@@ -866,7 +881,7 @@ static struct snd_soc_dai_ops davinci_mcasp_dai_ops = {
 	.trigger	= davinci_mcasp_trigger,
 	.hw_params	= davinci_mcasp_hw_params,
 	.set_fmt	= davinci_mcasp_set_dai_fmt,
-
+	.set_sysclk	= davinci_mcasp_set_dai_sysclk,
 };
 
 #define DAVINCI_MCASP_PCM_FMTS (SNDRV_PCM_FMTBIT_S8 | \
