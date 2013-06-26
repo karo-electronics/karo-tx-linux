@@ -58,9 +58,9 @@ static unsigned int wdt_trgr_pattern = 0x1234;
 static spinlock_t wdt_lock;
 
 struct omap_wdt_dev {
-	void __iomem    *base;          /* physical */
-	struct device   *dev;
-	int             omap_wdt_users;
+	void __iomem *base;          /* physical */
+	struct device *dev;
+	unsigned long omap_wdt_users;
 	struct resource *mem;
 	struct miscdevice omap_wdt_miscdev;
 };
@@ -141,7 +141,7 @@ static int omap_wdt_open(struct inode *inode, struct file *file)
 	struct omap_wdt_dev *wdev = platform_get_drvdata(omap_wdt_dev);
 	void __iomem *base = wdev->base;
 
-	if (test_and_set_bit(1, (unsigned long *)&(wdev->omap_wdt_users)))
+	if (test_and_set_bit(1, &wdev->omap_wdt_users))
 		return -EBUSY;
 
 	pm_runtime_get_sync(wdev->dev);
@@ -265,7 +265,7 @@ static int __devinit omap_wdt_probe(struct platform_device *pdev)
 	/* reserve static register mappings */
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
-		ret = -ENOENT;
+		ret = -ENODEV;
 		goto err_get_resource;
 	}
 
@@ -309,7 +309,7 @@ static int __devinit omap_wdt_probe(struct platform_device *pdev)
 	wdev->omap_wdt_miscdev.name = "watchdog";
 	wdev->omap_wdt_miscdev.fops = &omap_wdt_fops;
 
-	ret = misc_register(&(wdev->omap_wdt_miscdev));
+	ret = misc_register(&wdev->omap_wdt_miscdev);
 	if (ret)
 		goto err_misc;
 
@@ -358,7 +358,7 @@ static int __devexit omap_wdt_remove(struct platform_device *pdev)
 	if (!res)
 		return -ENOENT;
 
-	misc_deregister(&(wdev->omap_wdt_miscdev));
+	misc_deregister(&wdev->omap_wdt_miscdev);
 	release_mem_region(res->start, resource_size(res));
 	platform_set_drvdata(pdev, NULL);
 
