@@ -176,6 +176,7 @@ static int __devexit d_can_plat_remove(struct platform_device *pdev)
 	struct net_device *ndev = platform_get_drvdata(pdev);
 	struct d_can_priv *priv = netdev_priv(ndev);
 	struct resource *mem;
+	void __iomem *base = priv->base;
 
 	/* De-initialize DCAN RAM */
 	d_can_reset_ram(priv, pdev->id, 0);
@@ -184,7 +185,7 @@ static int __devexit d_can_plat_remove(struct platform_device *pdev)
 	platform_set_drvdata(pdev, NULL);
 
 	free_d_can_dev(ndev);
-	iounmap(priv->base);
+	iounmap(base);
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	release_mem_region(mem->start, resource_size(mem));
