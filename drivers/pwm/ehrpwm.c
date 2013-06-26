@@ -28,7 +28,7 @@
 #include <plat/config_pwm.h>
 
 #ifdef DEBUG
-#define debug(format, args...) printk(format, ##args)
+#define debug(format, args...) printk(KERN_DEBUG format, ##args)
 #else
 #define debug(format, args...) { }
 #endif
@@ -510,7 +510,7 @@ int ehrpwm_db_get_delay(struct pwm_device *p, unsigned char edge,
 	} else if (cfgmask == CONFIG_NS) {
 		delay_ticks = delay_ticks * ehrpwm->prescale_val;
 		delay_ns = pwm_ticks_to_ns(p, delay_ticks);
-		debug("\n delay ns value is %lu", delay_ns);
+		debug("delay ns value is %lu\n", delay_ns);
 		*delay_val = delay_ns;
 	} else {
 		return -EINVAL;
@@ -552,7 +552,7 @@ int ehrpwm_db_set_delay(struct pwm_device *p, unsigned char edge,
 			" %lu ns", __func__, delay_ticks);
 			delay_ticks = 0x3ff;
 		}
-		debug("\n delay ticks is %lu", delay_ticks);
+		debug("delay ticks is %lu\n", delay_ticks);
 		ehrpwm_write(ehrpwm, offset, delay_ticks);
 	} else {
 		return -EINVAL;
@@ -659,7 +659,7 @@ int ehrpwm_tz_sel_event(struct pwm_device *p, unsigned char input,
 		dev_dbg(p->dev, "%s: Invalid command", __func__);
 		return -EINVAL;
 	}
-	debug("\n TZ_sel val is %0x", ehrpwm_read(ehrpwm, TZSEL));
+	debug("TZ_sel val is %08x\n", ehrpwm_read(ehrpwm, TZSEL));
 
 	return 0;
 }
@@ -679,7 +679,7 @@ int ehrpwm_tz_set_action(struct pwm_device *p, unsigned char ch,
 		ehrpwm_reg_config(ehrpwm, TZCTL, act << TZCTL_ACTB_POS,
 			       TZCTL_ACTB_MASK);
 
-	debug("\n TZCTL reg val is %0x", ehrpwm_read(ehrpwm, TZCTL));
+	debug("TZCTL reg val is %08x\n", ehrpwm_read(ehrpwm, TZCTL));
 
 	return 0;
 }
@@ -699,7 +699,7 @@ int ehrpwm_tz_set_int_en_dis(struct pwm_device *p, enum tz_event event,
 	else
 		return -EINVAL;
 
-	debug("\n TZEINT reg val is %0x", ehrpwm_read(ehrpwm, TZEINT));
+	debug("TZEINT reg val is %08x\n", ehrpwm_read(ehrpwm, TZEINT));
 
 	return 0;
 }
@@ -1039,14 +1039,14 @@ static int ehrpwm_pwm_set_prd(struct pwm_device *p)
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 	int chan = 0;
 	/*
-	 * Since the device has a singe period register, copy the period
+	 * Since the device has a single period register, copy the period
 	 * value to the other channel also.
 	 */
 	chan = p - &ehrpwm->pwm[0];
 	temp = &ehrpwm->pwm[!chan];
 	temp->period_ticks = p->period_ticks;
 	temp->period_ns = p->period_ns;
-	debug("\n period_ticks is %lu", p->period_ticks);
+	debug("period_ticks is %lu\n", p->period_ticks);
 
 	if (p->period_ticks > 65535) {
 		ret = get_divider_val(p->period_ticks / 65535 + 1, &ps_div_val,
@@ -1075,9 +1075,9 @@ static int ehrpwm_pwm_set_prd(struct pwm_device *p)
 	 */
 	ehrpwm_write(ehrpwm, TBPRD, (unsigned short)(period_ticks - 1));
 	pm_runtime_put_sync(ehrpwm->dev);
-	debug("\n period_ticks is %d", period_ticks);
+	debug("period_ticks is %d\n", period_ticks);
 	ehrpwm->prescale_val = ps_div_val;
-	debug("\n Prescaler value is %d", ehrpwm->prescale_val);
+	debug("Prescaler value is %d\n", ehrpwm->prescale_val);
 
 	return 0;
 }
@@ -1131,8 +1131,8 @@ static int ehrpwm_pwm_set_dty(struct pwm_device *p)
 	}
 
 	duty_ticks = p->duty_ticks / ehrpwm->prescale_val;
-	debug("\n Prescaler value is %d", ehrpwm->prescale_val);
-	debug("\n duty ticks is %d", duty_ticks);
+	debug("Prescaler value is %d\n", ehrpwm->prescale_val);
+	debug("duty ticks is %d\n", duty_ticks);
 	pm_runtime_get_sync(ehrpwm->dev);
 	/* High resolution module */
 	if (chan && ehrpwm->prescale_val <= 1) {
@@ -1312,7 +1312,7 @@ static int ehrpwm_pwm_request(struct pwm_device *p)
 	chan = p - &ehrpwm->pwm[0];
 
 	p->tick_hz = clk_get_rate(ehrpwm->clk);
-	debug("\n The clk freq is %lu", p->tick_hz);
+	debug("The clk freq is %lu\n", p->tick_hz);
 	/* Put PWM output to low */
 	pm_runtime_get_sync(ehrpwm->dev);
 	ehrpwm_channel_output_low(p);
