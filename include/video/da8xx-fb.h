@@ -76,6 +76,9 @@ struct lcd_ctrl_config {
 	/* Invert frame clock  */
 	unsigned invert_frm_clock:1;
 
+	/* Invert pixel clock  */
+	unsigned invert_pixel_clock:1;
+
 	/* Horizontal and Vertical Sync Edge: 0=rising 1=falling */
 	unsigned sync_edge:1;
 

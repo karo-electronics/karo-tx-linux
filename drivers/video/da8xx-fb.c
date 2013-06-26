@@ -197,26 +197,8 @@ struct da8xx_fb_par {
 	unsigned int		lcd_fck_rate;
 #endif
 	void (*panel_power_ctrl)(int);
-	struct da8xx_panel	*lcdc_info;
+	struct da8xx_panel	*panel;
 	struct lcd_ctrl_config	*lcd_cfg;
-};
-
-/* Variable Screen Information */
-static struct fb_var_screeninfo da8xx_fb_var __devinitdata = {
-	.xoffset = 0,
-	.yoffset = 0,
-	.transp = {0, 0, 0},
-	.nonstd = 0,
-	.activate = 0,
-	.height = -1,
-	.width = -1,
-	.accel_flags = 0,
-	.left_margin = LEFT_MARGIN,
-	.right_margin = RIGHT_MARGIN,
-	.upper_margin = UPPER_MARGIN,
-	.lower_margin = LOWER_MARGIN,
-	.sync = 0,
-	.vmode = FB_VMODE_NONINTERLACED
 };
 
 static struct fb_fix_screeninfo da8xx_fb_fix __devinitdata = {
@@ -733,16 +715,21 @@ static void lcd_calc_clk_divider(struct da8xx_fb_par *par)
 
 }
 
-static int lcd_init(struct da8xx_fb_par *par, const struct lcd_ctrl_config *cfg,
-		struct da8xx_panel *panel)
+static int lcd_init(struct fb_info *info, const struct lcd_ctrl_config *cfg)
 {
 	u32 bpp;
 	int ret = 0;
+	struct da8xx_fb_par *par = info->par;
+	struct fb_var_screeninfo *var = &info->var;
+	int invert_pxl_clk = par->panel ? par->panel->invert_pxl_clk :
+		cfg->invert_pixel_clock;
 
 	/* Calculate the divider */
 	lcd_calc_clk_divider(par);
 
-	if (panel->invert_pxl_clk)
+	printk(KERN_DEBUG "sizeof(struct lcd_ctrl_config)=%d\n",
+		sizeof(struct lcd_ctrl_config));
+	if (invert_pxl_clk)
 		lcdc_write((lcdc_read(LCD_RASTER_TIMING_2_REG) |
 			LCD_INVERT_PIXEL_CLOCK), LCD_RASTER_TIMING_2_REG);
 	else
@@ -758,8 +745,8 @@ static int lcd_init(struct da8xx_fb_par *par, const struct lcd_ctrl_config *cfg,
 	lcd_cfg_ac_bias(cfg->ac_bias, cfg->ac_bias_intrpt);
 
 	/* Configure the vertical and horizontal sync properties. */
-	lcd_cfg_vertical_sync(panel->vbp, panel->vsw, panel->vfp);
-	lcd_cfg_horizontal_sync(panel->hbp, panel->hsw, panel->hfp);
+	lcd_cfg_vertical_sync(var->upper_margin, var->vsync_len, var->lower_margin);
+	lcd_cfg_horizontal_sync(var->left_margin, var->hsync_len, var->right_margin);
 
 	/* Configure for disply */
 	ret = lcd_cfg_display(cfg);
@@ -778,8 +765,7 @@ static int lcd_init(struct da8xx_fb_par *par, const struct lcd_ctrl_config *cfg,
 		bpp = cfg->p_disp_panel->max_bpp;
 	if (bpp == 12)
 		bpp = 16;
-	ret = lcd_cfg_frame_buffer(par, (unsigned int)panel->width,
-				(unsigned int)panel->height, bpp,
+	ret = lcd_cfg_frame_buffer(par, var->xres, var->yres, bpp,
 				cfg->raster_order);
 	if (ret < 0)
 		return ret;
@@ -1003,8 +989,10 @@ static int fb_check_var(struct fb_var_screeninfo *var,
 	var->blue.msb_right = 0;
 	var->transp.msb_right = 0;
 
-	if (line_size * var->yres_virtual > par->vram_size)
-		var->yres_virtual = par->vram_size / line_size;
+	if (par->vram_size) {
+		if (line_size * var->yres_virtual > par->vram_size)
+			var->yres_virtual = par->vram_size / line_size;
+	}
 
 	if (var->yres > var->yres_virtual)
 		var->yres = var->yres_virtual;
@@ -1251,28 +1239,40 @@ static int da8xx_pan_display(struct fb_var_screeninfo *var,
 	return ret;
 }
 
+static inline int lcd_refresh_rate(struct fb_var_screeninfo *var)
+{
+	return PICOS2KHZ(var->pixclock) * 1000 /
+		((var->hsync_len + var->left_margin + var->right_margin + var->xres) *
+			(var->vsync_len + var->upper_margin + var->lower_margin + var->yres));
+}
+
 static int da8xxfb_set_par(struct fb_info *info)
 {
 	struct da8xx_fb_par *par = info->par;
 	struct lcd_ctrl_config *lcd_cfg = par->lcd_cfg;
-	struct da8xx_panel *lcdc_info = par->lcdc_info;
-	unsigned long long pxl_clk = 1000000000000ULL;
+	struct da8xx_panel *panel = par->panel;
 	bool raster;
 	int ret;
 
 	raster = is_raster_enabled();
 
-	lcdc_info->hfp = info->var.right_margin;
-	lcdc_info->hbp = info->var.left_margin;
-	lcdc_info->vfp = info->var.lower_margin;
-	lcdc_info->vbp = info->var.upper_margin;
-	lcdc_info->hsw = info->var.hsync_len;
-	lcdc_info->vsw = info->var.vsync_len;
-	lcdc_info->width = info->var.xres;
-	lcdc_info->height = info->var.yres;
+	if (panel) {
+		panel->hfp = info->var.right_margin;
+		panel->hbp = info->var.left_margin;
+		panel->vfp = info->var.lower_margin;
+		panel->vbp = info->var.upper_margin;
+		panel->hsw = info->var.hsync_len;
+		panel->vsw = info->var.vsync_len;
+		panel->width = info->var.xres;
+		panel->height = info->var.yres;
+	}
 
-	do_div(pxl_clk, info->var.pixclock);
-	par->pxl_clk = pxl_clk;
+	printk(KERN_DEBUG "%s: mode: %dx%d-%d@%d\n", __func__,
+		info->var.xres, info->var.yres,
+		lcd_cfg->bpp, lcd_refresh_rate(&info->var));
+//	par->pxl_clk = PICOS2KHZ(info->var.pixclock);
+	printk(KERN_DEBUG "%s: pixel clock: %d.%03d MHz\n", __func__,
+		par->pxl_clk / 1000000, par->pxl_clk / 1000 % 1000);
 
 	lcd_cfg->bpp = info->var.bits_per_pixel;
 
@@ -1283,13 +1283,13 @@ static int da8xxfb_set_par(struct fb_info *info)
 
 	info->fix.visual = (lcd_cfg->bpp <= 8) ?
 				FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_TRUECOLOR;
-	info->fix.line_length = (lcdc_info->width * lcd_cfg->bpp) / 8;
+	info->fix.line_length = (info->var.xres * lcd_cfg->bpp) / 8;
 
 	par->dma_start = par->vram_phys;
-	par->dma_end   = par->dma_start + lcdc_info->height *
-				info->fix.line_length - 1;
+	par->dma_end   = par->dma_start + info->var.yres *
+		info->fix.line_length - 1;
 
-	ret = lcd_init(par, lcd_cfg, lcdc_info);
+	ret = lcd_init(info, lcd_cfg);
 	if (ret < 0) {
 		dev_err(par->dev, "lcd init failed\n");
 		return ret;
@@ -1330,12 +1330,13 @@ static unsigned int da8xxfb_pixel_clk_period(struct da8xx_fb_par *par)
 	return pix_clk_period_picosec;
 }
 
+static char *fb_mode;
+
 static int __devinit fb_probe(struct platform_device *device)
 {
-	struct da8xx_lcdc_platform_data *fb_pdata =
-						device->dev.platform_data;
+	struct da8xx_lcdc_platform_data *fb_pdata = device->dev.platform_data;
 	struct lcd_ctrl_config *lcd_cfg;
-	struct da8xx_panel *lcdc_info;
+	struct da8xx_panel *panel = NULL;
 	struct fb_info *da8xx_fb_info;
 	struct clk *fb_clk = NULL;
 	struct da8xx_fb_par *par;
@@ -1348,18 +1349,32 @@ static int __devinit fb_probe(struct platform_device *device)
 		return -ENODEV;
 	}
 
+	lcd_cfg = fb_pdata->controller_data;
+
+	da8xx_fb_info = framebuffer_alloc(sizeof(struct da8xx_fb_par),
+					&device->dev);
+	if (!da8xx_fb_info) {
+		dev_err(&device->dev, "Memory allocation failed for fb_info\n");
+		return -ENOMEM;
+	}
+	da8xx_fb_info->flags = FBINFO_FLAG_DEFAULT;
+	da8xx_fb_info->fbops = &da8xx_fb_ops;
+
 	lcdc_regs = platform_get_resource(device, IORESOURCE_MEM, 0);
 	if (!lcdc_regs) {
 		dev_err(&device->dev,
 			"Can not get memory resource for LCD controller\n");
-		return -ENOENT;
+		ret = -ENODEV;
+		goto err_release_fb;
 	}
 
 	len = resource_size(lcdc_regs);
 
 	lcdc_regs = request_mem_region(lcdc_regs->start, len, lcdc_regs->name);
-	if (!lcdc_regs)
-		return -EBUSY;
+	if (!lcdc_regs) {
+		ret = -EBUSY;
+		goto err_release_fb;
+	}
 
 	da8xx_fb_reg_base = ioremap(lcdc_regs->start, len);
 	if (!da8xx_fb_reg_base) {
@@ -1396,29 +1411,40 @@ static int __devinit fb_probe(struct platform_device *device)
 		break;
 	}
 
-	for (i = 0, lcdc_info = known_lcd_panels;
-		i < ARRAY_SIZE(known_lcd_panels);
-		i++, lcdc_info++) {
-		if (strcmp(fb_pdata->type, lcdc_info->name) == 0)
-			break;
+	if (fb_pdata->type) {
+		struct da8xx_panel *p = known_lcd_panels;
+
+		for (i = 0; i < ARRAY_SIZE(known_lcd_panels); i++) {
+			if (strcmp(fb_pdata->type, p[i].name) == 0) {
+				panel = &p[i];
+				break;
+			}
+		}
 	}
-
-	if (i == ARRAY_SIZE(known_lcd_panels)) {
-		dev_err(&device->dev, "GLCD: No valid panel found\n");
-		ret = -ENODEV;
-		goto err_pm_runtime_disable;
-	} else
+	if (panel != NULL) {
 		dev_info(&device->dev, "GLCD: Found %s panel\n",
-					fb_pdata->type);
-
-	lcd_cfg = (struct lcd_ctrl_config *)fb_pdata->controller_data;
-
-	da8xx_fb_info = framebuffer_alloc(sizeof(struct da8xx_fb_par),
-					&device->dev);
-	if (!da8xx_fb_info) {
-		dev_dbg(&device->dev, "Memory allocation failed for fb_info\n");
-		ret = -ENOMEM;
-		goto err_pm_runtime_disable;
+			fb_pdata->type);
+		da8xx_fb_info->var.right_margin = panel->hfp;
+		da8xx_fb_info->var.left_margin = panel->hbp;
+		da8xx_fb_info->var.lower_margin = panel->vfp;
+		da8xx_fb_info->var.upper_margin = panel->vbp;
+		da8xx_fb_info->var.hsync_len = panel->hsw;
+		da8xx_fb_info->var.vsync_len = panel->vsw;
+		da8xx_fb_info->var.xres = panel->width;
+		da8xx_fb_info->var.yres = panel->height;
+		da8xx_fb_info->var.pixclock = KHZ2PICOS(panel->pxl_clk / 1000);
+	} else {
+		ret = fb_find_mode(&da8xx_fb_info->var,
+				da8xx_fb_info, fb_mode,
+				NULL, 0, NULL, lcd_cfg->bpp);
+		if (ret == 0 || ret >= 3) {
+			dev_err(&device->dev, "GLCD: No valid video mode found\n");
+			ret = -ENODEV;
+			goto err_pm_runtime_disable;
+		}
+		dev_info(&device->dev, "GLCD: Using mode %s: %dx%d-%d@%d\n",
+			fb_mode, da8xx_fb_info->var.xres, da8xx_fb_info->var.yres,
+			lcd_cfg->bpp, lcd_refresh_rate(&da8xx_fb_info->var));
 	}
 
 	par = da8xx_fb_info->par;
@@ -1427,7 +1453,7 @@ static int __devinit fb_probe(struct platform_device *device)
 #ifdef CONFIG_CPU_FREQ
 	par->lcd_fck_rate = clk_get_rate(fb_clk);
 #endif
-	par->pxl_clk = lcdc_info->pxl_clk;
+	par->pxl_clk = PICOS2KHZ(da8xx_fb_info->var.pixclock) * 1000;
 	if (fb_pdata->panel_power_ctrl) {
 		par->panel_power_ctrl = fb_pdata->panel_power_ctrl;
 		par->panel_power_ctrl(1);
@@ -1436,9 +1462,9 @@ static int __devinit fb_probe(struct platform_device *device)
 	lcd_reset(par);
 
 	/* allocate frame buffer */
-	par->vram_size = lcdc_info->width * lcdc_info->height * lcd_cfg->bpp;
-	ulcm = lcm((lcdc_info->width * lcd_cfg->bpp)/8, PAGE_SIZE);
-	par->vram_size = roundup(par->vram_size/8, ulcm);
+	par->vram_size = da8xx_fb_info->var.xres * da8xx_fb_info->var.yres * lcd_cfg->bpp;
+	ulcm = lcm((da8xx_fb_info->var.xres * lcd_cfg->bpp) / 8, PAGE_SIZE);
+	par->vram_size = roundup(par->vram_size / 8, ulcm);
 	par->vram_size = par->vram_size * LCD_NUM_BUFFERS;
 
 	par->vram_virt = dma_alloc_coherent(NULL,
@@ -1450,16 +1476,16 @@ static int __devinit fb_probe(struct platform_device *device)
 			"GLCD: failed to allocate %lu KiB frame buffer\n",
 			par->vram_size / SZ_1K);
 		ret = -EINVAL;
-		goto err_release_fb;
+		goto err_pm_runtime_disable;
 	}
 
 	da8xx_fb_info->screen_base = par->vram_virt;
 	da8xx_fb_fix.smem_start    = par->vram_phys;
 	da8xx_fb_fix.smem_len      = par->vram_size;
-	da8xx_fb_fix.line_length   = (lcdc_info->width * lcd_cfg->bpp) / 8;
+	da8xx_fb_fix.line_length   = (da8xx_fb_info->var.xres * lcd_cfg->bpp) / 8;
 
 	par->dma_start = par->vram_phys;
-	par->dma_end   = par->dma_start + lcdc_info->height *
+	par->dma_end   = par->dma_start + da8xx_fb_info->var.yres *
 		da8xx_fb_fix.line_length - 1;
 
 	/* allocate palette buffer */
@@ -1483,31 +1509,14 @@ static int __devinit fb_probe(struct platform_device *device)
 
 	/* Initialize par */
 	da8xx_fb_info->var.bits_per_pixel = lcd_cfg->bpp;
-
-	da8xx_fb_var.xres = lcdc_info->width;
-	da8xx_fb_var.xres_virtual = lcdc_info->width;
-
-	da8xx_fb_var.yres         = lcdc_info->height;
-	da8xx_fb_var.yres_virtual = lcdc_info->height * LCD_NUM_BUFFERS;
-
-	da8xx_fb_var.grayscale =
-	    lcd_cfg->p_disp_panel->panel_shade == MONOCHROME ? 1 : 0;
-	da8xx_fb_var.bits_per_pixel = lcd_cfg->bpp;
-
-	da8xx_fb_var.hsync_len = lcdc_info->hsw;
-	da8xx_fb_var.vsync_len = lcdc_info->vsw;
-	da8xx_fb_var.pixclock = da8xxfb_pixel_clk_period(par);
-
-	da8xx_fb_var.right_margin = lcdc_info->hfp;
-	da8xx_fb_var.left_margin  = lcdc_info->hbp;
-	da8xx_fb_var.lower_margin = lcdc_info->vfp;
-	da8xx_fb_var.upper_margin = lcdc_info->vbp;
+	da8xx_fb_info->var.grayscale =
+		lcd_cfg->p_disp_panel->panel_shade == MONOCHROME ? 1 : 0;
+	da8xx_fb_info->var.pixclock = da8xxfb_pixel_clk_period(par);
+	da8xx_fb_info->var.xres_virtual = da8xx_fb_info->var.xres;
+	da8xx_fb_info->var.yres_virtual = da8xx_fb_info->var.yres * LCD_NUM_BUFFERS;
 
 	/* Initialize fbinfo */
-	da8xx_fb_info->flags = FBINFO_FLAG_DEFAULT;
 	da8xx_fb_info->fix = da8xx_fb_fix;
-	da8xx_fb_info->var = da8xx_fb_var;
-	da8xx_fb_info->fbops = &da8xx_fb_ops;
 	da8xx_fb_info->pseudo_palette = par->pseudo_palette;
 	da8xx_fb_info->fix.visual = (da8xx_fb_info->var.bits_per_pixel <= 8) ?
 				FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_TRUECOLOR;
@@ -1517,12 +1526,12 @@ static int __devinit fb_probe(struct platform_device *device)
 		goto err_release_pl_mem;
 	da8xx_fb_info->cmap.len = par->palette_sz;
 
-	par->lcdc_info = lcdc_info;
+	par->panel = panel;
 	par->lcd_cfg = lcd_cfg;
 
 	/* initialize var_screeninfo */
-	da8xx_fb_var.activate = FB_ACTIVATE_FORCE;
-	fb_set_var(da8xx_fb_info, &da8xx_fb_var);
+	da8xx_fb_info->var.activate = FB_ACTIVATE_FORCE;
+	fb_set_var(da8xx_fb_info, &da8xx_fb_info->var);
 
 	platform_set_drvdata(device, da8xx_fb_info);
 
@@ -1576,9 +1585,6 @@ err_release_pl_mem:
 err_release_fb_mem:
 	dma_free_coherent(NULL, par->vram_size, par->vram_virt, par->vram_phys);
 
-err_release_fb:
-	framebuffer_release(da8xx_fb_info);
-
 err_pm_runtime_disable:
 	pm_runtime_put_sync(&device->dev);
 	pm_runtime_disable(&device->dev);
@@ -1589,6 +1595,9 @@ err_ioremap:
 
 err_request_mem:
 	release_mem_region(lcdc_regs->start, len);
+
+err_release_fb:
+	framebuffer_release(da8xx_fb_info);
 
 	return ret;
 }
@@ -1731,8 +1740,33 @@ static struct platform_driver da8xx_fb_driver = {
 	},
 };
 
+static int __init da8xx_fb_options(void)
+{
+	char *opt, *options;
+
+	if (fb_get_options("da8xx-fb", &options))
+		return -ENODEV;
+
+	if (options == NULL || *options == '\0')
+		return 0;
+
+	while ((opt = strsep(&options, ",")) != NULL) {
+		if (!*opt)
+			continue;
+		else
+			fb_mode = opt;
+	}
+	return 0;
+}
+
 static int __init da8xx_fb_init(void)
 {
+	int ret;
+
+	ret = da8xx_fb_options();
+	if (ret)
+		return ret;
+
 	return platform_driver_register(&da8xx_fb_driver);
 }
 
