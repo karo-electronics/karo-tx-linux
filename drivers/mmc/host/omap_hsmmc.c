@@ -2182,6 +2182,8 @@ static int omap_hsmmc_remove(struct platform_device *pdev)
 	struct resource *res;
 
 	if (host) {
+		void __iomem *base = host->base;
+
 		pm_runtime_get_sync(host->dev);
 		mmc_remove_host(host->mmc);
 		if (host->use_reg)
@@ -2202,7 +2204,7 @@ static int omap_hsmmc_remove(struct platform_device *pdev)
 		}
 
 		mmc_free_host(host->mmc);
-		iounmap(host->base);
+		iounmap(base);
 		omap_hsmmc_gpio_free(pdev->dev.platform_data);
 	}
 
