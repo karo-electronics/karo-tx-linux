@@ -1633,9 +1633,14 @@ int am33xx_cpsw_init(enum am33xx_cpsw_mac_mode mode, unsigned char *phy_id0,
 	default:
 		return -EINVAL;
 	}
-
+#if 0
+	/* This is terminally broken.
+	 * - there is no way to get the RMII_REF_CLK configured as input
+	 * - there is no way to get the RMII2 interface configured
+	 * Keeping the bootloader assigned values seems much more sensible!
+	 */
 	writel(gmii_sel, AM33XX_CTRL_REGADDR(AM33XX_CONTROL_GMII_SEL_OFFSET));
-
+#endif
 	if (phy_id0 != NULL)
 		am33xx_cpsw_slaves[0].phy_id = phy_id0;
 
