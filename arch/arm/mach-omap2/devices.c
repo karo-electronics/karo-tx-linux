@@ -217,8 +217,7 @@ int __init am33xx_register_mfd_tscadc(struct mfd_tscadc_board *pdata)
 	return 0;
 }
 
-#if defined(CONFIG_SND_AM335X_SOC_EVM) || \
-				defined(CONFIG_SND_AM335X_SOC_EVM_MODULE)
+#if IS_ENABLED(CONFIG_SND_DAVINCI_SOC_MCASP)
 int __init am335x_register_mcasp(struct snd_platform_data *pdata, int ctrl_nr)
 {
 	int l;
@@ -249,7 +248,7 @@ int __init am335x_register_mcasp(struct snd_platform_data *pdata, int ctrl_nr)
 }
 #endif
 
-#if (defined(CONFIG_SND_AM33XX_SOC) || (defined(CONFIG_SND_AM33XX_SOC_MODULE)))
+#if IS_ENABLED(CONFIG_SND_AM33XX_SOC)
 struct platform_device am33xx_pcm_device = {
 	.name		= "davinci-pcm-audio",
 	.id		= -1,
