@@ -841,18 +841,11 @@ static int davinci_mcasp_trigger(struct snd_pcm_substream *substream,
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-		ret = pm_runtime_get_sync(dev->dev);
-		if (ret < 0)
-			dev_err(dev->dev, "failed to get runtime pm\n");
-
 		davinci_mcasp_start(dev, substream->stream);
 		break;
 
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 		davinci_mcasp_stop(dev, substream->stream);
-		ret = pm_runtime_put_sync(dev->dev);
-		if (ret < 0)
-			dev_err(dev->dev, "failed to put runtime pm\n");
 		break;
 
 	case SNDRV_PCM_TRIGGER_STOP:
@@ -870,15 +863,33 @@ static int davinci_mcasp_trigger(struct snd_pcm_substream *substream,
 static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 				 struct snd_soc_dai *dai)
 {
+	int ret;
 	struct davinci_audio_dev *dev = snd_soc_dai_get_drvdata(dai);
 
+	ret = pm_runtime_get_sync(dev->dev);
+	if (ret < 0) {
+		dev_err(dev->dev, "failed to get runtime pm\n");
+		return ret;
+	}
 	snd_soc_dai_set_dma_data(dai, substream, dev->dma_params);
 	return 0;
+}
+
+static void davinci_mcasp_shutdown(struct snd_pcm_substream *substream,
+				 struct snd_soc_dai *dai)
+{
+	int ret;
+	struct davinci_audio_dev *dev = snd_soc_dai_get_drvdata(dai);
+
+	ret = pm_runtime_put_sync(dev->dev);
+	if (ret < 0)
+		dev_err(dev->dev, "failed to put runtime pm\n");
 }
 
 static struct snd_soc_dai_ops davinci_mcasp_dai_ops = {
 	.startup	= davinci_mcasp_startup,
 	.trigger	= davinci_mcasp_trigger,
+	.shutdown	= davinci_mcasp_shutdown,
 	.hw_params	= davinci_mcasp_hw_params,
 	.set_fmt	= davinci_mcasp_set_dai_fmt,
 	.set_sysclk	= davinci_mcasp_set_dai_sysclk,
