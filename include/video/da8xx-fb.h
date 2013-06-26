@@ -62,28 +62,28 @@ struct lcd_ctrl_config {
 	int fdd;
 
 	/* TFT Alternative Signal Mapping (Only for active) */
-	unsigned char tft_alt_mode;
+	unsigned tft_alt_mode:1;
 
 	/* 12 Bit Per Pixel (5-6-5) Mode (Only for passive) */
-	unsigned char stn_565_mode;
+	unsigned stn_565_mode:1;
 
 	/* Mono 8-bit Mode: 1=D0-D7 or 0=D0-D3 */
-	unsigned char mono_8bit_mode;
+	unsigned mono_8bit_mode:1;
 
 	/* Invert line clock */
-	unsigned char invert_line_clock;
+	unsigned invert_line_clock:1;
 
 	/* Invert frame clock  */
-	unsigned char invert_frm_clock;
+	unsigned invert_frm_clock:1;
 
 	/* Horizontal and Vertical Sync Edge: 0=rising 1=falling */
-	unsigned char sync_edge;
+	unsigned sync_edge:1;
 
 	/* Horizontal and Vertical Sync: Control: 0=ignore */
-	unsigned char sync_ctrl;
+	unsigned sync_ctrl:1;
 
 	/* Raster Data Order Select: 1=Most-to-least 0=Least-to-most */
-	unsigned char raster_order;
+	unsigned raster_order:1;
 
 	/* DMA FIFO threshold */
 	int fifo_th;

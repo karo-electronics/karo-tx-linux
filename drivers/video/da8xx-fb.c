@@ -137,7 +137,7 @@
 #define WAIT_FOR_FRAME_DONE	true
 #define NO_WAIT_FOR_FRAME_DONE	false
 
-static resource_size_t da8xx_fb_reg_base;
+static void __iomem *da8xx_fb_reg_base;
 static struct resource *lcdc_regs;
 static unsigned int lcd_revision;
 static irq_handler_t lcdc_irq_handler;
@@ -1055,7 +1055,7 @@ static inline void lcd_da8xx_cpufreq_deregister(struct da8xx_fb_par *par)
 
 static int __devexit fb_remove(struct platform_device *dev)
 {
-	struct fb_info *info = dev_get_drvdata(&dev->dev);
+	struct fb_info *info = platform_get_drvdata(dev);
 
 	if (info) {
 		struct da8xx_fb_par *par = info->par;
@@ -1082,7 +1082,7 @@ static int __devexit fb_remove(struct platform_device *dev)
 		pm_runtime_put_sync(&dev->dev);
 		pm_runtime_disable(&dev->dev);
 		framebuffer_release(info);
-		iounmap((void __iomem *)da8xx_fb_reg_base);
+		iounmap(da8xx_fb_reg_base);
 		release_mem_region(lcdc_regs->start, resource_size(lcdc_regs));
 
 	}
@@ -1344,8 +1344,8 @@ static int __devinit fb_probe(struct platform_device *device)
 	unsigned long ulcm;
 
 	if (fb_pdata == NULL) {
-		dev_err(&device->dev, "Can not get platform data\n");
-		return -ENOENT;
+		dev_err(&device->dev, "No platform data\n");
+		return -ENODEV;
 	}
 
 	lcdc_regs = platform_get_resource(device, IORESOURCE_MEM, 0);
@@ -1361,16 +1361,16 @@ static int __devinit fb_probe(struct platform_device *device)
 	if (!lcdc_regs)
 		return -EBUSY;
 
-	da8xx_fb_reg_base = (resource_size_t)ioremap(lcdc_regs->start, len);
+	da8xx_fb_reg_base = ioremap(lcdc_regs->start, len);
 	if (!da8xx_fb_reg_base) {
-		ret = -EBUSY;
+		ret = -ENOMEM;
 		goto err_request_mem;
 	}
 
 	fb_clk = clk_get(&device->dev, NULL);
 	if (IS_ERR(fb_clk)) {
 		dev_err(&device->dev, "Can not get device clock\n");
-		ret = -ENODEV;
+		ret = PTR_ERR(fb_clk);
 		goto err_ioremap;
 	}
 
@@ -1443,16 +1443,17 @@ static int __devinit fb_probe(struct platform_device *device)
 
 	par->vram_virt = dma_alloc_coherent(NULL,
 					    par->vram_size,
-					    (resource_size_t *) &par->vram_phys,
+					    &par->vram_phys,
 					    GFP_KERNEL | GFP_DMA);
 	if (!par->vram_virt) {
 		dev_err(&device->dev,
-			"GLCD: kmalloc for frame buffer failed\n");
+			"GLCD: failed to allocate %lu KiB frame buffer\n",
+			par->vram_size / SZ_1K);
 		ret = -EINVAL;
 		goto err_release_fb;
 	}
 
-	da8xx_fb_info->screen_base = (char __iomem *) par->vram_virt;
+	da8xx_fb_info->screen_base = par->vram_virt;
 	da8xx_fb_fix.smem_start    = par->vram_phys;
 	da8xx_fb_fix.smem_len      = par->vram_size;
 	da8xx_fb_fix.line_length   = (lcdc_info->width * lcd_cfg->bpp) / 8;
@@ -1464,7 +1465,6 @@ static int __devinit fb_probe(struct platform_device *device)
 	/* allocate palette buffer */
 	par->v_palette_base = dma_alloc_coherent(NULL,
 					       PALETTE_SIZE,
-					       (resource_size_t *)
 					       &par->p_palette_base,
 					       GFP_KERNEL | GFP_DMA);
 	if (!par->v_palette_base) {
@@ -1524,7 +1524,7 @@ static int __devinit fb_probe(struct platform_device *device)
 	da8xx_fb_var.activate = FB_ACTIVATE_FORCE;
 	fb_set_var(da8xx_fb_info, &da8xx_fb_var);
 
-	dev_set_drvdata(&device->dev, da8xx_fb_info);
+	platform_set_drvdata(device, da8xx_fb_info);
 
 	/* initialize the vsync wait queue */
 	init_waitqueue_head(&par->vsync_wait);
@@ -1585,7 +1585,7 @@ err_pm_runtime_disable:
 
 err_ioremap:
 
-	iounmap((void __iomem *)da8xx_fb_reg_base);
+	iounmap(da8xx_fb_reg_base);
 
 err_request_mem:
 	release_mem_region(lcdc_regs->start, len);
@@ -1676,6 +1676,7 @@ static int fb_suspend(struct platform_device *dev, pm_message_t state)
 
 	return 0;
 }
+
 static int fb_resume(struct platform_device *dev)
 {
 	struct fb_info *info = platform_get_drvdata(dev);
@@ -1725,9 +1726,9 @@ static struct platform_driver da8xx_fb_driver = {
 	.suspend = fb_suspend,
 	.resume = fb_resume,
 	.driver = {
-		   .name = DRIVER_NAME,
-		   .owner = THIS_MODULE,
-		   },
+		.name = DRIVER_NAME,
+		.owner = THIS_MODULE,
+	},
 };
 
 static int __init da8xx_fb_init(void)
