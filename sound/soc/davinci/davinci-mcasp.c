@@ -878,31 +878,29 @@ static struct snd_soc_dai_ops davinci_mcasp_dai_ops = {
 
 static struct snd_soc_dai_driver davinci_mcasp_dai[] = {
 	{
-		.name		= "davinci-mcasp.0",
 		.playback	= {
 			.channels_min	= 2,
-			.channels_max 	= 2,
-			.rates 		= DAVINCI_MCASP_RATES,
+			.channels_max	= 2,
+			.rates		= DAVINCI_MCASP_RATES,
 			.formats	= DAVINCI_MCASP_PCM_FMTS,
 		},
-		.capture 	= {
-			.channels_min 	= 2,
-			.channels_max 	= 2,
-			.rates 		= DAVINCI_MCASP_RATES,
+		.capture	= {
+			.channels_min	= 2,
+			.channels_max	= 2,
+			.rates		= DAVINCI_MCASP_RATES,
 			.formats	= DAVINCI_MCASP_PCM_FMTS,
 		},
-		.ops 		= &davinci_mcasp_dai_ops,
+		.ops		= &davinci_mcasp_dai_ops,
 
 	},
 	{
-		"davinci-mcasp.1",
-		.playback 	= {
+		.playback	= {
 			.channels_min	= 1,
 			.channels_max	= 384,
 			.rates		= DAVINCI_MCASP_RATES,
 			.formats	= DAVINCI_MCASP_PCM_FMTS,
 		},
-		.ops 		= &davinci_mcasp_dai_ops,
+		.ops		= &davinci_mcasp_dai_ops,
 	},
 
 };
@@ -961,9 +959,8 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 	dev->dev	= &pdev->dev;
 
 	if (dev->version == MCASP_VERSION_3) {
-		dev->xrsrctl = kzalloc((sizeof(unsigned int) *
-							dev->num_serializer),
-							GFP_KERNEL);
+		dev->xrsrctl = kcalloc(dev->num_serializer,
+				sizeof(unsigned int), GFP_KERNEL);
 		if (!dev->xrsrctl) {
 			ret = -ENOMEM;
 			dev_err(&pdev->dev, "err: mem alloc xrsrctl\n");
@@ -976,9 +973,9 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 	dma_data->ram_chan_q = pdata->ram_chan_q;
 	dma_data->sram_size = pdata->sram_size_playback;
 	if (dev->version == MCASP_VERSION_3)
-		dma_data->dma_addr = (dma_addr_t) (pdata->tx_dma_offset);
+		dma_data->dma_addr = (dma_addr_t)pdata->tx_dma_offset;
 	else
-		dma_data->dma_addr = (dma_addr_t) (pdata->tx_dma_offset +
+		dma_data->dma_addr = (dma_addr_t)(pdata->tx_dma_offset +
 							mem->start);
 
 	if (dev->version == MCASP_VERSION_3)
@@ -986,7 +983,6 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 	else
 		/* first TX, then RX */
 		res = platform_get_resource(pdev, IORESOURCE_DMA, 0);
-
 	if (!res) {
 		dev_err(&pdev->dev, "no DMA resource\n");
 		ret = -ENODEV;
@@ -1000,7 +996,7 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 	dma_data->ram_chan_q = pdata->ram_chan_q;
 	dma_data->sram_size = pdata->sram_size_capture;
 	if (dev->version == MCASP_VERSION_3)
-		dma_data->dma_addr = (dma_addr_t) (pdata->rx_dma_offset);
+		dma_data->dma_addr = (dma_addr_t)pdata->rx_dma_offset;
 	else
 		dma_data->dma_addr = (dma_addr_t)(pdata->rx_dma_offset +
 							mem->start);
@@ -1018,10 +1014,11 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 
 	dma_data->channel = res->start;
 	dev_set_drvdata(&pdev->dev, dev);
-	ret = snd_soc_register_dai(&pdev->dev, &davinci_mcasp_dai[pdata->op_mode]);
 
+	ret = snd_soc_register_dai(&pdev->dev, &davinci_mcasp_dai[pdata->op_mode]);
 	if (ret != 0)
 		goto err_iounmap;
+
 	return 0;
 
 err_iounmap:
