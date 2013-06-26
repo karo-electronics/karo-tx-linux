@@ -42,6 +42,15 @@ config  SND_AM335X_SOC_EVM
 	  Say Y if you want to add support for SoC audio on
 	  AM335X EVM
 
+config  SND_AM335X_SOC_TX48
+	tristate "SoC Audio support for Ka-Ro TX48"
+	depends on SND_AM33XX_SOC
+	select SND_DAVINCI_SOC_MCASP
+	select SND_SOC_SGTL5000
+	help
+	  Say Y if you want to add support for SoC audio on
+	  Ka-Ro electronics TX48
+
 choice
 	prompt "DM365 codec select"
 	depends on SND_DAVINCI_SOC_EVM
