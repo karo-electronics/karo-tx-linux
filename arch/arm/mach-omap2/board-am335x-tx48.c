@@ -609,6 +609,7 @@ static void __init tx48_nand_init(void)
 		return;
 	pdata->ecc_opt = OMAP_ECC_BCH8_CODE_HW;
 	pdata->elm_used = true;
+	pdata->use_flash_bbt = true;
 	gpmc_device[0].pdata = pdata;
 	gpmc_device[0].flag = GPMC_DEVICE_NAND;
 

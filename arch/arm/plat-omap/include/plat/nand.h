@@ -29,7 +29,8 @@ struct omap_nand_platform_data {
 	unsigned long		phys_base;
 	int			devsize;
 	enum omap_ecc           ecc_opt;
-	bool			elm_used;
+	unsigned		elm_used:1;
+	unsigned		use_flash_bbt:1;
 	int (*ctrlr_suspend) (void);
 	int (*ctrlr_resume) (void);
 };

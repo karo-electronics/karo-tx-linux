@@ -116,6 +116,28 @@ static struct nand_bbt_descr bb_descrip_flashbased = {
 	.pattern = scan_ff_pattern,
 };
 
+static uint8_t bbt_pattern[] = {'B', 'b', 't', '0' };
+static uint8_t mirror_pattern[] = {'1', 't', 'b', 'B' };
+
+static struct nand_bbt_descr bbt_main_descr = {
+	.options = NAND_BBT_LASTBLOCK | NAND_BBT_CREATE | NAND_BBT_WRITE |
+		NAND_BBT_2BIT | NAND_BBT_VERSION | NAND_BBT_PERCHIP,
+	.offs =	58,
+	.len = 4,
+	.veroffs = 62,
+	.maxblocks = 4,
+	.pattern = bbt_pattern,
+};
+
+static struct nand_bbt_descr bbt_mirror_descr = {
+	.options = NAND_BBT_LASTBLOCK | NAND_BBT_CREATE | NAND_BBT_WRITE |
+		NAND_BBT_2BIT | NAND_BBT_VERSION | NAND_BBT_PERCHIP,
+	.offs =	58,
+	.len = 4,
+	.veroffs = 62,
+	.maxblocks = 4,
+	.pattern = mirror_pattern,
+};
 
 struct omap_nand_info {
 	struct nand_hw_control		controller;
@@ -1099,7 +1121,13 @@ static int __devinit omap_nand_probe(struct platform_device *pdev)
 	info->ecc_opt		= pdata->ecc_opt;
 
 	info->nand.options	= pdata->devsize;
-	info->nand.options	|= NAND_SKIP_BBTSCAN;
+	if (pdata->use_flash_bbt) {
+		info->nand.bbt_options |= NAND_BBT_USE_FLASH;
+		info->nand.bbt_td = &bbt_main_descr;
+		info->nand.bbt_md = &bbt_mirror_descr;
+	} else {
+		info->nand.options |= NAND_SKIP_BBTSCAN;
+	}
 
 	/*
 	 * If ELM feature is used in OMAP NAND driver, then configure it
