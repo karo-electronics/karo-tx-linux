@@ -197,7 +197,12 @@ wait_queue_head_t *bit_waitqueue(void *, int);
 	for (;;) {							\
 		__ret = prepare_to_wait_event(&wq, &__wait, state);	\
 		if (condition) {					\
-			__ret = __wait_no_timeout(tout) ?: __tout ?: 1;	\
+			__ret = __wait_no_timeout(tout);		\
+			if (!__ret) {					\
+				__ret = __tout;				\
+				if (!__ret)				\
+					__ret = 1;			\
+			}						\
 			break;						\
 		}							\
 									\
@@ -218,9 +223,14 @@ wait_queue_head_t *bit_waitqueue(void *, int);
 #define wait_event_common(wq, condition, state, tout)			\
 ({									\
 	long __ret;							\
-	if (condition)							\
-		__ret = __wait_no_timeout(tout) ?: (tout) ?: 1;		\
-	else								\
+	if (condition) {						\
+		__ret = __wait_no_timeout(tout);			\
+		if (!__ret) {						\
+			__ret = (tout);					\
+			if (!__ret)					\
+				__ret = 1;				\
+		}							\
+	} else								\
 		__ret = __wait_event_common(wq, condition, state, tout);\
 	__ret;								\
 })
