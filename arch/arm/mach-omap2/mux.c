@@ -241,6 +241,7 @@ int omap_mux_get_by_name(const char *muxname,
 		return mux_mode;
 	}
 
+	pr_err("pinmux config '%s' not found\n", muxname);
 	return -ENODEV;
 }
 
