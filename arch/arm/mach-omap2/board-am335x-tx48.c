@@ -82,11 +82,11 @@ enum tx48_baseboards {
 	STK5_V5 = 5,
 };
 
-static enum tx48_baseboards tx48_baseboard = STK5_V3;
+static enum tx48_baseboards tx48_baseboard __initdata = STK5_V3;
 
 static int __init tx48_setup_baseboard(char *option)
 {
-	if (strcmp(option, "stk5-v5"))
+	if (strcasecmp(option, "stk5-v5") == 0)
 		tx48_baseboard = STK5_V5;
 	else
 		return 0;
