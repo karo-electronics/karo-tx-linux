@@ -173,7 +173,7 @@ static struct mfd_tscadc_board tscadc = {
 };
 
 static u8 stk5_iis_serializer_direction1[] = {
-	INACTIVE_MODE,	INACTIVE_MODE,	TX_MODE,	RX_MODE,
+	RX_MODE,	TX_MODE,	INACTIVE_MODE,	INACTIVE_MODE,
 	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,
 	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,
 	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,	INACTIVE_MODE,
@@ -290,7 +290,7 @@ static const struct pinmux_config mcasp1_pin_mux[] __initconst = {
 	{ "mcasp0_aclkr.mcasp1_aclkx", AM33XX_PIN_INPUT_PULLDOWN, },
 	{ "mcasp0_fsr.mcasp1_fsx", AM33XX_PIN_INPUT_PULLDOWN, },
 	{ "mcasp0_axr1.mcasp1_axr0", AM33XX_PIN_INPUT_PULLDOWN, },
-	{ "mcasp0_ahclk.mcasp1_axr1", AM33XX_PIN_INPUT_PULLDOWN, },
+	{ "mcasp0_ahclk.mcasp1_axr1", AM33XX_PIN_OUTPUT, },
 	{ }
 };
 
