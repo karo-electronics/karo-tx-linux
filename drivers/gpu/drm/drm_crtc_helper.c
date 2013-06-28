@@ -122,6 +122,7 @@ int drm_helper_probe_single_connector_modes(struct drm_connector *connector,
 	int count = 0;
 	int mode_flags = 0;
 	bool verbose_prune = true;
+	enum drm_connector_status old_status;
 
 	DRM_DEBUG_KMS("[CONNECTOR:%d:%s]\n", connector->base.id,
 			drm_get_connector_name(connector));
@@ -137,7 +138,32 @@ int drm_helper_probe_single_connector_modes(struct drm_connector *connector,
 		if (connector->funcs->force)
 			connector->funcs->force(connector);
 	} else {
+		old_status = connector->status;
+
 		connector->status = connector->funcs->detect(connector, true);
+
+		/*
+		 * Normally either the driver's hpd code or the poll loop should
+		 * pick up any changes and fire the hotplug event. But if
+		 * userspace sneaks in a probe, we might miss a change. Hence
+		 * check here, and if anything changed start the hotplug code.
+		 */
+		if (old_status != connector->status) {
+			DRM_DEBUG_KMS("[CONNECTOR:%d:%s] status updated from %d to %d\n",
+				      connector->base.id,
+				      drm_get_connector_name(connector),
+				      old_status, connector->status);
+
+			/*
+			 * The hotplug event code might call into the fb
+			 * helpers, and so expects that we do not hold any
+			 * locks. Fire up the poll struct instead, it will
+			 * disable itself again.
+			 */
+			dev->mode_config.delayed_event = true;
+			schedule_delayed_work(&dev->mode_config.output_poll_work,
+					      0);
+		}
 	}
 
 	/* Re-enable polling in case the global poll config changed. */
@@ -189,13 +215,14 @@ prune:
 	if (list_empty(&connector->modes))
 		return 0;
 
+	list_for_each_entry(mode, &connector->modes, head)
+		mode->vrefresh = drm_mode_vrefresh(mode);
+
 	drm_mode_sort(&connector->modes);
 
 	DRM_DEBUG_KMS("[CONNECTOR:%d:%s] probed modes :\n", connector->base.id,
 			drm_get_connector_name(connector));
 	list_for_each_entry(mode, &connector->modes, head) {
-		mode->vrefresh = drm_mode_vrefresh(mode);
-
 		drm_mode_set_crtcinfo(mode, CRTC_INTERLACE_HALVE_V);
 		drm_mode_debug_printmodeline(mode);
 	}
@@ -564,14 +591,13 @@ int drm_crtc_helper_set_config(struct drm_mode_set *set)
 
 	DRM_DEBUG_KMS("\n");
 
-	if (!set)
-		return -EINVAL;
+	BUG_ON(!set);
+	BUG_ON(!set->crtc);
+	BUG_ON(!set->crtc->helper_private);
 
-	if (!set->crtc)
-		return -EINVAL;
-
-	if (!set->crtc->helper_private)
-		return -EINVAL;
+	/* Enforce sane interface api - has been abused by the fb helper. */
+	BUG_ON(!set->mode && set->fb);
+	BUG_ON(set->fb && set->num_connectors == 0);
 
 	crtc_funcs = set->crtc->helper_private;
 
@@ -644,11 +670,6 @@ int drm_crtc_helper_set_config(struct drm_mode_set *set)
 			DRM_DEBUG_KMS("crtc has no fb, full mode set\n");
 			mode_changed = true;
 		} else if (set->fb == NULL) {
-			mode_changed = true;
-		} else if (set->fb->depth != set->crtc->fb->depth) {
-			mode_changed = true;
-		} else if (set->fb->bits_per_pixel !=
-			   set->crtc->fb->bits_per_pixel) {
 			mode_changed = true;
 		} else if (set->fb->pixel_format !=
 			   set->crtc->fb->pixel_format) {
@@ -759,12 +780,6 @@ int drm_crtc_helper_set_config(struct drm_mode_set *set)
 				ret = -EINVAL;
 				goto fail;
 			}
-			DRM_DEBUG_KMS("Setting connector DPMS state to on\n");
-			for (i = 0; i < set->num_connectors; i++) {
-				DRM_DEBUG_KMS("\t[CONNECTOR:%d:%s] set DPMS on\n", set->connectors[i]->base.id,
-					      drm_get_connector_name(set->connectors[i]));
-				set->connectors[i]->funcs->dpms(set->connectors[i], DRM_MODE_DPMS_ON);
-			}
 		}
 		drm_helper_disable_unused_functions(dev);
 	} else if (fb_changed) {
@@ -779,6 +794,22 @@ int drm_crtc_helper_set_config(struct drm_mode_set *set)
 		if (ret != 0) {
 			set->crtc->fb = old_fb;
 			goto fail;
+		}
+	}
+
+	/*
+	 * crtc set_config helpers implicit set the crtc and all connected
+	 * encoders to DPMS on for a full mode set. But for just an fb update it
+	 * doesn't do that. To not confuse userspace, do an explicit DPMS_ON
+	 * unconditionally. This will also ensure driver internal dpms state is
+	 * consistent again.
+	 */
+	if (set->crtc->enabled) {
+		DRM_DEBUG_KMS("Setting connector DPMS state to on\n");
+		for (i = 0; i < set->num_connectors; i++) {
+			DRM_DEBUG_KMS("\t[CONNECTOR:%d:%s] set DPMS on\n", set->connectors[i]->base.id,
+				      drm_get_connector_name(set->connectors[i]));
+			set->connectors[i]->funcs->dpms(set->connectors[i], DRM_MODE_DPMS_ON);
 		}
 	}
 
@@ -980,7 +1011,11 @@ static void output_poll_execute(struct work_struct *work)
 	struct drm_device *dev = container_of(delayed_work, struct drm_device, mode_config.output_poll_work);
 	struct drm_connector *connector;
 	enum drm_connector_status old_status;
-	bool repoll = false, changed = false;
+	bool repoll = false, changed;
+
+	/* Pick up any changes detected by the probe functions. */
+	changed = dev->mode_config.delayed_event;
+	dev->mode_config.delayed_event = false;
 
 	if (!drm_kms_helper_poll)
 		return;
