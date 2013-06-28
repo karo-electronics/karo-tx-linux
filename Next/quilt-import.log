@@ -1,0 +1,20 @@
+Importing jdelvare-hwmon based on 1aaf6d3d3d1e95f4be07e32dd84aa1c93855fbbd
+Unchanged quilt series jdelvare-hwmon
+Importing device-mapper based on v3.10-rc1
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard f722406faae2d073cc1d01063d1123c35425939e
+HEAD is now at f722406 Linux 3.10-rc1
+$ git am ../quilt/device-mapper/dm-optimize-use-SRCU-and-RCU.patch
+Applying: This patch removes "io_lock" and "map_lock" in struct mapped_device and
+$ git am ../quilt/device-mapper/dm-optimize-reorder-structure.patch
+Applying: This reorder actually improves performance by 20% (from 39.1s to 32.8s)
+$ git am ../quilt/device-mapper/dm-add-switch-target.patch
+Applying: dm-switch is a new target that maps IO to underlying block devices
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:95: new blank line at EOF.
++
+warning: 1 line adds whitespace errors.
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:device-mapper/master
+From ../quilt-tmp
+ + 644e888...636e7b0 master     -> device-mapper/master  (forced update)
