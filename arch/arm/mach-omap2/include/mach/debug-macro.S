@@ -14,13 +14,14 @@
 #include <linux/serial_reg.h>
 
 #include <plat/serial.h>
+#include <plat/io.h>
 
 #define UART_OFFSET(addr)	((addr) & 0x00ffffff)
 
 		.pushsection .data
-omap_uart_phys:	.word	0
-omap_uart_virt:	.word	0
-omap_uart_lsr:	.word	0
+omap_uart_phys:	.word	AM33XX_UART1_BASE
+omap_uart_virt:	.word	AM33XX_L4_WK_IO_ADDRESS(AM33XX_UART1_BASE)
+omap_uart_lsr:	.word	0x14
 		.popsection
 
 		/*
