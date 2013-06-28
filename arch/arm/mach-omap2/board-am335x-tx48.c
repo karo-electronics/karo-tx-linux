@@ -43,6 +43,7 @@
 #include <linux/rtc/rtc-omap.h>
 #include <linux/opp.h>
 #include <linux/i2c/tsc2007.h>
+#include <linux/input/edt-ft5x06.h>
 
 /* LCD controller is similar to DA850 */
 #include <video/da8xx-fb.h>
@@ -76,6 +77,11 @@ void am33xx_d_can_init(unsigned int instance);
 
 /* Convert GPIO signal to GPIO pin number */
 #define GPIO_TO_PIN(bank, gpio) (32 * (bank) + (gpio))
+
+/* EDT FT5X06 */
+#define EDT_FT5X06_IRQ_PIN	GPIO_TO_PIN(1, 17)
+#define EDT_FT5X06_RESET_PIN	GPIO_TO_PIN(1, 18)
+#define EDT_FT5X06_WAKE_PIN	GPIO_TO_PIN(1, 27)
 
 enum tx48_baseboards {
 	STK5_V3 = 3,
@@ -236,6 +242,14 @@ static const struct pinmux_config lcdc_pin_mux[] __initconst = {
 	{ "lcd_ac_bias_en.lcd_ac_bias_en", AM33XX_PIN_OUTPUT, },
 	{ "gpmc_a3.gpio1_19", AM33XX_PIN_OUTPUT, }, /* LCD RESET */
 	{ "gpmc_a6.gpio1_22", AM33XX_PIN_OUTPUT, }, /* LCD POWER */
+	{ }
+};
+
+/* Multitouch controller */
+static struct pinmux_config edt_ft5x06_pin_mux[] = {
+	{ "gpmc_a1.gpio1_17", AM33XX_PIN_OUTPUT, }, /* FT5x06 IRQ */
+	{ "gpmc_a2.gpio1_18", AM33XX_PIN_OUTPUT, }, /* FT5x06 RESET */
+	{ "gpmc_a11.gpio1_27", AM33XX_PIN_OUTPUT, }, /* FT5x06 WAKE */
 	{ }
 };
 
@@ -656,13 +670,38 @@ static struct tsc2007_platform_data tsc2007_pdata = {
 	.exit_platform_hw = tsc2007_exit_hw,
 };
 
+static const struct gpio edt_ft5x06_pins[] __initconst = {
+	{ EDT_FT5X06_WAKE_PIN, GPIOF_OUT_INIT_HIGH, "EDT FT5X06 Wake", },
+};
+
+static struct edt_ft5x06_platform_data edt_ft5x06_pdata = {
+	.irq_pin = EDT_FT5X06_IRQ_PIN,
+	.reset_pin = EDT_FT5X06_RESET_PIN,
+};
+
+static int __init enable_edt_ft5x06(void)
+{
+	int err;
+
+	err = gpio_request_one(EDT_FT5X06_WAKE_PIN, GPIOF_OUT_INIT_HIGH,
+			"EDT FT5X06 Wake");
+	if (err) {
+		pr_err("%s: failed to request edt-ft5x06 WAKE GPIO: %d\n",
+			__func__, err);
+		return err;
+	}
+
+	setup_pin_mux(edt_ft5x06_pin_mux);
+	return 0;
+}
+
 static const struct pinmux_config i2c0_pin_mux[] __initconst = {
 	{ "i2c0_sda.i2c0_sda", AM33XX_SLEWCTRL_SLOW | AM33XX_PIN_INPUT_PULLUP, },
 	{ "i2c0_scl.i2c0_scl", AM33XX_SLEWCTRL_SLOW | AM33XX_PIN_INPUT_PULLUP, },
 	{ }
 };
 
-static struct i2c_board_info stk5_i2c0_boardinfo[] = {
+static struct i2c_board_info stk5_v3_i2c0_boardinfo[] = {
 	{
 		I2C_BOARD_INFO("tsc2007", 0x48),
 		.irq = 0, /* setup at runtime by i2c0_init() */
@@ -676,12 +715,35 @@ static struct i2c_board_info stk5_i2c0_boardinfo[] = {
 	},
 };
 
+static struct i2c_board_info stk5_v5_i2c0_boardinfo[] = {
+	{
+		I2C_BOARD_INFO("tsc2007", 0x48),
+		.irq = 0, /* setup at runtime by i2c0_init() */
+		.platform_data = &tsc2007_pdata,
+	},
+	{
+		I2C_BOARD_INFO("sgtl5000", 0x0a),
+	},
+	{
+		I2C_BOARD_INFO("ds1339", 0x68),
+	},
+	{
+		I2C_BOARD_INFO("edt-ft5x06", 0x38),
+		.platform_data  = &edt_ft5x06_pdata,
+	},
+};
+
+static struct i2c_board_info *stk5_i2c0_boardinfo __initdata =
+	stk5_v3_i2c0_boardinfo;
+static size_t stk5_i2c0_boardinfo_size __initdata =
+	ARRAY_SIZE(stk5_v3_i2c0_boardinfo);
+
 static void __init i2c0_init(void)
 {
 	setup_pin_mux(i2c0_pin_mux);
-	stk5_i2c0_boardinfo[0].irq = gpio_to_irq(TSC2007_PENDOWN_GPIO);
+	stk5_i2c0_boardinfo->irq = gpio_to_irq(TSC2007_PENDOWN_GPIO);
 	omap_register_i2c_bus(1, 100, stk5_i2c0_boardinfo,
-			ARRAY_SIZE(stk5_i2c0_boardinfo));
+			stk5_i2c0_boardinfo_size);
 }
 
 /* Setup McASP 1 */
@@ -905,6 +967,19 @@ static void __init am335x_tx48_init(void)
 	uart0_init();
 	uart1_init();
 	uart5_init();
+
+	if (tx48_baseboard == STK5_V5) {
+		int ret;
+
+		printk(KERN_DEBUG "%s Baseboard: STK5-V5\n", __func__);
+
+		ret = enable_edt_ft5x06();
+		if (ret == 0) {
+			stk5_i2c0_boardinfo = stk5_v5_i2c0_boardinfo;
+			stk5_i2c0_boardinfo_size = ARRAY_SIZE(stk5_v5_i2c0_boardinfo);
+		}
+	}
+
 	tx48_nand_init();
 	gpio_led_init();
 	i2c0_init();
