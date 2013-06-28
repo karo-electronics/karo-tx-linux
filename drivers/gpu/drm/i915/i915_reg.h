@@ -147,15 +147,9 @@
 #define   VGA_MSR_MEM_EN (1<<1)
 #define   VGA_MSR_CGA_MODE (1<<0)
 
-/*
- * SR01 is the only VGA register touched on non-UMS setups.
- * VLV doesn't do UMS, so the sequencer index/data registers
- * are the only VGA registers which need to include
- * display_mmio_offset.
- */
-#define VGA_SR_INDEX (dev_priv->info->display_mmio_offset + 0x3c4)
+#define VGA_SR_INDEX 0x3c4
 #define SR01			1
-#define VGA_SR_DATA (dev_priv->info->display_mmio_offset + 0x3c5)
+#define VGA_SR_DATA 0x3c5
 
 #define VGA_AR_INDEX 0x3c0
 #define   VGA_AR_VID_EN (1<<5)
@@ -454,9 +448,9 @@
 #define _DPIO_PLL_CML_B			0x806c
 #define DPIO_PLL_CML(pipe) _PIPE(pipe, _DPIO_PLL_CML_A, _DPIO_PLL_CML_B)
 
-#define _DPIO_LFP_COEFF_A		0x8048
-#define _DPIO_LFP_COEFF_B		0x8068
-#define DPIO_LFP_COEFF(pipe) _PIPE(pipe, _DPIO_LFP_COEFF_A, _DPIO_LFP_COEFF_B)
+#define _DPIO_LPF_COEFF_A		0x8048
+#define _DPIO_LPF_COEFF_B		0x8068
+#define DPIO_LPF_COEFF(pipe) _PIPE(pipe, _DPIO_LPF_COEFF_A, _DPIO_LPF_COEFF_B)
 
 #define DPIO_CALIBRATION		0x80ac
 
@@ -1026,6 +1020,10 @@
 #define IPS_CTL		0x43408
 #define   IPS_ENABLE	(1 << 31)
 
+#define MSG_FBC_REND_STATE	0x50380
+#define   FBC_REND_NUKE		(1<<2)
+#define   FBC_REND_CACHE_CLEAN	(1<<1)
+
 #define _HSW_PIPE_SLICE_CHICKEN_1_A	0x420B0
 #define _HSW_PIPE_SLICE_CHICKEN_1_B	0x420B4
 #define   HSW_BYPASS_FBC_QUEUE		(1<<22)
@@ -1256,7 +1254,7 @@
 #define  DSTATE_PLL_D3_OFF			(1<<3)
 #define  DSTATE_GFX_CLOCK_GATING		(1<<1)
 #define  DSTATE_DOT_CLOCK_GATING		(1<<0)
-#define DSPCLK_GATE_D		0x6200
+#define DSPCLK_GATE_D	(dev_priv->info->display_mmio_offset + 0x6200)
 # define DPUNIT_B_CLOCK_GATE_DISABLE		(1 << 30) /* 965 */
 # define VSUNIT_CLOCK_GATE_DISABLE		(1 << 29) /* 965 */
 # define VRHUNIT_CLOCK_GATE_DISABLE		(1 << 28) /* 965 */
@@ -1368,6 +1366,8 @@
 
 #define FW_BLC_SELF_VLV		(VLV_DISPLAY_BASE + 0x6500)
 #define  FW_CSPWRDWNEN		(1<<15)
+
+#define MI_ARB_VLV		(VLV_DISPLAY_BASE + 0x6504)
 
 /*
  * Palette regs
@@ -1718,14 +1718,13 @@
 					 GEN7_CXT_EXTENDED_SIZE(ctx_reg) + \
 					 GEN7_CXT_GT1_SIZE(ctx_reg) + \
 					 GEN7_CXT_VFSTATE_SIZE(ctx_reg))
-#define HSW_CXT_POWER_SIZE(ctx_reg)	((ctx_reg >> 26) & 0x3f)
-#define HSW_CXT_RING_SIZE(ctx_reg)	((ctx_reg >> 23) & 0x7)
-#define HSW_CXT_RENDER_SIZE(ctx_reg)	((ctx_reg >> 15) & 0xff)
-#define HSW_CXT_TOTAL_SIZE(ctx_reg)	(HSW_CXT_POWER_SIZE(ctx_reg) + \
-					 HSW_CXT_RING_SIZE(ctx_reg) + \
-					 HSW_CXT_RENDER_SIZE(ctx_reg) + \
-					 GEN7_CXT_VFSTATE_SIZE(ctx_reg))
-
+/* Haswell does have the CXT_SIZE register however it does not appear to be
+ * valid. Now, docs explain in dwords what is in the context object. The full
+ * size is 70720 bytes, however, the power context and execlist context will
+ * never be saved (power context is stored elsewhere, and execlists don't work
+ * on HSW) - so the final size is 66944 bytes, which rounds to 17 pages.
+ */
+#define HSW_CXT_TOTAL_SIZE		(17 * PAGE_SIZE)
 
 /*
  * Overlay regs
@@ -1874,6 +1873,12 @@
 /* SDVO is different across gen3/4 */
 #define   SDVOC_HOTPLUG_INT_STATUS_G4X		(1 << 3)
 #define   SDVOB_HOTPLUG_INT_STATUS_G4X		(1 << 2)
+/*
+ * Bspec seems to be seriously misleaded about the SDVO hpd bits on i965g/gm,
+ * since reality corrobates that they're the same as on gen3. But keep these
+ * bits here (and the comment!) to help any other lost wanderers back onto the
+ * right tracks.
+ */
 #define   SDVOC_HOTPLUG_INT_STATUS_I965		(3 << 4)
 #define   SDVOB_HOTPLUG_INT_STATUS_I965		(3 << 2)
 #define   SDVOC_HOTPLUG_INT_STATUS_I915		(1 << 7)
@@ -1881,13 +1886,6 @@
 #define   HOTPLUG_INT_STATUS_G4X		(CRT_HOTPLUG_INT_STATUS | \
 						 SDVOB_HOTPLUG_INT_STATUS_G4X | \
 						 SDVOC_HOTPLUG_INT_STATUS_G4X | \
-						 PORTB_HOTPLUG_INT_STATUS | \
-						 PORTC_HOTPLUG_INT_STATUS | \
-						 PORTD_HOTPLUG_INT_STATUS)
-
-#define HOTPLUG_INT_STATUS_I965			(CRT_HOTPLUG_INT_STATUS | \
-						 SDVOB_HOTPLUG_INT_STATUS_I965 | \
-						 SDVOC_HOTPLUG_INT_STATUS_I965 | \
 						 PORTB_HOTPLUG_INT_STATUS | \
 						 PORTC_HOTPLUG_INT_STATUS | \
 						 PORTD_HOTPLUG_INT_STATUS)
@@ -3488,7 +3486,7 @@
 #define SPRGAMC(pipe) _PIPE(pipe, _SPRA_GAMC, _SPRB_GAMC)
 #define SPRSURFLIVE(pipe) _PIPE(pipe, _SPRA_SURFLIVE, _SPRB_SURFLIVE)
 
-#define _SPACNTR		0x72180
+#define _SPACNTR		(VLV_DISPLAY_BASE + 0x72180)
 #define   SP_ENABLE			(1<<31)
 #define   SP_GEAMMA_ENABLE		(1<<30)
 #define   SP_PIXFORMAT_MASK		(0xf<<26)
@@ -3507,30 +3505,30 @@
 #define   SP_YUV_ORDER_YVYU		(2<<16)
 #define   SP_YUV_ORDER_VYUY		(3<<16)
 #define   SP_TILED			(1<<10)
-#define _SPALINOFF		0x72184
-#define _SPASTRIDE		0x72188
-#define _SPAPOS			0x7218c
-#define _SPASIZE		0x72190
-#define _SPAKEYMINVAL		0x72194
-#define _SPAKEYMSK		0x72198
-#define _SPASURF		0x7219c
-#define _SPAKEYMAXVAL		0x721a0
-#define _SPATILEOFF		0x721a4
-#define _SPACONSTALPHA		0x721a8
-#define _SPAGAMC		0x721f4
+#define _SPALINOFF		(VLV_DISPLAY_BASE + 0x72184)
+#define _SPASTRIDE		(VLV_DISPLAY_BASE + 0x72188)
+#define _SPAPOS			(VLV_DISPLAY_BASE + 0x7218c)
+#define _SPASIZE		(VLV_DISPLAY_BASE + 0x72190)
+#define _SPAKEYMINVAL		(VLV_DISPLAY_BASE + 0x72194)
+#define _SPAKEYMSK		(VLV_DISPLAY_BASE + 0x72198)
+#define _SPASURF		(VLV_DISPLAY_BASE + 0x7219c)
+#define _SPAKEYMAXVAL		(VLV_DISPLAY_BASE + 0x721a0)
+#define _SPATILEOFF		(VLV_DISPLAY_BASE + 0x721a4)
+#define _SPACONSTALPHA		(VLV_DISPLAY_BASE + 0x721a8)
+#define _SPAGAMC		(VLV_DISPLAY_BASE + 0x721f4)
 
-#define _SPBCNTR		0x72280
-#define _SPBLINOFF		0x72284
-#define _SPBSTRIDE		0x72288
-#define _SPBPOS			0x7228c
-#define _SPBSIZE		0x72290
-#define _SPBKEYMINVAL		0x72294
-#define _SPBKEYMSK		0x72298
-#define _SPBSURF		0x7229c
-#define _SPBKEYMAXVAL		0x722a0
-#define _SPBTILEOFF		0x722a4
-#define _SPBCONSTALPHA		0x722a8
-#define _SPBGAMC		0x722f4
+#define _SPBCNTR		(VLV_DISPLAY_BASE + 0x72280)
+#define _SPBLINOFF		(VLV_DISPLAY_BASE + 0x72284)
+#define _SPBSTRIDE		(VLV_DISPLAY_BASE + 0x72288)
+#define _SPBPOS			(VLV_DISPLAY_BASE + 0x7228c)
+#define _SPBSIZE		(VLV_DISPLAY_BASE + 0x72290)
+#define _SPBKEYMINVAL		(VLV_DISPLAY_BASE + 0x72294)
+#define _SPBKEYMSK		(VLV_DISPLAY_BASE + 0x72298)
+#define _SPBSURF		(VLV_DISPLAY_BASE + 0x7229c)
+#define _SPBKEYMAXVAL		(VLV_DISPLAY_BASE + 0x722a0)
+#define _SPBTILEOFF		(VLV_DISPLAY_BASE + 0x722a4)
+#define _SPBCONSTALPHA		(VLV_DISPLAY_BASE + 0x722a8)
+#define _SPBGAMC		(VLV_DISPLAY_BASE + 0x722f4)
 
 #define SPCNTR(pipe, plane) _PIPE(pipe * 2 + plane, _SPACNTR, _SPBCNTR)
 #define SPLINOFF(pipe, plane) _PIPE(pipe * 2 + plane, _SPALINOFF, _SPBLINOFF)
@@ -3672,9 +3670,9 @@
 #define _GAMMA_MODE_B		0x4ac80
 #define GAMMA_MODE(pipe) _PIPE(pipe, _GAMMA_MODE_A, _GAMMA_MODE_B)
 #define GAMMA_MODE_MODE_MASK	(3 << 0)
-#define GAMMA_MODE_MODE_8bit	(0 << 0)
-#define GAMMA_MODE_MODE_10bit	(1 << 0)
-#define GAMMA_MODE_MODE_12bit	(2 << 0)
+#define GAMMA_MODE_MODE_8BIT	(0 << 0)
+#define GAMMA_MODE_MODE_10BIT	(1 << 0)
+#define GAMMA_MODE_MODE_12BIT	(2 << 0)
 #define GAMMA_MODE_MODE_SPLIT	(3 << 0)
 
 /* interrupts */
@@ -3932,15 +3930,15 @@
 
 #define _PCH_DPLL_A              0xc6014
 #define _PCH_DPLL_B              0xc6018
-#define _PCH_DPLL(pll) (pll == 0 ? _PCH_DPLL_A : _PCH_DPLL_B)
+#define PCH_DPLL(pll) (pll == 0 ? _PCH_DPLL_A : _PCH_DPLL_B)
 
 #define _PCH_FPA0                0xc6040
 #define  FP_CB_TUNE		(0x3<<22)
 #define _PCH_FPA1                0xc6044
 #define _PCH_FPB0                0xc6048
 #define _PCH_FPB1                0xc604c
-#define _PCH_FP0(pll) (pll == 0 ? _PCH_FPA0 : _PCH_FPB0)
-#define _PCH_FP1(pll) (pll == 0 ? _PCH_FPA1 : _PCH_FPB1)
+#define PCH_FP0(pll) (pll == 0 ? _PCH_FPA0 : _PCH_FPB0)
+#define PCH_FP1(pll) (pll == 0 ? _PCH_FPA1 : _PCH_FPB1)
 
 #define PCH_DPLL_TEST           0xc606c
 
@@ -3980,15 +3978,9 @@
 #define PCH_SSC4_AUX_PARMS      0xc6214
 
 #define PCH_DPLL_SEL		0xc7000
-#define  TRANSA_DPLL_ENABLE	(1<<3)
-#define	 TRANSA_DPLLB_SEL	(1<<0)
-#define	 TRANSA_DPLLA_SEL	0
-#define  TRANSB_DPLL_ENABLE	(1<<7)
-#define	 TRANSB_DPLLB_SEL	(1<<4)
-#define	 TRANSB_DPLLA_SEL	(0)
-#define  TRANSC_DPLL_ENABLE	(1<<11)
-#define	 TRANSC_DPLLB_SEL	(1<<8)
-#define	 TRANSC_DPLLA_SEL	(0)
+#define	 TRANS_DPLLB_SEL(pipe)		(1 << (pipe * 4))
+#define	 TRANS_DPLLA_SEL(pipe)		0
+#define  TRANS_DPLL_ENABLE(pipe)	(1 << (pipe * 4 + 3))
 
 /* transcoder */
 
