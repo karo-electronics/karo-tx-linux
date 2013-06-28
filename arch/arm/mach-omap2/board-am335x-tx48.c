@@ -725,7 +725,7 @@ static int __init d_can_init(int id)
 
 	if (tx48_baseboard == STK5_V5) {
 		setup_pin_mux(can_xcvr_pin_mux);
-		gpio_request_one(GPIO_TO_PIN(0, 0), GPIOF_OUT_INIT_LOW, "CAN xcvr");
+		gpio_request_one(GPIO_TO_PIN(0, 22), GPIOF_OUT_INIT_LOW, "CAN xcvr");
 	}
 
 	am33xx_d_can_init(id);
