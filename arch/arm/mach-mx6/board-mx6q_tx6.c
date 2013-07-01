@@ -749,10 +749,6 @@ static iomux_v3_cfg_t mx6q_tx6_pads[] = {
 	MX6Q_PAD_KEY_COL4__CAN2_TXCAN,
 	MX6Q_PAD_KEY_ROW4__CAN2_RXCAN,
 
-	/* CCM  */
-	/* MX6Q_PAD_GPIO_0__CCM_CLKO, */  /* SGTL500 sys_mclk */
-	/* MX6Q_PAD_GPIO_3__CCM_CLKO2, */ /* J5 - Camera MCLK */
-
 	/* ECSPI1 */
 	MX6Q_PAD_EIM_D16__ECSPI1_SCLK,
 	MX6Q_PAD_EIM_D18__ECSPI1_MOSI,
@@ -775,24 +771,12 @@ static iomux_v3_cfg_t mx6q_tx6_pads[] = {
 	MX6Q_PAD_SD3_DAT2__GPIO_7_6,		/* Phy reset */
 	MX6Q_PAD_EIM_D20__GPIO_3_20,		/* Phy power */
 
-	/* GPIO1 */
-
-	/* GPIO2 */
-
-	/* GPIO3 */
-
-	/* GPIO5 */
-
-	/* GPIO6 */
-
 	/* I2C1 */
 	MX6Q_PAD_EIM_D21__I2C1_SCL,
 	MX6Q_PAD_EIM_D28__I2C1_SDA,
 
-	/* I2C2 */
-
 	/* I2C3 */
-	MX6Q_PAD_GPIO_3__I2C3_SCL,	/* GPIO1[3] */
+	MX6Q_PAD_GPIO_3__I2C3_SCL,
 	MX6Q_PAD_GPIO_6__I2C3_SDA,
 
 	/* DISPLAY */
@@ -835,8 +819,6 @@ static iomux_v3_cfg_t mx6q_tx6_pads[] = {
 	MX6Q_PAD_SD3_DAT7__UART1_TXD,
 	MX6Q_PAD_SD3_DAT6__UART1_RXD,
 
-	/* UART3 */
-
 	/* USBOTG ID pin */
 	MX6Q_PAD_EIM_D23__GPIO_3_23,
 
@@ -865,9 +847,6 @@ static iomux_v3_cfg_t mx6q_tx6_pads[] = {
 	MX6Q_PAD_SD2_DAT2__USDHC2_DAT2,
 	MX6Q_PAD_SD2_DAT3__USDHC2_DAT3,
 	MX6Q_PAD_SD3_CLK__GPIO_7_3,		/* SD2_CD */
-
-	/* DISP_RST_B */
-	/* DISP_PWR_EN */
 
 	/* EDT-FT5x06 Polytouch */
 #if defined(CONFIG_TOUCHSCREEN_EDT_FT5X06) || \
