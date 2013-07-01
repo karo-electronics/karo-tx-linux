@@ -105,7 +105,6 @@
 #define TX6_BACKLIGHT_GPIO	IMX_GPIO_NR(1, 1)
 
 static struct clk *clko;
-static int enable_lcd_ldb;
 
 extern char *gp_reg_id;
 extern char *soc_reg_id;
@@ -867,13 +866,6 @@ static void mx6_snvs_poweroff(void)
 	/*set TOP and DP_EN bit*/
 	writel(value | 0x60, mx6_snvs_base + SNVS_LPCR);
 }
-
-static int __init early_enable_lcd_ldb(char *p)
-{
-	enable_lcd_ldb = 1;
-	return 0;
-}
-early_param("enable_lcd_ldb", early_enable_lcd_ldb);
 
 void tx6_set_system_rev(void)
 {
