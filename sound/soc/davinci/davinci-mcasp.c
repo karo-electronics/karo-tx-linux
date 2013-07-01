@@ -935,9 +935,15 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 {
 	struct davinci_pcm_dma_params *dma_data;
 	struct resource *mem, *ioarea, *res;
-	struct snd_platform_data *pdata;
+	struct snd_platform_data *pdata = pdev->dev.platform_data;
 	struct davinci_audio_dev *dev;
 	int ret = 0;
+
+	if (pdata->op_mode >= ARRAY_SIZE(davinci_mcasp_dai)) {
+		dev_err(&pdev->dev, "Invalid operation mode: %d\n",
+			pdata->op_mode);
+		return -EINVAL;
+	}
 
 	dev = kzalloc(sizeof(struct davinci_audio_dev), GFP_KERNEL);
 	if (!dev)
@@ -958,7 +964,6 @@ static int davinci_mcasp_probe(struct platform_device *pdev)
 		goto err_release_data;
 	}
 
-	pdata = pdev->dev.platform_data;
 	pm_runtime_enable(&pdev->dev);
 
 	ret = pm_runtime_get_sync(&pdev->dev);
