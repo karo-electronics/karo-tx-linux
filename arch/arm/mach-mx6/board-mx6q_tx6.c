@@ -67,6 +67,7 @@
 
 #include <asm/irq.h>
 #include <asm/setup.h>
+#include <asm/bitops.h>
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/time.h>
@@ -411,7 +412,6 @@ static void __init imx6q_tx6_init_usb(void)
 	mx6_set_host1_vbus_func(imx6q_tx6_usbh1_vbus);
 }
 
-#include <asm/bitops.h>
 static void mx6q_tx6_flexcan_switch(int id, int enable)
 {
 	static unsigned long flexcan_enable;
