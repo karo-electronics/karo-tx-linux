@@ -732,11 +732,6 @@ static struct mxc_dvfs_platform_data tx6_dvfscore_data = {
 	.delay_time = 80,
 };
 
-static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
-				   char **cmdline, struct meminfo *mi)
-{
-}
-
 static iomux_v3_cfg_t mx6q_tx6_pads[] = {
 	/* AUDMUX */
 	MX6Q_PAD_KEY_COL0__AUDMUX_AUD5_TXC,
@@ -1025,7 +1020,6 @@ static void __init tx6_reserve(void)
 MACHINE_START(TX6, "Ka-Ro i.MX 6Quad TX6")
 	/* Maintainer: Ka-Ro electronics GmbH */
 	.boot_params = MX6_PHYS_OFFSET + 0x100,
-	.fixup = fixup_mxc_board,
 	.map_io = mx6_map_io,
 	.init_irq = mx6_init_irq,
 	.init_machine = tx6_board_init,
