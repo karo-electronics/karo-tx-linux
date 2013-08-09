@@ -83,6 +83,8 @@ struct msi_chip {
 struct msi_chip {
 	struct module *owner;
 	struct device *dev;
+	struct device_node *of_node;
+	struct list_head list;
 
 	int (*setup_irq)(struct msi_chip *chip, struct pci_dev *dev,
 			 struct msi_desc *desc);
