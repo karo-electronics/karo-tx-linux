@@ -60,6 +60,7 @@
 #include <mach/mxc_dvfs.h>
 #include <mach/memory.h>
 #include <mach/iomux-mx6q.h>
+#include <mach/iomux-mx6dl.h>
 #include <mach/imx-uart.h>
 #include <mach/viv_gpu.h>
 #include <mach/ipu-v3.h>
@@ -67,7 +68,6 @@
 
 #include <asm/irq.h>
 #include <asm/setup.h>
-#include <asm/bitops.h>
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/time.h>
@@ -111,7 +111,7 @@ extern char *gp_reg_id;
 extern char *soc_reg_id;
 extern char *pu_reg_id;
 
-static const struct esdhc_platform_data mx6q_tx6_sd1_data __initconst = {
+static const struct esdhc_platform_data tx6_sd1_data __initconst = {
 	.cd_gpio = TX6_SD1_CD,
 	.wp_gpio = -EINVAL,
 	.keep_power_at_suspend = 1,
@@ -120,7 +120,7 @@ static const struct esdhc_platform_data mx6q_tx6_sd1_data __initconst = {
 	.cd_type = ESDHC_CD_GPIO,
 };
 
-static const struct esdhc_platform_data mx6q_tx6_sd2_data __initconst = {
+static const struct esdhc_platform_data tx6_sd2_data __initconst = {
 	.cd_gpio = TX6_SD2_CD,
 	.wp_gpio = -EINVAL,
 	.keep_power_at_suspend = 1,
@@ -129,7 +129,25 @@ static const struct esdhc_platform_data mx6q_tx6_sd2_data __initconst = {
 	.cd_type = ESDHC_CD_GPIO,
 };
 
-static iomux_v3_cfg_t tx6_gpmi_nand_pads[] __initdata = {
+static iomux_v3_cfg_t tx6dl_gpmi_nand_pads[] __initdata = {
+	MX6DL_PAD_NANDF_CLE__RAWNAND_CLE,
+	MX6DL_PAD_NANDF_ALE__RAWNAND_ALE,
+	MX6DL_PAD_NANDF_CS0__RAWNAND_CE0N,
+	MX6DL_PAD_NANDF_RB0__RAWNAND_READY0,
+	MX6DL_PAD_NANDF_D0__RAWNAND_D0,
+	MX6DL_PAD_NANDF_D1__RAWNAND_D1,
+	MX6DL_PAD_NANDF_D2__RAWNAND_D2,
+	MX6DL_PAD_NANDF_D3__RAWNAND_D3,
+	MX6DL_PAD_NANDF_D4__RAWNAND_D4,
+	MX6DL_PAD_NANDF_D5__RAWNAND_D5,
+	MX6DL_PAD_NANDF_D6__RAWNAND_D6,
+	MX6DL_PAD_NANDF_D7__RAWNAND_D7,
+	MX6DL_PAD_SD4_CMD__RAWNAND_RDN,
+	MX6DL_PAD_SD4_CLK__RAWNAND_WRN,
+	MX6DL_PAD_NANDF_WP_B__RAWNAND_RESETN,
+};
+
+static iomux_v3_cfg_t tx6q_gpmi_nand_pads[] __initdata = {
 	MX6Q_PAD_NANDF_CLE__RAWNAND_CLE,
 	MX6Q_PAD_NANDF_ALE__RAWNAND_ALE,
 	MX6Q_PAD_NANDF_CS0__RAWNAND_CE0N,
@@ -149,12 +167,17 @@ static iomux_v3_cfg_t tx6_gpmi_nand_pads[] __initdata = {
 
 static int __init gpmi_nand_platform_init(void)
 {
-	return mxc_iomux_v3_setup_multiple_pads(tx6_gpmi_nand_pads,
-						ARRAY_SIZE(tx6_gpmi_nand_pads));
+	if cpu_is_mx6q() {
+		return mxc_iomux_v3_setup_multiple_pads(tx6q_gpmi_nand_pads,
+						ARRAY_SIZE(tx6q_gpmi_nand_pads));
+	} else {
+		return mxc_iomux_v3_setup_multiple_pads(tx6dl_gpmi_nand_pads,
+						ARRAY_SIZE(tx6dl_gpmi_nand_pads));
+	}
 }
 
 static const struct gpmi_nand_platform_data
-mx6q_gpmi_nand_platform_data __initconst = {
+tx6_gpmi_nand_platform_data __initconst = {
 	.platform_init		= gpmi_nand_platform_init,
 	.min_prop_delay_in_ns	= 5,
 	.max_prop_delay_in_ns	= 9,
@@ -163,18 +186,18 @@ mx6q_gpmi_nand_platform_data __initconst = {
 };
 
 static const struct anatop_thermal_platform_data
-	mx6q_tx6_anatop_thermal_data __initconst = {
+	tx6_anatop_thermal_data __initconst = {
 		.name = "anatop_thermal",
 };
 
-static inline void mx6q_tx6_init_uart(void)
+static inline void tx6_init_uart(void)
 {
 	imx6q_add_imx_uart(0, NULL);
 	imx6q_add_imx_uart(1, NULL);
 	imx6q_add_imx_uart(2, NULL);
 }
 
-static int mx6q_tx6_fec_phy_init(struct phy_device *phydev)
+static int tx6_fec_phy_init(struct phy_device *phydev)
 {
 	gpio_request_one(TX6_FEC_PHY_PWR_EN, GPIOF_OUT_INIT_HIGH, "fec_phy_pwr_en");
 
@@ -186,18 +209,18 @@ static int mx6q_tx6_fec_phy_init(struct phy_device *phydev)
 }
 
 static struct fec_platform_data fec_data __initdata = {
-	.init = mx6q_tx6_fec_phy_init,
+	.init = tx6_fec_phy_init,
 	.phy = PHY_INTERFACE_MODE_RMII,
 };
 
-static int mx6q_tx6_spi_cs[] = {
+static int tx6_spi_cs[] = {
 	TX6_ECSPI1_CS0,
 	TX6_ECSPI1_CS1,
 };
 
-static const struct spi_imx_master mx6q_tx6_spi_data __initconst = {
-	.chipselect	= mx6q_tx6_spi_cs,
-	.num_chipselect = ARRAY_SIZE(mx6q_tx6_spi_cs),
+static const struct spi_imx_master tx6_spi_data __initconst = {
+	.chipselect	= tx6_spi_cs,
+	.num_chipselect = ARRAY_SIZE(tx6_spi_cs),
 };
 
 static struct spi_board_info tx6_spi_board_info[] __initdata = {
@@ -215,9 +238,9 @@ static struct spi_board_info tx6_spi_board_info[] __initdata = {
 	},
 };
 
-static struct mxc_audio_platform_data mx6_tx6_audio_data;
+static struct mxc_audio_platform_data tx6_audio_data;
 
-static int mx6_tx6_sgtl5000_init(void)
+static int tx6_sgtl5000_init(void)
 {
 	int ret;
 	struct clk *new_parent;
@@ -244,12 +267,12 @@ static int mx6_tx6_sgtl5000_init(void)
 		goto err;
 	}
 
-	mx6_tx6_audio_data.sysclk = 26000000;
+	tx6_audio_data.sysclk = 26000000;
 	ret = clk_set_rate(clko, rate);
 	if (ret) {
 		pr_err("Failed to set CLKO rate to %u.%03uMHz\n",
-			mx6_tx6_audio_data.sysclk / 1000000,
-			mx6_tx6_audio_data.sysclk / 1000 % 1000);
+			tx6_audio_data.sysclk / 1000000,
+			tx6_audio_data.sysclk / 1000 % 1000);
 		goto err;
 	}
 
@@ -266,7 +289,7 @@ err:
 	return ret;
 }
 
-static int mx6_tx6_sgtl5000_exit(void)
+static int tx6_sgtl5000_exit(void)
 {
 	if (!IS_ERR(clko)) {
 		clk_disable(clko);
@@ -275,20 +298,20 @@ static int mx6_tx6_sgtl5000_exit(void)
 	return 0;
 }
 
-static struct imx_ssi_platform_data mx6_tx6_ssi_pdata = {
+static struct imx_ssi_platform_data tx6_ssi_pdata = {
 	.flags = IMX_SSI_DMA | IMX_SSI_SYN,
 };
 
-static struct mxc_audio_platform_data mx6_tx6_audio_data = {
+static struct mxc_audio_platform_data tx6_audio_data = {
 	.ssi_num	= 1,
 	.src_port	= 2,
 	.ext_port	= 5,
-	.init		= mx6_tx6_sgtl5000_init,
-	.finit		= mx6_tx6_sgtl5000_exit,
+	.init		= tx6_sgtl5000_init,
+	.finit		= tx6_sgtl5000_exit,
 	.hp_gpio	= -1,
 };
 
-static struct platform_device mx6_tx6_audio_device = {
+static struct platform_device tx6_audio_device = {
 	.name = "imx-sgtl5000",
 };
 
@@ -303,7 +326,7 @@ static struct edt_ft5x06_platform_data edt_ft5x06_pdata = {
 	.wakeup_pin = EDT_FT5X06_WAKE_PIN,
 };
 
-static inline void __init imx6q_tx6_init_edt_ft5x06(void)
+static inline void __init tx6_init_edt_ft5x06(void)
 {
 	int ret = 0;
 
@@ -343,7 +366,7 @@ static struct tsc2007_platform_data tx6_tsc2007_pdata = {
 	.exit_platform_hw = tx6_tsc2007_plat_exit,
 };
 
-static struct imxi2c_platform_data mx6q_tx6_i2c_data = {
+static struct imxi2c_platform_data tx6_i2c_data = {
 	.bitrate = 100000,
 };
 
@@ -372,7 +395,7 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 #endif /* EDT_FT5X06 */
 };
 
-static void imx6q_tx6_usbotg_vbus(bool on)
+static void tx6_usbotg_vbus(bool on)
 {
 	if (on)
 		gpio_set_value(TX6_USB_OTG_PWR, 1);
@@ -380,7 +403,7 @@ static void imx6q_tx6_usbotg_vbus(bool on)
 		gpio_set_value(TX6_USB_OTG_PWR, 0);
 }
 
-static void imx6q_tx6_usbh1_vbus(bool on)
+static void tx6_usbh1_vbus(bool on)
 {
 	if (on)
 		gpio_set_value(TX6_USB_H1_PWR, 1);
@@ -388,7 +411,7 @@ static void imx6q_tx6_usbh1_vbus(bool on)
 		gpio_set_value(TX6_USB_H1_PWR, 0);
 }
 
-static void __init imx6q_tx6_init_usb(void)
+static void __init tx6_init_usb(void)
 {
 	int ret = 0;
 
@@ -400,7 +423,7 @@ static void __init imx6q_tx6_init_usb(void)
 			ret);
 		return;
 	}
-	mx6_set_otghost_vbus_func(imx6q_tx6_usbotg_vbus);
+	mx6_set_otghost_vbus_func(tx6_usbotg_vbus);
 
 	ret = gpio_request_one(TX6_USB_H1_PWR, GPIOF_OUT_INIT_LOW, "usb-h1-pwr");
 	if (ret) {
@@ -409,10 +432,11 @@ static void __init imx6q_tx6_init_usb(void)
 		return;
 	}
 
-	mx6_set_host1_vbus_func(imx6q_tx6_usbh1_vbus);
+	mx6_set_host1_vbus_func(tx6_usbh1_vbus);
 }
 
-static void mx6q_tx6_flexcan_switch(int id, int enable)
+#include <asm/bitops.h>
+static void tx6_flexcan_switch(int id, int enable)
 {
 	static unsigned long flexcan_enable;
 
@@ -429,23 +453,23 @@ static void mx6q_tx6_flexcan_switch(int id, int enable)
 	}
 }
 
-static void mx6q_tx6_flexcan0_switch(int enable)
+static void tx6_flexcan0_switch(int enable)
 {
-	mx6q_tx6_flexcan_switch(0, enable);
+	tx6_flexcan_switch(0, enable);
 }
 
-static void mx6q_tx6_flexcan1_switch(int enable)
+static void tx6_flexcan1_switch(int enable)
 {
-	mx6q_tx6_flexcan_switch(1, enable);
+	tx6_flexcan_switch(1, enable);
 }
 
 static const struct flexcan_platform_data
-mx6q_tx6_flexcan_pdata[] __initconst = {
+tx6_flexcan_pdata[] __initconst = {
 	{
-		.transceiver_switch = mx6q_tx6_flexcan0_switch,
+		.transceiver_switch = tx6_flexcan0_switch,
 	},
 	{
-		.transceiver_switch = mx6q_tx6_flexcan1_switch,
+		.transceiver_switch = tx6_flexcan1_switch,
 	},
 };
 
@@ -524,7 +548,7 @@ static void tx6_suspend_exit(void)
 	/* resume restore */
 	/* Enable AUX 5V */
 }
-static const struct pm_platform_data mx6q_tx6_pm_data __initconst = {
+static const struct pm_platform_data tx6_pm_data __initconst = {
 	.name = "imx_pm",
 	.suspend_enter = tx6_suspend_enter,
 	.suspend_exit = tx6_suspend_exit,
@@ -610,9 +634,9 @@ static struct platform_device sgtl5000_tx6_vddd_reg_devices = {
 
 static int imx6q_init_audio(void)
 {
-	mxc_register_device(&mx6_tx6_audio_device,
-			    &mx6_tx6_audio_data);
-	imx6q_add_imx_ssi(1, &mx6_tx6_ssi_pdata);
+	mxc_register_device(&tx6_audio_device,
+			    &tx6_audio_data);
+	imx6q_add_imx_ssi(1, &tx6_ssi_pdata);
 #if defined(CONFIG_SND_SOC_SGTL5000) || defined(CONFIG_SND_SOC_SGTL5000_MODULE)
 	platform_device_register(&sgtl5000_tx6_vdda_reg_devices);
 	platform_device_register(&sgtl5000_tx6_vddio_reg_devices);
@@ -658,12 +682,20 @@ static struct resource tx6_pwm_resource[] __initdata = {
 
 static void tx6_enable_pwm_pad(void)
 {
-	mxc_iomux_v3_setup_pad(MX6Q_PAD_GPIO_1__PWM2_PWMO);
+	if cpu_is_mx6q() {
+		mxc_iomux_v3_setup_pad(MX6Q_PAD_GPIO_1__PWM2_PWMO);
+	} else {
+		mxc_iomux_v3_setup_pad(MX6DL_PAD_GPIO_1__PWM2_PWMO);
+	}
 }
 
 static void tx6_disable_pwm_pad(void)
 {
-	mxc_iomux_v3_setup_pad(MX6Q_PAD_GPIO_1__GPIO_1_1);
+	if cpu_is_mx6q() {
+		mxc_iomux_v3_setup_pad(MX6Q_PAD_GPIO_1__GPIO_1_1);
+	} else {
+		mxc_iomux_v3_setup_pad(MX6DL_PAD_GPIO_1__GPIO_1_1);
+	}
 }
 
 static const struct mxc_pwm_platform_data tx6_pwm_pdata __initconst = {
@@ -738,7 +770,147 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 {
 }
 
-static iomux_v3_cfg_t mx6q_tx6_pads[] = {
+static iomux_v3_cfg_t tx6dl_pads[] = {
+	/* AUDMUX */
+	MX6DL_PAD_KEY_COL0__AUDMUX_AUD5_TXC,
+	MX6DL_PAD_KEY_ROW0__AUDMUX_AUD5_TXD,
+	MX6DL_PAD_KEY_COL1__AUDMUX_AUD5_TXFS,
+	MX6DL_PAD_KEY_ROW1__AUDMUX_AUD5_RXD,
+
+	/* CAN2  */
+	MX6DL_PAD_KEY_COL4__CAN2_TXCAN,
+	MX6DL_PAD_KEY_ROW4__CAN2_RXCAN,
+
+	/* CCM  */
+	/* MX6DL_PAD_GPIO_0__CCM_CLKO, */  /* SGTL500 sys_mclk */
+	/* MX6DL_PAD_GPIO_3__CCM_CLKO2, */ /* J5 - Camera MCLK */
+
+	/* ECSPI1 */
+	MX6DL_PAD_EIM_D16__ECSPI1_SCLK,
+	MX6DL_PAD_EIM_D18__ECSPI1_MOSI,
+	MX6DL_PAD_EIM_D17__ECSPI1_MISO,
+
+	/* ENET */
+	MX6DL_PAD_ENET_MDIO__ENET_MDIO,
+	MX6DL_PAD_ENET_MDC__ENET_MDC,
+	MX6DL_PAD_ENET_RXD0__ENET_RDATA_0,
+	MX6DL_PAD_ENET_RXD1__ENET_RDATA_1,
+	MX6DL_PAD_ENET_RX_ER__ENET_RX_ER,
+	MX6DL_PAD_ENET_TX_EN__ENET_TX_EN,
+	MX6DL_PAD_ENET_TXD0__ENET_TDATA_0,
+	MX6DL_PAD_ENET_TXD1__ENET_TDATA_1,
+	MX6DL_PAD_ENET_CRS_DV__ENET_RX_EN,
+	MX6DL_PAD_RGMII_TX_CTL__ENET_RGMII_TX_CTL,
+	MX6DL_PAD_ENET_REF_CLK__GPIO_1_23,	/* Connected to GPIO_16 on TX6 v1 */
+	MX6DL_PAD_GPIO_16__ENET_ANATOP_ETHERNET_REF_OUT,
+	MX6DL_PAD_SD3_DAT4__GPIO_7_1,		/* Phy Interrupt */
+	MX6DL_PAD_SD3_DAT2__GPIO_7_6,		/* Phy reset */
+	MX6DL_PAD_EIM_D20__GPIO_3_20,		/* Phy power */
+
+	/* GPIO1 */
+
+	/* GPIO2 */
+
+	/* GPIO3 */
+
+	/* GPIO5 */
+
+	/* GPIO6 */
+
+	/* I2C1 */
+	MX6DL_PAD_EIM_D21__I2C1_SCL,
+	MX6DL_PAD_EIM_D28__I2C1_SDA,
+
+	/* I2C2 */
+
+	/* I2C3 */
+	MX6DL_PAD_GPIO_3__I2C3_SCL,	/* GPIO1[3] */
+	MX6DL_PAD_GPIO_6__I2C3_SDA,
+
+	/* DISPLAY */
+	MX6DL_PAD_DI0_DISP_CLK__IPU1_DI0_DISP_CLK,
+	MX6DL_PAD_DI0_PIN15__IPU1_DI0_PIN15,		/* DE */
+	MX6DL_PAD_DI0_PIN2__IPU1_DI0_PIN2,		/* HSync */
+	MX6DL_PAD_DI0_PIN3__IPU1_DI0_PIN3,		/* VSync */
+	MX6DL_PAD_DI0_PIN4__IPU1_DI0_PIN4,		/* Contrast */
+	MX6DL_PAD_DISP0_DAT0__IPU1_DISP0_DAT_0,
+	MX6DL_PAD_DISP0_DAT1__IPU1_DISP0_DAT_1,
+	MX6DL_PAD_DISP0_DAT2__IPU1_DISP0_DAT_2,
+	MX6DL_PAD_DISP0_DAT3__IPU1_DISP0_DAT_3,
+	MX6DL_PAD_DISP0_DAT4__IPU1_DISP0_DAT_4,
+	MX6DL_PAD_DISP0_DAT5__IPU1_DISP0_DAT_5,
+	MX6DL_PAD_DISP0_DAT6__IPU1_DISP0_DAT_6,
+	MX6DL_PAD_DISP0_DAT7__IPU1_DISP0_DAT_7,
+	MX6DL_PAD_DISP0_DAT8__IPU1_DISP0_DAT_8,
+	MX6DL_PAD_DISP0_DAT9__IPU1_DISP0_DAT_9,
+	MX6DL_PAD_DISP0_DAT10__IPU1_DISP0_DAT_10,
+	MX6DL_PAD_DISP0_DAT11__IPU1_DISP0_DAT_11,
+	MX6DL_PAD_DISP0_DAT12__IPU1_DISP0_DAT_12,
+	MX6DL_PAD_DISP0_DAT13__IPU1_DISP0_DAT_13,
+	MX6DL_PAD_DISP0_DAT14__IPU1_DISP0_DAT_14,
+	MX6DL_PAD_DISP0_DAT15__IPU1_DISP0_DAT_15,
+	MX6DL_PAD_DISP0_DAT16__IPU1_DISP0_DAT_16,
+	MX6DL_PAD_DISP0_DAT17__IPU1_DISP0_DAT_17,
+	MX6DL_PAD_DISP0_DAT18__IPU1_DISP0_DAT_18,
+	MX6DL_PAD_DISP0_DAT19__IPU1_DISP0_DAT_19,
+	MX6DL_PAD_DISP0_DAT20__IPU1_DISP0_DAT_20,
+	MX6DL_PAD_DISP0_DAT21__IPU1_DISP0_DAT_21,
+	MX6DL_PAD_DISP0_DAT22__IPU1_DISP0_DAT_22,
+	MX6DL_PAD_DISP0_DAT23__IPU1_DISP0_DAT_23,
+	MX6DL_PAD_EIM_D29__GPIO_3_29,		/* Reset */
+	MX6DL_PAD_EIM_EB3__GPIO_2_31,		/* Enable */
+
+	/* DISP_PWM */
+	MX6DL_PAD_GPIO_1__PWM2_PWMO,
+
+	/* UART1 for debug */
+	MX6DL_PAD_SD3_DAT7__UART1_TXD,
+	MX6DL_PAD_SD3_DAT6__UART1_RXD,
+
+	/* UART3 */
+
+	/* USBOTG ID pin */
+	MX6DL_PAD_EIM_D23__GPIO_3_23,
+
+	/* USB power pin */
+	MX6DL_PAD_GPIO_7__GPIO_1_7,
+	MX6DL_PAD_EIM_D31__GPIO_3_31,
+
+	/* USB OC pin */
+	MX6DL_PAD_GPIO_8__GPIO_1_8,
+	MX6DL_PAD_EIM_D30__USBOH3_USBH1_OC,
+
+	/* USDHC1 */
+	MX6DL_PAD_SD1_CLK__USDHC1_CLK,
+	MX6DL_PAD_SD1_CMD__USDHC1_CMD,
+	MX6DL_PAD_SD1_DAT0__USDHC1_DAT0,
+	MX6DL_PAD_SD1_DAT1__USDHC1_DAT1,
+	MX6DL_PAD_SD1_DAT2__USDHC1_DAT2,
+	MX6DL_PAD_SD1_DAT3__USDHC1_DAT3,
+	MX6DL_PAD_SD3_CMD__GPIO_7_2,		/* SD1_CD */
+
+	/* USDHC2 */
+	MX6DL_PAD_SD2_CLK__USDHC2_CLK,
+	MX6DL_PAD_SD2_CMD__USDHC2_CMD,
+	MX6DL_PAD_SD2_DAT0__USDHC2_DAT0,
+	MX6DL_PAD_SD2_DAT1__USDHC2_DAT1,
+	MX6DL_PAD_SD2_DAT2__USDHC2_DAT2,
+	MX6DL_PAD_SD2_DAT3__USDHC2_DAT3,
+	MX6DL_PAD_SD3_CLK__GPIO_7_3,		/* SD2_CD */
+
+	/* DISP_RST_B */
+	/* DISP_PWR_EN */
+
+	/* EDT-FT5x06 Polytouch */
+#if defined(CONFIG_TOUCHSCREEN_EDT_FT5X06) || \
+	defined(CONFIG_TOUCHSCREEN_EDT_FT5X06_MODULE)
+	MX6DL_PAD_NANDF_CS2__GPIO_6_15, /* IRQ */
+	MX6DL_PAD_EIM_A16__GPIO_2_22, /* Reset */
+	MX6DL_PAD_EIM_A17__GPIO_2_21, /* Wake-Up */
+#endif
+};
+
+static iomux_v3_cfg_t tx6q_pads[] = {
 	/* AUDMUX */
 	MX6Q_PAD_KEY_COL0__AUDMUX_AUD5_TXC,
 	MX6Q_PAD_KEY_ROW0__AUDMUX_AUD5_TXD,
@@ -748,6 +920,10 @@ static iomux_v3_cfg_t mx6q_tx6_pads[] = {
 	/* CAN2  */
 	MX6Q_PAD_KEY_COL4__CAN2_TXCAN,
 	MX6Q_PAD_KEY_ROW4__CAN2_RXCAN,
+
+	/* CCM  */
+	/* MX6Q_PAD_GPIO_0__CCM_CLKO, */  /* SGTL500 sys_mclk */
+	/* MX6Q_PAD_GPIO_3__CCM_CLKO2, */ /* J5 - Camera MCLK */
 
 	/* ECSPI1 */
 	MX6Q_PAD_EIM_D16__ECSPI1_SCLK,
@@ -771,12 +947,24 @@ static iomux_v3_cfg_t mx6q_tx6_pads[] = {
 	MX6Q_PAD_SD3_DAT2__GPIO_7_6,		/* Phy reset */
 	MX6Q_PAD_EIM_D20__GPIO_3_20,		/* Phy power */
 
+	/* GPIO1 */
+
+	/* GPIO2 */
+
+	/* GPIO3 */
+
+	/* GPIO5 */
+
+	/* GPIO6 */
+
 	/* I2C1 */
 	MX6Q_PAD_EIM_D21__I2C1_SCL,
 	MX6Q_PAD_EIM_D28__I2C1_SDA,
 
+	/* I2C2 */
+
 	/* I2C3 */
-	MX6Q_PAD_GPIO_3__I2C3_SCL,
+	MX6Q_PAD_GPIO_3__I2C3_SCL,	/* GPIO1[3] */
 	MX6Q_PAD_GPIO_6__I2C3_SDA,
 
 	/* DISPLAY */
@@ -818,20 +1006,8 @@ static iomux_v3_cfg_t mx6q_tx6_pads[] = {
 	/* UART1 for debug */
 	MX6Q_PAD_SD3_DAT7__UART1_TXD,
 	MX6Q_PAD_SD3_DAT6__UART1_RXD,
-	MX6Q_PAD_SD3_DAT1__UART1_RTS,
-	MX6Q_PAD_SD3_DAT0__UART1_CTS,
-
-	/* UART2 */
-	MX6Q_PAD_SD4_DAT7__UART2_TXD,
-	MX6Q_PAD_SD4_DAT4__UART2_RXD,
-	MX6Q_PAD_SD4_DAT5__UART2_RTS,
-	MX6Q_PAD_SD4_DAT6__UART2_CTS,
 
 	/* UART3 */
-	MX6Q_PAD_EIM_D24__UART3_TXD,
-	MX6Q_PAD_EIM_D25__UART3_RXD,
-	MX6Q_PAD_SD3_RST__UART3_RTS,
-	MX6Q_PAD_SD3_DAT3__UART3_CTS,
 
 	/* USBOTG ID pin */
 	MX6Q_PAD_EIM_D23__GPIO_3_23,
@@ -861,6 +1037,9 @@ static iomux_v3_cfg_t mx6q_tx6_pads[] = {
 	MX6Q_PAD_SD2_DAT2__USDHC2_DAT2,
 	MX6Q_PAD_SD2_DAT3__USDHC2_DAT3,
 	MX6Q_PAD_SD3_CLK__GPIO_7_3,		/* SD2_CD */
+
+	/* DISP_RST_B */
+	/* DISP_PWR_EN */
 
 	/* EDT-FT5x06 Polytouch */
 #if defined(CONFIG_TOUCHSCREEN_EDT_FT5X06) || \
@@ -921,16 +1100,19 @@ void tx6_set_system_rev(void)
 static void __init tx6_board_init(void)
 {
 	int i;
-
-	mxc_iomux_v3_setup_multiple_pads(mx6q_tx6_pads,
-		ARRAY_SIZE(mx6q_tx6_pads));
-
+	if (cpu_is_mx6q()) {
+		mxc_iomux_v3_setup_multiple_pads(tx6q_pads,
+			ARRAY_SIZE(tx6q_pads));
+	} else {
+		mxc_iomux_v3_setup_multiple_pads(tx6dl_pads,
+			ARRAY_SIZE(tx6dl_pads));
+	}
 	tx6_set_system_rev();
 
 	gp_reg_id  = tx6_dvfscore_data.reg_id;
 	soc_reg_id = tx6_dvfscore_data.soc_id;
 	pu_reg_id  = tx6_dvfscore_data.pu_id;
-	mx6q_tx6_init_uart();
+	tx6_init_uart();
 
 	imx6q_add_ipuv3(0, &ipu_data[0]);
 	if (cpu_is_mx6q()) {
@@ -946,7 +1128,7 @@ static void __init tx6_board_init(void)
 	imx6q_add_ldb(&ldb_data);
 	imx6q_add_v4l2_output(0);
 	imx6q_add_imx_snvs_rtc();
-	imx6q_tx6_init_edt_ft5x06();
+	tx6_init_edt_ft5x06();
 
 	imx6q_add_imx_caam();
 
@@ -956,27 +1138,27 @@ static void __init tx6_board_init(void)
 			ARRAY_SIZE(mxc_i2c0_board_info));
 	i2c_register_board_info(2, mxc_i2c2_board_info,
 			ARRAY_SIZE(mxc_i2c2_board_info));
-	imx6q_add_imx_i2c(0, &mx6q_tx6_i2c_data);
-	imx6q_add_imx_i2c(2, &mx6q_tx6_i2c_data);
+	imx6q_add_imx_i2c(0, &tx6_i2c_data);
+	imx6q_add_imx_i2c(2, &tx6_i2c_data);
 	/* SPI */
 	spi_register_board_info(tx6_spi_board_info,
 				ARRAY_SIZE(tx6_spi_board_info));
-	imx6q_add_ecspi(0, &mx6q_tx6_spi_data);
+	imx6q_add_ecspi(0, &tx6_spi_data);
 
-	imx6q_add_anatop_thermal_imx(1, &mx6q_tx6_anatop_thermal_data);
+	imx6q_add_anatop_thermal_imx(1, &tx6_anatop_thermal_data);
 	imx6_init_fec(fec_data);
-	imx6q_add_pm_imx(0, &mx6q_tx6_pm_data);
+	imx6q_add_pm_imx(0, &tx6_pm_data);
 
-	imx6q_add_sdhci_usdhc_imx(0, &mx6q_tx6_sd1_data);
-	imx6q_add_sdhci_usdhc_imx(1, &mx6q_tx6_sd2_data);
+	imx6q_add_sdhci_usdhc_imx(0, &tx6_sd1_data);
+	imx6q_add_sdhci_usdhc_imx(1, &tx6_sd2_data);
 	imx_add_viv_gpu(&imx6_gpu_data, &imx6q_gpu_pdata);
 	if (tx6_flexcan_init() == 0) {
-		imx6q_add_flexcan0(&mx6q_tx6_flexcan_pdata[0]);
-		imx6q_add_flexcan1(&mx6q_tx6_flexcan_pdata[1]);
+		imx6q_add_flexcan0(&tx6_flexcan_pdata[0]);
+		imx6q_add_flexcan1(&tx6_flexcan_pdata[1]);
 	} else {
 		imx6q_add_flexcan1(NULL);
 	}
-	imx6q_tx6_init_usb();
+	tx6_init_usb();
 	imx6q_add_vpu();
 	imx6q_init_audio();
 	imx_asrc_data.asrc_core_clk = clk_get(NULL, "asrc_clk");
@@ -990,7 +1172,7 @@ static void __init tx6_board_init(void)
 	imx6q_add_imx2_wdt(0, NULL);
 	imx6q_add_dma();
 
-	imx6q_add_gpmi(&mx6q_gpmi_nand_platform_data);
+	imx6q_add_gpmi(&tx6_gpmi_nand_platform_data);
 
 	imx6q_add_dvfs_core(&tx6_dvfscore_data);
 
@@ -1044,7 +1226,7 @@ static void __init tx6_reserve(void)
 /*
  * initialize __mach_desc_TX6 data structure.
  */
-MACHINE_START(TX6, "Ka-Ro i.MX 6Quad TX6")
+MACHINE_START(TX6, "Ka-Ro i.MX6 TX6")
 	/* Maintainer: Ka-Ro electronics GmbH */
 	.boot_params = MX6_PHYS_OFFSET + 0x100,
 	.fixup = fixup_mxc_board,
