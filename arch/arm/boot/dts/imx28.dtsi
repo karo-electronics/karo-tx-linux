@@ -893,8 +893,9 @@
 			lcdif: lcdif@80030000 {
 				compatible = "fsl,imx28-lcdif";
 				reg = <0x80030000 0x2000>;
-				interrupts = <38>;
-				clocks = <&clks 55>;
+				interrupts = <38 86>;
+				clocks = <&clks 55>, <&clks 55>;
+				clock-names = "pix", "axi";
 				dmas = <&dma_apbh 13>;
 				dma-names = "rx";
 				status = "disabled";
