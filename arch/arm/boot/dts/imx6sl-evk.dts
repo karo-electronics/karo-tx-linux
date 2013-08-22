@@ -91,6 +91,11 @@
 		mux-int-port = <2>;
 		mux-ext-port = <3>;
 	};
+
+	pxp_v4l2_out {
+		compatible = "fsl,imx6sl-pxp-v4l2";
+		status = "okay";
+	};
 };
 
 &audmux {
