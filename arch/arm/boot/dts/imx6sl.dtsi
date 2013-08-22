@@ -641,8 +641,13 @@
 			};
 
 			lcdif: lcdif@020f8000 {
+				compatible = "fsl,imx6sl-lcdif", "fsl,imx28-lcdif";
 				reg = <0x020f8000 0x4000>;
 				interrupts = <0 39 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&clks IMX6SL_CLK_LCDIF_PIX>,
+					 <&clks IMX6SL_CLK_LCDIF_AXI>;
+				clock-names = "pix", "axi";
+				status = "disabled";
 			};
 
 			dcp: dcp@020fc000 {
