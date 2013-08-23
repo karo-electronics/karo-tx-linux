@@ -667,6 +667,12 @@ static struct platform_device tx6_gpio_led_device = {
 	}
 };
 
+/* LCD */
+static struct gpio tx6_lcd_gpios[] = {
+	{ TX6_DISP_RST_B, GPIOF_OUTPUT_INIT_HIGH, "lcd_reset", },
+	{ TX6_DISP_PWR_EN, GPIOF_OUTPUT_INIT_HIGH, "lcd_enable", },
+};
+
 static struct resource tx6_pwm_resource[] __initdata = {
 	{
 		.start = MX6Q_PWM2_BASE_ADDR,
@@ -1100,6 +1106,7 @@ void tx6_set_system_rev(void)
 static void __init tx6_board_init(void)
 {
 	int i;
+
 	if (cpu_is_mx6q()) {
 		mxc_iomux_v3_setup_multiple_pads(tx6q_pads,
 			ARRAY_SIZE(tx6q_pads));
@@ -1113,6 +1120,9 @@ static void __init tx6_board_init(void)
 	soc_reg_id = tx6_dvfscore_data.soc_id;
 	pu_reg_id  = tx6_dvfscore_data.pu_id;
 	tx6_init_uart();
+
+	gpio_request_array(tx6_lcd_gpios,
+			   ARRAY_SIZE(tx6_lcd_gpios));
 
 	imx6q_add_ipuv3(0, &ipu_data[0]);
 	if (cpu_is_mx6q()) {
