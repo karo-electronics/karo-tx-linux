@@ -669,9 +669,14 @@ static struct platform_device tx6_gpio_led_device = {
 
 /* LCD */
 static struct gpio tx6_lcd_gpios[] = {
-	{ TX6_DISP_RST_B, GPIOF_OUTPUT_INIT_HIGH, "lcd_reset", },
-	{ TX6_DISP_PWR_EN, GPIOF_OUTPUT_INIT_HIGH, "lcd_enable", },
+	{ TX6_DISP_RST_B, GPIOF_OUT_INIT_HIGH, "lcd_reset", },
+	{ TX6_DISP_PWR_EN, GPIOF_OUT_INIT_HIGH, "lcd_enable", },
 };
+
+static inline void __init tx6_enable_lcd_gpios(void)
+{
+	gpio_request_array(tx6_lcd_gpios, ARRAY_SIZE(tx6_lcd_gpios));
+}
 
 static struct resource tx6_pwm_resource[] __initdata = {
 	{
@@ -1121,9 +1126,7 @@ static void __init tx6_board_init(void)
 	pu_reg_id  = tx6_dvfscore_data.pu_id;
 	tx6_init_uart();
 
-	gpio_request_array(tx6_lcd_gpios,
-			   ARRAY_SIZE(tx6_lcd_gpios));
-
+	tx6_enable_lcd_gpios();
 	imx6q_add_ipuv3(0, &ipu_data[0]);
 	if (cpu_is_mx6q()) {
 		imx6q_add_ipuv3(1, &ipu_data[1]);
