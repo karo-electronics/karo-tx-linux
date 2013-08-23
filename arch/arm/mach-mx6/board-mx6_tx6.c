@@ -167,7 +167,7 @@ static iomux_v3_cfg_t tx6q_gpmi_nand_pads[] __initdata = {
 
 static int __init gpmi_nand_platform_init(void)
 {
-	if cpu_is_mx6q() {
+	if (cpu_is_mx6q()) {
 		return mxc_iomux_v3_setup_multiple_pads(tx6q_gpmi_nand_pads,
 						ARRAY_SIZE(tx6q_gpmi_nand_pads));
 	} else {
@@ -682,7 +682,7 @@ static struct resource tx6_pwm_resource[] __initdata = {
 
 static void tx6_enable_pwm_pad(void)
 {
-	if cpu_is_mx6q() {
+	if (cpu_is_mx6q()) {
 		mxc_iomux_v3_setup_pad(MX6Q_PAD_GPIO_1__PWM2_PWMO);
 	} else {
 		mxc_iomux_v3_setup_pad(MX6DL_PAD_GPIO_1__PWM2_PWMO);
@@ -691,7 +691,7 @@ static void tx6_enable_pwm_pad(void)
 
 static void tx6_disable_pwm_pad(void)
 {
-	if cpu_is_mx6q() {
+	if (cpu_is_mx6q()) {
 		mxc_iomux_v3_setup_pad(MX6Q_PAD_GPIO_1__GPIO_1_1);
 	} else {
 		mxc_iomux_v3_setup_pad(MX6DL_PAD_GPIO_1__GPIO_1_1);
@@ -1119,10 +1119,10 @@ static void __init tx6_board_init(void)
 		imx6q_add_ipuv3(1, &ipu_data[1]);
 		for (i = 0; i < ARRAY_SIZE(tx6_fb_data); i++)
 			imx6q_add_ipuv3fb(i, &tx6_fb_data[i]);
-	} else
+	} else {
 		for (i = 0; i < (ARRAY_SIZE(tx6_fb_data) + 1) / 2; i++)
 			imx6q_add_ipuv3fb(i, &tx6_fb_data[i]);
-
+	}
 	imx6q_add_vdoa();
 	imx6q_add_lcdif(&lcdif_data);
 	imx6q_add_ldb(&ldb_data);
