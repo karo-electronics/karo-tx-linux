@@ -25,6 +25,9 @@ config FORCE_MAX_ZONEORDER
 config	SOC_IMX6Q
 	bool
 
+config	SOC_IMX6DL
+	bool
+
 config	SOC_IMX6SL
 	bool
 
@@ -283,7 +286,7 @@ config MACH_MX6Q_HDMIDONGLE
 	  configurations for the board and its peripherals.
 
 config MACH_TX6
-	bool "Support i.MX 6Quad TX6 platform"
+	bool "Support i.MX6 TX6 platform"
 	select ARCH_MX6Q
 	select SOC_IMX6Q
 	select IMX_HAVE_PLATFORM_IMX_UART
@@ -314,7 +317,7 @@ config MACH_TX6
 	select IMX_HAVE_PLATFORM_IMX_PCIE
 	select IMX_HAVE_PLATFORM_IMX_CAAM
 	help
-	  Include support for i.MX6Quad Ka-Ro electronics TX6 platform.
+	  Include support for i.MX6 Ka-Ro electronics TX6 platform.
 	  This includes specific configurations for the board and its peripherals.
 
 comment "MX6 Options:"
