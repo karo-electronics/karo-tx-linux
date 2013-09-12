@@ -515,6 +515,8 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 
 	/* Audio-related clocks configuration */
 	clk_set_parent(clk[spdif_sel], clk[pll3_pfd3_454m]);
+	clk_set_parent(clk[asrc_sel], clk[pll3_usb_otg]);
+	clk_set_rate(clk[asrc_sel], 7500000);
 
 	/* All existing boards with PCIe use LVDS1 */
 	if (IS_ENABLED(CONFIG_PCI_IMX6))
