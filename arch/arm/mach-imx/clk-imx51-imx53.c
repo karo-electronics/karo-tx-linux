@@ -13,6 +13,9 @@
 #include <linux/clkdev.h>
 #include <linux/of.h>
 #include <linux/err.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 
 #include "crm-regs-imx5.h"
 #include "clk.h"
@@ -468,9 +471,10 @@ int __init mx51_clocks_init(unsigned long rate_ckil, unsigned long rate_osc,
 int __init mx53_clocks_init(unsigned long rate_ckil, unsigned long rate_osc,
 			unsigned long rate_ckih1, unsigned long rate_ckih2)
 {
-	int i;
+	int i, irq;
 	unsigned long r;
 	struct device_node *np;
+	void __iomem *base;
 
 	clk[pll1_sw] = imx_clk_pllv2("pll1_sw", "osc", MX53_DPLL1_BASE);
 	clk[pll2_sw] = imx_clk_pllv2("pll2_sw", "osc", MX53_DPLL2_BASE);
@@ -557,15 +561,18 @@ int __init mx53_clocks_init(unsigned long rate_ckil, unsigned long rate_osc,
 	clk_set_rate(clk[esdhc_a_podf], 200000000);
 	clk_set_rate(clk[esdhc_b_podf], 200000000);
 
-	/* System timer */
-	mxc_timer_init(MX53_IO_ADDRESS(MX53_GPT1_BASE_ADDR), MX53_INT_GPT);
-
 	clk_prepare_enable(clk[iim_gate]);
 	imx_print_silicon_rev("i.MX53", mx53_revision());
 	clk_disable_unprepare(clk[iim_gate]);
 
 	r = clk_round_rate(clk[usboh3_per_gate], 54000000);
 	clk_set_rate(clk[usboh3_per_gate], r);
+
+	np = of_find_compatible_node(NULL, NULL, "fsl,imx53-gpt");
+	base = of_iomap(np, 0);
+	WARN_ON(!base);
+	irq = irq_of_parse_and_map(np, 0);
+	mxc_timer_init(base, irq);
 
 	return 0;
 }
