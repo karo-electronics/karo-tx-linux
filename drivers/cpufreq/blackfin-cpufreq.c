@@ -210,8 +210,14 @@ static int __bfin_cpu_init(struct cpufreq_policy *policy)
 	policy->cpuinfo.transition_latency = 50000; /* 50us assumed */
 
 	policy->cur = cclk;
-	cpufreq_frequency_table_get_attr(bfin_freq_table, policy->cpu);
-	return cpufreq_frequency_table_cpuinfo(policy, bfin_freq_table);
+	return cpufreq_table_validate_and_show(policy, bfin_freq_table);
+}
+
+static int __bfin_cpu_exit(struct cpufreq_policy *policy)
+{
+
+	cpufreq_frequency_table_put_attr(policy->cpu);
+	return 0;
 }
 
 static struct freq_attr *bfin_freq_attr[] = {
@@ -224,6 +230,7 @@ static struct cpufreq_driver bfin_driver = {
 	.target = bfin_target,
 	.get = bfin_getfreq_khz,
 	.init = __bfin_cpu_init,
+	.exit = __bfin_cpu_exit,
 	.name = "bfin cpufreq",
 	.attr = bfin_freq_attr,
 };
