@@ -15,7 +15,6 @@
 #include <linux/clkdev.h>
 #include <linux/clocksource.h>
 #include <linux/cpu.h>
-#include <linux/delay.h>
 #include <linux/export.h>
 #include <linux/init.h>
 #include <linux/io.h>
@@ -39,36 +38,6 @@
 #include "common.h"
 #include "cpuidle.h"
 #include "hardware.h"
-
-static void imx6q_restart(enum reboot_mode mode, const char *cmd)
-{
-	struct device_node *np;
-	void __iomem *wdog_base;
-
-	np = of_find_compatible_node(NULL, NULL, "fsl,imx6q-wdt");
-	wdog_base = of_iomap(np, 0);
-	if (!wdog_base)
-		goto soft;
-
-	imx_src_prepare_restart();
-
-	/* enable wdog */
-	writew_relaxed(1 << 2, wdog_base);
-	/* write twice to ensure the request will not get ignored */
-	writew_relaxed(1 << 2, wdog_base);
-
-	/* wait for reset to assert ... */
-	mdelay(500);
-
-	pr_err("Watchdog reset failed to assert reset\n");
-
-	/* delay to allow the serial port to show the message */
-	mdelay(50);
-
-soft:
-	/* we'll take a jump through zero as a poor second */
-	soft_restart(0);
-}
 
 /* For imx6q sabrelite board: set KSZ9021RN RGMII pad skew */
 static int ksz9021rn_phy_fixup(struct phy_device *phydev)
@@ -165,6 +134,8 @@ static void __init imx6q_1588_init(void)
 static void __init imx6q_init_machine(void)
 {
 	struct device *parent;
+
+	mxc_arch_reset_init_dt();
 
 	parent = imx_soc_device_init();
 	if (parent == NULL)
@@ -293,5 +264,5 @@ DT_MACHINE_START(IMX6Q, "Freescale i.MX6 Quad/DualLite (Device Tree)")
 	.init_machine	= imx6q_init_machine,
 	.init_late      = imx6q_init_late,
 	.dt_compat	= imx6q_dt_compat,
-	.restart	= imx6q_restart,
+	.restart	= mxc_restart,
 MACHINE_END
