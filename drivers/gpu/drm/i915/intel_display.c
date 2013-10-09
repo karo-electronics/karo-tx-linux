@@ -9991,6 +9991,7 @@ int intel_framebuffer_init(struct drm_device *dev,
 			   struct drm_mode_fb_cmd2 *mode_cmd,
 			   struct drm_i915_gem_object *obj)
 {
+	int aligned_height;
 	int pitch_limit;
 	int ret;
 
@@ -10082,6 +10083,12 @@ int intel_framebuffer_init(struct drm_device *dev,
 
 	/* FIXME need to adjust LINOFF/TILEOFF accordingly. */
 	if (mode_cmd->offsets[0] != 0)
+		return -EINVAL;
+
+	/* X-tiled is always 8 rows high. */
+	aligned_height = ALIGN(mode_cmd->height, obj->tiling_mode ? 8 : 1);
+	/* FIXME drm helper for size checks (especially planar formats)? */
+	if (obj->base.size < aligned_height * mode_cmd->pitches[0])
 		return -EINVAL;
 
 	drm_helper_mode_fill_fb_struct(&intel_fb->base, mode_cmd);
