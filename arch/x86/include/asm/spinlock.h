@@ -62,6 +62,11 @@ static inline void __ticket_unlock_kick(arch_spinlock_t *lock,
 
 #endif /* CONFIG_PARAVIRT_SPINLOCKS */
 
+static __always_inline int arch_spin_value_unlocked(arch_spinlock_t lock)
+{
+	return lock.tickets.head == lock.tickets.tail;
+}
+
 /*
  * Ticket locks are conceptually two parts, one indicating the current head of
  * the queue, and the other indicating the current tail. The lock is acquired
