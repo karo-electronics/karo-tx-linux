@@ -160,6 +160,10 @@ void hists__calc_col_len(struct hists *hists, struct hist_entry *h)
 	hists__new_col_len(hists, HISTC_MEM_LVL, 21 + 3);
 	hists__new_col_len(hists, HISTC_LOCAL_WEIGHT, 12);
 	hists__new_col_len(hists, HISTC_GLOBAL_WEIGHT, 12);
+
+	if (h->transaction)
+		hists__new_col_len(hists, HISTC_TRANSACTION,
+				   hist_entry__transaction_len());
 }
 
 void hists__output_recalc_col_len(struct hists *hists, int max_rows)
@@ -346,7 +350,7 @@ static struct hist_entry *add_hist_entry(struct hists *hists,
 	struct rb_node **p;
 	struct rb_node *parent = NULL;
 	struct hist_entry *he;
-	int cmp;
+	int64_t cmp;
 
 	p = &hists->entries_in->rb_node;
 
@@ -466,7 +470,7 @@ struct hist_entry *__hists__add_branch_entry(struct hists *self,
 struct hist_entry *__hists__add_entry(struct hists *self,
 				      struct addr_location *al,
 				      struct symbol *sym_parent, u64 period,
-				      u64 weight)
+				      u64 weight, u64 transaction)
 {
 	struct hist_entry entry = {
 		.thread	= al->thread,
@@ -487,6 +491,7 @@ struct hist_entry *__hists__add_entry(struct hists *self,
 		.hists	= self,
 		.branch_info = NULL,
 		.mem_info = NULL,
+		.transaction = transaction,
 	};
 
 	return add_hist_entry(self, &entry, al, period, weight);
@@ -884,7 +889,7 @@ static struct hist_entry *hists__add_dummy_entry(struct hists *hists,
 	struct rb_node **p;
 	struct rb_node *parent = NULL;
 	struct hist_entry *he;
-	int cmp;
+	int64_t cmp;
 
 	if (sort__need_collapse)
 		root = &hists->entries_collapsed;

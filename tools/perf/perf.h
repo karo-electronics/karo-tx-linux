@@ -182,7 +182,9 @@ struct ip_callchain {
 struct branch_flags {
 	u64 mispred:1;
 	u64 predicted:1;
-	u64 reserved:62;
+	u64 in_tx:1;
+	u64 abort:1;
+	u64 reserved:60;
 };
 
 struct branch_entry {
@@ -231,6 +233,7 @@ struct perf_record_opts {
 	u64	     default_interval;
 	u64	     user_interval;
 	u16	     stack_dump_size;
+	bool	     sample_transaction;
 };
 
 #endif
