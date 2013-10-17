@@ -55,7 +55,6 @@ enum dma_status {
 	DMA_IN_PROGRESS,
 	DMA_PAUSED,
 	DMA_ERROR,
-	DMA_SUCCESS,
 };
 
 /**
