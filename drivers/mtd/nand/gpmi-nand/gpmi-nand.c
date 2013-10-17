@@ -45,7 +45,10 @@ static struct nand_bbt_descr gpmi_bbt_descr = {
 	.pattern	= scan_ff_pattern
 };
 
-/*  We will use all the (page + OOB). */
+/*
+ * We may change the layout if we can get the ECC info from the datasheet,
+ * else we will use all the (page + OOB).
+ */
 static struct nand_ecclayout gpmi_hw_ecclayout = {
 	.eccbytes = 0,
 	.eccpos = { 0, },
@@ -1263,14 +1266,22 @@ static int gpmi_ecc_read_oob(struct mtd_info *mtd, struct nand_chip *chip,
 static int
 gpmi_ecc_write_oob(struct mtd_info *mtd, struct nand_chip *chip, int page)
 {
-	/*
-	 * The BCH will use all the (page + oob).
-	 * Our gpmi_hw_ecclayout can only prohibit the JFFS2 to write the oob.
-	 * But it can not stop some ioctls such MEMWRITEOOB which uses
-	 * MTD_OPS_PLACE_OOB. So We have to implement this function to prohibit
-	 * these ioctls too.
-	 */
-	return -EPERM;
+	struct nand_oobfree *of = mtd->ecclayout->oobfree;
+	int status = 0;
+
+	/* Do we have available oob area? */
+	if (!of->length)
+		return -EPERM;
+
+	if (!nand_is_slc(chip))
+		return -EPERM;
+
+	chip->cmdfunc(mtd, NAND_CMD_SEQIN, mtd->writesize + of->offset, page);
+	chip->write_buf(mtd, chip->oob_poi + of->offset, of->length);
+	chip->cmdfunc(mtd, NAND_CMD_PAGEPROG, -1, -1);
+
+	status = chip->waitfunc(mtd, chip);
+	return status & NAND_STATUS_FAIL ? -EIO : 0;
 }
 
 static int gpmi_block_markbad(struct mtd_info *mtd, loff_t ofs)
@@ -1691,19 +1702,19 @@ static const struct platform_device_id gpmi_ids[] = {
 	{ .name = "imx23-gpmi-nand", .driver_data = IS_MX23, },
 	{ .name = "imx28-gpmi-nand", .driver_data = IS_MX28, },
 	{ .name = "imx6q-gpmi-nand", .driver_data = IS_MX6Q, },
-	{},
+	{}
 };
 
 static const struct of_device_id gpmi_nand_id_table[] = {
 	{
 		.compatible = "fsl,imx23-gpmi-nand",
-		.data = (void *)&gpmi_ids[IS_MX23]
+		.data = (void *)&gpmi_ids[IS_MX23],
 	}, {
 		.compatible = "fsl,imx28-gpmi-nand",
-		.data = (void *)&gpmi_ids[IS_MX28]
+		.data = (void *)&gpmi_ids[IS_MX28],
 	}, {
 		.compatible = "fsl,imx6q-gpmi-nand",
-		.data = (void *)&gpmi_ids[IS_MX6Q]
+		.data = (void *)&gpmi_ids[IS_MX6Q],
 	}, {}
 };
 MODULE_DEVICE_TABLE(of, gpmi_nand_id_table);

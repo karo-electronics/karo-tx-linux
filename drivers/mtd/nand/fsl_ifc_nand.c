@@ -718,8 +718,6 @@ static int fsl_ifc_chip_init_tail(struct mtd_info *mtd)
 							chip->page_shift);
 	dev_dbg(priv->dev, "%s: nand->phys_erase_shift = %d\n", __func__,
 							chip->phys_erase_shift);
-	dev_dbg(priv->dev, "%s: nand->ecclayout = %p\n", __func__,
-							chip->ecclayout);
 	dev_dbg(priv->dev, "%s: nand->ecc.mode = %d\n", __func__,
 							chip->ecc.mode);
 	dev_dbg(priv->dev, "%s: nand->ecc.steps = %d\n", __func__,
@@ -907,7 +905,6 @@ static int fsl_ifc_chip_remove(struct fsl_ifc_mtd *priv)
 		iounmap(priv->vbase);
 
 	ifc_nand_ctrl->chips[priv->bank] = NULL;
-	dev_set_drvdata(priv->dev, NULL);
 
 	return 0;
 }
@@ -1082,25 +1079,7 @@ static struct platform_driver fsl_ifc_nand_driver = {
 	.remove      = fsl_ifc_nand_remove,
 };
 
-static int __init fsl_ifc_nand_init(void)
-{
-	int ret;
-
-	ret = platform_driver_register(&fsl_ifc_nand_driver);
-	if (ret)
-		printk(KERN_ERR "fsl-ifc: Failed to register platform"
-				"driver\n");
-
-	return ret;
-}
-
-static void __exit fsl_ifc_nand_exit(void)
-{
-	platform_driver_unregister(&fsl_ifc_nand_driver);
-}
-
-module_init(fsl_ifc_nand_init);
-module_exit(fsl_ifc_nand_exit);
+module_platform_driver(fsl_ifc_nand_driver);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Freescale");
