@@ -1,0 +1,81 @@
+
+
+next/cleanup
+	shark/removal
+		  git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/del-shark-for-v3.13
+	cleanup/dt-clock
+		https://github.com/shesselba/linux-dove.git clk-of-init-v2_for-3.13
+	patch
+		ARM: drop explicit selection of HAVE_CLK and CLKDEV_LOOKUP
+	reneasas/initdata-cleanup
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-fixes5-for-v3.12
+	renesas/cleanup
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-cleanup-for-v3.13
+	patch
+		clk: nomadik: fix missing __init on nomadik_src_init
+	renesas/cleanup2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-cleanup2-for-v3.13
+	patch
+		ARM: clps711x: Use linux/sched_clock.h
+		ARM: Remove temporary sched_clock.h header
+
+next/soc
+	samsung/s3c64xx-clk
+		http://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/samsung-clk-s3c64xx
+	patch
+		ARM: davinci: remove deprecated IRQF_DISABLED
+	renesas/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-soc-for-v3.13
+	renesas/smp
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-smp-for-v3.13
+	renesas/soc2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-soc2-for-v3.13
+	keystone/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone.git tags/keystone-soc-for-arm-soc
+	patch
+		ARM: keystone: fix PM domain initcall to be keystone only
+	omap/hwmod
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.13/hwmod-signed
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.13/soc-take2
+
+next/drivers
+	davinci/gpio
+		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci.git tags/davinci-for-v3.13/gpio
+	mvebu/drivers
+		git://git.infradead.org/linux-mvebu.git tags/drivers-3.13
+	arm/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/will/linux.git tags/arm-perf-3.13
+
+next/boards
+	renesas/boards
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git renesas-boards-for-v3.13
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-defconfig-for-v3.13
+	renesas/boards2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-boards2-for-v3.13
+	omap/boards
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.13/board-signed
+
+next/dt
+	samsung/s3c64xx-dt
+		  http://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git tags/samsung-dt-s3c64xx
+	ux500/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-dt-for-v3.13-2
+		patch "ARM: ux500: enable appended dtb in u8500_defconfig"
+	ux500/dt2
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson.git tags/ux500-devicetree-2
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-dt-for-v3.13
+	mvebu/dt
+		git://git.infradead.org/linux-mvebu.git tags/dt-3.13
+	mvebu/dt2
+		git://git.infradead.org/linux-mvebu.git tags/dt-3.13-2
+	renesas/dt2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas.git tags/renesas-dt2-for-v3.13
+	socfpga/dt
+		git://git.rocketboards.org/linux-socfpga-next.git tags/socfpga-dts-updates-for-v3.13
+	omap/pdata-quirks		
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.13/quirk-signed
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.13/dt-signed
