@@ -19,7 +19,12 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <linux/gpio.h>
+#include <linux/gpio_keys.h>
+#include <linux/input.h>
 #include <linux/kernel.h>
+#include <linux/leds.h>
+#include <linux/platform_data/gpio-rcar.h>
 #include <linux/platform_device.h>
 #include <mach/common.h>
 #include <mach/r8a7791.h>
@@ -27,10 +32,55 @@
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 
+/* LEDS */
+static struct gpio_led koelsch_leds[] = {
+	{
+		.name		= "led8",
+		.gpio		= RCAR_GP_PIN(2, 21),
+		.default_state	= LEDS_GPIO_DEFSTATE_ON,
+	}, {
+		.name		= "led7",
+		.gpio		= RCAR_GP_PIN(2, 20),
+		.default_state	= LEDS_GPIO_DEFSTATE_ON,
+	}, {
+		.name		= "led6",
+		.gpio		= RCAR_GP_PIN(2, 19),
+		.default_state	= LEDS_GPIO_DEFSTATE_ON,
+	},
+};
+
+static const struct gpio_led_platform_data koelsch_leds_pdata __initconst = {
+	.leds		= koelsch_leds,
+	.num_leds	= ARRAY_SIZE(koelsch_leds),
+};
+
+/* GPIO KEY */
+#define GPIO_KEY(c, g, d, ...) \
+	{ .code = c, .gpio = g, .desc = d, .active_low = 1 }
+
+static struct gpio_keys_button gpio_buttons[] = {
+	GPIO_KEY(KEY_4,		RCAR_GP_PIN(5, 3),	"SW2-pin4"),
+	GPIO_KEY(KEY_3,		RCAR_GP_PIN(5, 2),	"SW2-pin3"),
+	GPIO_KEY(KEY_2,		RCAR_GP_PIN(5, 1),	"SW2-pin2"),
+	GPIO_KEY(KEY_1,		RCAR_GP_PIN(5, 0),	"SW2-pin1"),
+};
+
+static const struct gpio_keys_platform_data koelsch_keys_pdata __initconst = {
+	.buttons	= gpio_buttons,
+	.nbuttons	= ARRAY_SIZE(gpio_buttons),
+};
+
 static void __init koelsch_add_standard_devices(void)
 {
 	r8a7791_clock_init();
+	r8a7791_pinmux_init();
 	r8a7791_add_standard_devices();
+	platform_device_register_data(&platform_bus, "leds-gpio", -1,
+				      &koelsch_leds_pdata,
+				      sizeof(koelsch_leds_pdata));
+	platform_device_register_data(&platform_bus, "gpio-keys", -1,
+				      &koelsch_keys_pdata,
+				      sizeof(koelsch_keys_pdata));
 }
 
 static const char * const koelsch_boards_compat_dt[] __initconst = {
