@@ -83,9 +83,12 @@ struct s3c_hsotg_req;
  * @dir_in: Set to true if this endpoint is of the IN direction, which
  *	    means that it is sending data to the Host.
  * @index: The index for the endpoint registers.
+ * @mc: Multi Count - number of transactions per microframe
+ * @interval - Interval for periodic endpoints
  * @name: The name array passed to the USB core.
  * @halted: Set if the endpoint has been halted.
  * @periodic: Set if this is a periodic ep, such as Interrupt
+ * @isochronous: Set if this is a isochronous ep
  * @sent_zlp: Set if we've sent a zero-length packet.
  * @total_data: The total number of data bytes done.
  * @fifo_size: The size of the FIFO (for periodic IN endpoints)
@@ -121,9 +124,12 @@ struct s3c_hsotg_ep {
 
 	unsigned char		dir_in;
 	unsigned char		index;
+	unsigned char		mc;
+	unsigned char		interval;
 
 	unsigned int		halted:1;
 	unsigned int		periodic:1;
+	unsigned int		isochronous:1;
 	unsigned int		sent_zlp:1;
 
 	char			name[10];
@@ -468,6 +474,7 @@ static int s3c_hsotg_write_fifo(struct s3c_hsotg *hsotg,
 	void *data;
 	int can_write;
 	int pkt_round;
+	int max_transfer;
 
 	to_write -= (buf_pos - hs_ep->last_load);
 
@@ -535,8 +542,10 @@ static int s3c_hsotg_write_fifo(struct s3c_hsotg *hsotg,
 		can_write *= 4;	/* fifo size is in 32bit quantities. */
 	}
 
-	dev_dbg(hsotg->dev, "%s: GNPTXSTS=%08x, can=%d, to=%d, mps %d\n",
-		 __func__, gnptxsts, can_write, to_write, hs_ep->ep.maxpacket);
+	max_transfer = hs_ep->ep.maxpacket * hs_ep->mc;
+
+	dev_dbg(hsotg->dev, "%s: GNPTXSTS=%08x, can=%d, to=%d, max_transfer %d\n",
+		 __func__, gnptxsts, can_write, to_write, max_transfer);
 
 	/*
 	 * limit to 512 bytes of data, it seems at least on the non-periodic
@@ -551,8 +560,8 @@ static int s3c_hsotg_write_fifo(struct s3c_hsotg *hsotg,
 	 * the transfer to return that it did not run out of fifo space
 	 * doing it.
 	 */
-	if (to_write > hs_ep->ep.maxpacket) {
-		to_write = hs_ep->ep.maxpacket;
+	if (to_write > max_transfer) {
+		to_write = max_transfer;
 
 		s3c_hsotg_en_gsint(hsotg,
 				   periodic ? GINTSTS_PTxFEmp :
@@ -563,7 +572,7 @@ static int s3c_hsotg_write_fifo(struct s3c_hsotg *hsotg,
 
 	if (to_write > can_write) {
 		to_write = can_write;
-		pkt_round = to_write % hs_ep->ep.maxpacket;
+		pkt_round = to_write % max_transfer;
 
 		/*
 		 * Round the write down to an
@@ -727,8 +736,16 @@ static void s3c_hsotg_start_req(struct s3c_hsotg *hsotg,
 	else
 		packets = 1;	/* send one packet if length is zero. */
 
+	if (hs_ep->isochronous && length > (hs_ep->mc * hs_ep->ep.maxpacket)) {
+		dev_err(hsotg->dev, "req length > maxpacket*mc\n");
+		return;
+	}
+
 	if (dir_in && index != 0)
-		epsize = DxEPTSIZ_MC(1);
+		if (hs_ep->isochronous)
+			epsize = DxEPTSIZ_MC(packets);
+		else
+			epsize = DxEPTSIZ_MC(1);
 	else
 		epsize = 0;
 
@@ -1698,6 +1715,7 @@ static void s3c_hsotg_set_ep_maxpacket(struct s3c_hsotg *hsotg,
 	struct s3c_hsotg_ep *hs_ep = &hsotg->eps[ep];
 	void __iomem *regs = hsotg->regs;
 	u32 mpsval;
+	u32 mcval;
 	u32 reg;
 
 	if (ep == 0) {
@@ -1705,14 +1723,18 @@ static void s3c_hsotg_set_ep_maxpacket(struct s3c_hsotg *hsotg,
 		mpsval = s3c_hsotg_ep0_mps(mps);
 		if (mpsval > 3)
 			goto bad_mps;
+		hs_ep->ep.maxpacket = mps;
+		hs_ep->mc = 1;
 	} else {
-		if (mps >= DxEPCTL_MPS_LIMIT+1)
+		mpsval = mps & DxEPCTL_MPS_MASK;
+		if (mpsval > 1024)
 			goto bad_mps;
-
-		mpsval = mps;
+		mcval = ((mps >> 11) & 0x3) + 1;
+		hs_ep->mc = mcval;
+		if (mcval > 3)
+			goto bad_mps;
+		hs_ep->ep.maxpacket = mpsval;
 	}
-
-	hs_ep->ep.maxpacket = mps;
 
 	/*
 	 * update both the in and out endpoint controldir_ registers, even
@@ -1887,8 +1909,10 @@ static void s3c_hsotg_epint(struct s3c_hsotg *hsotg, unsigned int idx,
 	u32 epctl_reg = dir_in ? DIEPCTL(idx) : DOEPCTL(idx);
 	u32 epsiz_reg = dir_in ? DIEPTSIZ(idx) : DOEPTSIZ(idx);
 	u32 ints;
+	u32 ctrl;
 
 	ints = readl(hsotg->regs + epint_reg);
+	ctrl = readl(hsotg->regs + epctl_reg);
 
 	/* Clear endpoint interrupts */
 	writel(ints, hsotg->regs + epint_reg);
@@ -1897,6 +1921,14 @@ static void s3c_hsotg_epint(struct s3c_hsotg *hsotg, unsigned int idx,
 		__func__, idx, dir_in ? "in" : "out", ints);
 
 	if (ints & DxEPINT_XferCompl) {
+		if (hs_ep->isochronous && hs_ep->interval == 1) {
+			if (ctrl & DxEPCTL_EOFrNum)
+				ctrl |= DxEPCTL_SetEvenFr;
+			else
+				ctrl |= DxEPCTL_SetOddFr;
+			writel(ctrl, hsotg->regs + epctl_reg);
+		}
+
 		dev_dbg(hsotg->dev,
 			"%s: XferCompl: DxEPCTL=0x%08x, DxEPTSIZ=%08x\n",
 			__func__, readl(hsotg->regs + epctl_reg),
@@ -1963,7 +1995,7 @@ static void s3c_hsotg_epint(struct s3c_hsotg *hsotg, unsigned int idx,
 	if (ints & DxEPINT_Back2BackSetup)
 		dev_dbg(hsotg->dev, "%s: B2BSetup/INEPNakEff\n", __func__);
 
-	if (dir_in) {
+	if (dir_in && !hs_ep->isochronous) {
 		/* not sure if this is important, but we'll clear it anyway */
 		if (ints & DIEPMSK_INTknTXFEmpMsk) {
 			dev_dbg(hsotg->dev, "%s: ep%d: INTknTXFEmpMsk\n",
@@ -2092,12 +2124,14 @@ static void kill_all_requests(struct s3c_hsotg *hsotg,
 }
 
 #define call_gadget(_hs, _entry) \
+do { \
 	if ((_hs)->gadget.speed != USB_SPEED_UNKNOWN &&	\
 	    (_hs)->driver && (_hs)->driver->_entry) { \
 		spin_unlock(&_hs->lock); \
 		(_hs)->driver->_entry(&(_hs)->gadget); \
 		spin_lock(&_hs->lock); \
-		}
+	} \
+} while (0)
 
 /**
  * s3c_hsotg_disconnect - disconnect service
@@ -2577,16 +2611,24 @@ static int s3c_hsotg_ep_enable(struct usb_ep *ep,
 	epctrl |= DxEPCTL_SNAK;
 
 	/* update the endpoint state */
-	hs_ep->ep.maxpacket = mps;
+	s3c_hsotg_set_ep_maxpacket(hsotg, hs_ep->index, mps);
 
 	/* default, set to non-periodic */
+	hs_ep->isochronous = 0;
 	hs_ep->periodic = 0;
+	hs_ep->interval = desc->bInterval;
+
+	if (hs_ep->interval > 1 && hs_ep->mc > 1)
+		dev_err(hsotg->dev, "MC > 1 when interval is not 1\n");
 
 	switch (desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) {
 	case USB_ENDPOINT_XFER_ISOC:
-		dev_err(hsotg->dev, "no current ISOC support\n");
-		ret = -EINVAL;
-		goto out;
+		epctrl |= DxEPCTL_EPType_Iso;
+		epctrl |= DxEPCTL_SetEvenFr;
+		hs_ep->isochronous = 1;
+		if (dir_in)
+			hs_ep->periodic = 1;
+		break;
 
 	case USB_ENDPOINT_XFER_BULK:
 		epctrl |= DxEPCTL_EPType_Bulk;
@@ -2634,7 +2676,6 @@ static int s3c_hsotg_ep_enable(struct usb_ep *ep,
 	/* enable the endpoint interrupt */
 	s3c_hsotg_ctrl_epint(hsotg, index, dir_in, 1);
 
-out:
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 	return ret;
 }
@@ -2903,7 +2944,7 @@ static int s3c_hsotg_udc_start(struct usb_gadget *gadget,
 	int ret;
 
 	if (!hsotg) {
-		printk(KERN_ERR "%s: called with no device\n", __func__);
+		pr_err("%s: called with no device\n", __func__);
 		return -ENODEV;
 	}
 
@@ -3066,7 +3107,7 @@ static void s3c_hsotg_initep(struct s3c_hsotg *hsotg,
 
 	hs_ep->parent = hsotg;
 	hs_ep->ep.name = hs_ep->name;
-	hs_ep->ep.maxpacket = epnum ? 512 : EP0_MPS_LIMIT;
+	hs_ep->ep.maxpacket = epnum ? 1024 : EP0_MPS_LIMIT;
 	hs_ep->ep.ops = &s3c_hsotg_ep_ops;
 
 	/*
@@ -3200,7 +3241,7 @@ static int state_show(struct seq_file *seq, void *v)
 		   readl(regs + GNPTXSTS),
 		   readl(regs + GRXSTSR));
 
-	seq_printf(seq, "\nEndpoint status:\n");
+	seq_puts(seq, "\nEndpoint status:\n");
 
 	for (idx = 0; idx < 15; idx++) {
 		u32 in, out;
@@ -3217,7 +3258,7 @@ static int state_show(struct seq_file *seq, void *v)
 		seq_printf(seq, ", DIEPTSIZ=0x%08x, DOEPTSIZ=0x%08x",
 			   in, out);
 
-		seq_printf(seq, "\n");
+		seq_puts(seq, "\n");
 	}
 
 	return 0;
@@ -3251,7 +3292,7 @@ static int fifo_show(struct seq_file *seq, void *v)
 	u32 val;
 	int idx;
 
-	seq_printf(seq, "Non-periodic FIFOs:\n");
+	seq_puts(seq, "Non-periodic FIFOs:\n");
 	seq_printf(seq, "RXFIFO: Size %d\n", readl(regs + GRXFSIZ));
 
 	val = readl(regs + GNPTXFSIZ);
@@ -3259,7 +3300,7 @@ static int fifo_show(struct seq_file *seq, void *v)
 		   val >> GNPTXFSIZ_NPTxFDep_SHIFT,
 		   val & GNPTXFSIZ_NPTxFStAddr_MASK);
 
-	seq_printf(seq, "\nPeriodic TXFIFOs:\n");
+	seq_puts(seq, "\nPeriodic TXFIFOs:\n");
 
 	for (idx = 1; idx <= 15; idx++) {
 		val = readl(regs + DPTXFSIZn(idx));
@@ -3330,7 +3371,7 @@ static int ep_show(struct seq_file *seq, void *v)
 		   readl(regs + DIEPTSIZ(index)),
 		   readl(regs + DOEPTSIZ(index)));
 
-	seq_printf(seq, "\n");
+	seq_puts(seq, "\n");
 	seq_printf(seq, "mps %d\n", ep->ep.maxpacket);
 	seq_printf(seq, "total_data=%ld\n", ep->total_data);
 
@@ -3341,7 +3382,7 @@ static int ep_show(struct seq_file *seq, void *v)
 
 	list_for_each_entry(req, &ep->queue, queue) {
 		if (--show_limit < 0) {
-			seq_printf(seq, "not showing more requests...\n");
+			seq_puts(seq, "not showing more requests...\n");
 			break;
 		}
 
