@@ -209,6 +209,64 @@ smb2_negotiate_rsize(struct cifs_tcon *tcon, struct smb_vol *volume_info)
 	return rsize;
 }
 
+static void
+smb3_qfs_tcon(const unsigned int xid, struct cifs_tcon *tcon)
+{
+	int rc;
+	__le16 srch_path = 0; /* Null - open root of share */
+	u8 oplock = SMB2_OPLOCK_LEVEL_NONE;
+	struct cifs_open_parms oparms;
+	struct cifs_fid fid;
+
+	oparms.tcon = tcon;
+	oparms.desired_access = FILE_READ_ATTRIBUTES;
+	oparms.disposition = FILE_OPEN;
+	oparms.create_options = 0;
+	oparms.fid = &fid;
+	oparms.reconnect = false;
+
+	rc = SMB2_open(xid, &oparms, &srch_path, &oplock, NULL, NULL);
+	if (rc)
+		return;
+
+	SMB2_QFS_attr(xid, tcon, fid.persistent_fid, fid.volatile_fid,
+			FS_ATTRIBUTE_INFORMATION);
+	SMB2_QFS_attr(xid, tcon, fid.persistent_fid, fid.volatile_fid,
+			FS_DEVICE_INFORMATION);
+	SMB2_QFS_attr(xid, tcon, fid.persistent_fid, fid.volatile_fid,
+			FS_SECTOR_SIZE_INFORMATION); /* SMB3 specific */
+	SMB2_close(xid, tcon, fid.persistent_fid, fid.volatile_fid);
+	return;
+}
+
+static void
+smb2_qfs_tcon(const unsigned int xid, struct cifs_tcon *tcon)
+{
+	int rc;
+	__le16 srch_path = 0; /* Null - open root of share */
+	u8 oplock = SMB2_OPLOCK_LEVEL_NONE;
+	struct cifs_open_parms oparms;
+	struct cifs_fid fid;
+
+	oparms.tcon = tcon;
+	oparms.desired_access = FILE_READ_ATTRIBUTES;
+	oparms.disposition = FILE_OPEN;
+	oparms.create_options = 0;
+	oparms.fid = &fid;
+	oparms.reconnect = false;
+
+	rc = SMB2_open(xid, &oparms, &srch_path, &oplock, NULL, NULL);
+	if (rc)
+		return;
+
+	SMB2_QFS_attr(xid, tcon, fid.persistent_fid, fid.volatile_fid,
+			FS_ATTRIBUTE_INFORMATION);
+	SMB2_QFS_attr(xid, tcon, fid.persistent_fid, fid.volatile_fid,
+			FS_DEVICE_INFORMATION);
+	SMB2_close(xid, tcon, fid.persistent_fid, fid.volatile_fid);
+	return;
+}
+
 static int
 smb2_is_path_accessible(const unsigned int xid, struct cifs_tcon *tcon,
 			struct cifs_sb_info *cifs_sb, const char *full_path)
@@ -304,7 +362,19 @@ smb2_dump_share_caps(struct seq_file *m, struct cifs_tcon *tcon)
 		seq_puts(m, " ASYMMETRIC,");
 	if (tcon->capabilities == 0)
 		seq_puts(m, " None");
+	if (tcon->ss_flags & SSINFO_FLAGS_ALIGNED_DEVICE)
+		seq_puts(m, " Aligned,");
+	if (tcon->ss_flags & SSINFO_FLAGS_PARTITION_ALIGNED_ON_DEVICE)
+		seq_puts(m, " Partition Aligned,");
+	if (tcon->ss_flags & SSINFO_FLAGS_NO_SEEK_PENALTY)
+		seq_puts(m, " SSD,");
+	if (tcon->ss_flags & SSINFO_FLAGS_TRIM_ENABLED)
+		seq_puts(m, " TRIM-support,");
+
 	seq_printf(m, "\tShare Flags: 0x%x", tcon->share_flags);
+	if (tcon->perf_sector_size)
+		seq_printf(m, "\tOptimal sector size: 0x%x",
+			   tcon->perf_sector_size);
 }
 
 static void
@@ -443,6 +513,14 @@ smb2_set_file_size(const unsigned int xid, struct cifs_tcon *tcon,
 	__le64 eof = cpu_to_le64(size);
 	return SMB2_set_eof(xid, tcon, cfile->fid.persistent_fid,
 			    cfile->fid.volatile_fid, cfile->pid, &eof);
+}
+
+static int
+smb2_set_compression(const unsigned int xid, struct cifs_tcon *tcon,
+		   struct cifsFileInfo *cfile)
+{
+	return SMB2_set_compression(xid, tcon, cfile->fid.persistent_fid,
+			    cfile->fid.volatile_fid);
 }
 
 static int
@@ -865,6 +943,7 @@ struct smb_version_operations smb20_operations = {
 	.logoff = SMB2_logoff,
 	.tree_connect = SMB2_tcon,
 	.tree_disconnect = SMB2_tdis,
+	.qfs_tcon = smb2_qfs_tcon,
 	.is_path_accessible = smb2_is_path_accessible,
 	.can_echo = smb2_can_echo,
 	.echo = SMB2_echo,
@@ -874,6 +953,7 @@ struct smb_version_operations smb20_operations = {
 	.set_path_size = smb2_set_path_size,
 	.set_file_size = smb2_set_file_size,
 	.set_file_info = smb2_set_file_info,
+	.set_compression = smb2_set_compression,
 	.mkdir = smb2_mkdir,
 	.mkdir_setinfo = smb2_mkdir_setinfo,
 	.rmdir = smb2_rmdir,
@@ -936,6 +1016,7 @@ struct smb_version_operations smb21_operations = {
 	.logoff = SMB2_logoff,
 	.tree_connect = SMB2_tcon,
 	.tree_disconnect = SMB2_tdis,
+	.qfs_tcon = smb2_qfs_tcon,
 	.is_path_accessible = smb2_is_path_accessible,
 	.can_echo = smb2_can_echo,
 	.echo = SMB2_echo,
@@ -945,6 +1026,7 @@ struct smb_version_operations smb21_operations = {
 	.set_path_size = smb2_set_path_size,
 	.set_file_size = smb2_set_file_size,
 	.set_file_info = smb2_set_file_info,
+	.set_compression = smb2_set_compression,
 	.mkdir = smb2_mkdir,
 	.mkdir_setinfo = smb2_mkdir_setinfo,
 	.rmdir = smb2_rmdir,
@@ -1008,6 +1090,7 @@ struct smb_version_operations smb30_operations = {
 	.logoff = SMB2_logoff,
 	.tree_connect = SMB2_tcon,
 	.tree_disconnect = SMB2_tdis,
+	.qfs_tcon = smb3_qfs_tcon,
 	.is_path_accessible = smb2_is_path_accessible,
 	.can_echo = smb2_can_echo,
 	.echo = SMB2_echo,
@@ -1017,6 +1100,7 @@ struct smb_version_operations smb30_operations = {
 	.set_path_size = smb2_set_path_size,
 	.set_file_size = smb2_set_file_size,
 	.set_file_info = smb2_set_file_info,
+	.set_compression = smb2_set_compression,
 	.mkdir = smb2_mkdir,
 	.mkdir_setinfo = smb2_mkdir_setinfo,
 	.rmdir = smb2_rmdir,
