@@ -206,6 +206,7 @@ int acquire_orphan_inode(struct f2fs_sb_info *sbi)
 void release_orphan_inode(struct f2fs_sb_info *sbi)
 {
 	mutex_lock(&sbi->orphan_inode_mutex);
+	BUG_ON(sbi->n_orphans == 0);
 	sbi->n_orphans--;
 	mutex_unlock(&sbi->orphan_inode_mutex);
 }
@@ -253,6 +254,7 @@ void remove_orphan_inode(struct f2fs_sb_info *sbi, nid_t ino)
 		if (orphan->ino == ino) {
 			list_del(&orphan->list);
 			kmem_cache_free(orphan_entry_slab, orphan);
+			BUG_ON(sbi->n_orphans == 0);
 			sbi->n_orphans--;
 			break;
 		}
@@ -617,11 +619,10 @@ static void block_operations(struct f2fs_sb_info *sbi)
 	blk_start_plug(&plug);
 
 retry_flush_dents:
-	mutex_lock_all(sbi);
-
+	f2fs_lock_all(sbi);
 	/* write all the dirty dentry pages */
 	if (get_pages(sbi, F2FS_DIRTY_DENTS)) {
-		mutex_unlock_all(sbi);
+		f2fs_unlock_all(sbi);
 		sync_dirty_dir_inodes(sbi);
 		goto retry_flush_dents;
 	}
@@ -644,7 +645,7 @@ retry_flush_nodes:
 static void unblock_operations(struct f2fs_sb_info *sbi)
 {
 	mutex_unlock(&sbi->node_write);
-	mutex_unlock_all(sbi);
+	f2fs_unlock_all(sbi);
 }
 
 static void do_checkpoint(struct f2fs_sb_info *sbi, bool is_umount)
@@ -756,8 +757,15 @@ static void do_checkpoint(struct f2fs_sb_info *sbi, bool is_umount)
 	f2fs_put_page(cp_page, 1);
 
 	/* wait for previous submitted node/meta pages writeback */
-	while (get_pages(sbi, F2FS_WRITEBACK))
-		congestion_wait(BLK_RW_ASYNC, HZ / 50);
+	sbi->cp_task = current;
+	while (get_pages(sbi, F2FS_WRITEBACK)) {
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		if (!get_pages(sbi, F2FS_WRITEBACK))
+			break;
+		io_schedule();
+	}
+	__set_current_state(TASK_RUNNING);
+	sbi->cp_task = NULL;
 
 	filemap_fdatawait_range(sbi->node_inode->i_mapping, 0, LONG_MAX);
 	filemap_fdatawait_range(sbi->meta_inode->i_mapping, 0, LONG_MAX);
