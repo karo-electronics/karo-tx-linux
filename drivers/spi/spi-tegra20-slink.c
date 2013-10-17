@@ -278,12 +278,12 @@ static unsigned tegra_slink_calculate_curr_xfer_param(
 {
 	unsigned remain_len = t->len - tspi->cur_pos;
 	unsigned max_word;
-	unsigned bits_per_word ;
+	unsigned bits_per_word;
 	unsigned max_len;
 	unsigned total_fifo_words;
 
 	bits_per_word = t->bits_per_word;
-	tspi->bytes_per_word = (bits_per_word - 1) / 8 + 1;
+	tspi->bytes_per_word = DIV_ROUND_UP(bits_per_word, 8);
 
 	if (bits_per_word == 8 || bits_per_word == 16) {
 		tspi->is_packed = 1;
@@ -707,8 +707,7 @@ static void tegra_slink_deinit_dma_param(struct tegra_slink_data *tspi,
 }
 
 static int tegra_slink_start_transfer_one(struct spi_device *spi,
-		struct spi_transfer *t, bool is_first_of_msg,
-		bool is_single_xfer)
+		struct spi_transfer *t, bool is_first_of_msg)
 {
 	struct tegra_slink_data *tspi = spi_master_get_devdata(spi->master);
 	u32 speed;
@@ -828,7 +827,6 @@ static int tegra_slink_transfer_one_message(struct spi_master *master,
 			struct spi_message *msg)
 {
 	bool is_first_msg = true;
-	int single_xfer;
 	struct tegra_slink_data *tspi = spi_master_get_devdata(master);
 	struct spi_transfer *xfer;
 	struct spi_device *spi = msg->spi;
@@ -837,11 +835,9 @@ static int tegra_slink_transfer_one_message(struct spi_master *master,
 	msg->status = 0;
 	msg->actual_length = 0;
 
-	single_xfer = list_is_singular(&msg->transfers);
 	list_for_each_entry(xfer, &msg->transfers, transfer_list) {
 		INIT_COMPLETION(tspi->xfer_completion);
-		ret = tegra_slink_start_transfer_one(spi, xfer,
-					is_first_msg, single_xfer);
+		ret = tegra_slink_start_transfer_one(spi, xfer, is_first_msg);
 		if (ret < 0) {
 			dev_err(tspi->dev,
 				"spi can not start transfer, err %d\n", ret);
@@ -1164,7 +1160,7 @@ static int tegra_slink_probe(struct platform_device *pdev)
 	pm_runtime_put(&pdev->dev);
 
 	master->dev.of_node = pdev->dev.of_node;
-	ret = spi_register_master(master);
+	ret = devm_spi_register_master(&pdev->dev, master);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "can not register to master err %d\n", ret);
 		goto exit_pm_disable;
@@ -1191,7 +1187,6 @@ static int tegra_slink_remove(struct platform_device *pdev)
 	struct tegra_slink_data	*tspi = spi_master_get_devdata(master);
 
 	free_irq(tspi->irq, tspi);
-	spi_unregister_master(master);
 
 	if (tspi->tx_dma_chan)
 		tegra_slink_deinit_dma_param(tspi, false);
