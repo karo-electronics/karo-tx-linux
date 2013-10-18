@@ -29,8 +29,9 @@
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
 #include <net/bluetooth/mgmt.h>
-#include <net/bluetooth/a2mp.h>
-#include <net/bluetooth/amp.h>
+
+#include "a2mp.h"
+#include "amp.h"
 
 /* Handle HCI Event packets */
 
@@ -194,6 +195,9 @@ static void hci_cc_reset(struct hci_dev *hdev, struct sk_buff *skb)
 
 	memset(hdev->adv_data, 0, sizeof(hdev->adv_data));
 	hdev->adv_data_len = 0;
+
+	memset(hdev->scan_rsp_data, 0, sizeof(hdev->scan_rsp_data));
+	hdev->scan_rsp_data_len = 0;
 }
 
 static void hci_cc_write_local_name(struct hci_dev *hdev, struct sk_buff *skb)
@@ -309,11 +313,6 @@ static void hci_cc_write_scan_enable(struct hci_dev *hdev, struct sk_buff *skb)
 		set_bit(HCI_ISCAN, &hdev->flags);
 		if (!old_iscan)
 			mgmt_discoverable(hdev, 1);
-		if (hdev->discov_timeout > 0) {
-			int to = msecs_to_jiffies(hdev->discov_timeout * 1000);
-			queue_delayed_work(hdev->workqueue, &hdev->discov_off,
-					   to);
-		}
 	} else if (old_iscan)
 		mgmt_discoverable(hdev, 0);
 
@@ -415,6 +414,21 @@ static void hci_cc_write_voice_setting(struct hci_dev *hdev,
 
 	if (hdev->notify)
 		hdev->notify(hdev, HCI_NOTIFY_VOICE_SETTING);
+}
+
+static void hci_cc_read_num_supported_iac(struct hci_dev *hdev,
+					  struct sk_buff *skb)
+{
+	struct hci_rp_read_num_supported_iac *rp = (void *) skb->data;
+
+	BT_DBG("%s status 0x%2.2x", hdev->name, rp->status);
+
+	if (rp->status)
+		return;
+
+	hdev->num_iac = rp->num_iac;
+
+	BT_DBG("%s num iac %d", hdev->name, hdev->num_iac);
 }
 
 static void hci_cc_write_ssp_mode(struct hci_dev *hdev, struct sk_buff *skb)
@@ -918,17 +932,9 @@ static void hci_cc_le_set_adv_enable(struct hci_dev *hdev, struct sk_buff *skb)
 
 	if (!status) {
 		if (*sent)
-			set_bit(HCI_LE_PERIPHERAL, &hdev->dev_flags);
+			set_bit(HCI_ADVERTISING, &hdev->dev_flags);
 		else
-			clear_bit(HCI_LE_PERIPHERAL, &hdev->dev_flags);
-	}
-
-	if (!test_bit(HCI_INIT, &hdev->flags)) {
-		struct hci_request req;
-
-		hci_req_init(&req, hdev);
-		hci_update_ad(&req);
-		hci_req_run(&req, NULL);
+			clear_bit(HCI_ADVERTISING, &hdev->dev_flags);
 	}
 
 	hci_dev_unlock(hdev);
@@ -1005,7 +1011,7 @@ static void hci_cc_write_le_host_supported(struct hci_dev *hdev,
 		} else {
 			hdev->features[1][0] &= ~LMP_HOST_LE;
 			clear_bit(HCI_LE_ENABLED, &hdev->dev_flags);
-			clear_bit(HCI_LE_PERIPHERAL, &hdev->dev_flags);
+			clear_bit(HCI_ADVERTISING, &hdev->dev_flags);
 		}
 
 		if (sent->simul)
@@ -1296,9 +1302,11 @@ static void hci_cs_remote_name_req(struct hci_dev *hdev, __u8 status)
 		goto unlock;
 
 	if (!test_and_set_bit(HCI_CONN_AUTH_PEND, &conn->flags)) {
-		struct hci_cp_auth_requested cp;
-		cp.handle = __cpu_to_le16(conn->handle);
-		hci_send_cmd(hdev, HCI_OP_AUTH_REQUESTED, sizeof(cp), &cp);
+		struct hci_cp_auth_requested auth_cp;
+
+		auth_cp.handle = __cpu_to_le16(conn->handle);
+		hci_send_cmd(hdev, HCI_OP_AUTH_REQUESTED,
+			     sizeof(auth_cp), &auth_cp);
 	}
 
 unlock:
@@ -1468,33 +1476,6 @@ static void hci_cs_disconnect(struct hci_dev *hdev, u8 status)
 				       conn->dst_type, status);
 
 	hci_dev_unlock(hdev);
-}
-
-static void hci_cs_le_create_conn(struct hci_dev *hdev, __u8 status)
-{
-	struct hci_conn *conn;
-
-	BT_DBG("%s status 0x%2.2x", hdev->name, status);
-
-	if (status) {
-		hci_dev_lock(hdev);
-
-		conn = hci_conn_hash_lookup_state(hdev, LE_LINK, BT_CONNECT);
-		if (!conn) {
-			hci_dev_unlock(hdev);
-			return;
-		}
-
-		BT_DBG("%s bdaddr %pMR conn %p", hdev->name, &conn->dst, conn);
-
-		conn->state = BT_CLOSED;
-		mgmt_connect_failed(hdev, &conn->dst, conn->type,
-				    conn->dst_type, status);
-		hci_proto_connect_cfm(conn, status);
-		hci_conn_del(conn);
-
-		hci_dev_unlock(hdev);
-	}
 }
 
 static void hci_cs_create_phylink(struct hci_dev *hdev, u8 status)
@@ -1826,10 +1807,25 @@ static void hci_disconn_complete_evt(struct hci_dev *hdev, struct sk_buff *skb)
 	}
 
 	if (ev->status == 0) {
-		if (conn->type == ACL_LINK && conn->flush_key)
+		u8 type = conn->type;
+
+		if (type == ACL_LINK && conn->flush_key)
 			hci_remove_link_key(hdev, &conn->dst);
 		hci_proto_disconn_cfm(conn, ev->reason);
 		hci_conn_del(conn);
+
+		/* Re-enable advertising if necessary, since it might
+		 * have been disabled by the connection. From the
+		 * HCI_LE_Set_Advertise_Enable command description in
+		 * the core specification (v4.0):
+		 * "The Controller shall continue advertising until the Host
+		 * issues an LE_Set_Advertise_Enable command with
+		 * Advertising_Enable set to 0x00 (Advertising is disabled)
+		 * or until a connection is created or until the Advertising
+		 * is timed out due to Directed Advertising."
+		 */
+		if (type == LE_LINK)
+			mgmt_reenable_advertising(hdev);
 	}
 
 unlock:
@@ -2144,6 +2140,10 @@ static void hci_cmd_complete_evt(struct hci_dev *hdev, struct sk_buff *skb)
 		hci_cc_write_voice_setting(hdev, skb);
 		break;
 
+	case HCI_OP_READ_NUM_SUPPORTED_IAC:
+		hci_cc_read_num_supported_iac(hdev, skb);
+		break;
+
 	case HCI_OP_WRITE_SSP_MODE:
 		hci_cc_write_ssp_mode(hdev, skb);
 		break;
@@ -2345,10 +2345,6 @@ static void hci_cmd_status_evt(struct hci_dev *hdev, struct sk_buff *skb)
 
 	case HCI_OP_DISCONNECT:
 		hci_cs_disconnect(hdev, ev->status);
-		break;
-
-	case HCI_OP_LE_CREATE_CONN:
-		hci_cs_le_create_conn(hdev, ev->status);
 		break;
 
 	case HCI_OP_CREATE_PHY_LINK:
@@ -2935,6 +2931,23 @@ unlock:
 	hci_dev_unlock(hdev);
 }
 
+static inline size_t eir_get_length(u8 *eir, size_t eir_len)
+{
+	size_t parsed = 0;
+
+	while (parsed < eir_len) {
+		u8 field_len = eir[0];
+
+		if (field_len == 0)
+			return parsed;
+
+		parsed += field_len + 1;
+		eir += field_len + 1;
+	}
+
+	return eir_len;
+}
+
 static void hci_extended_inquiry_result_evt(struct hci_dev *hdev,
 					    struct sk_buff *skb)
 {
@@ -3175,7 +3188,8 @@ static void hci_user_confirm_request_evt(struct hci_dev *hdev,
 
 		if (hdev->auto_accept_delay > 0) {
 			int delay = msecs_to_jiffies(hdev->auto_accept_delay);
-			mod_timer(&conn->auto_accept_timer, jiffies + delay);
+			queue_delayed_work(conn->hdev->workqueue,
+					   &conn->auto_accept_work, delay);
 			goto unlock;
 		}
 
@@ -3490,6 +3504,17 @@ static void hci_le_conn_complete_evt(struct hci_dev *hdev, struct sk_buff *skb)
 
 		conn->dst_type = ev->bdaddr_type;
 
+		/* The advertising parameters for own address type
+		 * define which source address and source address
+		 * type this connections has.
+		 */
+		if (bacmp(&conn->src, BDADDR_ANY)) {
+			conn->src_type = ADDR_LE_DEV_PUBLIC;
+		} else {
+			bacpy(&conn->src, &hdev->static_addr);
+			conn->src_type = ADDR_LE_DEV_RANDOM;
+		}
+
 		if (ev->role == LE_CONN_ROLE_MASTER) {
 			conn->out = true;
 			conn->link_mode |= HCI_LM_MASTER;
@@ -3645,8 +3670,8 @@ void hci_event_packet(struct hci_dev *hdev, struct sk_buff *skb)
 	skb_pull(skb, HCI_EVENT_HDR_SIZE);
 
 	if (hdev->sent_cmd && bt_cb(hdev->sent_cmd)->req.event == event) {
-		struct hci_command_hdr *hdr = (void *) hdev->sent_cmd->data;
-		u16 opcode = __le16_to_cpu(hdr->opcode);
+		struct hci_command_hdr *cmd_hdr = (void *) hdev->sent_cmd->data;
+		u16 opcode = __le16_to_cpu(cmd_hdr->opcode);
 
 		hci_req_cmd_complete(hdev, opcode, 0);
 	}
