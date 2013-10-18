@@ -278,6 +278,8 @@ struct smb_version_operations {
 	/* set attributes */
 	int (*set_file_info)(struct inode *, const char *, FILE_BASIC_INFO *,
 			     const unsigned int);
+	int (*set_compression)(const unsigned int, struct cifs_tcon *,
+			       struct cifsFileInfo *);
 	/* check if we can send an echo or nor */
 	bool (*can_echo)(struct TCP_Server_Info *);
 	/* send echo request */
@@ -828,6 +830,8 @@ struct cifs_tcon {
 	__u32 maximal_access;
 	__u32 vol_serial_number;
 	__le64 vol_create_time;
+	__u32 ss_flags;		/* sector size flags */
+	__u32 perf_sector_size; /* best sector size for perf */
 #endif /* CONFIG_CIFS_SMB2 */
 #ifdef CONFIG_CIFS_FSCACHE
 	u64 resource_id;		/* server resource id */
