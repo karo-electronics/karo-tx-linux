@@ -71,6 +71,7 @@ struct gfs2_bitmap {
 	u32 bi_offset;
 	u32 bi_start;
 	u32 bi_len;
+	u32 bi_blocks;
 };
 
 struct gfs2_rgrpd {
@@ -101,19 +102,25 @@ struct gfs2_rgrpd {
 
 struct gfs2_rbm {
 	struct gfs2_rgrpd *rgd;
-	struct gfs2_bitmap *bi;	/* Bitmap must belong to the rgd */
 	u32 offset;		/* The offset is bitmap relative */
+	int bii;		/* Bitmap index */
 };
+
+static inline struct gfs2_bitmap *rbm_bi(const struct gfs2_rbm *rbm)
+{
+	return rbm->rgd->rd_bits + rbm->bii;
+}
 
 static inline u64 gfs2_rbm_to_block(const struct gfs2_rbm *rbm)
 {
-	return rbm->rgd->rd_data0 + (rbm->bi->bi_start * GFS2_NBBY) + rbm->offset;
+	return rbm->rgd->rd_data0 + (rbm_bi(rbm)->bi_start * GFS2_NBBY) +
+		rbm->offset;
 }
 
 static inline bool gfs2_rbm_eq(const struct gfs2_rbm *rbm1,
 			       const struct gfs2_rbm *rbm2)
 {
-	return (rbm1->rgd == rbm2->rgd) && (rbm1->bi == rbm2->bi) && 
+	return (rbm1->rgd == rbm2->rgd) && (rbm1->bii == rbm2->bii) &&
 	       (rbm1->offset == rbm2->offset);
 }
 
@@ -276,6 +283,20 @@ struct gfs2_blkreserv {
 	struct gfs2_quota_data *rs_qa_qd[2 * MAXQUOTAS];
 	struct gfs2_holder rs_qa_qd_ghs[2 * MAXQUOTAS];
 	unsigned int rs_qa_qd_num;
+};
+
+/*
+ * Allocation parameters
+ * @target: The number of blocks we'd ideally like to allocate
+ * @aflags: The flags (e.g. Orlov flag)
+ *
+ * The intent is to gradually expand this structure over time in
+ * order to give more information, e.g. alignment, min extent size
+ * to the allocation code.
+ */
+struct gfs2_alloc_parms {
+	u32 target;
+	u32 aflags;
 };
 
 enum {
@@ -516,7 +537,6 @@ struct gfs2_tune {
 
 	unsigned int gt_logd_secs;
 
-	unsigned int gt_quota_simul_sync; /* Max quotavals to sync at once */
 	unsigned int gt_quota_warn_period; /* Secs between quota warn msgs */
 	unsigned int gt_quota_scale_num; /* Numerator */
 	unsigned int gt_quota_scale_den; /* Denominator */
@@ -694,6 +714,7 @@ struct gfs2_sbd {
 	struct list_head sd_quota_list;
 	atomic_t sd_quota_count;
 	struct mutex sd_quota_mutex;
+	struct mutex sd_quota_sync_mutex;
 	wait_queue_head_t sd_quota_wait;
 	struct list_head sd_trunc_list;
 	spinlock_t sd_trunc_lock;
