@@ -260,7 +260,7 @@ static void sysfs_init_inode(struct sysfs_dirent *sd, struct inode *inode)
 	case SYSFS_KOBJ_BIN_ATTR:
 		bin_attr = sd->s_bin_attr.bin_attr;
 		inode->i_size = bin_attr->size;
-		inode->i_fop = &bin_fops;
+		inode->i_fop = &sysfs_bin_operations;
 		break;
 	case SYSFS_KOBJ_LINK:
 		inode->i_op = &sysfs_symlink_inode_operations;
@@ -314,8 +314,8 @@ void sysfs_evict_inode(struct inode *inode)
 	sysfs_put(sd);
 }
 
-int sysfs_hash_and_remove(struct sysfs_dirent *dir_sd, const void *ns,
-			  const char *name)
+int sysfs_hash_and_remove(struct sysfs_dirent *dir_sd, const char *name,
+			  const void *ns)
 {
 	struct sysfs_addrm_cxt acxt;
 	struct sysfs_dirent *sd;
@@ -326,11 +326,11 @@ int sysfs_hash_and_remove(struct sysfs_dirent *dir_sd, const void *ns,
 		return -ENOENT;
 	}
 
-	sysfs_addrm_start(&acxt, dir_sd);
+	sysfs_addrm_start(&acxt);
 
-	sd = sysfs_find_dirent(dir_sd, ns, name);
+	sd = sysfs_find_dirent(dir_sd, name, ns);
 	if (sd)
-		sysfs_remove_one(&acxt, sd);
+		__sysfs_remove(&acxt, sd);
 
 	sysfs_addrm_finish(&acxt);
 
