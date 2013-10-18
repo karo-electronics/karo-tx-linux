@@ -77,6 +77,7 @@ static DEFINE_PCI_DEVICE_TABLE(mei_me_pci_tbl) = {
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, MEI_DEV_ID_PPT_2)},
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, MEI_DEV_ID_PPT_3)},
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, MEI_DEV_ID_LPT)},
+	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, MEI_DEV_ID_LPT_W)},
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, MEI_DEV_ID_LPT_LP)},
 
 	/* required last entry */
@@ -239,7 +240,6 @@ static void mei_me_remove(struct pci_dev *pdev)
 
 	free_irq(pdev->irq, dev);
 	pci_disable_msi(pdev);
-	pci_set_drvdata(pdev, NULL);
 
 	if (hw->mem_addr)
 		pci_iounmap(pdev, hw->mem_addr);
