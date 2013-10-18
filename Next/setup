@@ -1,0 +1,23 @@
+#!/bin/bash
+
+tail -n +5 < Next/Trees | while read tree type url; do
+	repository=${url%#*}
+	branch=${url#*#}
+
+	if test "x$type" != "xgit"; then
+		echo "Don't know how to handle type $type trees, skipping..."
+		continue
+	fi
+
+	git remote add -t $branch --no-tags $tree $repository > /dev/null 2>&1; ret=$?
+
+	if test $ret -eq 128; then
+		echo "Remote $tree exists, skipping..."
+	else
+		if test $ret -ne 0; then
+			echo "Failed to add remote $tree: $ret"
+		else
+			echo "Remote $tree added"
+		fi
+	fi
+done
