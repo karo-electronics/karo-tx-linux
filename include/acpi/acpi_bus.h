@@ -222,7 +222,8 @@ struct acpi_device_power_flags {
 	u32 power_resources:1;	/* Power resources */
 	u32 inrush_current:1;	/* Serialize Dx->D0 */
 	u32 power_removed:1;	/* Optimize Dx->D0 */
-	u32 reserved:28;
+	u32 ignore_parent:1;	/* Power is independent of parent power state */
+	u32 reserved:27;
 };
 
 struct acpi_device_power_state {
@@ -311,7 +312,6 @@ struct acpi_device {
 	unsigned int physical_node_count;
 	struct list_head physical_node_list;
 	struct mutex physical_node_lock;
-	struct list_head power_dependent;
 	void (*remove)(struct acpi_device *);
 };
 
@@ -456,8 +456,6 @@ acpi_status acpi_add_pm_notifier(struct acpi_device *adev,
 acpi_status acpi_remove_pm_notifier(struct acpi_device *adev,
 				    acpi_notify_handler handler);
 int acpi_pm_device_sleep_state(struct device *, int *, int);
-void acpi_dev_pm_add_dependent(acpi_handle handle, struct device *depdev);
-void acpi_dev_pm_remove_dependent(acpi_handle handle, struct device *depdev);
 #else
 static inline acpi_status acpi_add_pm_notifier(struct acpi_device *adev,
 					       acpi_notify_handler handler,
@@ -478,10 +476,6 @@ static inline int acpi_pm_device_sleep_state(struct device *d, int *p, int m)
 	return (m >= ACPI_STATE_D0 && m <= ACPI_STATE_D3_COLD) ?
 		m : ACPI_STATE_D0;
 }
-static inline void acpi_dev_pm_add_dependent(acpi_handle handle,
-					     struct device *depdev) {}
-static inline void acpi_dev_pm_remove_dependent(acpi_handle handle,
-						struct device *depdev) {}
 #endif
 
 #ifdef CONFIG_PM_RUNTIME
