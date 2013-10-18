@@ -110,7 +110,7 @@ xfs_alert_fsblock_zero(
 	xfs_alert_tag(ip->i_mount, XFS_PTAG_FSBLOCK_ZERO,
 			"Access to block zero in inode %llu "
 			"start_block: %llx start_off: %llx "
-			"blkcnt: %llx extent-state: %x\n",
+			"blkcnt: %llx extent-state: %x",
 		(unsigned long long)ip->i_ino,
 		(unsigned long long)imap->br_startblock,
 		(unsigned long long)imap->br_startoff,
@@ -655,7 +655,6 @@ int
 xfs_iomap_write_allocate(
 	xfs_inode_t	*ip,
 	xfs_off_t	offset,
-	size_t		count,
 	xfs_bmbt_irec_t *imap)
 {
 	xfs_mount_t	*mp = ip->i_mount;
