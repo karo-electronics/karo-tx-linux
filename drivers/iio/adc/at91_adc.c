@@ -83,13 +83,7 @@ static irqreturn_t at91_adc_trigger_handler(int irq, void *p)
 		j++;
 	}
 
-	if (idev->scan_timestamp) {
-		s64 *timestamp = (s64 *)((u8 *)st->buffer +
-					ALIGN(j, sizeof(s64)));
-		*timestamp = pf->timestamp;
-	}
-
-	iio_push_to_buffers(idev, (u8 *)st->buffer);
+	iio_push_to_buffers_with_timestamp(idev, st->buffer, pf->timestamp);
 
 	iio_trigger_notify_done(idev->trig);
 
@@ -279,7 +273,7 @@ static int at91_adc_trigger_init(struct iio_dev *idev)
 	int i, ret;
 
 	st->trig = devm_kzalloc(&idev->dev,
-				st->trigger_number * sizeof(st->trig),
+				st->trigger_number * sizeof(*st->trig),
 				GFP_KERNEL);
 
 	if (st->trig == NULL) {
@@ -372,9 +366,9 @@ static int at91_adc_read_raw(struct iio_dev *idev,
 		return IIO_VAL_INT;
 
 	case IIO_CHAN_INFO_SCALE:
-		*val = (st->vref_mv * 1000) >> chan->scan_type.realbits;
-		*val2 = 0;
-		return IIO_VAL_INT_PLUS_MICRO;
+		*val = st->vref_mv;
+		*val2 = chan->scan_type.realbits;
+		return IIO_VAL_FRACTIONAL_LOG2;
 	default:
 		break;
 	}

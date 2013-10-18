@@ -543,7 +543,7 @@ void *comedi_alloc_spriv(struct comedi_subdevice *s, size_t size)
 {
 	s->private = kzalloc(size, GFP_KERNEL);
 	if (s->private)
-		comedi_set_subdevice_runflags(s, ~0, SRF_FREE_SPRIV);
+		s->runflags |= SRF_FREE_SPRIV;
 	return s->private;
 }
 EXPORT_SYMBOL_GPL(comedi_alloc_spriv);
@@ -806,7 +806,6 @@ static int do_subdinfo_ioctl(struct comedi_device *dev,
 		} else {
 			us->range_type = 0;	/* XXX */
 		}
-		us->flags = s->flags;
 
 		if (s->busy)
 			us->subd_flags |= SDF_BUSY;
@@ -818,8 +817,6 @@ static int do_subdinfo_ioctl(struct comedi_device *dev,
 			us->subd_flags |= SDF_LOCK_OWNER;
 		if (!s->maxdata && s->maxdata_list)
 			us->subd_flags |= SDF_MAXDATA;
-		if (s->flaglist)
-			us->subd_flags |= SDF_FLAGS;
 		if (s->range_table_list)
 			us->subd_flags |= SDF_RANGETYPE;
 		if (s->do_cmd)
@@ -829,8 +826,6 @@ static int do_subdinfo_ioctl(struct comedi_device *dev,
 			us->insn_bits_support = COMEDI_SUPPORTED;
 		else
 			us->insn_bits_support = COMEDI_UNSUPPORTED;
-
-		us->settling_time_0 = s->settling_time_0;
 	}
 
 	ret = copy_to_user(arg, tmp, dev->n_subdevices * sizeof(*tmp));
@@ -875,13 +870,8 @@ static int do_chaninfo_ioctl(struct comedi_device *dev,
 			return -EFAULT;
 	}
 
-	if (it.flaglist) {
-		if (!s->flaglist)
-			return -EINVAL;
-		if (copy_to_user(it.flaglist, s->flaglist,
-				 s->n_chan * sizeof(unsigned int)))
-			return -EFAULT;
-	}
+	if (it.flaglist)
+		return -EINVAL;	/* flaglist not supported */
 
 	if (it.rangelist) {
 		int i;
@@ -1485,7 +1475,8 @@ static int do_cmd_ioctl(struct comedi_device *dev,
 	if (async->cmd.flags & TRIG_WAKE_EOS)
 		async->cb_mask |= COMEDI_CB_EOS;
 
-	comedi_set_subdevice_runflags(s, ~0, SRF_USER | SRF_RUNNING);
+	comedi_set_subdevice_runflags(s, SRF_USER | SRF_ERROR | SRF_RUNNING,
+				      SRF_USER | SRF_RUNNING);
 
 	/* set s->busy _after_ setting SRF_RUNNING flag to avoid race with
 	 * comedi_read() or comedi_write() */
