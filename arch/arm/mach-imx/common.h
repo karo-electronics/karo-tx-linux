@@ -73,10 +73,12 @@ extern void mxc_restart(enum reboot_mode, const char *);
 extern void mxc_arch_reset_init(void __iomem *);
 extern void mxc_arch_reset_init_dt(void);
 extern int mx53_revision(void);
-extern int imx6q_revision(void);
-extern int mx53_display_revision(void);
 extern void imx_set_aips(void __iomem *);
 extern int mxc_device_init(void);
+void imx_set_soc_revision(unsigned int rev);
+unsigned int imx_get_soc_revision(void);
+void imx_init_revision_from_anatop(void);
+struct device *imx_soc_device_init(void);
 
 enum mxc_cpu_pwr_mode {
 	WAIT_CLOCKED,		/* wfi only */
@@ -124,7 +126,11 @@ static inline void imx_smp_prepare(void) {}
 static inline void imx_scu_standby_enable(void) {}
 #endif
 extern void imx_src_init(void);
+#ifdef CONFIG_HAVE_IMX_SRC
 extern void imx_src_prepare_restart(void);
+#else
+static inline void imx_src_prepare_restart(void) {}
+#endif
 extern void imx_gpc_init(void);
 extern void imx_gpc_pre_suspend(void);
 extern void imx_gpc_post_resume(void);
@@ -133,7 +139,6 @@ extern void imx_gpc_restore_all(void);
 extern void imx_anatop_init(void);
 extern void imx_anatop_pre_suspend(void);
 extern void imx_anatop_post_resume(void);
-extern u32 imx_anatop_get_digprog(void);
 extern int imx6q_set_lpm(enum mxc_cpu_pwr_mode mode);
 extern void imx6q_set_chicken_bit(void);
 

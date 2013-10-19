@@ -182,7 +182,7 @@ static const char *periph2_clk2_sels[]	= { "pll3_usb_otg", "pll2_bus", };
 static const char *periph_sels[]	= { "periph_pre", "periph_clk2", };
 static const char *periph2_sels[]	= { "periph2_pre", "periph2_clk2", };
 static const char *axi_sels[]		= { "periph", "pll2_pfd2_396m", "periph", "pll3_pfd1_540m", };
-static const char *audio_sels[]	= { "pll4_post_div", "pll3_pfd2_508m", "pll3_pfd3_454m", "pll3_usb_otg", };
+static const char *audio_sels[]	= { "pll4_audio_div", "pll3_pfd2_508m", "pll3_pfd3_454m", "pll3_usb_otg", };
 static const char *gpu_axi_sels[]	= { "axi", "ahb", };
 static const char *gpu2d_core_sels[]	= { "axi", "pll3_usb_otg", "pll2_pfd0_352m", "pll2_pfd2_396m", };
 static const char *gpu3d_core_sels[]	= { "mmdc_ch0_axi", "pll3_usb_otg", "pll2_pfd1_594m", "pll2_pfd2_396m", };
@@ -196,7 +196,7 @@ static const char *ipu2_di0_sels[]	= { "ipu2_di0_pre", "dummy", "dummy", "ldb_di
 static const char *ipu2_di1_sels[]	= { "ipu2_di1_pre", "dummy", "dummy", "ldb_di0", "ldb_di1", };
 static const char *hsi_tx_sels[]	= { "pll3_120m", "pll2_pfd2_396m", };
 static const char *pcie_axi_sels[]	= { "axi", "ahb", };
-static const char *ssi_sels[]		= { "pll3_pfd2_508m", "pll3_pfd3_454m", "pll4_post_div", };
+static const char *ssi_sels[]		= { "pll3_pfd2_508m", "pll3_pfd3_454m", "pll4_audio_div", };
 static const char *usdhc_sels[]	= { "pll2_pfd2_396m", "pll2_pfd0_352m", };
 static const char *enfc_sels[]	= { "pll2_pfd0_352m", "pll2_bus", "pll3_usb_otg", "pll2_pfd2_396m", };
 static const char *emi_sels[]		= { "pll2_pfd2_396m", "pll3_usb_otg", "axi", "pll2_pfd0_352m", };
@@ -205,7 +205,7 @@ static const char *vdo_axi_sels[]	= { "axi", "ahb", };
 static const char *vpu_axi_sels[]	= { "axi", "pll2_pfd2_396m", "pll2_pfd0_352m", };
 static const char *cko1_sels[]	= { "pll3_usb_otg", "pll2_bus", "pll1_sys", "pll5_video_div",
 				    "dummy", "axi", "enfc", "ipu1_di0", "ipu1_di1", "ipu2_di0",
-				    "ipu2_di1", "ahb", "ipg", "ipg_per", "ckil", "pll4_post_div", };
+				    "ipu2_di1", "ahb", "ipg", "ipg_per", "ckil", "pll4_audio_div", };
 static const char *cko2_sels[] = {
 	"mmdc_ch0_axi", "mmdc_ch1_axi", "usdhc4", "usdhc1",
 	"gpu2d_axi", "dummy", "ecspi_root", "gpu3d_axi",
@@ -217,6 +217,11 @@ static const char *cko2_sels[] = {
 	"uart_serial", "spdif", "asrc", "hsi_tx",
 };
 static const char *cko_sels[] = { "cko1", "cko2", };
+static const char *lvds_sels[] = {
+	"dummy", "dummy", "dummy", "dummy", "dummy", "dummy",
+	"pll4_audio", "pll5_video", "pll8_mlb", "enet_ref",
+	"pcie_ref", "sata_ref",
+};
 
 enum mx6q_clks {
 	dummy, ckil, ckih, osc, pll2_pfd0_352m, pll2_pfd1_594m, pll2_pfd2_396m,
@@ -251,7 +256,8 @@ enum mx6q_clks {
 	ssi2_ipg, ssi3_ipg, rom, usbphy1, usbphy2, ldb_di0_div_3_5, ldb_di1_div_3_5,
 	sata_ref, sata_ref_100m, pcie_ref, pcie_ref_125m, enet_ref, usbphy1_gate,
 	usbphy2_gate, pll4_post_div, pll5_post_div, pll5_video_div, eim_slow,
-	spdif, cko2_sel, cko2_podf, cko2, cko, vdoa, clk_max
+	spdif, cko2_sel, cko2_podf, cko2, cko, vdoa, pll4_audio_div,
+	lvds1_sel, lvds2_sel, lvds1_gate, lvds2_gate, clk_max
 };
 
 static struct clk *clk[clk_max];
@@ -300,7 +306,7 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	WARN_ON(!base);
 
 	/* Audio/video PLL post dividers do not work on i.MX6q revision 1.0 */
-	if (cpu_is_imx6q() && imx6q_revision() == IMX_CHIP_REVISION_1_0) {
+	if (cpu_is_imx6q() && imx_get_soc_revision() == IMX_CHIP_REVISION_1_0) {
 		post_div_table[1].div = 1;
 		post_div_table[2].div = 1;
 		video_div_table[1].div = 1;
@@ -342,6 +348,18 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 			base + 0xe0, 0, 2, 0, clk_enet_ref_table,
 			&imx_ccm_lock);
 
+	clk[lvds1_sel] = imx_clk_mux("lvds1_sel", base + 0x160, 0, 5, lvds_sels, ARRAY_SIZE(lvds_sels));
+	clk[lvds2_sel] = imx_clk_mux("lvds2_sel", base + 0x160, 5, 5, lvds_sels, ARRAY_SIZE(lvds_sels));
+
+	/*
+	 * lvds1_gate and lvds2_gate are pseudo-gates.  Both can be
+	 * independently configured as clock inputs or outputs.  We treat
+	 * the "output_enable" bit as a gate, even though it's really just
+	 * enabling clock output.
+	 */
+	clk[lvds1_gate] = imx_clk_gate("lvds1_gate", "dummy", base + 0x160, 10);
+	clk[lvds2_gate] = imx_clk_gate("lvds2_gate", "dummy", base + 0x160, 11);
+
 	/*                                name              parent_name        reg       idx */
 	clk[pll2_pfd0_352m] = imx_clk_pfd("pll2_pfd0_352m", "pll2_bus",     base + 0x100, 0);
 	clk[pll2_pfd1_594m] = imx_clk_pfd("pll2_pfd1_594m", "pll2_bus",     base + 0x100, 1);
@@ -359,6 +377,7 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	clk[twd]       = imx_clk_fixed_factor("twd",       "arm",            1, 2);
 
 	clk[pll4_post_div] = clk_register_divider_table(NULL, "pll4_post_div", "pll4_audio", CLK_SET_RATE_PARENT, base + 0x70, 19, 2, 0, post_div_table, &imx_ccm_lock);
+	clk[pll4_audio_div] = clk_register_divider(NULL, "pll4_audio_div", "pll4_post_div", CLK_SET_RATE_PARENT, base + 0x170, 15, 1, 0, &imx_ccm_lock);
 	clk[pll5_post_div] = clk_register_divider_table(NULL, "pll5_post_div", "pll5_video", CLK_SET_RATE_PARENT, base + 0xa0, 19, 2, 0, post_div_table, &imx_ccm_lock);
 	clk[pll5_video_div] = clk_register_divider_table(NULL, "pll5_video_div", "pll5_post_div", CLK_SET_RATE_PARENT, base + 0x170, 30, 2, 0, video_div_table, &imx_ccm_lock);
 
@@ -573,7 +592,8 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	clk_register_clkdev(clk[pll4_post_div], "pll4_post_div", NULL);
 	clk_register_clkdev(clk[pll4_audio], "pll4_audio", NULL);
 
-	if ((imx6q_revision() != IMX_CHIP_REVISION_1_0) || cpu_is_imx6dl()) {
+	if ((imx_get_soc_revision() != IMX_CHIP_REVISION_1_0) ||
+	    cpu_is_imx6dl()) {
 		clk_set_parent(clk[ldb_di0_sel], clk[pll5_video_div]);
 		clk_set_parent(clk[ldb_di1_sel], clk[pll5_video_div]);
 	}
@@ -602,6 +622,10 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 		ret = clk_set_parent(clk[cko], clk[cko2]);
 	if (ret)
 		pr_warn("failed to set up CLKO: %d\n", ret);
+
+	/* All existing boards with PCIe use LVDS1 */
+	if (IS_ENABLED(CONFIG_PCI_IMX6))
+		clk_set_parent(clk[lvds1_sel], clk[sata_ref]);
 
 	/* Set initial power mode */
 	imx6q_set_lpm(WAIT_CLOCKED);
