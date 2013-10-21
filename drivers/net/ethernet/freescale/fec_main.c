@@ -2042,7 +2042,7 @@ static void fec_reset_phy(struct platform_device *pdev)
 	of_property_read_u32(np, "phy-reset-duration", &msec);
 	/* A sane reset duration should not be longer than 1s */
 	if (msec > 1000)
-		msec = 1;
+		msec = 1000;
 
 	phy_reset = of_get_named_gpio(np, "phy-reset-gpios", 0);
 	if (!gpio_is_valid(phy_reset))
