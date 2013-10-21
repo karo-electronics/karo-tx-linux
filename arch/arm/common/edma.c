@@ -459,7 +459,7 @@ static irqreturn_t dma_ccerr_handler(int irq, void *data)
 								callback) {
 						edma_cc[ctlr]->intr_data[k].
 						callback(k,
-						DMA_CC_ERROR,
+						EDMA_CC_ERROR,
 						edma_cc[ctlr]->intr_data
 						[k].data);
 					}
