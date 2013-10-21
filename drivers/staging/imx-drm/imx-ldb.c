@@ -540,7 +540,7 @@ static int imx_ldb_probe(struct platform_device *pdev)
 			channel->edid = kmemdup(edidp, channel->edid_len,
 						GFP_KERNEL);
 		} else {
-			ret = of_get_drm_display_mode(child, &channel->mode, 0);
+			ret = of_get_drm_display_mode(child, &channel->mode, -1);
 			if (!ret)
 				channel->mode_valid = 1;
 		}
