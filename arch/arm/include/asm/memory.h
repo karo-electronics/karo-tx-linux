@@ -297,9 +297,11 @@ static inline void *phys_to_virt(phys_addr_t x)
  */
 static inline phys_addr_t __virt_to_idmap(unsigned long x)
 {
+#ifdef CONFIG_ARM_PATCH_VIRT_PHYS
 	if (arch_virt_to_idmap)
 		return arch_virt_to_idmap(x);
 	else
+#endif
 		return __virt_to_phys(x);
 }
 
