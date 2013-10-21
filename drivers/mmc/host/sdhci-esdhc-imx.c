@@ -54,6 +54,11 @@
 #define ESDHC_DLL_OVERRIDE_VAL_SHIFT	9
 #define ESDHC_DLL_OVERRIDE_EN_SHIFT	8
 
+/* dll control register */
+#define ESDHC_DLL_CTRL			0x60
+#define ESDHC_DLL_OVERRIDE_VAL_SHIFT	9
+#define ESDHC_DLL_OVERRIDE_EN_SHIFT	8
+
 /* tune control register */
 #define ESDHC_TUNE_CTRL_STATUS		0x68
 #define  ESDHC_TUNE_CTRL_STEP		1
