@@ -772,6 +772,8 @@ void rpc_task_set_client(struct rpc_task *task, struct rpc_clnt *clnt)
 		atomic_inc(&clnt->cl_count);
 		if (clnt->cl_softrtry)
 			task->tk_flags |= RPC_TASK_SOFT;
+		if (clnt->cl_noretranstimeo)
+			task->tk_flags |= RPC_TASK_NO_RETRANS_TIMEOUT;
 		if (sk_memalloc_socks()) {
 			struct rpc_xprt *xprt;
 
@@ -1690,6 +1692,7 @@ call_connect_status(struct rpc_task *task)
 	dprint_status(task);
 
 	trace_rpc_connect_status(task, status);
+	task->tk_status = 0;
 	switch (status) {
 		/* if soft mounted, test if we've timed out */
 	case -ETIMEDOUT:
@@ -1698,12 +1701,14 @@ call_connect_status(struct rpc_task *task)
 	case -ECONNREFUSED:
 	case -ECONNRESET:
 	case -ENETUNREACH:
+		/* retry with existing socket, after a delay */
+		rpc_delay(task, 3*HZ);
 		if (RPC_IS_SOFTCONN(task))
 			break;
-		/* retry with existing socket, after a delay */
-	case 0:
 	case -EAGAIN:
-		task->tk_status = 0;
+		task->tk_action = call_bind;
+		return;
+	case 0:
 		clnt->cl_stats->netreconn++;
 		task->tk_action = call_transmit;
 		return;
@@ -1717,13 +1722,14 @@ call_connect_status(struct rpc_task *task)
 static void
 call_transmit(struct rpc_task *task)
 {
+	int is_retrans = RPC_WAS_SENT(task);
+
 	dprint_status(task);
 
 	task->tk_action = call_status;
 	if (task->tk_status < 0)
 		return;
-	task->tk_status = xprt_prepare_transmit(task);
-	if (task->tk_status != 0)
+	if (!xprt_prepare_transmit(task))
 		return;
 	task->tk_action = call_transmit_status;
 	/* Encode here so that rpcsec_gss can use correct sequence number. */
@@ -1742,6 +1748,8 @@ call_transmit(struct rpc_task *task)
 	xprt_transmit(task);
 	if (task->tk_status < 0)
 		return;
+	if (is_retrans)
+		task->tk_client->cl_stats->rpcretrans++;
 	/*
 	 * On success, ensure that we call xprt_end_transmit() before sleeping
 	 * in order to allow access to the socket to other RPC requests.
@@ -1811,8 +1819,7 @@ call_bc_transmit(struct rpc_task *task)
 {
 	struct rpc_rqst *req = task->tk_rqstp;
 
-	task->tk_status = xprt_prepare_transmit(task);
-	if (task->tk_status == -EAGAIN) {
+	if (!xprt_prepare_transmit(task)) {
 		/*
 		 * Could not reserve the transport. Try again after the
 		 * transport is released.
@@ -1900,7 +1907,8 @@ call_status(struct rpc_task *task)
 		rpc_delay(task, 3*HZ);
 	case -ETIMEDOUT:
 		task->tk_action = call_timeout;
-		if (task->tk_client->cl_discrtry)
+		if (!(task->tk_flags & RPC_TASK_NO_RETRANS_TIMEOUT)
+		    && task->tk_client->cl_discrtry)
 			xprt_conditional_disconnect(req->rq_xprt,
 					req->rq_connect_cookie);
 		break;
@@ -1982,7 +1990,6 @@ call_timeout(struct rpc_task *task)
 	rpcauth_invalcred(task);
 
 retry:
-	clnt->cl_stats->rpcretrans++;
 	task->tk_action = call_bind;
 	task->tk_status = 0;
 }
@@ -2025,7 +2032,6 @@ call_decode(struct rpc_task *task)
 	if (req->rq_rcv_buf.len < 12) {
 		if (!RPC_IS_SOFT(task)) {
 			task->tk_action = call_bind;
-			clnt->cl_stats->rpcretrans++;
 			goto out_retry;
 		}
 		dprintk("RPC:       %s: too small RPC reply size (%d bytes)\n",
