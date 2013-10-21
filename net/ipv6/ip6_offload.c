@@ -66,7 +66,6 @@ static int ipv6_gso_send_check(struct sk_buff *skb)
 	__skb_pull(skb, sizeof(*ipv6h));
 	err = -EPROTONOSUPPORT;
 
-	rcu_read_lock();
 	ops = rcu_dereference(inet6_offloads[
 		ipv6_gso_pull_exthdrs(skb, ipv6h->nexthdr)]);
 
@@ -74,7 +73,6 @@ static int ipv6_gso_send_check(struct sk_buff *skb)
 		skb_reset_transport_header(skb);
 		err = ops->callbacks.gso_send_check(skb);
 	}
-	rcu_read_unlock();
 
 out:
 	return err;
@@ -98,6 +96,7 @@ static struct sk_buff *ipv6_gso_segment(struct sk_buff *skb,
 		       SKB_GSO_DODGY |
 		       SKB_GSO_TCP_ECN |
 		       SKB_GSO_GRE |
+		       SKB_GSO_IPIP |
 		       SKB_GSO_UDP_TUNNEL |
 		       SKB_GSO_MPLS |
 		       SKB_GSO_TCPV6 |
@@ -113,13 +112,12 @@ static struct sk_buff *ipv6_gso_segment(struct sk_buff *skb,
 	segs = ERR_PTR(-EPROTONOSUPPORT);
 
 	proto = ipv6_gso_pull_exthdrs(skb, ipv6h->nexthdr);
-	rcu_read_lock();
+
 	ops = rcu_dereference(inet6_offloads[proto]);
 	if (likely(ops && ops->callbacks.gso_segment)) {
 		skb_reset_transport_header(skb);
 		segs = ops->callbacks.gso_segment(skb, features);
 	}
-	rcu_read_unlock();
 
 	if (IS_ERR(segs))
 		goto out;

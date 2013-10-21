@@ -25,10 +25,10 @@
 #include "routing.h"
 #include "gateway_client.h"
 #include "hard-interface.h"
-#include "unicast.h"
 #include "soft-interface.h"
 #include "bridge_loop_avoidance.h"
 #include "network-coding.h"
+#include "fragmentation.h"
 
 /* hash class keys */
 static struct lock_class_key batadv_orig_hash_lock_class_key;
@@ -42,6 +42,88 @@ static int batadv_compare_orig(const struct hlist_node *node, const void *data2)
 					 hash_entry);
 
 	return (memcmp(data1, data2, ETH_ALEN) == 0 ? 1 : 0);
+}
+
+/**
+ * batadv_orig_node_vlan_get - get an orig_node_vlan object
+ * @orig_node: the originator serving the VLAN
+ * @vid: the VLAN identifier
+ *
+ * Returns the vlan object identified by vid and belonging to orig_node or NULL
+ * if it does not exist.
+ */
+struct batadv_orig_node_vlan *
+batadv_orig_node_vlan_get(struct batadv_orig_node *orig_node,
+			  unsigned short vid)
+{
+	struct batadv_orig_node_vlan *vlan = NULL, *tmp;
+
+	rcu_read_lock();
+	list_for_each_entry_rcu(tmp, &orig_node->vlan_list, list) {
+		if (tmp->vid != vid)
+			continue;
+
+		if (!atomic_inc_not_zero(&tmp->refcount))
+			continue;
+
+		vlan = tmp;
+
+		break;
+	}
+	rcu_read_unlock();
+
+	return vlan;
+}
+
+/**
+ * batadv_orig_node_vlan_new - search and possibly create an orig_node_vlan
+ *  object
+ * @orig_node: the originator serving the VLAN
+ * @vid: the VLAN identifier
+ *
+ * Returns NULL in case of failure or the vlan object identified by vid and
+ * belonging to orig_node otherwise. The object is created and added to the list
+ * if it does not exist.
+ *
+ * The object is returned with refcounter increased by 1.
+ */
+struct batadv_orig_node_vlan *
+batadv_orig_node_vlan_new(struct batadv_orig_node *orig_node,
+			  unsigned short vid)
+{
+	struct batadv_orig_node_vlan *vlan;
+
+	spin_lock_bh(&orig_node->vlan_list_lock);
+
+	/* first look if an object for this vid already exists */
+	vlan = batadv_orig_node_vlan_get(orig_node, vid);
+	if (vlan)
+		goto out;
+
+	vlan = kzalloc(sizeof(*vlan), GFP_ATOMIC);
+	if (!vlan)
+		goto out;
+
+	atomic_set(&vlan->refcount, 2);
+	vlan->vid = vid;
+
+	list_add_rcu(&vlan->list, &orig_node->vlan_list);
+
+out:
+	spin_unlock_bh(&orig_node->vlan_list_lock);
+
+	return vlan;
+}
+
+/**
+ * batadv_orig_node_vlan_free_ref - decrement the refcounter and possibly free
+ *  the originator-vlan object
+ * @orig_vlan: the originator-vlan object to release
+ */
+void batadv_orig_node_vlan_free_ref(struct batadv_orig_node_vlan *orig_vlan)
+{
+	if (atomic_dec_and_test(&orig_vlan->refcount))
+		kfree_rcu(orig_vlan, rcu);
 }
 
 int batadv_originator_init(struct batadv_priv *bat_priv)
@@ -146,8 +228,9 @@ static void batadv_orig_node_free_rcu(struct rcu_head *rcu)
 	/* Free nc_nodes */
 	batadv_nc_purge_orig(orig_node->bat_priv, orig_node, NULL);
 
-	batadv_frag_list_free(&orig_node->frag_list);
-	batadv_tt_global_del_orig(orig_node->bat_priv, orig_node,
+	batadv_frag_purge_orig(orig_node, NULL);
+
+	batadv_tt_global_del_orig(orig_node->bat_priv, orig_node, -1,
 				  "originator timed out");
 
 	kfree(orig_node->tt_buff);
@@ -217,7 +300,8 @@ struct batadv_orig_node *batadv_get_orig_node(struct batadv_priv *bat_priv,
 					      const uint8_t *addr)
 {
 	struct batadv_orig_node *orig_node;
-	int size;
+	struct batadv_orig_node_vlan *vlan;
+	int size, i;
 	int hash_added;
 	unsigned long reset_time;
 
@@ -234,10 +318,13 @@ struct batadv_orig_node *batadv_get_orig_node(struct batadv_priv *bat_priv,
 
 	INIT_HLIST_HEAD(&orig_node->neigh_list);
 	INIT_LIST_HEAD(&orig_node->bond_list);
+	INIT_LIST_HEAD(&orig_node->vlan_list);
 	spin_lock_init(&orig_node->ogm_cnt_lock);
 	spin_lock_init(&orig_node->bcast_seqno_lock);
 	spin_lock_init(&orig_node->neigh_list_lock);
 	spin_lock_init(&orig_node->tt_buff_lock);
+	spin_lock_init(&orig_node->tt_lock);
+	spin_lock_init(&orig_node->vlan_list_lock);
 
 	batadv_nc_init_orig(orig_node);
 
@@ -249,28 +336,39 @@ struct batadv_orig_node *batadv_get_orig_node(struct batadv_priv *bat_priv,
 	memcpy(orig_node->orig, addr, ETH_ALEN);
 	batadv_dat_init_orig_node_addr(orig_node);
 	orig_node->router = NULL;
-	orig_node->tt_crc = 0;
 	atomic_set(&orig_node->last_ttvn, 0);
 	orig_node->tt_buff = NULL;
 	orig_node->tt_buff_len = 0;
-	atomic_set(&orig_node->tt_size, 0);
 	reset_time = jiffies - 1 - msecs_to_jiffies(BATADV_RESET_PROTECTION_MS);
 	orig_node->bcast_seqno_reset = reset_time;
 	orig_node->batman_seqno_reset = reset_time;
 
 	atomic_set(&orig_node->bond_candidates, 0);
 
+	/* create a vlan object for the "untagged" LAN */
+	vlan = batadv_orig_node_vlan_new(orig_node, BATADV_NO_FLAGS);
+	if (!vlan)
+		goto free_orig_node;
+	/* batadv_orig_node_vlan_new() increases the refcounter.
+	 * Immediately release vlan since it is not needed anymore in this
+	 * context
+	 */
+	batadv_orig_node_vlan_free_ref(vlan);
+
 	size = bat_priv->num_ifaces * sizeof(unsigned long) * BATADV_NUM_WORDS;
 
 	orig_node->bcast_own = kzalloc(size, GFP_ATOMIC);
 	if (!orig_node->bcast_own)
-		goto free_orig_node;
+		goto free_vlan;
 
 	size = bat_priv->num_ifaces * sizeof(uint8_t);
 	orig_node->bcast_own_sum = kzalloc(size, GFP_ATOMIC);
 
-	INIT_LIST_HEAD(&orig_node->frag_list);
-	orig_node->last_frag_packet = 0;
+	for (i = 0; i < BATADV_FRAG_BUFFER_COUNT; i++) {
+		INIT_HLIST_HEAD(&orig_node->fragments[i].head);
+		spin_lock_init(&orig_node->fragments[i].lock);
+		orig_node->fragments[i].size = 0;
+	}
 
 	if (!orig_node->bcast_own_sum)
 		goto free_bcast_own;
@@ -286,6 +384,8 @@ free_bcast_own_sum:
 	kfree(orig_node->bcast_own_sum);
 free_bcast_own:
 	kfree(orig_node->bcast_own);
+free_vlan:
+	batadv_orig_node_vlan_free_ref(vlan);
 free_orig_node:
 	kfree(orig_node);
 	return NULL;
@@ -388,17 +488,14 @@ static void _batadv_purge_orig(struct batadv_priv *bat_priv)
 		hlist_for_each_entry_safe(orig_node, node_tmp,
 					  head, hash_entry) {
 			if (batadv_purge_orig_node(bat_priv, orig_node)) {
-				if (orig_node->gw_flags)
-					batadv_gw_node_delete(bat_priv,
-							      orig_node);
+				batadv_gw_node_delete(bat_priv, orig_node);
 				hlist_del_rcu(&orig_node->hash_entry);
 				batadv_orig_node_free_ref(orig_node);
 				continue;
 			}
 
-			if (batadv_has_timed_out(orig_node->last_frag_packet,
-						 BATADV_FRAG_TIMEOUT))
-				batadv_frag_list_free(&orig_node->frag_list);
+			batadv_frag_purge_orig(orig_node,
+					       batadv_frag_check_entry);
 		}
 		spin_unlock_bh(list_lock);
 	}
