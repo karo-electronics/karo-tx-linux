@@ -551,10 +551,12 @@ struct l2cap_ops {
 	void			(*teardown) (struct l2cap_chan *chan, int err);
 	void			(*close) (struct l2cap_chan *chan);
 	void			(*state_change) (struct l2cap_chan *chan,
-						 int state);
+						 int state, int err);
 	void			(*ready) (struct l2cap_chan *chan);
 	void			(*defer) (struct l2cap_chan *chan);
 	void			(*resume) (struct l2cap_chan *chan);
+	void			(*set_shutdown) (struct l2cap_chan *chan);
+	long			(*get_sndtimeo) (struct l2cap_chan *chan);
 	struct sk_buff		*(*alloc_skb) (struct l2cap_chan *chan,
 					       unsigned long len, int nb);
 };
@@ -795,6 +797,19 @@ static inline void l2cap_chan_no_defer(struct l2cap_chan *chan)
 {
 }
 
+static inline void l2cap_chan_no_resume(struct l2cap_chan *chan)
+{
+}
+
+static inline void l2cap_chan_no_set_shutdown(struct l2cap_chan *chan)
+{
+}
+
+static inline long l2cap_chan_no_get_sndtimeo(struct l2cap_chan *chan)
+{
+	return 0;
+}
+
 extern bool disable_ertm;
 
 int l2cap_init_sockets(void);
@@ -802,7 +817,6 @@ void l2cap_cleanup_sockets(void);
 bool l2cap_is_socket(struct socket *sock);
 
 void __l2cap_connect_rsp_defer(struct l2cap_chan *chan);
-int __l2cap_wait_ack(struct sock *sk);
 
 int l2cap_add_psm(struct l2cap_chan *chan, bdaddr_t *src, __le16 psm);
 int l2cap_add_scid(struct l2cap_chan *chan,  __u16 scid);

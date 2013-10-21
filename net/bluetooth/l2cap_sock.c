@@ -72,6 +72,15 @@ static int l2cap_sock_bind(struct socket *sock, struct sockaddr *addr, int alen)
 	if (!bdaddr_type_is_valid(la.l2_bdaddr_type))
 		return -EINVAL;
 
+	if (bdaddr_type_is_le(la.l2_bdaddr_type)) {
+		/* Connection oriented channels are not supported on LE */
+		if (la.l2_psm)
+			return -EINVAL;
+		/* We only allow ATT user space socket */
+		if (la.l2_cid != __constant_cpu_to_le16(L2CAP_CID_ATT))
+			return -EINVAL;
+	}
+
 	lock_sock(sk);
 
 	if (sk->sk_state != BT_OPEN) {
@@ -150,11 +159,43 @@ static int l2cap_sock_connect(struct socket *sock, struct sockaddr *addr,
 	if (!bdaddr_type_is_valid(la.l2_bdaddr_type))
 		return -EINVAL;
 
-	if (chan->src_type == BDADDR_BREDR && la.l2_bdaddr_type != BDADDR_BREDR)
-		return -EINVAL;
+	/* Check that the socket wasn't bound to something that
+	 * conflicts with the address given to connect(). If chan->src
+	 * is BDADDR_ANY it means bind() was never used, in which case
+	 * chan->src_type and la.l2_bdaddr_type do not need to match.
+	 */
+	if (chan->src_type == BDADDR_BREDR && bacmp(&chan->src, BDADDR_ANY) &&
+	    bdaddr_type_is_le(la.l2_bdaddr_type)) {
+		/* Old user space versions will try to incorrectly bind
+		 * the ATT socket using BDADDR_BREDR. We need to accept
+		 * this and fix up the source address type only when
+		 * both the source CID and destination CID indicate
+		 * ATT. Anything else is an invalid combination.
+		 */
+		if (chan->scid != L2CAP_CID_ATT ||
+		    la.l2_cid != __constant_cpu_to_le16(L2CAP_CID_ATT))
+			return -EINVAL;
+
+		/* We don't have the hdev available here to make a
+		 * better decision on random vs public, but since all
+		 * user space versions that exhibit this issue anyway do
+		 * not support random local addresses assuming public
+		 * here is good enough.
+		 */
+		chan->src_type = BDADDR_LE_PUBLIC;
+	}
 
 	if (chan->src_type != BDADDR_BREDR && la.l2_bdaddr_type == BDADDR_BREDR)
 		return -EINVAL;
+
+	if (bdaddr_type_is_le(la.l2_bdaddr_type)) {
+		/* Connection oriented channels are not supported on LE */
+		if (la.l2_psm)
+			return -EINVAL;
+		/* We only allow ATT user space socket */
+		if (la.l2_cid != __constant_cpu_to_le16(L2CAP_CID_ATT))
+			return -EINVAL;
+	}
 
 	err = l2cap_chan_connect(chan, la.l2_psm, __le16_to_cpu(la.l2_cid),
 				 &la.l2_bdaddr, la.l2_bdaddr_type);
@@ -879,6 +920,38 @@ static void l2cap_sock_kill(struct sock *sk)
 	sock_put(sk);
 }
 
+static int __l2cap_wait_ack(struct sock *sk)
+{
+	struct l2cap_chan *chan = l2cap_pi(sk)->chan;
+	DECLARE_WAITQUEUE(wait, current);
+	int err = 0;
+	int timeo = HZ/5;
+
+	add_wait_queue(sk_sleep(sk), &wait);
+	set_current_state(TASK_INTERRUPTIBLE);
+	while (chan->unacked_frames > 0 && chan->conn) {
+		if (!timeo)
+			timeo = HZ/5;
+
+		if (signal_pending(current)) {
+			err = sock_intr_errno(timeo);
+			break;
+		}
+
+		release_sock(sk);
+		timeo = schedule_timeout(timeo);
+		lock_sock(sk);
+		set_current_state(TASK_INTERRUPTIBLE);
+
+		err = sock_error(sk);
+		if (err)
+			break;
+	}
+	set_current_state(TASK_RUNNING);
+	remove_wait_queue(sk_sleep(sk), &wait);
+	return err;
+}
+
 static int l2cap_sock_shutdown(struct socket *sock, int how)
 {
 	struct sock *sk = sock->sk;
@@ -1072,11 +1145,15 @@ static void l2cap_sock_teardown_cb(struct l2cap_chan *chan, int err)
 	release_sock(sk);
 }
 
-static void l2cap_sock_state_change_cb(struct l2cap_chan *chan, int state)
+static void l2cap_sock_state_change_cb(struct l2cap_chan *chan, int state,
+				       int err)
 {
 	struct sock *sk = chan->data;
 
 	sk->sk_state = state;
+
+	if (err)
+		sk->sk_err = err;
 }
 
 static struct sk_buff *l2cap_sock_alloc_skb_cb(struct l2cap_chan *chan,
@@ -1132,6 +1209,22 @@ static void l2cap_sock_resume_cb(struct l2cap_chan *chan)
 	sk->sk_state_change(sk);
 }
 
+static void l2cap_sock_set_shutdown_cb(struct l2cap_chan *chan)
+{
+	struct sock *sk = chan->data;
+
+	lock_sock(sk);
+	sk->sk_shutdown = SHUTDOWN_MASK;
+	release_sock(sk);
+}
+
+static long l2cap_sock_get_sndtimeo_cb(struct l2cap_chan *chan)
+{
+	struct sock *sk = chan->data;
+
+	return sk->sk_sndtimeo;
+}
+
 static struct l2cap_ops l2cap_chan_ops = {
 	.name		= "L2CAP Socket Interface",
 	.new_connection	= l2cap_sock_new_connection_cb,
@@ -1142,6 +1235,8 @@ static struct l2cap_ops l2cap_chan_ops = {
 	.ready		= l2cap_sock_ready_cb,
 	.defer		= l2cap_sock_defer_cb,
 	.resume		= l2cap_sock_resume_cb,
+	.set_shutdown	= l2cap_sock_set_shutdown_cb,
+	.get_sndtimeo	= l2cap_sock_get_sndtimeo_cb,
 	.alloc_skb	= l2cap_sock_alloc_skb_cb,
 };
 
