@@ -119,25 +119,25 @@ CFS_MODULE_PARM(warn_on_depth, "i", uint, 0644,
 struct cfs_wi_sched *cfs_sched_rehash;
 
 static inline void
-cfs_hash_nl_lock(cfs_hash_lock_t *lock, int exclusive) {}
+cfs_hash_nl_lock(union cfs_hash_lock *lock, int exclusive) {}
 
 static inline void
-cfs_hash_nl_unlock(cfs_hash_lock_t *lock, int exclusive) {}
+cfs_hash_nl_unlock(union cfs_hash_lock *lock, int exclusive) {}
 
 static inline void
-cfs_hash_spin_lock(cfs_hash_lock_t *lock, int exclusive)
+cfs_hash_spin_lock(union cfs_hash_lock *lock, int exclusive)
 {
 	spin_lock(&lock->spin);
 }
 
 static inline void
-cfs_hash_spin_unlock(cfs_hash_lock_t *lock, int exclusive)
+cfs_hash_spin_unlock(union cfs_hash_lock *lock, int exclusive)
 {
 	spin_unlock(&lock->spin);
 }
 
 static inline void
-cfs_hash_rw_lock(cfs_hash_lock_t *lock, int exclusive)
+cfs_hash_rw_lock(union cfs_hash_lock *lock, int exclusive)
 {
 	if (!exclusive)
 		read_lock(&lock->rw);
@@ -146,7 +146,7 @@ cfs_hash_rw_lock(cfs_hash_lock_t *lock, int exclusive)
 }
 
 static inline void
-cfs_hash_rw_unlock(cfs_hash_lock_t *lock, int exclusive)
+cfs_hash_rw_unlock(union cfs_hash_lock *lock, int exclusive)
 {
 	if (!exclusive)
 		read_unlock(&lock->rw);
@@ -1965,7 +1965,7 @@ cfs_hash_rehash_worker(cfs_workitem_t *wi)
 	if (bkts != NULL)
 		cfs_hash_buckets_free(bkts, bsize, new_size, old_size);
 	if (rc != 0)
-		CDEBUG(D_INFO, "early quit of of rehashing: %d\n", rc);
+		CDEBUG(D_INFO, "early quit of rehashing: %d\n", rc);
 	/* return 1 only if cfs_wi_exit is called */
 	return rc == -ESRCH;
 }
