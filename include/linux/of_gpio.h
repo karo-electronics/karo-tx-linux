@@ -18,6 +18,7 @@
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/of.h>
 
 struct device_node;

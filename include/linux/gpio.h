@@ -86,6 +86,7 @@ static inline int irq_to_gpio(unsigned int irq)
 
 struct device;
 struct gpio_chip;
+struct pinctrl_dev;
 
 static inline bool gpio_is_valid(int number)
 {
