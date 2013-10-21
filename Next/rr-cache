@@ -1,0 +1,50 @@
+#!/bin/bash
+
+#
+# This script is intended to help with sharing a recorded resolution cache for
+# use with git's rerere. It assumes that the cache is available in an orphaned
+# branch of a remote repository.
+#
+# Run the following command to initialize the repository with a cache:
+#
+#   $ rr-cache init [branch]
+#
+# Where branch is the name of the (remote) branch that contains the cache. If
+# omitted, origin/rr-cache will be used by default. The init command creates a
+# local branch named rr-cache and clones it into the .git/rr-cache directory.
+#
+# Commands other than init are passed unmodified to git and are run on the new
+# repository created in the .git/rr-cache subdirectory.
+#
+
+case $1 in
+	init)
+		if test -d .git/rr-cache; then
+			echo "error: directory .git/rr-cache already exists"
+			exit 1
+		fi
+
+		if test -z "$2"; then
+			ref=origin/rr-cache
+		else
+			ref="$2"
+		fi
+
+		remote=${ref%/*}
+		branch=${ref#*/}
+
+		if test "$remote" != "$ref" -o "$branch" != "$ref"; then
+			echo "initializing rr-cache using remote branch $remote/$branch"
+			git branch rr-cache "$remote/$branch"
+			branch=rr-cache
+		else
+			echo "initializing rr-cache using local branch $branch"
+		fi
+
+		git clone -b $branch . .git/rr-cache
+		;;
+
+	*)
+		git --git-dir=.git/rr-cache/.git --work-tree=.git/rr-cache "$@"
+		;;
+esac
