@@ -387,7 +387,7 @@ static int s3c_cpufreq_init(struct cpufreq_policy *policy)
 	policy->cpuinfo.transition_latency = cpu_cur.info->latency;
 
 	if (ftab)
-		cpufreq_frequency_table_cpuinfo(policy, ftab);
+		return cpufreq_table_validate_and_show(policy, ftab);
 
 	return 0;
 }
