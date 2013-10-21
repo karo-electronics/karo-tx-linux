@@ -73,8 +73,15 @@ __setup("fpe=", fpe_setup);
 #endif
 
 extern void paging_init(const struct machine_desc *desc);
+#ifdef CONFIG_MMU
 extern void early_paging_init(const struct machine_desc *,
 			      struct proc_info_list *);
+#else
+static inline void early_paging_init(const struct machine_desc *mdesc,
+				     struct proc_info_list *procinfo)
+{
+}
+#endif
 extern void sanity_check_meminfo(void);
 extern enum reboot_mode reboot_mode;
 extern void setup_dma_zone(const struct machine_desc *desc);
