@@ -386,6 +386,8 @@ fec_enet_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	 */
 	bdp->cbd_bufaddr = dma_map_single(&fep->pdev->dev, bufaddr,
 			FEC_ENET_TX_FRSIZE, DMA_TO_DEVICE);
+	if (dma_mapping_error(&fep->pdev->dev, bdp->cbd_bufaddr))
+		return NETDEV_TX_BUSY;
 
 	/* Send it on its way.  Tell FEC it's ready, interrupt when done,
 	 * it's the last BD of the frame, and to put the CRC on the end.
@@ -1001,6 +1003,9 @@ fec_enet_rx(struct net_device *ndev, int budget)
 
 		bdp->cbd_bufaddr = dma_map_single(&fep->pdev->dev, data,
 				FEC_ENET_TX_FRSIZE, DMA_FROM_DEVICE);
+		if (dma_mapping_error(&fep->pdev->dev, bdp->cbd_bufaddr))
+			dev_warn(&fep->pdev->dev,
+				"Failed to map RX buffer %p for DMA\n", data);
 rx_processing_done:
 		/* Clear the status flags for this buffer */
 		status &= ~BD_ENET_RX_STATS;
@@ -1719,6 +1724,8 @@ static int fec_enet_alloc_buffers(struct net_device *ndev)
 
 		bdp->cbd_bufaddr = dma_map_single(&fep->pdev->dev, skb->data,
 				FEC_ENET_RX_FRSIZE, DMA_FROM_DEVICE);
+		if (dma_mapping_error(&fep->pdev->dev, bdp->cbd_bufaddr))
+			goto dma_map_err;
 		bdp->cbd_sc = BD_ENET_RX_EMPTY;
 
 		if (fep->bufdesc_ex) {
@@ -1753,6 +1760,15 @@ static int fec_enet_alloc_buffers(struct net_device *ndev)
 	bdp->cbd_sc |= BD_SC_WRAP;
 
 	return 0;
+
+dma_map_err:
+	while (--i >= 0) {
+		bdp = fec_enet_get_prevdesc(bdp, fep);
+		dma_unmap_single(&fep->pdev->dev, bdp->cbd_bufaddr,
+				FEC_ENET_RX_FRSIZE, DMA_FROM_DEVICE);
+	}
+
+	return -ENOMEM;
 }
 
 static int
