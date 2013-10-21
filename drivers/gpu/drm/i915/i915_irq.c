@@ -665,7 +665,8 @@ static int i915_get_vblank_timestamp(struct drm_device *dev, int pipe,
 						     crtc);
 }
 
-static int intel_hpd_irq_event(struct drm_device *dev, struct drm_connector *connector)
+static bool intel_hpd_irq_event(struct drm_device *dev,
+				struct drm_connector *connector)
 {
 	enum drm_connector_status old_status;
 
@@ -673,11 +674,16 @@ static int intel_hpd_irq_event(struct drm_device *dev, struct drm_connector *con
 	old_status = connector->status;
 
 	connector->status = connector->funcs->detect(connector, false);
-	DRM_DEBUG_KMS("[CONNECTOR:%d:%s] status updated from %d to %d\n",
+	if (old_status == connector->status)
+		return false;
+
+	DRM_DEBUG_KMS("[CONNECTOR:%d:%s] status updated from %s to %s\n",
 		      connector->base.id,
 		      drm_get_connector_name(connector),
-		      old_status, connector->status);
-	return (old_status != connector->status);
+		      drm_get_connector_status_name(old_status),
+		      drm_get_connector_status_name(connector->status));
+
+	return true;
 }
 
 /*
@@ -801,7 +807,7 @@ static void notify_ring(struct drm_device *dev,
 	if (ring->obj == NULL)
 		return;
 
-	trace_i915_gem_request_complete(ring, ring->get_seqno(ring, false));
+	trace_i915_gem_request_complete(ring);
 
 	wake_up_all(&ring->irq_queue);
 	i915_queue_hangcheck(dev);
@@ -812,7 +818,7 @@ static void gen6_pm_rps_work(struct work_struct *work)
 	drm_i915_private_t *dev_priv = container_of(work, drm_i915_private_t,
 						    rps.work);
 	u32 pm_iir;
-	u8 new_delay;
+	int new_delay, adj;
 
 	spin_lock_irq(&dev_priv->irq_lock);
 	pm_iir = dev_priv->rps.pm_iir;
@@ -829,40 +835,49 @@ static void gen6_pm_rps_work(struct work_struct *work)
 
 	mutex_lock(&dev_priv->rps.hw_lock);
 
+	adj = dev_priv->rps.last_adj;
 	if (pm_iir & GEN6_PM_RP_UP_THRESHOLD) {
-		new_delay = dev_priv->rps.cur_delay + 1;
+		if (adj > 0)
+			adj *= 2;
+		else
+			adj = 1;
+		new_delay = dev_priv->rps.cur_delay + adj;
 
 		/*
 		 * For better performance, jump directly
 		 * to RPe if we're below it.
 		 */
-		if (IS_VALLEYVIEW(dev_priv->dev) &&
-		    dev_priv->rps.cur_delay < dev_priv->rps.rpe_delay)
+		if (new_delay < dev_priv->rps.rpe_delay)
 			new_delay = dev_priv->rps.rpe_delay;
-	} else
-		new_delay = dev_priv->rps.cur_delay - 1;
+	} else if (pm_iir & GEN6_PM_RP_DOWN_TIMEOUT) {
+		if (dev_priv->rps.cur_delay > dev_priv->rps.rpe_delay)
+			new_delay = dev_priv->rps.rpe_delay;
+		else
+			new_delay = dev_priv->rps.min_delay;
+		adj = 0;
+	} else if (pm_iir & GEN6_PM_RP_DOWN_THRESHOLD) {
+		if (adj < 0)
+			adj *= 2;
+		else
+			adj = -1;
+		new_delay = dev_priv->rps.cur_delay + adj;
+	} else { /* unknown event */
+		new_delay = dev_priv->rps.cur_delay;
+	}
 
 	/* sysfs frequency interfaces may have snuck in while servicing the
 	 * interrupt
 	 */
-	if (new_delay >= dev_priv->rps.min_delay &&
-	    new_delay <= dev_priv->rps.max_delay) {
-		if (IS_VALLEYVIEW(dev_priv->dev))
-			valleyview_set_rps(dev_priv->dev, new_delay);
-		else
-			gen6_set_rps(dev_priv->dev, new_delay);
-	}
+	if (new_delay < (int)dev_priv->rps.min_delay)
+		new_delay = dev_priv->rps.min_delay;
+	if (new_delay > (int)dev_priv->rps.max_delay)
+		new_delay = dev_priv->rps.max_delay;
+	dev_priv->rps.last_adj = new_delay - dev_priv->rps.cur_delay;
 
-	if (IS_VALLEYVIEW(dev_priv->dev)) {
-		/*
-		 * On VLV, when we enter RC6 we may not be at the minimum
-		 * voltage level, so arm a timer to check.  It should only
-		 * fire when there's activity or once after we've entered
-		 * RC6, and then won't be re-armed until the next RPS interrupt.
-		 */
-		mod_delayed_work(dev_priv->wq, &dev_priv->rps.vlv_work,
-				 msecs_to_jiffies(100));
-	}
+	if (IS_VALLEYVIEW(dev_priv->dev))
+		valleyview_set_rps(dev_priv->dev, new_delay);
+	else
+		gen6_set_rps(dev_priv->dev, new_delay);
 
 	mutex_unlock(&dev_priv->rps.hw_lock);
 }
@@ -882,9 +897,10 @@ static void ivybridge_parity_work(struct work_struct *work)
 	drm_i915_private_t *dev_priv = container_of(work, drm_i915_private_t,
 						    l3_parity.error_work);
 	u32 error_status, row, bank, subbank;
-	char *parity_event[5];
+	char *parity_event[6];
 	uint32_t misccpctl;
 	unsigned long flags;
+	uint8_t slice = 0;
 
 	/* We must turn off DOP level clock gating to access the L3 registers.
 	 * In order to prevent a get/put style interface, acquire struct mutex
@@ -892,54 +908,80 @@ static void ivybridge_parity_work(struct work_struct *work)
 	 */
 	mutex_lock(&dev_priv->dev->struct_mutex);
 
+	/* If we've screwed up tracking, just let the interrupt fire again */
+	if (WARN_ON(!dev_priv->l3_parity.which_slice))
+		goto out;
+
 	misccpctl = I915_READ(GEN7_MISCCPCTL);
 	I915_WRITE(GEN7_MISCCPCTL, misccpctl & ~GEN7_DOP_CLOCK_GATE_ENABLE);
 	POSTING_READ(GEN7_MISCCPCTL);
 
-	error_status = I915_READ(GEN7_L3CDERRST1);
-	row = GEN7_PARITY_ERROR_ROW(error_status);
-	bank = GEN7_PARITY_ERROR_BANK(error_status);
-	subbank = GEN7_PARITY_ERROR_SUBBANK(error_status);
+	while ((slice = ffs(dev_priv->l3_parity.which_slice)) != 0) {
+		u32 reg;
 
-	I915_WRITE(GEN7_L3CDERRST1, GEN7_PARITY_ERROR_VALID |
-				    GEN7_L3CDERRST1_ENABLE);
-	POSTING_READ(GEN7_L3CDERRST1);
+		slice--;
+		if (WARN_ON_ONCE(slice >= NUM_L3_SLICES(dev_priv->dev)))
+			break;
+
+		dev_priv->l3_parity.which_slice &= ~(1<<slice);
+
+		reg = GEN7_L3CDERRST1 + (slice * 0x200);
+
+		error_status = I915_READ(reg);
+		row = GEN7_PARITY_ERROR_ROW(error_status);
+		bank = GEN7_PARITY_ERROR_BANK(error_status);
+		subbank = GEN7_PARITY_ERROR_SUBBANK(error_status);
+
+		I915_WRITE(reg, GEN7_PARITY_ERROR_VALID | GEN7_L3CDERRST1_ENABLE);
+		POSTING_READ(reg);
+
+		parity_event[0] = I915_L3_PARITY_UEVENT "=1";
+		parity_event[1] = kasprintf(GFP_KERNEL, "ROW=%d", row);
+		parity_event[2] = kasprintf(GFP_KERNEL, "BANK=%d", bank);
+		parity_event[3] = kasprintf(GFP_KERNEL, "SUBBANK=%d", subbank);
+		parity_event[4] = kasprintf(GFP_KERNEL, "SLICE=%d", slice);
+		parity_event[5] = NULL;
+
+		kobject_uevent_env(&dev_priv->dev->primary->kdev.kobj,
+				   KOBJ_CHANGE, parity_event);
+
+		DRM_DEBUG("Parity error: Slice = %d, Row = %d, Bank = %d, Sub bank = %d.\n",
+			  slice, row, bank, subbank);
+
+		kfree(parity_event[4]);
+		kfree(parity_event[3]);
+		kfree(parity_event[2]);
+		kfree(parity_event[1]);
+	}
 
 	I915_WRITE(GEN7_MISCCPCTL, misccpctl);
 
+out:
+	WARN_ON(dev_priv->l3_parity.which_slice);
 	spin_lock_irqsave(&dev_priv->irq_lock, flags);
-	ilk_enable_gt_irq(dev_priv, GT_RENDER_L3_PARITY_ERROR_INTERRUPT);
+	ilk_enable_gt_irq(dev_priv, GT_PARITY_ERROR(dev_priv->dev));
 	spin_unlock_irqrestore(&dev_priv->irq_lock, flags);
 
 	mutex_unlock(&dev_priv->dev->struct_mutex);
-
-	parity_event[0] = I915_L3_PARITY_UEVENT "=1";
-	parity_event[1] = kasprintf(GFP_KERNEL, "ROW=%d", row);
-	parity_event[2] = kasprintf(GFP_KERNEL, "BANK=%d", bank);
-	parity_event[3] = kasprintf(GFP_KERNEL, "SUBBANK=%d", subbank);
-	parity_event[4] = NULL;
-
-	kobject_uevent_env(&dev_priv->dev->primary->kdev.kobj,
-			   KOBJ_CHANGE, parity_event);
-
-	DRM_DEBUG("Parity error: Row = %d, Bank = %d, Sub bank = %d.\n",
-		  row, bank, subbank);
-
-	kfree(parity_event[3]);
-	kfree(parity_event[2]);
-	kfree(parity_event[1]);
 }
 
-static void ivybridge_parity_error_irq_handler(struct drm_device *dev)
+static void ivybridge_parity_error_irq_handler(struct drm_device *dev, u32 iir)
 {
 	drm_i915_private_t *dev_priv = (drm_i915_private_t *) dev->dev_private;
 
-	if (!HAS_L3_GPU_CACHE(dev))
+	if (!HAS_L3_DPF(dev))
 		return;
 
 	spin_lock(&dev_priv->irq_lock);
-	ilk_disable_gt_irq(dev_priv, GT_RENDER_L3_PARITY_ERROR_INTERRUPT);
+	ilk_disable_gt_irq(dev_priv, GT_PARITY_ERROR(dev));
 	spin_unlock(&dev_priv->irq_lock);
+
+	iir &= GT_PARITY_ERROR(dev);
+	if (iir & GT_RENDER_L3_PARITY_ERROR_INTERRUPT_S1)
+		dev_priv->l3_parity.which_slice |= 1 << 1;
+
+	if (iir & GT_RENDER_L3_PARITY_ERROR_INTERRUPT)
+		dev_priv->l3_parity.which_slice |= 1 << 0;
 
 	queue_work(dev_priv->wq, &dev_priv->l3_parity.error_work);
 }
@@ -975,8 +1017,8 @@ static void snb_gt_irq_handler(struct drm_device *dev,
 		i915_handle_error(dev, false);
 	}
 
-	if (gt_iir & GT_RENDER_L3_PARITY_ERROR_INTERRUPT)
-		ivybridge_parity_error_irq_handler(dev);
+	if (gt_iir & GT_PARITY_ERROR(dev))
+		ivybridge_parity_error_irq_handler(dev, gt_iir);
 }
 
 #define HPD_STORM_DETECT_PERIOD 1000
@@ -1388,7 +1430,6 @@ static irqreturn_t ironlake_irq_handler(int irq, void *arg)
 	drm_i915_private_t *dev_priv = (drm_i915_private_t *) dev->dev_private;
 	u32 de_iir, gt_iir, de_ier, sde_ier = 0;
 	irqreturn_t ret = IRQ_NONE;
-	bool err_int_reenable = false;
 
 	atomic_inc(&dev_priv->irq_received);
 
@@ -1410,17 +1451,6 @@ static irqreturn_t ironlake_irq_handler(int irq, void *arg)
 		sde_ier = I915_READ(SDEIER);
 		I915_WRITE(SDEIER, 0);
 		POSTING_READ(SDEIER);
-	}
-
-	/* On Haswell, also mask ERR_INT because we don't want to risk
-	 * generating "unclaimed register" interrupts from inside the interrupt
-	 * handler. */
-	if (IS_HASWELL(dev)) {
-		spin_lock(&dev_priv->irq_lock);
-		err_int_reenable = ~dev_priv->irq_mask & DE_ERR_INT_IVB;
-		if (err_int_reenable)
-			ironlake_disable_display_irq(dev_priv, DE_ERR_INT_IVB);
-		spin_unlock(&dev_priv->irq_lock);
 	}
 
 	gt_iir = I915_READ(GTIIR);
@@ -1450,13 +1480,6 @@ static irqreturn_t ironlake_irq_handler(int irq, void *arg)
 			I915_WRITE(GEN6_PMIIR, pm_iir);
 			ret = IRQ_HANDLED;
 		}
-	}
-
-	if (err_int_reenable) {
-		spin_lock(&dev_priv->irq_lock);
-		if (ivb_can_enable_err_int(dev))
-			ironlake_enable_display_irq(dev_priv, DE_ERR_INT_IVB);
-		spin_unlock(&dev_priv->irq_lock);
 	}
 
 	I915_WRITE(DEIER, de_ier);
@@ -2021,12 +2044,17 @@ static void i915_hangcheck_elapsed(unsigned long data)
 
 		if (ring->hangcheck.seqno == seqno) {
 			if (ring_idle(ring, seqno)) {
+				ring->hangcheck.action = HANGCHECK_IDLE;
+
 				if (waitqueue_active(&ring->irq_queue)) {
 					/* Issue a wake-up to catch stuck h/w. */
-					DRM_ERROR("Hangcheck timer elapsed... %s idle\n",
-						  ring->name);
-					wake_up_all(&ring->irq_queue);
-					ring->hangcheck.score += HUNG;
+					if (!test_and_set_bit(ring->id, &dev_priv->gpu_error.missed_irq_rings)) {
+						DRM_ERROR("Hangcheck timer elapsed... %s idle\n",
+							  ring->name);
+						wake_up_all(&ring->irq_queue);
+					}
+					/* Safeguard against driver failure */
+					ring->hangcheck.score += BUSY;
 				} else
 					busy = false;
 			} else {
@@ -2049,6 +2077,7 @@ static void i915_hangcheck_elapsed(unsigned long data)
 								    acthd);
 
 				switch (ring->hangcheck.action) {
+				case HANGCHECK_IDLE:
 				case HANGCHECK_WAIT:
 					break;
 				case HANGCHECK_ACTIVE:
@@ -2064,6 +2093,8 @@ static void i915_hangcheck_elapsed(unsigned long data)
 				}
 			}
 		} else {
+			ring->hangcheck.action = HANGCHECK_ACTIVE;
+
 			/* Gradually reduce the count so that we catch DoS
 			 * attempts across multiple batches.
 			 */
@@ -2254,10 +2285,10 @@ static void gen5_gt_irq_postinstall(struct drm_device *dev)
 	pm_irqs = gt_irqs = 0;
 
 	dev_priv->gt_irq_mask = ~0;
-	if (HAS_L3_GPU_CACHE(dev)) {
+	if (HAS_L3_DPF(dev)) {
 		/* L3 parity interrupt is always unmasked. */
-		dev_priv->gt_irq_mask = ~GT_RENDER_L3_PARITY_ERROR_INTERRUPT;
-		gt_irqs |= GT_RENDER_L3_PARITY_ERROR_INTERRUPT;
+		dev_priv->gt_irq_mask = ~GT_PARITY_ERROR(dev);
+		gt_irqs |= GT_PARITY_ERROR(dev);
 	}
 
 	gt_irqs |= GT_RENDER_USER_INTERRUPT;
