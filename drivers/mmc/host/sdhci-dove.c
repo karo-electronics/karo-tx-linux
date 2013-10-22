@@ -39,7 +39,7 @@ static irqreturn_t sdhci_dove_carddetect_irq(int irq, void *data)
 {
 	struct sdhci_host *host = data;
 
-	schedule_schedule(&host->card_detect_work);
+	schedule_work(&host->card_detect_work);
 	return IRQ_HANDLED;
 }
 
