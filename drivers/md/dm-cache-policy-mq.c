@@ -399,18 +399,20 @@ static void hash_remove(struct entry *e)
  */
 static struct entry *alloc_entry(struct mq_policy *mq)
 {
-	struct entry *e;
+	struct entry *e = NULL;
 
 	if (mq->nr_entries_allocated >= mq->nr_entries) {
 		BUG_ON(!list_empty(&mq->free));
 		return NULL;
 	}
 
-	e = list_entry(list_pop(&mq->free), struct entry, list);
-	INIT_LIST_HEAD(&e->list);
-	INIT_HLIST_NODE(&e->hlist);
+	if (!list_empty(&mq->free)) {
+		e = list_entry(list_pop(&mq->free), struct entry, list);
+		INIT_LIST_HEAD(&e->list);
+		INIT_HLIST_NODE(&e->hlist);
+		mq->nr_entries_allocated++;
+	}
 
-	mq->nr_entries_allocated++;
 	return e;
 }
 
