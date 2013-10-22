@@ -171,7 +171,7 @@ int ipu_dc_init_sync(struct ipu_dc *dc, struct ipu_di *di, bool interlaced,
 
 	map = ipu_pixfmt_to_map(pixel_fmt);
 	if (map < 0) {
-		dev_dbg(priv->dev, "IPU_DISP: No MAP\n");
+		dev_err(priv->dev, "IPU_DISP: No MAP\n");
 		return map;
 	}
 
