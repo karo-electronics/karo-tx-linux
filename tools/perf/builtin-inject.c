@@ -15,6 +15,7 @@
 #include "util/tool.h"
 #include "util/debug.h"
 #include "util/build-id.h"
+#include "util/data.h"
 
 #include "util/parse-options.h"
 
@@ -231,7 +232,7 @@ static int perf_event__inject_buildid(struct perf_tool *tool,
 				 * account this as unresolved.
 				 */
 			} else {
-#ifdef LIBELF_SUPPORT
+#ifdef HAVE_LIBELF_SUPPORT
 				pr_warning("no symbols found in %s, maybe "
 					   "install a debug package?\n",
 					   al.map->dso->long_name);
@@ -345,6 +346,10 @@ static int __cmd_inject(struct perf_inject *inject)
 {
 	struct perf_session *session;
 	int ret = -EINVAL;
+	struct perf_data_file file = {
+		.path = inject->input_name,
+		.mode = PERF_DATA_MODE_READ,
+	};
 
 	signal(SIGINT, sig_handler);
 
@@ -355,7 +360,7 @@ static int __cmd_inject(struct perf_inject *inject)
 		inject->tool.tracing_data = perf_event__repipe_tracing_data;
 	}
 
-	session = perf_session__new(inject->input_name, O_RDONLY, false, true, &inject->tool);
+	session = perf_session__new(&file, true, &inject->tool);
 	if (session == NULL)
 		return -ENOMEM;
 
