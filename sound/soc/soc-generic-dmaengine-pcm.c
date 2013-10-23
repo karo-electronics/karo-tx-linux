@@ -36,6 +36,15 @@ static struct dmaengine_pcm *soc_platform_to_pcm(struct snd_soc_platform *p)
 	return container_of(p, struct dmaengine_pcm, platform);
 }
 
+static struct device *dmaengine_dma_dev(struct dmaengine_pcm *pcm,
+	struct snd_pcm_substream *substream)
+{
+	if (!pcm->chan[substream->stream])
+		return NULL;
+
+	return pcm->chan[substream->stream]->device->dev;
+}
+
 /**
  * snd_dmaengine_pcm_prepare_slave_config() - Generic prepare_slave_config callback
  * @substream: PCM substream
@@ -75,12 +84,19 @@ static int dmaengine_pcm_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct dmaengine_pcm *pcm = soc_platform_to_pcm(rtd->platform);
 	struct dma_chan *chan = snd_dmaengine_pcm_get_chan(substream);
+	int (*prepare_slave_config)(struct snd_pcm_substream *substream,
+			struct snd_pcm_hw_params *params,
+			struct dma_slave_config *slave_config);
 	struct dma_slave_config slave_config;
 	int ret;
 
-	if (pcm->config->prepare_slave_config) {
-		ret = pcm->config->prepare_slave_config(substream, params,
-				&slave_config);
+	if (!pcm->config)
+		prepare_slave_config = snd_dmaengine_pcm_prepare_slave_config;
+	else
+		prepare_slave_config = pcm->config->prepare_slave_config;
+
+	if (prepare_slave_config) {
+		ret = prepare_slave_config(substream, params, &slave_config);
 		if (ret)
 			return ret;
 
@@ -92,6 +108,42 @@ static int dmaengine_pcm_hw_params(struct snd_pcm_substream *substream,
 	return snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(params));
 }
 
+static int dmaengine_pcm_set_runtime_hwparams(struct snd_pcm_substream *substream)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct dmaengine_pcm *pcm = soc_platform_to_pcm(rtd->platform);
+	struct device *dma_dev = dmaengine_dma_dev(pcm, substream);
+	struct dma_chan *chan = pcm->chan[substream->stream];
+	struct snd_dmaengine_dai_dma_data *dma_data;
+	struct dma_slave_caps dma_caps;
+	struct snd_pcm_hardware hw;
+	int ret;
+
+	if (pcm->config && pcm->config->pcm_hardware)
+		return snd_soc_set_runtime_hwparams(substream,
+				pcm->config->pcm_hardware);
+
+	dma_data = snd_soc_dai_get_dma_data(rtd->cpu_dai, substream);
+
+	memset(&hw, 0, sizeof(hw));
+	hw.info = SNDRV_PCM_INFO_MMAP | SNDRV_PCM_INFO_MMAP_VALID |
+			SNDRV_PCM_INFO_INTERLEAVED;
+	hw.periods_min = 2;
+	hw.periods_max = UINT_MAX;
+	hw.period_bytes_min = 256;
+	hw.period_bytes_max = dma_get_max_seg_size(dma_dev);
+	hw.buffer_bytes_max = SIZE_MAX;
+	hw.fifo_size = dma_data->fifo_size;
+
+	ret = dma_get_slave_caps(chan, &dma_caps);
+	if (ret == 0) {
+		if (dma_caps.cmd_pause)
+			hw.info |= SNDRV_PCM_INFO_PAUSE | SNDRV_PCM_INFO_RESUME;
+	}
+
+	return snd_soc_set_runtime_hwparams(substream, &hw);
+}
+
 static int dmaengine_pcm_open(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
@@ -99,21 +151,11 @@ static int dmaengine_pcm_open(struct snd_pcm_substream *substream)
 	struct dma_chan *chan = pcm->chan[substream->stream];
 	int ret;
 
-	ret = snd_soc_set_runtime_hwparams(substream,
-				pcm->config->pcm_hardware);
+	ret = dmaengine_pcm_set_runtime_hwparams(substream);
 	if (ret)
 		return ret;
 
 	return snd_dmaengine_pcm_open(substream, chan);
-}
-
-static struct device *dmaengine_dma_dev(struct dmaengine_pcm *pcm,
-	struct snd_pcm_substream *substream)
-{
-	if (!pcm->chan[substream->stream])
-		return NULL;
-
-	return pcm->chan[substream->stream]->device->dev;
 }
 
 static void dmaengine_pcm_free(struct snd_pcm *pcm)
@@ -142,8 +184,19 @@ static int dmaengine_pcm_new(struct snd_soc_pcm_runtime *rtd)
 	struct dmaengine_pcm *pcm = soc_platform_to_pcm(rtd->platform);
 	const struct snd_dmaengine_pcm_config *config = pcm->config;
 	struct snd_pcm_substream *substream;
+	size_t prealloc_buffer_size;
+	size_t max_buffer_size;
 	unsigned int i;
 	int ret;
+
+	if (config && config->prealloc_buffer_size) {
+		prealloc_buffer_size = config->prealloc_buffer_size;
+		max_buffer_size = config->pcm_hardware->buffer_bytes_max;
+	} else {
+		prealloc_buffer_size = 512 * 1024;
+		max_buffer_size = SIZE_MAX;
+	}
+
 
 	for (i = SNDRV_PCM_STREAM_PLAYBACK; i <= SNDRV_PCM_STREAM_CAPTURE; i++) {
 		substream = rtd->pcm->streams[i].substream;
@@ -165,8 +218,8 @@ static int dmaengine_pcm_new(struct snd_soc_pcm_runtime *rtd)
 		ret = snd_pcm_lib_preallocate_pages(substream,
 				SNDRV_DMA_TYPE_DEV,
 				dmaengine_dma_dev(pcm, substream),
-				config->prealloc_buffer_size,
-				config->pcm_hardware->buffer_bytes_max);
+				prealloc_buffer_size,
+				max_buffer_size);
 		if (ret)
 			goto err_free;
 	}
