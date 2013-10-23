@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Freescale Semiconductor, Inc.
+ * Copyright 2012-2013 Freescale Semiconductor, Inc.
  * Copyright (C) 2012 Marek Vasut <marex@denx.de>
  * on behalf of DENX Software Engineering GmbH
  *
@@ -144,6 +144,9 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 	ret = dma_coerce_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 	if (ret)
 		goto err_clk;
+
+	if (imx_platform_flag->flags & CI_HDRC_IMX_IMX28_WRITE_FIX)
+		pdata.flags |= CI_HDRC_IMX28_WRITE_FIX;
 
 	if (data->usbmisc_data) {
 		ret = imx_usbmisc_init(data->usbmisc_data);
