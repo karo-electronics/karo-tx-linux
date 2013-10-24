@@ -103,7 +103,7 @@ static void kirkwood_set_rate(struct snd_soc_dai *dai,
 {
 	uint32_t clks_ctrl;
 
-	if (rate == 44100 || rate == 48000 || rate == 96000) {
+	if (IS_ERR(priv->extclk)) {
 		/* use internal dco for the supported rates
 		 * defined in kirkwood_i2s_dai */
 		dev_dbg(dai->dev, "%s: dco set rate = %lu\n",
@@ -496,7 +496,10 @@ static int kirkwood_i2s_dev_probe(struct platform_device *pdev)
 		return err;
 
 	priv->extclk = devm_clk_get(&pdev->dev, "extclk");
-	if (!IS_ERR(priv->extclk)) {
+	if (IS_ERR(priv->extclk)) {
+		if (PTR_ERR(priv->extclk) == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+	} else {
 		if (priv->extclk == priv->clk) {
 			devm_clk_put(&pdev->dev, priv->extclk);
 			priv->extclk = ERR_PTR(-EINVAL);
