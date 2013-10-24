@@ -214,7 +214,7 @@
 
 &pwm1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pwm0_1>;
+	pinctrl-0 = <&pinctrl_pwm1_1>;
 	status = "okay";
 };
 
