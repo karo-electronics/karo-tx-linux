@@ -98,14 +98,24 @@ enum intel_display_power_domain {
 	POWER_DOMAIN_TRANSCODER_A,
 	POWER_DOMAIN_TRANSCODER_B,
 	POWER_DOMAIN_TRANSCODER_C,
-	POWER_DOMAIN_TRANSCODER_EDP = POWER_DOMAIN_TRANSCODER_A + 0xF,
+	POWER_DOMAIN_TRANSCODER_EDP,
 	POWER_DOMAIN_VGA,
+
+	POWER_DOMAIN_NUM,
 };
+
+#define POWER_DOMAIN_MASK (BIT(POWER_DOMAIN_NUM) - 1)
 
 #define POWER_DOMAIN_PIPE(pipe) ((pipe) + POWER_DOMAIN_PIPE_A)
 #define POWER_DOMAIN_PIPE_PANEL_FITTER(pipe) \
 		((pipe) + POWER_DOMAIN_PIPE_A_PANEL_FITTER)
-#define POWER_DOMAIN_TRANSCODER(tran) ((tran) + POWER_DOMAIN_TRANSCODER_A)
+#define POWER_DOMAIN_TRANSCODER(tran) \
+	((tran) == TRANSCODER_EDP ? POWER_DOMAIN_TRANSCODER_EDP : \
+	 (tran) + POWER_DOMAIN_TRANSCODER_A)
+
+#define HSW_ALWAYS_ON_POWER_DOMAINS (		\
+	BIT(POWER_DOMAIN_PIPE_A) |		\
+	BIT(POWER_DOMAIN_TRANSCODER_EDP))
 
 enum hpd_pin {
 	HPD_NONE = 0,
@@ -379,7 +389,8 @@ struct drm_i915_display_funcs {
 	void (*crtc_disable)(struct drm_crtc *crtc);
 	void (*off)(struct drm_crtc *crtc);
 	void (*write_eld)(struct drm_connector *connector,
-			  struct drm_crtc *crtc);
+			  struct drm_crtc *crtc,
+			  struct drm_display_mode *mode);
 	void (*fdi_link_train)(struct drm_crtc *crtc);
 	void (*init_clock_gating)(struct drm_device *dev);
 	int (*queue_flip)(struct drm_device *dev, struct drm_crtc *crtc,
@@ -399,6 +410,20 @@ struct drm_i915_display_funcs {
 struct intel_uncore_funcs {
 	void (*force_wake_get)(struct drm_i915_private *dev_priv);
 	void (*force_wake_put)(struct drm_i915_private *dev_priv);
+
+	uint8_t  (*mmio_readb)(struct drm_i915_private *dev_priv, off_t offset, bool trace);
+	uint16_t (*mmio_readw)(struct drm_i915_private *dev_priv, off_t offset, bool trace);
+	uint32_t (*mmio_readl)(struct drm_i915_private *dev_priv, off_t offset, bool trace);
+	uint64_t (*mmio_readq)(struct drm_i915_private *dev_priv, off_t offset, bool trace);
+
+	void (*mmio_writeb)(struct drm_i915_private *dev_priv, off_t offset,
+				uint8_t val, bool trace);
+	void (*mmio_writew)(struct drm_i915_private *dev_priv, off_t offset,
+				uint16_t val, bool trace);
+	void (*mmio_writel)(struct drm_i915_private *dev_priv, off_t offset,
+				uint32_t val, bool trace);
+	void (*mmio_writeq)(struct drm_i915_private *dev_priv, off_t offset,
+				uint64_t val, bool trace);
 };
 
 struct intel_uncore {
@@ -427,7 +452,6 @@ struct intel_uncore {
 	func(is_valleyview) sep \
 	func(is_haswell) sep \
 	func(is_preliminary) sep \
-	func(has_force_wake) sep \
 	func(has_fbc) sep \
 	func(has_pipe_cxsr) sep \
 	func(has_hotplug) sep \
@@ -435,9 +459,6 @@ struct intel_uncore {
 	func(has_overlay) sep \
 	func(overlay_needs_physical) sep \
 	func(supports_tv) sep \
-	func(has_bsd_ring) sep \
-	func(has_blt_ring) sep \
-	func(has_vebox_ring) sep \
 	func(has_llc) sep \
 	func(has_ddi) sep \
 	func(has_fpga_dbg)
@@ -449,6 +470,7 @@ struct intel_device_info {
 	u32 display_mmio_offset;
 	u8 num_pipes:3;
 	u8 gen;
+	u8 ring_mask; /* Rings supported by the HW */
 	DEV_INFO_FOR_EACH_FLAG(DEFINE_FLAG, SEP_SEMICOLON);
 };
 
@@ -851,6 +873,7 @@ struct intel_gen6_power_mgmt {
 	int last_adj;
 	enum { LOW_POWER, BETWEEN, HIGH_POWER } power;
 
+	bool enabled;
 	struct delayed_work delayed_resume_work;
 
 	/*
@@ -888,7 +911,7 @@ struct intel_ilk_power_mgmt {
 /* Power well structure for haswell */
 struct i915_power_well {
 	struct drm_device *device;
-	spinlock_t lock;
+	struct mutex lock;
 	/* power well enable/disable usage count */
 	int count;
 	int i915_request;
@@ -1129,6 +1152,15 @@ struct intel_wm_level {
 	uint32_t fbc_val;
 };
 
+struct hsw_wm_values {
+	uint32_t wm_pipe[3];
+	uint32_t wm_lp[3];
+	uint32_t wm_lp_spr[3];
+	uint32_t wm_linetime[3];
+	bool enable_fbc_wm;
+	enum intel_ddb_partitioning partitioning;
+};
+
 /*
  * This struct tracks the state needed for the Package C8+ feature.
  *
@@ -1196,6 +1228,35 @@ struct i915_package_c8 {
 		uint32_t gtier;
 		uint32_t gen6_pmimr;
 	} regsave;
+};
+
+enum intel_pipe_crc_source {
+	INTEL_PIPE_CRC_SOURCE_NONE,
+	INTEL_PIPE_CRC_SOURCE_PLANE1,
+	INTEL_PIPE_CRC_SOURCE_PLANE2,
+	INTEL_PIPE_CRC_SOURCE_PF,
+	INTEL_PIPE_CRC_SOURCE_PIPE,
+	/* TV/DP on pre-gen5/vlv can't use the pipe source. */
+	INTEL_PIPE_CRC_SOURCE_TV,
+	INTEL_PIPE_CRC_SOURCE_DP_B,
+	INTEL_PIPE_CRC_SOURCE_DP_C,
+	INTEL_PIPE_CRC_SOURCE_DP_D,
+	INTEL_PIPE_CRC_SOURCE_MAX,
+};
+
+struct intel_pipe_crc_entry {
+	uint32_t frame;
+	uint32_t crc[5];
+};
+
+#define INTEL_PIPE_CRC_ENTRIES_NR	128
+struct intel_pipe_crc {
+	spinlock_t lock;
+	bool opened;		/* exclusive access to the result file */
+	struct intel_pipe_crc_entry *entries;
+	enum intel_pipe_crc_source source;
+	int head, tail;
+	wait_queue_head_t wq;
 };
 
 typedef struct drm_i915_private {
@@ -1322,6 +1383,10 @@ typedef struct drm_i915_private {
 	struct drm_crtc *pipe_to_crtc_mapping[3];
 	wait_queue_head_t pending_flip_queue;
 
+#ifdef CONFIG_DEBUG_FS
+	struct intel_pipe_crc pipe_crc[I915_MAX_PIPES];
+#endif
+
 	int num_shared_dpll;
 	struct intel_shared_dpll shared_dplls[I915_NUM_PLLS];
 	struct intel_ddi_plls ddi_plls;
@@ -1356,8 +1421,10 @@ typedef struct drm_i915_private {
 
 	struct drm_i915_gem_object *vlv_pctx;
 
+#ifdef CONFIG_DRM_I915_FBDEV
 	/* list of fbdev register on this device */
 	struct intel_fbdev *fbdev;
+#endif
 
 	/*
 	 * The console may be contended at resume, but we don't
@@ -1388,6 +1455,9 @@ typedef struct drm_i915_private {
 		uint16_t spr_latency[5];
 		/* cursor */
 		uint16_t cur_latency[5];
+
+		/* current hardware state */
+		struct hsw_wm_values hw;
 	} wm;
 
 	struct i915_package_c8 pc8;
@@ -1547,11 +1617,14 @@ struct drm_i915_gem_object {
 	/** Current tiling stride for the object, if it's tiled. */
 	uint32_t stride;
 
+	/** References from framebuffers, locks out tiling changes. */
+	unsigned long framebuffer_references;
+
 	/** Record of address bit 17 of each page at last unbind. */
 	unsigned long *bit_17;
 
 	/** User space pin count and filp owning the pin */
-	uint32_t user_pin_count;
+	unsigned long user_pin_count;
 	struct drm_file *pin_filp;
 
 	/** for phy allocated objects */
@@ -1665,9 +1738,13 @@ struct drm_i915_file_private {
 #define IS_GEN6(dev)	(INTEL_INFO(dev)->gen == 6)
 #define IS_GEN7(dev)	(INTEL_INFO(dev)->gen == 7)
 
-#define HAS_BSD(dev)            (INTEL_INFO(dev)->has_bsd_ring)
-#define HAS_BLT(dev)            (INTEL_INFO(dev)->has_blt_ring)
-#define HAS_VEBOX(dev)          (INTEL_INFO(dev)->has_vebox_ring)
+#define RENDER_RING		(1<<RCS)
+#define BSD_RING		(1<<VCS)
+#define BLT_RING		(1<<BCS)
+#define VEBOX_RING		(1<<VECS)
+#define HAS_BSD(dev)            (INTEL_INFO(dev)->ring_mask & BSD_RING)
+#define HAS_BLT(dev)            (INTEL_INFO(dev)->ring_mask & BLT_RING)
+#define HAS_VEBOX(dev)            (INTEL_INFO(dev)->ring_mask & VEBOX_RING)
 #define HAS_LLC(dev)            (INTEL_INFO(dev)->has_llc)
 #define HAS_WT(dev)            (IS_HASWELL(dev) && to_i915(dev)->ellc_size)
 #define I915_NEED_GFX_HWS(dev)	(INTEL_INFO(dev)->need_gfx_hws)
@@ -1717,8 +1794,6 @@ struct drm_i915_file_private {
 #define HAS_PCH_NOP(dev) (INTEL_PCH_TYPE(dev) == PCH_NOP)
 #define HAS_PCH_SPLIT(dev) (INTEL_PCH_TYPE(dev) != PCH_NONE)
 
-#define HAS_FORCE_WAKE(dev) (INTEL_INFO(dev)->has_force_wake)
-
 /* DPF == dynamic parity feature */
 #define HAS_L3_DPF(dev) (IS_IVYBRIDGE(dev) || IS_HASWELL(dev))
 #define NUM_L3_SLICES(dev) (IS_HSW_GT3(dev) ? 2 : HAS_L3_DPF(dev))
@@ -1726,27 +1801,6 @@ struct drm_i915_file_private {
 #define GT_FREQUENCY_MULTIPLIER 50
 
 #include "i915_trace.h"
-
-/**
- * RC6 is a special power stage which allows the GPU to enter an very
- * low-voltage mode when idle, using down to 0V while at this stage.  This
- * stage is entered automatically when the GPU is idle when RC6 support is
- * enabled, and as soon as new workload arises GPU wakes up automatically as well.
- *
- * There are different RC6 modes available in Intel GPU, which differentiate
- * among each other with the latency required to enter and leave RC6 and
- * voltage consumed by the GPU in different states.
- *
- * The combination of the following flags define which states GPU is allowed
- * to enter, while RC6 is the normal RC6 state, RC6p is the deep RC6, and
- * RC6pp is deepest RC6. Their support by hardware varies according to the
- * GPU, BIOS, chipset and platform. RC6 is usually the safest one and the one
- * which brings the most power savings; deeper states save more power, but
- * require higher latency to switch to and wake up.
- */
-#define INTEL_RC6_ENABLE			(1<<0)
-#define INTEL_RC6p_ENABLE			(1<<1)
-#define INTEL_RC6pp_ENABLE			(1<<2)
 
 extern const struct drm_ioctl_desc i915_ioctls[];
 extern int i915_max_ioctl;
@@ -1985,7 +2039,7 @@ int i915_gem_l3_remap(struct intel_ring_buffer *ring, int slice);
 void i915_gem_init_swizzling(struct drm_device *dev);
 void i915_gem_cleanup_ringbuffer(struct drm_device *dev);
 int __must_check i915_gpu_idle(struct drm_device *dev);
-int __must_check i915_gem_idle(struct drm_device *dev);
+int __must_check i915_gem_suspend(struct drm_device *dev);
 int __i915_add_request(struct intel_ring_buffer *ring,
 		       struct drm_file *file,
 		       struct drm_i915_gem_object *batch_obj,
@@ -2185,6 +2239,11 @@ int i915_verify_lists(struct drm_device *dev);
 /* i915_debugfs.c */
 int i915_debugfs_init(struct drm_minor *minor);
 void i915_debugfs_cleanup(struct drm_minor *minor);
+#ifdef CONFIG_DEBUG_FS
+void intel_display_crc_init(struct drm_device *dev);
+#else
+static inline void intel_display_crc_init(struct drm_device *dev) {}
+#endif
 
 /* i915_gpu_error.c */
 __printf(2, 3)
@@ -2341,37 +2400,21 @@ void intel_sbi_write(struct drm_i915_private *dev_priv, u16 reg, u32 value,
 int vlv_gpu_freq(int ddr_freq, int val);
 int vlv_freq_opcode(int ddr_freq, int val);
 
-#define __i915_read(x) \
-	u##x i915_read##x(struct drm_i915_private *dev_priv, u32 reg, bool trace);
-__i915_read(8)
-__i915_read(16)
-__i915_read(32)
-__i915_read(64)
-#undef __i915_read
+#define I915_READ8(reg)		dev_priv->uncore.funcs.mmio_readb(dev_priv, (reg), true)
+#define I915_WRITE8(reg, val)	dev_priv->uncore.funcs.mmio_writeb(dev_priv, (reg), (val), true)
 
-#define __i915_write(x) \
-	void i915_write##x(struct drm_i915_private *dev_priv, u32 reg, u##x val, bool trace);
-__i915_write(8)
-__i915_write(16)
-__i915_write(32)
-__i915_write(64)
-#undef __i915_write
+#define I915_READ16(reg)	dev_priv->uncore.funcs.mmio_readw(dev_priv, (reg), true)
+#define I915_WRITE16(reg, val)	dev_priv->uncore.funcs.mmio_writew(dev_priv, (reg), (val), true)
+#define I915_READ16_NOTRACE(reg)	dev_priv->uncore.funcs.mmio_readw(dev_priv, (reg), false)
+#define I915_WRITE16_NOTRACE(reg, val)	dev_priv->uncore.funcs.mmio_writew(dev_priv, (reg), (val), false)
 
-#define I915_READ8(reg)		i915_read8(dev_priv, (reg), true)
-#define I915_WRITE8(reg, val)	i915_write8(dev_priv, (reg), (val), true)
+#define I915_READ(reg)		dev_priv->uncore.funcs.mmio_readl(dev_priv, (reg), true)
+#define I915_WRITE(reg, val)	dev_priv->uncore.funcs.mmio_writel(dev_priv, (reg), (val), true)
+#define I915_READ_NOTRACE(reg)		dev_priv->uncore.funcs.mmio_readl(dev_priv, (reg), false)
+#define I915_WRITE_NOTRACE(reg, val)	dev_priv->uncore.funcs.mmio_writel(dev_priv, (reg), (val), false)
 
-#define I915_READ16(reg)	i915_read16(dev_priv, (reg), true)
-#define I915_WRITE16(reg, val)	i915_write16(dev_priv, (reg), (val), true)
-#define I915_READ16_NOTRACE(reg)	i915_read16(dev_priv, (reg), false)
-#define I915_WRITE16_NOTRACE(reg, val)	i915_write16(dev_priv, (reg), (val), false)
-
-#define I915_READ(reg)		i915_read32(dev_priv, (reg), true)
-#define I915_WRITE(reg, val)	i915_write32(dev_priv, (reg), (val), true)
-#define I915_READ_NOTRACE(reg)		i915_read32(dev_priv, (reg), false)
-#define I915_WRITE_NOTRACE(reg, val)	i915_write32(dev_priv, (reg), (val), false)
-
-#define I915_WRITE64(reg, val)	i915_write64(dev_priv, (reg), (val), true)
-#define I915_READ64(reg)	i915_read64(dev_priv, (reg), true)
+#define I915_WRITE64(reg, val)	dev_priv->uncore.funcs.mmio_writeq(dev_priv, (reg), (val), true)
+#define I915_READ64(reg)	dev_priv->uncore.funcs.mmio_readq(dev_priv, (reg), true)
 
 #define POSTING_READ(reg)	(void)I915_READ_NOTRACE(reg)
 #define POSTING_READ16(reg)	(void)I915_READ16_NOTRACE(reg)
