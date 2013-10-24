@@ -1232,6 +1232,15 @@
 					};
 				};
 
+				usbh1 {
+					pinctrl_usbh1_1: usbh1grp-1 {
+						fsl,pins = <
+							MX6QDL_PAD_EIM_D31__USB_H1_PWR 0x40013030
+							MX6QDL_PAD_EIM_D30__USB_H1_OC  0x40013030
+						>;
+					};
+				};
+
 				usbh2 {
 					pinctrl_usbh2_1: usbh2grp-1 {
 						fsl,pins = <
