@@ -23,8 +23,9 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
-#include <linux/pm_opp.h>
+#include <linux/pci.h>
 #include <linux/phy.h>
+#include <linux/pm_opp.h>
 #include <linux/reboot.h>
 #include <linux/regmap.h>
 #include <linux/micrel_phy.h>
@@ -37,64 +38,6 @@
 #include "common.h"
 #include "cpuidle.h"
 #include "hardware.h"
-
-static u32 chip_revision;
-
-int imx6q_revision(void)
-{
-	return chip_revision;
-}
-
-static void __init imx6q_init_revision(void)
-{
-	u32 rev = imx_anatop_get_digprog();
-
-	switch (rev & 0xff) {
-	case 0:
-		chip_revision = IMX_CHIP_REVISION_1_0;
-		break;
-	case 1:
-		chip_revision = IMX_CHIP_REVISION_1_1;
-		break;
-	case 2:
-		chip_revision = IMX_CHIP_REVISION_1_2;
-		break;
-	default:
-		chip_revision = IMX_CHIP_REVISION_UNKNOWN;
-	}
-
-	mxc_set_cpu_type(rev >> 16 & 0xff);
-}
-
-static void imx6q_restart(enum reboot_mode mode, const char *cmd)
-{
-	struct device_node *np;
-	void __iomem *wdog_base;
-
-	np = of_find_compatible_node(NULL, NULL, "fsl,imx6q-wdt");
-	wdog_base = of_iomap(np, 0);
-	if (!wdog_base)
-		goto soft;
-
-	imx_src_prepare_restart();
-
-	/* enable wdog */
-	writew_relaxed(1 << 2, wdog_base);
-	/* write twice to ensure the request will not get ignored */
-	writew_relaxed(1 << 2, wdog_base);
-
-	/* wait for reset to assert ... */
-	mdelay(500);
-
-	pr_err("Watchdog reset failed to assert reset\n");
-
-	/* delay to allow the serial port to show the message */
-	mdelay(50);
-
-soft:
-	/* we'll take a jump through zero as a poor second */
-	soft_restart(0);
-}
 
 /* For imx6q sabrelite board: set KSZ9021RN RGMII pad skew */
 static int ksz9021rn_phy_fixup(struct phy_device *phydev)
@@ -136,6 +79,34 @@ static int ksz9031rn_phy_fixup(struct phy_device *dev)
 
 	return 0;
 }
+
+/*
+ * fixup for PLX PEX8909 bridge to configure GPIO1-7 as output High
+ * as they are used for slots1-7 PERST#
+ */
+static void ventana_pciesw_early_fixup(struct pci_dev *dev)
+{
+	u32 dw;
+
+	if (!of_machine_is_compatible("gw,ventana"))
+		return;
+
+	if (dev->devfn != 0)
+		return;
+
+	pci_read_config_dword(dev, 0x62c, &dw);
+	dw |= 0xaaa8; // GPIO1-7 outputs
+	pci_write_config_dword(dev, 0x62c, dw);
+
+	pci_read_config_dword(dev, 0x644, &dw);
+	dw |= 0xfe;   // GPIO1-7 output high
+	pci_write_config_dword(dev, 0x644, dw);
+
+	msleep(100);
+}
+DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_PLX, 0x8609, ventana_pciesw_early_fixup);
+DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_PLX, 0x8606, ventana_pciesw_early_fixup);
+DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_PLX, 0x8604, ventana_pciesw_early_fixup);
 
 static int ar8031_phy_fixup(struct phy_device *dev)
 {
@@ -190,12 +161,20 @@ static void __init imx6q_1588_init(void)
 
 static void __init imx6q_init_machine(void)
 {
+	struct device *parent;
+
 	imx_print_silicon_rev(cpu_is_imx6dl() ? "i.MX6DL" : "i.MX6Q",
-			      imx6q_revision());
+			      imx_get_soc_revision());
+
+	mxc_arch_reset_init_dt();
+
+	parent = imx_soc_device_init();
+	if (parent == NULL)
+		pr_warn("failed to initialize soc device\n");
 
 	imx6q_enet_phy_init();
 
-	of_platform_populate(NULL, of_default_bus_match_table, NULL, NULL);
+	of_platform_populate(NULL, of_default_bus_match_table, NULL, parent);
 
 	imx_anatop_init();
 	imx6q_pm_init();
@@ -270,7 +249,7 @@ static void __init imx6q_init_late(void)
 	 * WAIT mode is broken on TO 1.0 and 1.1, so there is no point
 	 * to run cpuidle on them.
 	 */
-	if (imx6q_revision() > IMX_CHIP_REVISION_1_1)
+	if (imx_get_soc_revision() > IMX_CHIP_REVISION_1_1)
 		imx6q_cpuidle_init();
 
 	if (IS_ENABLED(CONFIG_ARM_IMX6Q_CPUFREQ)) {
@@ -287,7 +266,7 @@ static void __init imx6q_map_io(void)
 
 static void __init imx6q_init_irq(void)
 {
-	imx6q_init_revision();
+	imx_init_revision_from_anatop();
 	imx_init_l2cache();
 	imx_src_init();
 	imx_gpc_init();
@@ -307,5 +286,5 @@ DT_MACHINE_START(IMX6Q, "Freescale i.MX6 Quad/DualLite (Device Tree)")
 	.init_machine	= imx6q_init_machine,
 	.init_late      = imx6q_init_late,
 	.dt_compat	= imx6q_dt_compat,
-	.restart	= imx6q_restart,
+	.restart	= mxc_restart,
 MACHINE_END
