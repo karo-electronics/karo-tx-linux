@@ -647,6 +647,15 @@
 							MX6QDL_PAD_DISP0_DAT19__AUD5_RXD  0x80000000
 						>;
 					};
+
+					pinctrl_audmux_5: audmux-5 {
+						fsl,pins = <
+							MX6QDL_PAD_KEY_ROW1__AUD5_RXD  0x80000000
+							MX6QDL_PAD_KEY_ROW0__AUD5_TXD  0x80000000
+							MX6QDL_PAD_KEY_COL0__AUD5_TXC  0x80000000
+							MX6QDL_PAD_KEY_COL1__AUD5_TXFS 0x80000000
+						>;
+					};
 				};
 
 				ecspi1 {
