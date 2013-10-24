@@ -62,6 +62,7 @@
 #define SLIC_OFFLOAD_IP_CHECKSUM		1
 #define STATS_TIMER_INTERVAL			2
 #define PING_TIMER_INTERVAL			    1
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/kernel.h>
 #include <linux/string.h>
@@ -791,8 +792,8 @@ static bool slic_mac_filter(struct adapter *adapter,
 			struct mcast_address *mcaddr = adapter->mcastaddrs;
 
 			while (mcaddr) {
-				if (!compare_ether_addr(mcaddr->address,
-							ether_frame->ether_dhost)) {
+				if (ether_addr_equal(mcaddr->address,
+						     ether_frame->ether_dhost)) {
 					adapter->rcv_multicasts++;
 					netdev->stats.multicast++;
 					return true;
@@ -2231,14 +2232,8 @@ static void slic_debug_card_destroy(struct sliccard *card)
 		if (adapter)
 			slic_debug_adapter_destroy(adapter);
 	}
-	if (card->debugfs_cardinfo) {
-		debugfs_remove(card->debugfs_cardinfo);
-		card->debugfs_cardinfo = NULL;
-	}
-	if (card->debugfs_dir) {
-		debugfs_remove(card->debugfs_dir);
-		card->debugfs_dir = NULL;
-	}
+	debugfs_remove(card->debugfs_cardinfo);
+	debugfs_remove(card->debugfs_dir);
 }
 
 static void slic_debug_init(void)
@@ -2256,10 +2251,7 @@ static void slic_debug_init(void)
 
 static void slic_debug_cleanup(void)
 {
-	if (slic_debugfs) {
-		debugfs_remove(slic_debugfs);
-		slic_debugfs = NULL;
-	}
+	debugfs_remove(slic_debugfs);
 }
 
 /*
@@ -2333,7 +2325,7 @@ static int slic_mcast_add_list(struct adapter *adapter, char *address)
 	/* Check to see if it already exists */
 	mlist = adapter->mcastaddrs;
 	while (mlist) {
-		if (!compare_ether_addr(mlist->address, address))
+		if (ether_addr_equal(mlist->address, address))
 			return 0;
 		mlist = mlist->next;
 	}
@@ -2627,6 +2619,67 @@ static void slic_xmit_complete(struct adapter *adapter)
 	adapter->max_isr_xmits = max(adapter->max_isr_xmits, frames);
 }
 
+static void slic_interrupt_card_up(u32 isr, struct adapter *adapter,
+			struct net_device *dev)
+{
+	if (isr & ~ISR_IO) {
+		if (isr & ISR_ERR) {
+			adapter->error_interrupts++;
+			if (isr & ISR_RMISS) {
+				int count;
+				int pre_count;
+				int errors;
+
+				struct slic_rcvqueue *rcvq =
+					&adapter->rcvqueue;
+
+				adapter->error_rmiss_interrupts++;
+
+				if (!rcvq->errors)
+					rcv_count = rcvq->count;
+				pre_count = rcvq->count;
+				errors = rcvq->errors;
+
+				while (rcvq->count < SLIC_RCVQ_FILLTHRESH) {
+					count = slic_rcvqueue_fill(adapter);
+					if (!count)
+						break;
+				}
+			} else if (isr & ISR_XDROP) {
+				dev_err(&dev->dev,
+						"isr & ISR_ERR [%x] "
+						"ISR_XDROP \n", isr);
+			} else {
+				dev_err(&dev->dev,
+						"isr & ISR_ERR [%x]\n",
+						isr);
+			}
+		}
+
+		if (isr & ISR_LEVENT) {
+			adapter->linkevent_interrupts++;
+			slic_link_event_handler(adapter);
+		}
+
+		if ((isr & ISR_UPC) || (isr & ISR_UPCERR) ||
+		    (isr & ISR_UPCBSY)) {
+			adapter->upr_interrupts++;
+			slic_upr_request_complete(adapter, isr);
+		}
+	}
+
+	if (isr & ISR_RCV) {
+		adapter->rcv_interrupts++;
+		slic_rcv_handler(adapter);
+	}
+
+	if (isr & ISR_CMD) {
+		adapter->xmit_interrupts++;
+		slic_xmit_complete(adapter);
+	}
+}
+
+
 static irqreturn_t slic_interrupt(int irq, void *dev_id)
 {
 	struct net_device *dev = (struct net_device *)dev_id;
@@ -2641,64 +2694,7 @@ static irqreturn_t slic_interrupt(int irq, void *dev_id)
 		adapter->num_isrs++;
 		switch (adapter->card->state) {
 		case CARD_UP:
-			if (isr & ~ISR_IO) {
-				if (isr & ISR_ERR) {
-					adapter->error_interrupts++;
-					if (isr & ISR_RMISS) {
-						int count;
-						int pre_count;
-						int errors;
-
-						struct slic_rcvqueue *rcvq =
-						    &adapter->rcvqueue;
-
-						adapter->
-						    error_rmiss_interrupts++;
-						if (!rcvq->errors)
-							rcv_count = rcvq->count;
-						pre_count = rcvq->count;
-						errors = rcvq->errors;
-
-						while (rcvq->count <
-						       SLIC_RCVQ_FILLTHRESH) {
-							count =
-							    slic_rcvqueue_fill
-							    (adapter);
-							if (!count)
-								break;
-						}
-					} else if (isr & ISR_XDROP) {
-						dev_err(&dev->dev,
-							"isr & ISR_ERR [%x] "
-							"ISR_XDROP \n", isr);
-					} else {
-						dev_err(&dev->dev,
-							"isr & ISR_ERR [%x]\n",
-							isr);
-					}
-				}
-
-				if (isr & ISR_LEVENT) {
-					adapter->linkevent_interrupts++;
-					slic_link_event_handler(adapter);
-				}
-
-				if ((isr & ISR_UPC) ||
-				    (isr & ISR_UPCERR) || (isr & ISR_UPCBSY)) {
-					adapter->upr_interrupts++;
-					slic_upr_request_complete(adapter, isr);
-				}
-			}
-
-			if (isr & ISR_RCV) {
-				adapter->rcv_interrupts++;
-				slic_rcv_handler(adapter);
-			}
-
-			if (isr & ISR_CMD) {
-				adapter->xmit_interrupts++;
-				slic_xmit_complete(adapter);
-			}
+			slic_interrupt_card_up(isr, adapter, dev);
 			break;
 
 		case CARD_DOWN:
@@ -3645,16 +3641,15 @@ static int slic_entry_probe(struct pci_dev *pcidev,
 		return err;
 
 	if (slic_debug > 0 && did_version++ == 0) {
-		printk(KERN_DEBUG "%s\n", slic_banner);
-		printk(KERN_DEBUG "%s\n", slic_proc_version);
+		dev_dbg(&pcidev->dev, "%s\n", slic_banner);
+		dev_dbg(&pcidev->dev, "%s\n", slic_proc_version);
 	}
 
 	if (!pci_set_dma_mask(pcidev, DMA_BIT_MASK(64))) {
 		pci_using_dac = 1;
 		err = pci_set_consistent_dma_mask(pcidev, DMA_BIT_MASK(64));
 		if (err) {
-			dev_err(&pcidev->dev, "unable to obtain 64-bit DMA for "
-					"consistent allocations\n");
+			dev_err(&pcidev->dev, "unable to obtain 64-bit DMA for consistent allocations\n");
 			goto err_out_disable_pci;
 		}
 	} else {
@@ -3776,8 +3771,7 @@ static int __init slic_module_init(void)
 	slic_init_driver();
 
 	if (debug >= 0 && slic_debug != debug)
-		printk(KERN_DEBUG KBUILD_MODNAME ": debug level is %d.\n",
-		       debug);
+		pr_debug("debug level is %d.\n", debug);
 	if (debug >= 0)
 		slic_debug = debug;
 
