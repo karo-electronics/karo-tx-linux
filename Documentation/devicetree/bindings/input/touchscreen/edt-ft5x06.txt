@@ -1,0 +1,30 @@
+* EDT FT5x06 Multiple Touch Controller
+
+Required properties:
+- compatible: must be "edt,edt-ft5x06"
+- reg: i2c slave address
+- interrupt-parent: the phandle for the interrupt controller
+- interrupts: touch controller interrupt
+
+Optional properties:
+- reset-gpios:  the gpio pin to be used for resetting the controller
+- wakeup-gpios: the gpio pin to be used for waking up the controller
+
+  The following properties provide default values for the
+  corresponding parameters configurable via sysfs
+  (see Documentation/input/edt-ft5x06.txt)
+- threshold: allows setting the "click"-threshold in the range from 20 to 80.
+- gain: sensitivity (0..31) (lower value -> higher sensitivity)
+- offset: edge compensation (0..31)
+- report_rate: report rate (3..14)
+
+Example:
+
+	edt-ft5x06@38 {
+		compatible = "edt,edt-ft5x06";
+		reg = <0x38>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <5 0>;
+		reset-gpios = <&gpio2 6 GPIO_ACTIVE_LOW>;
+		wakeup-gpios = <&gpio4 9 GPIO_ACTIVE_HIGH>;
+	};
