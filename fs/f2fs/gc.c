@@ -77,9 +77,7 @@ static int gc_thread_func(void *data)
 		else
 			wait_ms = increase_sleep_time(gc_th, wait_ms);
 
-#ifdef CONFIG_F2FS_STAT_FS
-		sbi->bg_gc++;
-#endif
+		stat_inc_bggc_count(sbi);
 
 		/* if return value is not zero, no victim was selected */
 		if (f2fs_gc(sbi))
@@ -236,8 +234,8 @@ static unsigned int get_cb_cost(struct f2fs_sb_info *sbi, unsigned int segno)
 	return UINT_MAX - ((100 * (100 - u) * age) / (100 + u));
 }
 
-static unsigned int get_gc_cost(struct f2fs_sb_info *sbi, unsigned int segno,
-					struct victim_sel_policy *p)
+static inline unsigned int get_gc_cost(struct f2fs_sb_info *sbi,
+			unsigned int segno, struct victim_sel_policy *p)
 {
 	if (p->alloc_mode == SSR)
 		return get_seg_entry(sbi, segno)->ckpt_valid_blocks;
@@ -293,7 +291,11 @@ static int get_victim_by_default(struct f2fs_sb_info *sbi,
 			}
 			break;
 		}
-		p.offset = ((segno / p.ofs_unit) * p.ofs_unit) + p.ofs_unit;
+
+		p.offset = segno + p.ofs_unit;
+		if (p.ofs_unit > 1)
+			p.offset -= segno % p.ofs_unit;
+
 		secno = GET_SECNO(sbi, segno);
 
 		if (sec_usage_check(sbi, secno))
@@ -306,10 +308,9 @@ static int get_victim_by_default(struct f2fs_sb_info *sbi,
 		if (p.min_cost > cost) {
 			p.min_segno = segno;
 			p.min_cost = cost;
-		}
-
-		if (cost == max_cost)
+		} else if (unlikely(cost == max_cost)) {
 			continue;
+		}
 
 		if (nsearched++ >= p.max_search) {
 			sbi->last_victim[p.gc_mode] = segno;
@@ -358,12 +359,8 @@ static void add_gc_inode(struct inode *inode, struct list_head *ilist)
 		iput(inode);
 		return;
 	}
-repeat:
-	new_ie = kmem_cache_alloc(winode_slab, GFP_NOFS);
-	if (!new_ie) {
-		cond_resched();
-		goto repeat;
-	}
+
+	new_ie = f2fs_kmem_cache_alloc(winode_slab, GFP_NOFS);
 	new_ie->inode = inode;
 	list_add_tail(&new_ie->list, ilist);
 }
