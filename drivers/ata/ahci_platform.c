@@ -23,6 +23,7 @@
 #include <linux/platform_device.h>
 #include <linux/libata.h>
 #include <linux/ahci_platform.h>
+#include <linux/of_device.h>
 #include "ahci.h"
 
 static void ahci_host_stop(struct ata_host *host);
@@ -32,22 +33,6 @@ enum ahci_type {
 	IMX53_AHCI,	/* ahci on i.mx53 */
 	STRICT_AHCI,	/* delayed DMA engine start */
 };
-
-static struct platform_device_id ahci_devtype[] = {
-	{
-		.name = "ahci",
-		.driver_data = AHCI,
-	}, {
-		.name = "imx53-ahci",
-		.driver_data = IMX53_AHCI,
-	}, {
-		.name = "strict-ahci",
-		.driver_data = STRICT_AHCI,
-	}, {
-		/* sentinel */
-	}
-};
-MODULE_DEVICE_TABLE(platform, ahci_devtype);
 
 struct ata_port_operations ahci_platform_ops = {
 	.inherits	= &ahci_ops,
@@ -60,28 +45,52 @@ static struct ata_port_operations ahci_platform_retry_srst_ops = {
 	.host_stop	= ahci_host_stop,
 };
 
-static const struct ata_port_info ahci_port_info[] = {
-	/* by features */
-	[AHCI] = {
-		.flags		= AHCI_FLAG_COMMON,
-		.pio_mask	= ATA_PIO4,
-		.udma_mask	= ATA_UDMA6,
-		.port_ops	= &ahci_platform_ops,
-	},
-	[IMX53_AHCI] = {
-		.flags		= AHCI_FLAG_COMMON,
-		.pio_mask	= ATA_PIO4,
-		.udma_mask	= ATA_UDMA6,
-		.port_ops	= &ahci_platform_retry_srst_ops,
-	},
-	[STRICT_AHCI] = {
-		AHCI_HFLAGS	(AHCI_HFLAG_DELAY_ENGINE),
-		.flags		= AHCI_FLAG_COMMON,
-		.pio_mask	= ATA_PIO4,
-		.udma_mask	= ATA_UDMA6,
-		.port_ops	= &ahci_platform_ops,
-	},
+static const struct ata_port_info ahci_port_info = {
+	.flags		= AHCI_FLAG_COMMON,
+	.pio_mask	= ATA_PIO4,
+	.udma_mask	= ATA_UDMA6,
+	.port_ops	= &ahci_platform_ops,
 };
+
+static const struct ata_port_info imx53_ahci_port_info = {
+	.flags		= AHCI_FLAG_COMMON,
+	.pio_mask	= ATA_PIO4,
+	.udma_mask	= ATA_UDMA6,
+	.port_ops	= &ahci_platform_retry_srst_ops,
+};
+
+static const struct ata_port_info strict_ahci_port_info = {
+	AHCI_HFLAGS	(AHCI_HFLAG_DELAY_ENGINE),
+	.flags		= AHCI_FLAG_COMMON,
+	.pio_mask	= ATA_PIO4,
+	.udma_mask	= ATA_UDMA6,
+	.port_ops	= &ahci_platform_ops,
+};
+
+static struct platform_device_id ahci_devtype[] = {
+	{
+		.name = "ahci",
+		.driver_data = (kernel_ulong_t)&ahci_port_info,
+	},
+	{
+		.name = "imx53-ahci",
+		.driver_data = (kernel_ulong_t)&imx53_ahci_port_info,
+	},
+	{
+		.name = "strict-ahci",
+		.driver_data = (kernel_ulong_t)&strict_ahci_port_info,
+	},
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(platform, ahci_devtype);
+
+static const struct of_device_id ahci_of_match[] = {
+	{ .compatible = "snps,spear-ahci", },
+	{ .compatible = "snps,exynos5440-ahci", },
+	{ .compatible = "fsl,imx53-ahci", .data = &imx53_ahci_port_info, },
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, ahci_of_match);
 
 static struct scsi_host_template ahci_platform_sht = {
 	AHCI_SHT("ahci_platform"),
@@ -91,9 +100,9 @@ static int ahci_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct ahci_platform_data *pdata = dev_get_platdata(dev);
-	const struct platform_device_id *id = platform_get_device_id(pdev);
-	struct ata_port_info pi = ahci_port_info[id ? id->driver_data : 0];
-	const struct ata_port_info *ppi[] = { &pi, NULL };
+	const struct of_device_id *of_id;
+	struct ata_port_info pi;
+	const struct ata_port_info *ppi[] = { &pi, NULL, };
 	struct ahci_host_priv *hpriv;
 	struct ata_host *host;
 	struct resource *mem;
@@ -101,6 +110,18 @@ static int ahci_probe(struct platform_device *pdev)
 	int n_ports;
 	int i;
 	int rc;
+	const struct ata_port_info *p;
+
+	of_id = of_match_device(ahci_of_match, &pdev->dev);
+	if (of_id) {
+		p = of_id->data;
+	} else {
+		const struct platform_device_id *id;
+
+		id = platform_get_device_id(pdev);
+		p = (struct ata_port_info *)id->driver_data;
+	}
+	pi = *p;
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!mem) {
@@ -325,13 +346,6 @@ disable_unprepare_clk:
 #endif
 
 static SIMPLE_DEV_PM_OPS(ahci_pm_ops, ahci_suspend, ahci_resume);
-
-static const struct of_device_id ahci_of_match[] = {
-	{ .compatible = "snps,spear-ahci", },
-	{ .compatible = "snps,exynos5440-ahci", },
-	{},
-};
-MODULE_DEVICE_TABLE(of, ahci_of_match);
 
 static struct platform_driver ahci_driver = {
 	.probe = ahci_probe,
