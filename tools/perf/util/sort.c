@@ -182,8 +182,18 @@ static int64_t _sort__sym_cmp(struct symbol *sym_l, struct symbol *sym_r)
 static int64_t
 sort__sym_cmp(struct hist_entry *left, struct hist_entry *right)
 {
+	int64_t ret;
+
 	if (!left->ms.sym && !right->ms.sym)
 		return right->level - left->level;
+
+	/*
+	 * comparing symbol address alone is not enough since it's a
+	 * relative address within a dso.
+	 */
+	ret = sort__dso_cmp(left, right);
+	if (ret != 0)
+		return ret;
 
 	return _sort__sym_cmp(left->ms.sym, right->ms.sym);
 }
@@ -243,50 +253,32 @@ struct sort_entry sort_sym = {
 static int64_t
 sort__srcline_cmp(struct hist_entry *left, struct hist_entry *right)
 {
-	return (int64_t)(right->ip - left->ip);
+	if (!left->srcline) {
+		if (!left->ms.map)
+			left->srcline = SRCLINE_UNKNOWN;
+		else {
+			struct map *map = left->ms.map;
+			left->srcline = get_srcline(map->dso,
+					    map__rip_2objdump(map, left->ip));
+		}
+	}
+	if (!right->srcline) {
+		if (!right->ms.map)
+			right->srcline = SRCLINE_UNKNOWN;
+		else {
+			struct map *map = right->ms.map;
+			right->srcline = get_srcline(map->dso,
+					    map__rip_2objdump(map, right->ip));
+		}
+	}
+	return strcmp(left->srcline, right->srcline);
 }
 
 static int hist_entry__srcline_snprintf(struct hist_entry *self, char *bf,
 					size_t size,
 					unsigned int width __maybe_unused)
 {
-	FILE *fp = NULL;
-	char cmd[PATH_MAX + 2], *path = self->srcline, *nl;
-	size_t line_len;
-
-	if (path != NULL)
-		goto out_path;
-
-	if (!self->ms.map)
-		goto out_ip;
-
-	if (!strncmp(self->ms.map->dso->long_name, "/tmp/perf-", 10))
-		goto out_ip;
-
-	snprintf(cmd, sizeof(cmd), "addr2line -e %s %016" PRIx64,
-		 self->ms.map->dso->long_name, self->ip);
-	fp = popen(cmd, "r");
-	if (!fp)
-		goto out_ip;
-
-	if (getline(&path, &line_len, fp) < 0 || !line_len)
-		goto out_ip;
-	self->srcline = strdup(path);
-	if (self->srcline == NULL)
-		goto out_ip;
-
-	nl = strchr(self->srcline, '\n');
-	if (nl != NULL)
-		*nl = '\0';
-	path = self->srcline;
-out_path:
-	if (fp)
-		pclose(fp);
-	return repsep_snprintf(bf, size, "%s", path);
-out_ip:
-	if (fp)
-		pclose(fp);
-	return repsep_snprintf(bf, size, "%-#*llx", BITS_PER_LONG / 4, self->ip);
+	return repsep_snprintf(bf, size, "%s", self->srcline);
 }
 
 struct sort_entry sort_srcline = {
@@ -858,6 +850,127 @@ struct sort_entry sort_mem_snoop = {
 	.se_width_idx	= HISTC_MEM_SNOOP,
 };
 
+static int64_t
+sort__abort_cmp(struct hist_entry *left, struct hist_entry *right)
+{
+	return left->branch_info->flags.abort !=
+		right->branch_info->flags.abort;
+}
+
+static int hist_entry__abort_snprintf(struct hist_entry *self, char *bf,
+				    size_t size, unsigned int width)
+{
+	static const char *out = ".";
+
+	if (self->branch_info->flags.abort)
+		out = "A";
+	return repsep_snprintf(bf, size, "%-*s", width, out);
+}
+
+struct sort_entry sort_abort = {
+	.se_header	= "Transaction abort",
+	.se_cmp		= sort__abort_cmp,
+	.se_snprintf	= hist_entry__abort_snprintf,
+	.se_width_idx	= HISTC_ABORT,
+};
+
+static int64_t
+sort__in_tx_cmp(struct hist_entry *left, struct hist_entry *right)
+{
+	return left->branch_info->flags.in_tx !=
+		right->branch_info->flags.in_tx;
+}
+
+static int hist_entry__in_tx_snprintf(struct hist_entry *self, char *bf,
+				    size_t size, unsigned int width)
+{
+	static const char *out = ".";
+
+	if (self->branch_info->flags.in_tx)
+		out = "T";
+
+	return repsep_snprintf(bf, size, "%-*s", width, out);
+}
+
+struct sort_entry sort_in_tx = {
+	.se_header	= "Branch in transaction",
+	.se_cmp		= sort__in_tx_cmp,
+	.se_snprintf	= hist_entry__in_tx_snprintf,
+	.se_width_idx	= HISTC_IN_TX,
+};
+
+static int64_t
+sort__transaction_cmp(struct hist_entry *left, struct hist_entry *right)
+{
+	return left->transaction - right->transaction;
+}
+
+static inline char *add_str(char *p, const char *str)
+{
+	strcpy(p, str);
+	return p + strlen(str);
+}
+
+static struct txbit {
+	unsigned flag;
+	const char *name;
+	int skip_for_len;
+} txbits[] = {
+	{ PERF_TXN_ELISION,        "EL ",        0 },
+	{ PERF_TXN_TRANSACTION,    "TX ",        1 },
+	{ PERF_TXN_SYNC,           "SYNC ",      1 },
+	{ PERF_TXN_ASYNC,          "ASYNC ",     0 },
+	{ PERF_TXN_RETRY,          "RETRY ",     0 },
+	{ PERF_TXN_CONFLICT,       "CON ",       0 },
+	{ PERF_TXN_CAPACITY_WRITE, "CAP-WRITE ", 1 },
+	{ PERF_TXN_CAPACITY_READ,  "CAP-READ ",  0 },
+	{ 0, NULL, 0 }
+};
+
+int hist_entry__transaction_len(void)
+{
+	int i;
+	int len = 0;
+
+	for (i = 0; txbits[i].name; i++) {
+		if (!txbits[i].skip_for_len)
+			len += strlen(txbits[i].name);
+	}
+	len += 4; /* :XX<space> */
+	return len;
+}
+
+static int hist_entry__transaction_snprintf(struct hist_entry *self, char *bf,
+					    size_t size, unsigned int width)
+{
+	u64 t = self->transaction;
+	char buf[128];
+	char *p = buf;
+	int i;
+
+	buf[0] = 0;
+	for (i = 0; txbits[i].name; i++)
+		if (txbits[i].flag & t)
+			p = add_str(p, txbits[i].name);
+	if (t && !(t & (PERF_TXN_SYNC|PERF_TXN_ASYNC)))
+		p = add_str(p, "NEITHER ");
+	if (t & PERF_TXN_ABORT_MASK) {
+		sprintf(p, ":%" PRIx64,
+			(t & PERF_TXN_ABORT_MASK) >>
+			PERF_TXN_ABORT_SHIFT);
+		p += strlen(p);
+	}
+
+	return repsep_snprintf(bf, size, "%-*s", width, buf);
+}
+
+struct sort_entry sort_transaction = {
+	.se_header	= "Transaction                ",
+	.se_cmp		= sort__transaction_cmp,
+	.se_snprintf	= hist_entry__transaction_snprintf,
+	.se_width_idx	= HISTC_TRANSACTION,
+};
+
 struct sort_dimension {
 	const char		*name;
 	struct sort_entry	*entry;
@@ -876,6 +989,7 @@ static struct sort_dimension common_sort_dimensions[] = {
 	DIM(SORT_SRCLINE, "srcline", sort_srcline),
 	DIM(SORT_LOCAL_WEIGHT, "local_weight", sort_local_weight),
 	DIM(SORT_GLOBAL_WEIGHT, "weight", sort_global_weight),
+	DIM(SORT_TRANSACTION, "transaction", sort_transaction),
 };
 
 #undef DIM
@@ -888,6 +1002,8 @@ static struct sort_dimension bstack_sort_dimensions[] = {
 	DIM(SORT_SYM_FROM, "symbol_from", sort_sym_from),
 	DIM(SORT_SYM_TO, "symbol_to", sort_sym_to),
 	DIM(SORT_MISPREDICT, "mispredict", sort_mispredict),
+	DIM(SORT_IN_TX, "in_tx", sort_in_tx),
+	DIM(SORT_ABORT, "abort", sort_abort),
 };
 
 #undef DIM
