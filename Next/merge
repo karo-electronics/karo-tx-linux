@@ -1,0 +1,48 @@
+#!/bin/bash
+
+color=no
+
+while test $# -gt 0; do
+	case $1 in
+		--color)
+			color=yes
+			shift
+			;;
+
+		*)
+			shift
+			;;
+	esac
+done
+
+if test "x$color" = "xyes"; then
+	COLOR_TREE="\033[35m"
+	COLOR_REPOSITORY="\033[33m"
+	COLOR_BRANCH="\033[36m"
+	COLOR_DEFAULT="\033[0m"
+else
+	COLOR_TREE=
+	COLOR_REPOSITORY=
+	COLOR_BRANCH=
+	COLOR_DEFAULT=
+fi
+
+tail -n +5 < Next/Trees | while read tree type url; do
+	repository=${url%#*}
+	branch=${url#*#}
+
+	if test "x$type" != "xgit"; then
+		echo "Don't know how to handle type $type trees, skipping..."
+		continue
+	fi
+
+	echo -en "merging tree ${COLOR_TREE}${tree}${COLOR_DEFAULT} "
+	echo -en "from ${COLOR_REPOSITORY}${repository}${COLOR_DEFAULT} "
+	echo -e  "branch ${COLOR_BRANCH}$branch${COLOR_DEFAULT}"
+
+	if ! git merge ${tree}/${branch}; then
+		/bin/bash <&- < /dev/tty
+	fi
+done
+
+echo "-next-$(date +%Y%m%d)" > localversion-next

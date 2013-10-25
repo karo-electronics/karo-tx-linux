@@ -1,0 +1,29 @@
+#!/bin/bash
+
+exec 3> Next/SHA1s
+echo "Name                    SHA1" >&3
+echo "----                    ----" >&3
+
+tail -n +5 < Next/Trees | while read tree type url; do
+	repository=${url%#*}
+	branch=${url#*#}
+
+	if test "x$type" != "xgit"; then
+		echo "Don't know how to handle type $type trees, skipping $tree ($repository)..."
+		continue
+	fi
+
+	git remote set-url ${tree} ${repository}
+
+	echo "Fetching tree $tree ($repository)..."
+
+	if ! git fetch $tree; then
+		echo "ERROR: failed to fetch tree $tree, aborting..."
+		exit 1
+	fi
+
+	hash=$(git show-ref --hash -- remotes/$tree/$branch)
+	printf "%-23s %s\n" $tree $hash >&3
+done
+
+exec 3>&-
