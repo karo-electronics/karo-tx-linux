@@ -36,6 +36,14 @@ void f2fs_balance_fs(struct f2fs_sb_info *sbi)
 	}
 }
 
+void f2fs_balance_fs_bg(struct f2fs_sb_info *sbi)
+{
+	/* check the # of cached NAT entries and prefree segments */
+	if (try_to_free_nats(sbi, NAT_ENTRY_PER_BLOCK) ||
+				excess_prefree_segs(sbi))
+		f2fs_sync_fs(sbi->sb, true);
+}
+
 static void __locate_dirty_segment(struct f2fs_sb_info *sbi, unsigned int segno,
 		enum dirty_type dirty_type)
 {
@@ -78,10 +86,14 @@ static void __remove_dirty_segment(struct f2fs_sb_info *sbi, unsigned int segno,
 	if (dirty_type == DIRTY) {
 		enum dirty_type t = DIRTY_HOT_DATA;
 
-		/* clear all the bitmaps */
-		for (; t <= DIRTY_COLD_NODE; t++)
-			if (test_and_clear_bit(segno, dirty_i->dirty_segmap[t]))
+		/* clear its dirty bitmap */
+		for (; t <= DIRTY_COLD_NODE; t++) {
+			if (test_and_clear_bit(segno,
+						dirty_i->dirty_segmap[t])) {
 				dirty_i->nr_dirty[t]--;
+				break;
+			}
+		}
 
 		if (get_valid_blocks(sbi, segno, sbi->segs_per_sec) == 0)
 			clear_bit(GET_SECNO(sbi, segno),
@@ -550,9 +562,8 @@ static void allocate_segment_by_default(struct f2fs_sb_info *sbi,
 		change_curseg(sbi, type, true);
 	else
 		new_curseg(sbi, type, false);
-#ifdef CONFIG_F2FS_STAT_FS
-	sbi->segment_count[curseg->alloc_type]++;
-#endif
+
+	stat_inc_seg_type(sbi, curseg);
 }
 
 void allocate_new_segments(struct f2fs_sb_info *sbi)
@@ -597,6 +608,10 @@ static void f2fs_end_io_write(struct bio *bio, int err)
 
 	if (p->is_sync)
 		complete(p->wait);
+
+	if (!get_pages(p->sbi, F2FS_WRITEBACK) && p->sbi->cp_task)
+		wake_up_process(p->sbi->cp_task);
+
 	kfree(p);
 	bio_put(bio);
 }
@@ -657,6 +672,7 @@ static void submit_write_page(struct f2fs_sb_info *sbi, struct page *page,
 				block_t blk_addr, enum page_type type)
 {
 	struct block_device *bdev = sbi->sb->s_bdev;
+	int bio_blocks;
 
 	verify_block_addr(sbi, blk_addr);
 
@@ -676,7 +692,8 @@ retry:
 			goto retry;
 		}
 
-		sbi->bio[type] = f2fs_bio_alloc(bdev, max_hw_blocks(sbi));
+		bio_blocks = MAX_BIO_BLOCKS(max_hw_blocks(sbi));
+		sbi->bio[type] = f2fs_bio_alloc(bdev, bio_blocks);
 		sbi->bio[type]->bi_sector = SECTOR_FROM_BLOCK(sbi, blk_addr);
 		sbi->bio[type]->bi_private = priv;
 		/*
@@ -801,9 +818,8 @@ static void do_write_page(struct f2fs_sb_info *sbi, struct page *page,
 
 	mutex_lock(&sit_i->sentry_lock);
 	__refresh_next_blkoff(sbi, curseg);
-#ifdef CONFIG_F2FS_STAT_FS
-	sbi->block_count[curseg->alloc_type]++;
-#endif
+
+	stat_inc_block_count(sbi, curseg);
 
 	/*
 	 * SIT information should be updated before segment allocation,
@@ -1122,8 +1138,6 @@ static void write_compacted_summaries(struct f2fs_sb_info *sbi, block_t blkaddr)
 						SUM_JOURNAL_SIZE);
 	written_size += SUM_JOURNAL_SIZE;
 
-	set_page_dirty(page);
-
 	/* Step 3: write summary entries */
 	for (i = CURSEG_HOT_DATA; i <= CURSEG_COLD_DATA; i++) {
 		unsigned short blkoff;
@@ -1142,18 +1156,20 @@ static void write_compacted_summaries(struct f2fs_sb_info *sbi, block_t blkaddr)
 			summary = (struct f2fs_summary *)(kaddr + written_size);
 			*summary = seg_i->sum_blk->entries[j];
 			written_size += SUMMARY_SIZE;
-			set_page_dirty(page);
 
 			if (written_size + SUMMARY_SIZE <= PAGE_CACHE_SIZE -
 							SUM_FOOTER_SIZE)
 				continue;
 
+			set_page_dirty(page);
 			f2fs_put_page(page, 1);
 			page = NULL;
 		}
 	}
-	if (page)
+	if (page) {
+		set_page_dirty(page);
 		f2fs_put_page(page, 1);
+	}
 }
 
 static void write_normal_summaries(struct f2fs_sb_info *sbi,
@@ -1271,9 +1287,9 @@ static bool flush_sits_in_journal(struct f2fs_sb_info *sbi)
 			__mark_sit_entry_dirty(sbi, segno);
 		}
 		update_sits_in_cursum(sum, -sits_in_cursum(sum));
-		return 1;
+		return true;
 	}
-	return 0;
+	return false;
 }
 
 /*
@@ -1637,6 +1653,7 @@ int build_segment_manager(struct f2fs_sb_info *sbi)
 	sm_info->ovp_segments = le32_to_cpu(ckpt->overprov_segment_count);
 	sm_info->main_segments = le32_to_cpu(raw_super->segment_count_main);
 	sm_info->ssa_blkaddr = le32_to_cpu(raw_super->ssa_blkaddr);
+	sm_info->rec_prefree_segments = DEF_RECLAIM_PREFREE_SEGMENTS;
 
 	err = build_sit_info(sbi);
 	if (err)
