@@ -78,8 +78,8 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	mode_cmd.width = sizes->surface_width;
 	mode_cmd.height = sizes->surface_height;
 
-	mode_cmd.pitches[0] = ALIGN(mode_cmd.width * ((sizes->surface_bpp + 7) /
-						      8), 64);
+	mode_cmd.pitches[0] = ALIGN(mode_cmd.width *
+				    DIV_ROUND_UP(sizes->surface_bpp, 8), 64);
 	mode_cmd.pixel_format = drm_mode_legacy_fb_format(sizes->surface_bpp,
 							  sizes->surface_depth);
 
@@ -299,13 +299,13 @@ void intel_fbdev_set_suspend(struct drm_device *dev, int state)
 
 MODULE_LICENSE("GPL and additional rights");
 
-void intel_fb_output_poll_changed(struct drm_device *dev)
+void intel_fbdev_output_poll_changed(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	drm_fb_helper_hotplug_event(&dev_priv->fbdev->helper);
 }
 
-void intel_fb_restore_mode(struct drm_device *dev)
+void intel_fbdev_restore_mode(struct drm_device *dev)
 {
 	int ret;
 	struct drm_i915_private *dev_priv = dev->dev_private;
