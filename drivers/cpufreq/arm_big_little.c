@@ -25,7 +25,7 @@
 #include <linux/cpumask.h>
 #include <linux/export.h>
 #include <linux/of_platform.h>
-#include <linux/opp.h>
+#include <linux/pm_opp.h>
 #include <linux/slab.h>
 #include <linux/topology.h>
 #include <linux/types.h>
@@ -45,14 +45,6 @@ static unsigned int bL_cpufreq_get(unsigned int cpu)
 	u32 cur_cluster = cpu_to_cluster(cpu);
 
 	return clk_get_rate(clk[cur_cluster]) / 1000;
-}
-
-/* Validate policy frequency range */
-static int bL_cpufreq_verify_policy(struct cpufreq_policy *policy)
-{
-	u32 cur_cluster = cpu_to_cluster(policy->cpu);
-
-	return cpufreq_frequency_table_verify(policy, freq_table[cur_cluster]);
 }
 
 /* Set clock frequency */
@@ -98,7 +90,7 @@ static void put_cluster_clk_and_freq_table(struct device *cpu_dev)
 
 	if (!atomic_dec_return(&cluster_usage[cluster])) {
 		clk_put(clk[cluster]);
-		opp_free_cpufreq_table(cpu_dev, &freq_table[cluster]);
+		dev_pm_opp_free_cpufreq_table(cpu_dev, &freq_table[cluster]);
 		dev_dbg(cpu_dev, "%s: cluster: %d\n", __func__, cluster);
 	}
 }
@@ -119,7 +111,7 @@ static int get_cluster_clk_and_freq_table(struct device *cpu_dev)
 		goto atomic_dec;
 	}
 
-	ret = opp_init_cpufreq_table(cpu_dev, &freq_table[cluster]);
+	ret = dev_pm_opp_init_cpufreq_table(cpu_dev, &freq_table[cluster]);
 	if (ret) {
 		dev_err(cpu_dev, "%s: failed to init cpufreq table, cpu: %d, err: %d\n",
 				__func__, cpu_dev->id, ret);
@@ -127,7 +119,7 @@ static int get_cluster_clk_and_freq_table(struct device *cpu_dev)
 	}
 
 	name[12] = cluster + '0';
-	clk[cluster] = clk_get_sys(name, NULL);
+	clk[cluster] = clk_get(cpu_dev, name);
 	if (!IS_ERR(clk[cluster])) {
 		dev_dbg(cpu_dev, "%s: clk: %p & freq table: %p, cluster: %d\n",
 				__func__, clk[cluster], freq_table[cluster],
@@ -138,7 +130,7 @@ static int get_cluster_clk_and_freq_table(struct device *cpu_dev)
 	dev_err(cpu_dev, "%s: Failed to get clk for cpu: %d, cluster: %d\n",
 			__func__, cpu_dev->id, cluster);
 	ret = PTR_ERR(clk[cluster]);
-	opp_free_cpufreq_table(cpu_dev, &freq_table[cluster]);
+	dev_pm_opp_free_cpufreq_table(cpu_dev, &freq_table[cluster]);
 
 atomic_dec:
 	atomic_dec(&cluster_usage[cluster]);
@@ -165,7 +157,7 @@ static int bL_cpufreq_init(struct cpufreq_policy *policy)
 	if (ret)
 		return ret;
 
-	ret = cpufreq_frequency_table_cpuinfo(policy, freq_table[cur_cluster]);
+	ret = cpufreq_table_validate_and_show(policy, freq_table[cur_cluster]);
 	if (ret) {
 		dev_err(cpu_dev, "CPU %d, cluster: %d invalid freq table\n",
 				policy->cpu, cur_cluster);
@@ -173,15 +165,11 @@ static int bL_cpufreq_init(struct cpufreq_policy *policy)
 		return ret;
 	}
 
-	cpufreq_frequency_table_get_attr(freq_table[cur_cluster], policy->cpu);
-
 	if (arm_bL_ops->get_transition_latency)
 		policy->cpuinfo.transition_latency =
 			arm_bL_ops->get_transition_latency(cpu_dev);
 	else
 		policy->cpuinfo.transition_latency = CPUFREQ_ETERNAL;
-
-	policy->cur = bL_cpufreq_get(policy->cpu);
 
 	cpumask_copy(policy->cpus, topology_core_cpumask(policy->cpu));
 
@@ -200,28 +188,23 @@ static int bL_cpufreq_exit(struct cpufreq_policy *policy)
 		return -ENODEV;
 	}
 
+	cpufreq_frequency_table_put_attr(policy->cpu);
 	put_cluster_clk_and_freq_table(cpu_dev);
 	dev_dbg(cpu_dev, "%s: Exited, cpu: %d\n", __func__, policy->cpu);
 
 	return 0;
 }
 
-/* Export freq_table to sysfs */
-static struct freq_attr *bL_cpufreq_attr[] = {
-	&cpufreq_freq_attr_scaling_available_freqs,
-	NULL,
-};
-
 static struct cpufreq_driver bL_cpufreq_driver = {
 	.name			= "arm-big-little",
-	.flags			= CPUFREQ_STICKY,
-	.verify			= bL_cpufreq_verify_policy,
+	.flags			= CPUFREQ_STICKY |
+					CPUFREQ_HAVE_GOVERNOR_PER_POLICY,
+	.verify			= cpufreq_generic_frequency_table_verify,
 	.target			= bL_cpufreq_set_target,
 	.get			= bL_cpufreq_get,
 	.init			= bL_cpufreq_init,
 	.exit			= bL_cpufreq_exit,
-	.have_governor_per_policy = true,
-	.attr			= bL_cpufreq_attr,
+	.attr			= cpufreq_generic_attr,
 };
 
 int bL_cpufreq_register(struct cpufreq_arm_bL_ops *ops)
