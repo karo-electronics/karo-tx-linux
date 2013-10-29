@@ -751,6 +751,12 @@
 							MX53_PAD_DISP0_DAT8__PWM1_PWMO	0x5
 						>;
 					};
+
+					pinctrl_pwm1_2: pwm1grp-2 {
+						fsl,pins = <
+							MX53_PAD_GPIO_9__PWM1_PWMO	0x5
+						>;
+					};
 				};
 
 				pwm2 {
