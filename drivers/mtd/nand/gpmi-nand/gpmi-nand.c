@@ -1581,11 +1581,12 @@ static int gpmi_pre_bbt_scan(struct gpmi_nand_data  *this)
 	int ret;
 
 	/* Set up swap_block_mark, must be set before the gpmi_set_geometry() */
+#if 0
 	if (GPMI_IS_MX23(this))
 		this->swap_block_mark = false;
 	else
 		this->swap_block_mark = true;
-
+#endif
 	/* Set up the medium geometry */
 	ret = gpmi_set_geometry(this);
 	if (ret)
