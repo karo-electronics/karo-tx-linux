@@ -53,7 +53,6 @@
 #define PORTSC_HSP            BIT(9)
 #define PORTSC_PP             BIT(12)
 #define PORTSC_PTC            (0x0FUL << 16)
-#define PORTSC_PHCD(d)	      ((d) ? BIT(22) : BIT(23))
 /* PTS and PTW for non lpm version only */
 #define PORTSC_PFSC           BIT(24)
 #define PORTSC_PTS(d)						\
