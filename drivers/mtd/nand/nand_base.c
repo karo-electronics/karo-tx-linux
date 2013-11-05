@@ -1741,6 +1741,9 @@ static int nand_do_read_oob(struct mtd_info *mtd, loff_t from,
 	else
 		len = mtd->oobsize;
 
+	if (len == 0)
+		return 0;
+
 	if (unlikely(ops->ooboffs >= len)) {
 		pr_debug("%s: attempt to start read outside oob\n",
 				__func__);
@@ -2408,6 +2411,9 @@ static int nand_do_write_oob(struct mtd_info *mtd, loff_t to,
 		len = chip->ecc.layout->oobavail;
 	else
 		len = mtd->oobsize;
+
+	if (len == 0)
+		return 0;
 
 	/* Do not allow write past end of page */
 	if ((ops->ooboffs + ops->ooblen) > len) {
