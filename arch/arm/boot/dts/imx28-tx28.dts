@@ -287,8 +287,9 @@
 		pinctrl-0 = <&tx28_tsc2007_pins>;
 		interrupt-parent = <&gpio3>;
 		interrupts = <20 0>;
-		pendown-gpio = <&gpio3 20 GPIO_ACTIVE_LOW>;
-		ti,x-plate-ohms = /bits/ 16 <660>;
+		gpios = <&gpio3 20 GPIO_ACTIVE_LOW>;
+		ti,x-plate-ohms = <660>;
+		linux,wakeup;
 	};
 
 	ds1339: rtc@68 {
