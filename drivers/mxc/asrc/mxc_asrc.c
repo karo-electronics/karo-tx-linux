@@ -735,7 +735,7 @@ static void asrc_output_dma_callback(void *data)
 	struct asrc_pair_params *params = (struct asrc_pair_params *)data;
 
 	dma_unmap_sg(NULL, params->output_sg, params->output_sg_nodes,
-			DMA_MEM_TO_DEV);
+			DMA_DEV_TO_MEM);
 
 	complete(&params->output_complete);
 }
@@ -881,7 +881,7 @@ static int mxc_allocate_dma_buf(struct asrc_pair_params *params)
 	}
 	output_a->dma_paddr = virt_to_dma(NULL, output_a->dma_vaddr);
 
-	last_period->dma_vaddr = dma_alloc_coherent(NULL,
+	last_period->dma_vaddr = dma_alloc_coherent(asrc->dev,
 			1024 * params->last_period_sample,
 			&last_period->dma_paddr, GFP_KERNEL);
 
@@ -1219,7 +1219,7 @@ static void asrc_polling_debug(struct asrc_pair_params *params)
 	dma_unmap_sg(NULL, params->input_sg, params->input_sg_nodes,
 			DMA_MEM_TO_DEV);
 	dma_unmap_sg(NULL, params->output_sg, params->output_sg_nodes,
-			DMA_MEM_TO_DEV);
+			DMA_DEV_TO_MEM);
 
 	complete(&params->input_complete);
 	complete(&params->lastperiod_complete);
