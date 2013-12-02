@@ -299,26 +299,14 @@ dtb-$(CONFIG_SOC_AM33XX) += am335x-base0033.dtb \
 	am335x-boneblack.dtb \
 	am335x-evm.dtb \
 	am335x-evmsk.dtb \
-	am335x-nano.dtb
+	am335x-nano.dtb \
+	am335x-tx48.dtb
 dtb-$(CONFIG_ARCH_OMAP4) += omap4-duovero-parlor.dtb \
 	omap4-panda.dtb \
 	omap4-panda-a4.dtb \
 	omap4-panda-es.dtb \
 	omap4-sdp.dtb \
 	omap4-sdp-es23plus.dtb \
-	omap4-var-dvk-om44.dtb \
-	omap4-var-stk-om44.dtb
-dtb-$(CONFIG_SOC_AM43XX) += am43x-epos-evm.dtb \
-	am437x-gp-evm.dtb
-dtb-$(CONFIG_SOC_OMAP5) += omap5-cm-t54.dtb \
-	omap5-sbc-t54.dtb \
-	omap5-uevm.dtb
-dtb-$(CONFIG_SOC_DRA7XX) += dra7-evm.dtb \
-	dra72-evm.dtb
-dtb-$(CONFIG_ARCH_ORION5X) += orion5x-lacie-d2-network.dtb \
-	orion5x-lacie-ethernet-disk-mini-v2.dtb \
-	orion5x-maxtor-shared-storage-2.dtb \
-	orion5x-rd88f5182-nas.dtb
 dtb-$(CONFIG_ARCH_PRIMA2) += prima2-evb.dtb
 dtb-$(CONFIG_ARCH_QCOM) += \
 	qcom-apq8064-ifc6410.dtb \
