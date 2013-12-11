@@ -194,7 +194,7 @@
 	};
 };
 
-&mmc1 {
+&mmc0 {
 	status = "okay";
 	vmmc-supply = <&vmmc>;
 	bus-width = <4>;

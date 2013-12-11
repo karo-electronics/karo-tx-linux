@@ -16,11 +16,11 @@
 	regulator-always-on;
 };
 
-&mmc1 {
+&mmc0 {
 	vmmc-supply = <&vmmcsd_fixed>;
 };
 
-&mmc2 {
+&mmc1 {
 	vmmc-supply = <&vmmcsd_fixed>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&emmc_pins>;

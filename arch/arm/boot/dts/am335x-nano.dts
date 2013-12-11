@@ -146,7 +146,7 @@
 		>;
 	};
 
-	mmc1_pins: mmc1_pins {
+	mmc0_pins: mmc0_pins {
 		pinctrl-single,pins = <
 			0xf0 (PIN_INPUT_PULLUP | MUX_MODE0)	/* mmc0_dat0.mmc0_dat0 */
 			0xf4 (PIN_INPUT_PULLUP | MUX_MODE0)	/* mmc0_dat1.mmc0_dat1 */
@@ -361,11 +361,11 @@
 	dual_emac_res_vlan = <2>;
 };
 
-&mmc1 {
+&mmc0 {
 	status = "okay";
 	vmmc-supply = <&ldo4_reg>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&mmc1_pins>;
+	pinctrl-0 = <&mmc0_pins>;
 	bus-width = <4>;
 	cd-gpios = <&gpio3 8 0>;
 	wp-gpios = <&gpio3 18 0>;
