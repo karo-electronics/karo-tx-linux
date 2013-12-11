@@ -140,6 +140,9 @@ static int am335x_control_usb_probe(struct platform_device *pdev)
 	const struct of_device_id *of_id;
 	const struct phy_control *phy_ctrl;
 
+	if (!try_module_get(pdev->dev.parent->driver->owner))
+		return -EPROBE_DEFER;
+
 	of_id = of_match_node(omap_control_usb_id_table, pdev->dev.of_node);
 	if (!of_id)
 		return -EINVAL;
@@ -171,8 +174,15 @@ static int am335x_control_usb_probe(struct platform_device *pdev)
 	return 0;
 }
 
+static int am335x_control_usb_remove(struct platform_device *pdev)
+{
+	module_put(pdev->dev.parent->driver->owner);
+	return 0;
+}
+
 static struct platform_driver am335x_control_driver = {
 	.probe		= am335x_control_usb_probe,
+	.remove		= am335x_control_usb_remove,
 	.driver		= {
 		.name	= "am335x-control-usb",
 		.owner	= THIS_MODULE,
