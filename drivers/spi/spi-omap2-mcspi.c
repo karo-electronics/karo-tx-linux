@@ -421,8 +421,8 @@ static void omap2_mcspi_tx_dma(struct spi_device *spi,
 		} else {
 			/* FIXME: fall back to PIO? */
 		}
+		dma_async_issue_pending(mcspi_dma->dma_tx);
 	}
-	dma_async_issue_pending(mcspi_dma->dma_tx);
 	omap2_mcspi_set_dma_req(spi, 0, 1);
 }
 
