@@ -11,5 +11,7 @@ obj-$(CONFIG_SND_DAVINCI_SOC_VCIF) += snd-soc-davinci-vcif.o
 
 # Generic DAVINCI/AM33xx Machine Support
 snd-soc-evm-objs := davinci-evm.o
+snd-soc-tx48-objs := am335x-tx48.o
 
 obj-$(CONFIG_SND_DAVINCI_SOC_GENERIC_EVM) += snd-soc-evm.o
+obj-$(CONFIG_SND_AM335X_SOC_TX48) += snd-soc-tx48.o
