@@ -277,7 +277,7 @@
 			status = "disabled";
 		};
 
-		mmc1: mmc@48060000 {
+		mmc0: mmc@48060000 {
 			compatible = "ti,omap4-hsmmc";
 			ti,hwmods = "mmc1";
 			ti,dual-volt;
@@ -292,7 +292,7 @@
 			status = "disabled";
 		};
 
-		mmc2: mmc@481d8000 {
+		mmc1: mmc@481d8000 {
 			compatible = "ti,omap4-hsmmc";
 			ti,hwmods = "mmc2";
 			ti,needs-special-reset;
@@ -305,7 +305,7 @@
 			status = "disabled";
 		};
 
-		mmc3: mmc@47810000 {
+		mmc2: mmc@47810000 {
 			compatible = "ti,omap4-hsmmc";
 			ti,hwmods = "mmc3";
 			ti,needs-special-reset;
