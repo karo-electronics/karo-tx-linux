@@ -20,6 +20,7 @@
 		display = &display;
 		lcdif_23bit_pins_a = &pinctrl_lcd_23bit;
 		lcdif_24bit_pins_a = &pinctrl_lcd_24bit;
+		reg_can_xcvr = &reg_can_xcvr;
 	};
 
 	cpus {
@@ -28,9 +29,45 @@
 		};
 	};
 
+	clocks {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		mclk: clock@0 {
+			compatible = "fixed-clock";
+			reg = <0>;
+			#clock-cells = <0>;
+			clock-frequency = <27000000>;
+		};
+	};
+
 	memory {
 		device_type = "memory";
 		reg = <0 0>; /* will be set up by bootloader */
+	};
+
+	backlight: backlight@0 {
+		compatible = "pwm-backlight";
+		pwms = <&ehrpwm0 0 500000 PWM_POLARITY_INVERTED>;
+		power-supply = <&reg_3v3>;
+		/*
+		 * a poor man's way to create a 1:1 relationship between
+		 * the PWM value and the actual duty cycle
+		 */
+		brightness-levels = <
+			 0  1  2  3  4  5  6  7  8  9
+			10 11 12 13 14 15 16 17 18 19
+			20 21 22 23 24 25 26 27 28 29
+			30 31 32 33 34 35 36 37 38 39
+			40 41 42 43 44 45 46 47 48 49
+			50 51 52 53 54 55 56 57 58 59
+			60 61 62 63 64 65 66 67 68 69
+			70 71 72 73 74 75 76 77 78 79
+			80 81 82 83 84 85 86 87 88 89
+			90 91 92 93 94 95 96 97 98 99
+			100
+		>;
+		default-brightness-level = <50>;
 	};
 
 	display: panel {
@@ -38,29 +75,6 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lcd_24bit>;
 		status = "okay";
-
-		backlight: backlight@0 {
-			compatible = "pwm-backlight";
-			pwms = <&ehrpwm0 0 500000 PWM_POLARITY_INVERTED>;
-			power-supply = <&reg_3v3>;
-			/*
-			 * a poor man's way to create a 1:1 relationship between
-			 * the PWM value and the actual duty cycle
-			 */
-			brightness-levels = <
-				 0  1  2  3  4  5  6  7  8  9
-				10 11 12 13 14 15 16 17 18 19
-				20 21 22 23 24 25 26 27 28 29
-				30 31 32 33 34 35 36 37 38 39
-				40 41 42 43 44 45 46 47 48 49
-				50 51 52 53 54 55 56 57 58 59
-				60 61 62 63 64 65 66 67 68 69
-				70 71 72 73 74 75 76 77 78 79
-				80 81 82 83 84 85 86 87 88 89
-				90 91 92 93 94 95 96 97 98 99
-				100
-			>;
-		};
 
 		display-timings {
 			VGA {
@@ -222,17 +236,96 @@
 		>;
 	};
 
+	regulators {
+		compatible = "simple-bus";
+
+		reg_3v3: regulator@0 {
+			compatible = "regulator-fixed";
+			regulator-name = "vbat";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-boot-on;
+		};
+
+		reg_sw1: regulator@1 {
+			// VDD_CORE voltage limits 0.95V - 1.1V with +/-4% tolerance
+			regulator-name = "vdd_core";
+			regulator-min-microvolt = <912000>;
+			regulator-max-microvolt = <1144000>;
+		};
+
+		reg_sw2: regulator@2 {
+			// VDD_MPU voltage limits 0.95V - 1.26V with +/-4% tolerance
+			regulator-name = "vdd_mpu";
+			regulator-min-microvolt = <912500>;
+			regulator-max-microvolt = <1312500>;
+		};
+
+		reg_sw4: regulator@3 {
+			compatible = "regulator-fixed";
+			regulator-name = "3v3";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+		};
+
+		reg_2v5: regulator@4 {
+			compatible = "regulator-fixed";
+			regulator-name = "2v5";
+			regulator-min-microvolt = <2500000>;
+			regulator-max-microvolt = <2500000>;
+		};
+
+		reg_lcd_pwr: regulator@5 {
+			compatible = "regulator-fixed";
+			regulator-name = "LCD power";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_lcd_pwr>;
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpios = <&gpio1 22 GPIO_ACTIVE_HIGH>;
+		};
+
+		reg_vmmc: regulator@6 {
+			compatible = "regulator-fixed";
+			regulator-name = "vmmc";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+		};
+
+		reg_can_xcvr: regulator@7 {
+			compatible = "regulator-fixed";
+			regulator-name = "can-xcvr";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_can_xcvr>;
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
+		};
+
+		reg_usbotg: regulator@8 {
+			compatible = "regulator-fixed";
+			regulator-name = "usbotg-vbus";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_usbotg>;
+			gpios = <&gpio2 30 GPIO_ACTIVE_HIGH>;
+		};
+
+		reg_usbhost: regulator@9 {
+			compatible = "regulator-fixed";
+			regulator-name = "usbhost-vbus";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+		};
+	};
+
 	sound {
-		compatible = "ti,da830-evm-audio";
+		compatible = "ti,am335x-tx48-audio";
 		ti,model = "AM335x-TX48";
 		ti,audio-codec = <&sgtl5000>;
 		ti,mcasp-controller = <&mcasp1>;
 		ti,codec-clock-rate = <27000000>;
-		ti,audio-routing =
-			"Headphone Jack",	"HPLOUT",
-			"Headphone Jack",	"HPROUT",
-			"LINE1L",		"Line In",
-			"LINE1R",		"Line In";
 	};
 };
 
@@ -296,7 +389,7 @@
 		pinctrl-single,pins = <
 			0x15c (PIN_OUTPUT_PULLUP | MUX_MODE0)	/* spi0_cs0.spi0_cs0			CSPI_SS */
 			0x160 (PIN_OUTPUT_PULLUP | MUX_MODE0)	/* spi0_cs1.spi0_cs1			CSPI_SS*/
-			0x154 (PIN_OUTPUT_PULLUP | MUX_MODE0)	/* spi0_d0.spi0_d0			CSPI_MOSI*/
+			0x154 (PIN_INPUT_PULLUP | MUX_MODE0)	/* spi0_d0.spi0_d0			CSPI_MOSI*/
 			0x158 (PIN_INPUT_PULLUP | MUX_MODE0)	/* spi0_d1.spi0_d1			CSPI_MISO*/
 			0x150 (PIN_OUTPUT_PULLDOWN | MUX_MODE0)	/* spi0_sclk.spi0_sclk			CSPI_SCLK */
 		>;
@@ -370,13 +463,13 @@
 
 	pinctrl_mmc1: mmc1grp-1 {
 		pinctrl-single,pins = <
-			0x194 (PIN_INPUT_PULLUP | MUX_MODE4)	/* mcasp0_fsx.gpio3_15			SD1_CD */
+			0x194 (PIN_INPUT_PULLUP | MUX_MODE7)	/* mcasp0_fsx.gpio3_15			SD1_CD */
 			0x12c (PIN_INPUT_PULLUP | MUX_MODE4)	/* mii1_tx_clk.mmc1_dat0		SD1_DAT0 */
 			0x130 (PIN_INPUT_PULLUP | MUX_MODE4)	/* mii1_rx_clk.mmc1_dat1		SD1_DAT1 */
 			0x134 (PIN_INPUT_PULLUP | MUX_MODE4)	/* mii1_rxd3.mmc1_dat2			SD1_DAT2 */
 			0x138 (PIN_INPUT_PULLUP | MUX_MODE4)	/* mii1_rxd2.mmc1_dat3			SD1_DAT3 */
-			0x84 (PIN_INPUT | MUX_MODE2)		/* gpmc_cs2.mmc1_cmd			SD1_CMD */
-			0x80 (PIN_OUTPUT | MUX_MODE2)		/* gpmc_cs1.mmc1_clk			SD1_CLK */
+			0x84 (PIN_INPUT_PULLUP | MUX_MODE2)	/* gpmc_cs2.mmc1_cmd			SD1_CMD */
+			0x80 (PIN_INPUT_PULLUP | MUX_MODE2)	/* gpmc_cs1.mmc1_clk			SD1_CLK */
 		>;
 	};
 
@@ -419,17 +512,22 @@
 		>;
 	};
 
-	pinctrl_usb_host_0: usbhostgrp-1 {
+	pinctrl_usb_host: usbhostgrp-1 {
 		pinctrl-single,pins = <
 			0x234 (PIN_OUTPUT_PULLDOWN | MUX_MODE0)	/* usb1_drvvbus.usb1_drvvbus		USBH_VBUSEN */
 			0x21c (PIN_INPUT_PULLUP | MUX_MODE7)	/* usb0_drvvbus.gpio0_18		#USBH_OC */
 		>;
 	};
 
-	pinctrl_usbotg0: usbotggrp-1 { // USB-OTG / 2nd CAN
+	pinctrl_usbotg: usbotggrp-1 {
+		pinctrl-single,pins = <
+			0x104 (PIN_INPUT_PULLUP | MUX_MODE7)	/* mmc0_cmd.gpio2_31			#USBOTG_OC */
+		>;
+	};
+
+	pinctrl_reg_usbotg: usbotggrp-2 {
 		pinctrl-single,pins = <
 			0x100 (PIN_OUTPUT_PULLDOWN | MUX_MODE7)	/* mmc0_clk.gpio2_30			USBOTG_VBUSEN */
-			0x104 (PIN_INPUT_PULLUP | MUX_MODE7)	/* mmc0_cmd.gpio2_31			#USBOTG_OC */
 		>;
 	};
 
@@ -522,6 +620,7 @@
 &cpsw_emac1 {
 	phy_id = <&davinci_mdio>, <1>;
 	phy-mode = "rmii";
+	status = "disabled";
 };
 
 &davinci_mdio {
@@ -624,17 +723,18 @@
 		compatible = "dallas,ds1339";
 		reg = <0x68>;
 	};
-
+/*
 	pmic: lt3589@34 {
 		compatible = "lt,lt3589";
 		reg = <0x34>;
 	};
-
+*/
 	sgtl5000: sgtl5000@0a {
 		compatible = "fsl,sgtl5000";
 		reg = <0x0a>;
 		VDDA-supply = <&reg_2v5>;
 		VDDIO-supply = <&reg_sw4>;
+		clocks = <&mclk 0>;
 	};
 
 	touchscreen: tsc2007@48 {
@@ -669,6 +769,17 @@
 	pinctrl-1 = <&cpsw_sleep>;
 };
 
+&mcasp1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_ssi_0>;
+	op-mode = <0>;          /* MCASP_IIS_MODE */
+	tdm-slots = <2>;
+	serial-dir = <2 1 0 0>; /* 0: INACTIVE, 1: TX, 2: RX */
+	tx-num-evt = <32>;
+	rx-num-evt = <32>;
+	status = "okay";
+};
+
 &mmc1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_mmc1>;
@@ -681,92 +792,12 @@
 	rmii-clock-ext;
 };
 
-&pmic {
-	regulators {
-		compatible = "simple-bus";
-
-		reg_3v3: regulator@0 {
-			compatible = "regulator-fixed";
-			regulator-name = "vbat";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			regulator-boot-on;
-		};
-
-		reg_sw1: regulator@1 {
-			// VDD_CORE voltage limits 0.95V - 1.1V with +/-4% tolerance
-			compatible = "regulator-fixed";
-			regulator-name = "vdd_core";
-			regulator-min-microvolt = <912000>;
-			regulator-max-microvolt = <1144000>;
-			regulator-boot-on;
-			regulator-always-on;
-		};
-
-		reg_sw2: regulator@2 {
-			// VDD_MPU voltage limits 0.95V - 1.26V with +/-4% tolerance
-			compatible = "regulator-fixed";
-			regulator-name = "vdd_mpu";
-			regulator-min-microvolt = <912500>;
-			regulator-max-microvolt = <1312500>;
-			regulator-boot-on;
-			regulator-always-on;
-		};
-
-		reg_sw4: regulator@3 {
-			compatible = "regulator-fixed";
-			regulator-name = "3v3";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			regulator-always-on;
-		};
-
-		reg_2v5: regulator@4 {
-			compatible = "regulator-fixed";
-			regulator-name = "2v5";
-			regulator-min-microvolt = <2500000>;
-			regulator-max-microvolt = <2500000>;
-			regulator-always-on;
-		};
-
-		reg_lcd_pwr: regulator@5 {
-			compatible = "regulator-fixed";
-			regulator-name = "LCD power";
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_lcd_pwr>;
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpios = <&gpio1 22 GPIO_ACTIVE_HIGH>;
-		};
-
-		reg_vmmc: regulator@6 {
-			compatible = "regulator-fixed";
-			regulator-name = "vmmc";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			regulator-always-on;
-		};
-
-		reg_can_xcvr: regulator@7 {
-			compatible = "regulator-fixed";
-			regulator-name = "can-xcvr";
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_can_xcvr>;
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
-		};
-	};
-};
-
-&sgtl5000 {
-};
-
 &spi0 {
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_cspi0>;
 	ti,spi-num-cs = <2>;
+	ti,pindir-d0-out-d1-in;
 
 	spidev0: spi@0 {
 		compatible = "spidev";
@@ -812,4 +843,40 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart5_1>;
 	status = "okay";
+};
+
+&usb {
+	status = "okay";
+};
+
+&usb_ctrl_mod {
+	status = "okay";
+};
+
+&cppi41dma {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "peripheral";
+};
+
+&usb0_phy {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usbotg>;
+	vcc-supply = <&reg_usbotg>;
+};
+
+&usb1 {
+	status = "okay";
+	dr_mode = "host";
+};
+
+&usb1_phy {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usb_host>;
+	vcc-supply = <&reg_usbhost>;
 };
