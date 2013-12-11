@@ -424,7 +424,6 @@ static void omap2_mcspi_tx_dma(struct spi_device *spi,
 	}
 	dma_async_issue_pending(mcspi_dma->dma_tx);
 	omap2_mcspi_set_dma_req(spi, 0, 1);
-
 }
 
 static unsigned
@@ -549,10 +548,10 @@ omap2_mcspi_txrx_dma(struct spi_device *spi, struct spi_transfer *xfer)
 	const u8		*tx;
 	struct dma_slave_config	cfg;
 	enum dma_slave_buswidth width;
-	unsigned es;
+	unsigned		es;
 	u32			burst;
 	void __iomem		*chstat_reg;
-	void __iomem            *irqstat_reg;
+	void __iomem		*irqstat_reg;
 	int			wait_res;
 
 	mcspi = spi_master_get_devdata(spi->master);
@@ -1302,7 +1301,7 @@ static const struct of_device_id omap_mcspi_of_match[] = {
 		.compatible = "ti,omap4-mcspi",
 		.data = &omap4_pdata,
 	},
-	{ },
+	{ }
 };
 MODULE_DEVICE_TABLE(of, omap_mcspi_of_match);
 
@@ -1313,7 +1312,7 @@ static int omap2_mcspi_probe(struct platform_device *pdev)
 	struct omap2_mcspi	*mcspi;
 	struct resource		*r;
 	int			status = 0, i;
-	u32			regs_offset = 0;
+	u32			regs_offset;
 	static int		bus_num = 1;
 	struct device_node	*node = pdev->dev.of_node;
 	const struct of_device_id *match;
