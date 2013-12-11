@@ -1880,7 +1880,7 @@ musb_init_controller(struct device *dev, int nIrq, void __iomem *ctrl)
 	 * Fail when the board needs a feature that's not enabled.
 	 */
 	if (!plat) {
-		dev_dbg(dev, "no platform_data?\n");
+		dev_err(dev, "no platform_data?\n");
 		status = -ENODEV;
 		goto fail0;
 	}
