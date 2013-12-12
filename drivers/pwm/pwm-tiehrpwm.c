@@ -377,10 +377,12 @@ static void ehrpwm_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 
 	/* Action Qualifier puts PWM output low forcefully */
 	if (pwm->hwpwm) {
-		aqcsfrc_val = AQCSFRC_CSFB_FRCLOW;
+		aqcsfrc_val = pc->polarity[pwm->hwpwm] == PWM_POLARITY_INVERSED ?
+			AQCSFRC_CSFB_FRCHIGH : AQCSFRC_CSFB_FRCLOW;
 		aqcsfrc_mask = AQCSFRC_CSFB_MASK;
 	} else {
-		aqcsfrc_val = AQCSFRC_CSFA_FRCLOW;
+		aqcsfrc_val = pc->polarity[pwm->hwpwm] == PWM_POLARITY_INVERSED ?
+			AQCSFRC_CSFA_FRCHIGH : AQCSFRC_CSFA_FRCLOW;
 		aqcsfrc_mask = AQCSFRC_CSFA_MASK;
 	}
 
