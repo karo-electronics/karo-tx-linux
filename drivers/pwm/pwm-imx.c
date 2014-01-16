@@ -21,24 +21,25 @@
 
 /* i.MX1 and i.MX21 share the same PWM function block: */
 
-#define MX1_PWMC    0x00   /* PWM Control Register */
-#define MX1_PWMS    0x04   /* PWM Sample Register */
-#define MX1_PWMP    0x08   /* PWM Period Register */
+#define MX1_PWMC			0x00   /* PWM Control Register */
+#define MX1_PWMS			0x04   /* PWM Sample Register */
+#define MX1_PWMP			0x08   /* PWM Period Register */
 
-#define MX1_PWMC_EN		(1 << 4)
+#define MX1_PWMC_EN			(1 << 4)
 
 /* i.MX27, i.MX31, i.MX35 share the same PWM function block: */
 
-#define MX3_PWMCR                 0x00    /* PWM Control Register */
-#define MX3_PWMSAR                0x0C    /* PWM Sample Register */
-#define MX3_PWMPR                 0x10    /* PWM Period Register */
-#define MX3_PWMCR_PRESCALER(x)    (((x - 1) & 0xFFF) << 4)
-#define MX3_PWMCR_DOZEEN                (1 << 24)
-#define MX3_PWMCR_WAITEN                (1 << 23)
+#define MX3_PWMCR			0x00   /* PWM Control Register */
+#define MX3_PWMSAR			0x0C   /* PWM Sample Register */
+#define MX3_PWMPR			0x10   /* PWM Period Register */
+#define MX3_PWMCR_PRESCALER(x)		(((x - 1) & 0xFFF) << 4)
+#define MX3_PWMCR_DOZEEN		(1 << 24)
+#define MX3_PWMCR_WAITEN		(1 << 23)
 #define MX3_PWMCR_DBGEN			(1 << 22)
-#define MX3_PWMCR_CLKSRC_IPG_HIGH (2 << 16)
-#define MX3_PWMCR_CLKSRC_IPG      (1 << 16)
-#define MX3_PWMCR_EN              (1 << 0)
+#define MX3_PWMCR_POUTC			(1 << 18)
+#define MX3_PWMCR_CLKSRC_IPG_HIGH	(2 << 16)
+#define MX3_PWMCR_CLKSRC_IPG		(1 << 16)
+#define MX3_PWMCR_EN			(1 << 0)
 
 struct imx_chip {
 	struct clk	*clk_per;
@@ -138,6 +139,9 @@ static int imx_pwm_config_v2(struct pwm_chip *chip,
 	if (test_bit(PWMF_ENABLED, &pwm->flags))
 		cr |= MX3_PWMCR_EN;
 
+	if (pwm->polarity == PWM_POLARITY_INVERSED)
+		cr |= MX3_PWMCR_POUTC;
+
 	writel(cr, imx->mmio_base + MX3_PWMCR);
 
 	return 0;
@@ -154,6 +158,11 @@ static void imx_pwm_set_enable_v2(struct pwm_chip *chip, bool enable)
 		val |= MX3_PWMCR_EN;
 	else
 		val &= ~MX3_PWMCR_EN;
+
+	if (chip->pwms[0].polarity == PWM_POLARITY_INVERSED)
+		val |= MX3_PWMCR_POUTC;
+	else
+		val &= ~MX3_PWMCR_POUTC;
 
 	writel(val, imx->mmio_base + MX3_PWMCR);
 }
@@ -198,6 +207,17 @@ static void imx_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 	clk_disable_unprepare(imx->clk_per);
 }
 
+static int imx_pwm_set_polarity(struct pwm_chip *chip, struct pwm_device *pwm,
+				enum pwm_polarity polarity)
+{
+	struct imx_chip *imx = to_imx_chip(chip);
+
+	dev_dbg(imx->chip.dev, "%s: polarity set to %s\n", __func__,
+		polarity == PWM_POLARITY_INVERSED ? "inverted" : "normal");
+
+	return 0;
+}
+
 static struct pwm_ops imx_pwm_ops = {
 	.enable = imx_pwm_enable,
 	.disable = imx_pwm_disable,
@@ -209,6 +229,7 @@ struct imx_pwm_data {
 	int (*config)(struct pwm_chip *chip,
 		struct pwm_device *pwm, int duty_ns, int period_ns);
 	void (*set_enable)(struct pwm_chip *chip, bool enable);
+	unsigned output_polarity:1;
 };
 
 static struct imx_pwm_data imx_pwm_data_v1 = {
@@ -219,6 +240,7 @@ static struct imx_pwm_data imx_pwm_data_v1 = {
 static struct imx_pwm_data imx_pwm_data_v2 = {
 	.config = imx_pwm_config_v2,
 	.set_enable = imx_pwm_set_enable_v2,
+	.output_polarity = 1,
 };
 
 static const struct of_device_id imx_pwm_dt_ids[] = {
@@ -271,6 +293,26 @@ static int imx_pwm_probe(struct platform_device *pdev)
 		return PTR_ERR(imx->mmio_base);
 
 	data = of_id->data;
+	if (data->output_polarity) {
+		const struct device_node *np = pdev->dev.of_node;
+		u32 num_cells;
+
+		dev_dbg(&pdev->dev, "PWM supports output inversion\n");
+		ret = of_property_read_u32(np, "#pwm-cells", &num_cells);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "missing property '#pwm-cells'\n");
+			return ret;
+		}
+		if (num_cells == 3) {
+			imx_pwm_ops.set_polarity = imx_pwm_set_polarity;
+			imx->chip.of_xlate = of_pwm_xlate_with_flags;
+		} else if (num_cells != 2) {
+			dev_err(&pdev->dev, "'#pwm-cells' must be <2> or <3>\n");
+			return -EINVAL;
+		}
+		imx->chip.of_pwm_n_cells = num_cells;
+	}
+
 	imx->config = data->config;
 	imx->set_enable = data->set_enable;
 

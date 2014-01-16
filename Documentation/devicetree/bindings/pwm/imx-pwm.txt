@@ -3,8 +3,9 @@ Freescale i.MX PWM controller
 Required properties:
 - compatible: should be "fsl,<soc>-pwm"
 - reg: physical base address and length of the controller's registers
-- #pwm-cells: should be 2. See pwm.txt in this directory for a description of
-  the cells format.
+- #pwm-cells: may be 2 for backwards compatibility or 3 to support
+  switching the output polarity. See pwm.txt in this directory for a
+  description of the cells format.
 - interrupts: The interrupt for the pwm controller
 
 Example:
