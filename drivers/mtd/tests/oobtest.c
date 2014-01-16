@@ -213,8 +213,15 @@ static int verify_eraseblock_in_one_go(int ebnum)
 	int err = 0;
 	loff_t addr = ebnum * mtd->erasesize;
 	size_t len = mtd->ecclayout->oobavail * pgcnt;
+	int i;
 
-	prandom_bytes_state(&rnd_state, writebuf, len);
+	for (i = 0; i < pgcnt; i++)
+		prandom_bytes_state(&rnd_state, &writebuf[i * use_len],
+				use_len);
+	if (len % use_len)
+		prandom_bytes_state(&rnd_state, &writebuf[i * use_len],
+				len % use_len);
+
 	ops.mode      = MTD_OPS_AUTO_OOB;
 	ops.len       = 0;
 	ops.retlen    = 0;
@@ -594,7 +601,10 @@ static int __init mtd_oobtest_init(void)
 		if (bbt[i] || bbt[i + 1])
 			continue;
 		prandom_bytes_state(&rnd_state, writebuf,
-					mtd->ecclayout->oobavail * 2);
+					mtd->ecclayout->oobavail);
+		prandom_bytes_state(&rnd_state,
+					writebuf + mtd->ecclayout->oobavail,
+					mtd->ecclayout->oobavail);
 		addr = (i + 1) * mtd->erasesize - mtd->writesize;
 		ops.mode      = MTD_OPS_AUTO_OOB;
 		ops.len       = 0;
