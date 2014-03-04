@@ -710,7 +710,7 @@ static void tx6_disable_pwm_pad(void)
 }
 
 static const struct mxc_pwm_platform_data tx6_pwm_pdata __initconst = {
-	.pwmo_invert = 1,
+	.pwmo_invert = 0,
 	.enable_pwm_pad = tx6_enable_pwm_pad,
 	.disable_pwm_pad = tx6_disable_pwm_pad,
 };
