@@ -24,10 +24,6 @@
 		usbotg = &usbotg;
 	};
 
-	chosen {
-		bootargs = "init=/linuxrc console=ttymxc0,115200 root=/dev/mtdblock3 rootfstype=jffs2 ro debug panic=1";
-	};
-
 	memory {
 		reg = <0 0>; /* will be filled by U-Boot */
 	};
