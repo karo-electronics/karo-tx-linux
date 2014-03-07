@@ -142,6 +142,7 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx6dl-gw54xx.dtb \
 	imx6dl-sabreauto.dtb \
 	imx6dl-sabresd.dtb \
+	imx6dl-tx6dl-comtft.dtb \
 	imx6dl-tx6dl.dtb \
 	imx6dl-wandboard.dtb \
 	imx6q-arm2.dtb \

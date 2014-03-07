@@ -1,0 +1,85 @@
+/*
+ * Copyright 2014 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+#include "imx6dl.dtsi"
+#include "imx6qdl-tx6.dtsi"
+
+/ {
+	model = "Ka-Ro electronics TX6DL Module on CoMpact TFT";
+	compatible = "fsl,imx6dl-tx6dl", "fsl,imx6dl";
+};
+
+&backlight {
+	pwms = <&pwm2 0 500000 0>;
+};
+
+&can1 {
+	status = "disabled";
+};
+
+&can2 {
+	xceiver-supply = <&reg_3v3>;
+};
+
+&display {
+	display-timings {
+		native-mode = <&ET070001DM6>;
+
+		ET070001DM6: CoMTFT { /* same as ET0700 but with inverted pixel clock */
+			clock-frequency = <33264000>;
+			hactive = <800>;
+			vactive = <480>;
+			hback-porch = <88>;
+			hsync-len = <128>;
+			hfront-porch = <40>;
+			vback-porch = <33>;
+			vsync-len = <2>;
+			vfront-porch = <10>;
+			hsync-active = <0>;
+			vsync-active = <0>;
+			de-active = <1>;
+			pixelclk-active = <1>;
+		};
+	};
+};
+
+&kpp {
+	status = "disabled";
+};
+
+&ldb {
+	status = "disabled";
+};
+
+&lvds0 {
+	status = "disabled";
+};
+
+&lvds1 {
+	status = "disabled";
+};
+
+&pwm1 {
+	status = "disabled";
+};
+
+&reg_lcd_pwr1 {
+	status = "disabled";
+};
+
+&reg_can_xcvr {
+	status = "disabled";
+};
+
+&touchscreen {
+	status = "disabled";
+};
