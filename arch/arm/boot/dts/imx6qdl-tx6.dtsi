@@ -320,6 +320,8 @@
 			regulator-max-microvolt = <5000000>;
 			gpio = <&gpio3 31 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_tx6_usbh1_vbus>;
 		};
 
 		reg_usbotg_vbus: regulator@8 {
@@ -330,6 +332,8 @@
 			regulator-max-microvolt = <5000000>;
 			gpio = <&gpio1 7 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_tx6_usbotg_vbus>;
 		};
 	};
 
@@ -712,8 +716,6 @@
 
 &usbh1 {
 	vbus-supply = <&reg_usbh1_vbus>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_tx6_usbh1_vbus>;
 	dr_mode = "host";
 	disable-over-current;
 	status = "okay";
@@ -722,7 +724,7 @@
 &usbotg {
 	vbus-supply = <&reg_usbotg_vbus>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_tx6_usbotg &pinctrl_tx6_usbotg_vbus>;
+	pinctrl-0 = <&pinctrl_tx6_usbotg>;
 	dr_mode = "peripheral";
 	disable-over-current;
 	status = "okay";
