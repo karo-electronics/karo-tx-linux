@@ -160,8 +160,8 @@ static struct pwm_device *of_pwm_xlate(struct pwm_chip *pc,
 }
 
 struct pwm_device *
-of_pwm_xlate_with_flags(struct pwm_chip *pc,
-			const struct of_phandle_args *args)
+__deprecated of_pwm_xlate_with_flags(struct pwm_chip *pc,
+				const struct of_phandle_args *args)
 {
 	return of_pwm_xlate(pc, args);
 }
