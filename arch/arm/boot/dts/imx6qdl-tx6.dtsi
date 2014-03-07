@@ -237,9 +237,12 @@
 
 	regulators {
 		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
 
-		reg_3v3_etn: 3v3-etn {
+		reg_3v3_etn: regulator@0 {
 			compatible = "regulator-fixed";
+			reg = <0>;
 			regulator-name = "3V3_ETN";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
@@ -247,24 +250,27 @@
 			enable-active-high;
 		};
 
-		reg_2v5: 2v5 {
+		reg_2v5: regulator@1 {
 			compatible = "regulator-fixed";
+			reg = <1>;
 			regulator-name = "2V5";
 			regulator-min-microvolt = <2500000>;
 			regulator-max-microvolt = <2500000>;
 			regulator-always-on;
 		};
 
-		reg_3v3: 3v3 {
+		reg_3v3: regulator@2 {
 			compatible = "regulator-fixed";
+			reg = <2>;
 			regulator-name = "3V3";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			regulator-always-on;
 		};
 
-		reg_can_xcvr: can-xcvr {
+		reg_can_xcvr: regulator@3 {
 			compatible = "regulator-fixed";
+			reg = <3>;
 			regulator-name = "CAN XCVR";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
@@ -274,9 +280,10 @@
 			pinctrl-0 = <&pinctrl_tx6qdl_flexcan_xcvr>;
 		};
 
-		reg_lcd_pwr0: lcd-power@0 {
+		reg_lcd_pwr0: regulator@4 {
 			compatible = "regulator-fixed";
-			regulator-name = "LCD POWER";
+			reg = <4>;
+			regulator-name = "LCD0 POWER";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio2 31 GPIO_ACTIVE_HIGH>;
@@ -284,9 +291,10 @@
 			regulator-boot-on;
 		};
 
-		reg_lcd_pwr1: lcd-power@1 {
+		reg_lcd_pwr1: regulator@5 {
 			compatible = "regulator-fixed";
-			regulator-name = "LCD POWER";
+			reg = <5>;
+			regulator-name = "LCD1 POWER";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio3 29 GPIO_ACTIVE_HIGH>;
@@ -294,8 +302,9 @@
 			regulator-boot-on;
 		};
 
-		reg_lcd_reset: lcd-reset {
+		reg_lcd_reset: regulator@6 {
 			compatible = "regulator-fixed";
+			reg = <6>;
 			regulator-name = "LCD RESET";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
@@ -306,8 +315,9 @@
 			regulator-boot-on;
 		};
 
-		reg_usbh1_vbus: usbh1_vbus {
+		reg_usbh1_vbus: regulator@7 {
 			compatible = "regulator-fixed";
+			reg = <7>;
 			regulator-name = "usbh1_vbus";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
@@ -315,8 +325,9 @@
 			enable-active-high;
 		};
 
-		reg_usbotg_vbus: usbotg_vbus {
+		reg_usbotg_vbus: regulator@8 {
 			compatible = "regulator-fixed";
+			reg = <8>;
 			regulator-name = "usbotg_vbus";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
