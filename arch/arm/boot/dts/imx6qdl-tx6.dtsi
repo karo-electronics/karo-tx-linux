@@ -13,6 +13,7 @@
 
 / {
 	aliases {
+		can0 = &can2;
 		can1 = &can1;
 		display = &display;
 		ethernet0 = &fec;
@@ -20,8 +21,13 @@
 		lcdif_24bit_pins_a = &tx6_pinctrl_disp0_2;
 		lvds0 = &lvds0;
 		lvds1 = &lvds1;
+		pwm0 = &pwm1;
+		pwm1 = &pwm2;
+		reg_can_xcvr = &reg_can_xcvr;
 		stk5led = &user_led;
 		usbotg = &usbotg;
+		sdhc0 = &usdhc1;
+		sdhc1 = &usdhc2;
 	};
 
 	memory {
@@ -39,7 +45,7 @@
 		};
 	};
 
-	backlight@0 {
+	backlight: backlight@0 {
 		compatible = "pwm-backlight";
 		pwms = <&pwm2 0 500000>;
 		power-supply = <&reg_3v3>;
