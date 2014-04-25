@@ -10,12 +10,12 @@
  */
 
 /dts-v1/;
-#include "imx6dl.dtsi"
+#include "imx6q.dtsi"
 #include "imx6qdl-tx6.dtsi"
 
 / {
-	model = "Ka-Ro electronics TX6DL Module on CoMpact TFT";
-	compatible = "karo,imx6dl-tx6dl", "fsl,imx6dl";
+	model = "Ka-Ro electronics TX6Q-1010 Module on CoMpact TFT";
+	compatible = "karo,imx6q-tx6q", "fsl,imx6q";
 
 	aliases {
 		display = &display;
@@ -86,6 +86,10 @@
 
 &can2 {
 	xceiver-supply = <&reg_3v3>;
+};
+
+&ipu2 {
+	status = "disabled";
 };
 
 &kpp {
