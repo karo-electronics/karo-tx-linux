@@ -282,37 +282,53 @@
 			pinctrl-0 = <&pinctrl_lcd_pwr>;
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
-			gpios = <&gpio1 22 GPIO_ACTIVE_HIGH>;
+			gpio = <&gpio1 22 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			regulator-boot-on;
 		};
 
-		reg_vmmc: regulator@6 {
+		reg_lcd_rst: regulator@6 {
+			compatible = "regulator-fixed";
+			regulator-name = "LCD reset";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_lcd_rst>;
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio1 19 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			regulator-boot-on;
+		};
+
+		reg_vmmc: regulator@7 {
 			compatible = "regulator-fixed";
 			regulator-name = "vmmc";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 		};
 
-		reg_can_xcvr: regulator@7 {
+		reg_can_xcvr: regulator@8 {
 			compatible = "regulator-fixed";
 			regulator-name = "can-xcvr";
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_can_xcvr>;
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
-			gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
+			gpio = <&gpio0 22 GPIO_ACTIVE_LOW>;
 		};
 
-		reg_usbotg: regulator@8 {
+		reg_usbotg: regulator@9 {
 			compatible = "regulator-fixed";
 			regulator-name = "usbotg-vbus";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_usbotg>;
-			gpios = <&gpio2 30 GPIO_ACTIVE_HIGH>;
+			gpio = <&gpio2 30 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			regulator-boot-on;
 		};
 
-		reg_usbhost: regulator@9 {
+		reg_usbhost: regulator@10 {
 			compatible = "regulator-fixed";
 			regulator-name = "usbhost-vbus";
 			regulator-min-microvolt = <3300000>;
@@ -438,7 +454,13 @@
 
 	pinctrl_lcd_pwr: lcdpwrgrp {
 		pinctrl-single,pins = <
-			0x58 (PIN_OUTPUT_PULLDOWN | MUX_MODE7)	/* gpmc_a6.gpio1_22 */
+			0x58 (PIN_OUTPUT | MUX_MODE7)		/* gpmc_a6.gpio1_22 */
+		>;
+	};
+
+	pinctrl_lcd_rst: lcdrstgrp {
+		pinctrl-single,pins = <
+			0x4c (PIN_OUTPUT | MUX_MODE7)		/* gpmc_a3.gpio1_19 */
 		>;
 	};
 
@@ -527,7 +549,7 @@
 
 	pinctrl_reg_usbotg: usbotggrp-2 {
 		pinctrl-single,pins = <
-			0x100 (PIN_OUTPUT_PULLDOWN | MUX_MODE7)	/* mmc0_clk.gpio2_30			USBOTG_VBUSEN */
+			0x100 (PIN_OUTPUT | MUX_MODE7)		/* mmc0_clk.gpio2_30			USBOTG_VBUSEN */
 		>;
 	};
 
@@ -863,10 +885,10 @@
 };
 
 &usb0_phy {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg>;
 	vcc-supply = <&reg_usbotg>;
+	status = "okay";
 };
 
 &usb1 {
