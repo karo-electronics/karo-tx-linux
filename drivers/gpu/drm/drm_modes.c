@@ -611,6 +611,18 @@ void drm_display_mode_from_videomode(const struct videomode *vm,
 		dmode->flags |= DRM_MODE_FLAG_DBLSCAN;
 	if (vm->flags & DISPLAY_FLAGS_DOUBLECLK)
 		dmode->flags |= DRM_MODE_FLAG_DBLCLK;
+	if (vm->flags & DISPLAY_FLAGS_PIXDATA_POSEDGE)
+		dmode->pol_flags |= DRM_MODE_FLAG_POL_PIXDATA_POSEDGE;
+	else if (vm->flags & DISPLAY_FLAGS_PIXDATA_NEGEDGE)
+		dmode->pol_flags |= DRM_MODE_FLAG_POL_PIXDATA_NEGEDGE;
+	else
+		dmode->pol_flags |= DRM_MODE_FLAG_POL_PIXDATA_PRESERVE;
+	if (vm->flags & DISPLAY_FLAGS_DE_HIGH)
+		dmode->pol_flags |= DRM_MODE_FLAG_POL_DE_HIGH;
+	else if (vm->flags & DISPLAY_FLAGS_DE_LOW)
+		dmode->pol_flags |= DRM_MODE_FLAG_POL_DE_LOW;
+	else
+		dmode->pol_flags |= DRM_MODE_FLAG_POL_DE_PRESERVE;
 	drm_mode_set_name(dmode);
 }
 EXPORT_SYMBOL_GPL(drm_display_mode_from_videomode);
