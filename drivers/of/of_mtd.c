@@ -117,3 +117,15 @@ bool of_get_nand_on_flash_bbt(struct device_node *np)
 	return of_property_read_bool(np, "nand-on-flash-bbt");
 }
 EXPORT_SYMBOL_GPL(of_get_nand_on_flash_bbt);
+
+/**
+ * of_get_nand_no_oob_bbm - Get nand no oob bbm for given device_node
+ * @np:	Pointer to the given device_node
+ *
+ * return true if present, false otherwise
+ */
+bool of_get_nand_no_oob_bbm(struct device_node *np)
+{
+	return of_property_read_bool(np, "nand-no-oob-bbm");
+}
+EXPORT_SYMBOL_GPL(of_get_nand_no_oob_bbm);
