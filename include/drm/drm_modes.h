@@ -93,6 +93,13 @@ enum drm_mode_status {
 
 #define DRM_MODE_FLAG_3D_MAX	DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF
 
+#define DRM_MODE_FLAG_POL_PIXDATA_NEGEDGE	BIT(1)
+#define DRM_MODE_FLAG_POL_PIXDATA_POSEDGE	BIT(2)
+#define DRM_MODE_FLAG_POL_PIXDATA_PRESERVE	BIT(3)
+#define DRM_MODE_FLAG_POL_DE_LOW		BIT(4)
+#define DRM_MODE_FLAG_POL_DE_HIGH		BIT(5)
+#define DRM_MODE_FLAG_POL_DE_PRESERVE		BIT(6)
+
 struct drm_display_mode {
 	/* Header */
 	struct list_head head;
@@ -144,6 +151,7 @@ struct drm_display_mode {
 	int vrefresh;		/* in Hz */
 	int hsync;		/* in kHz */
 	enum hdmi_picture_aspect picture_aspect_ratio;
+	unsigned int pol_flags;
 };
 
 /* mode specified on the command line */
