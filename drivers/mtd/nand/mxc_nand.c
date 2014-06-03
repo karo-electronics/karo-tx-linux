@@ -1496,6 +1496,8 @@ static int mxcnd_probe(struct platform_device *pdev)
 		this->bbt_md = &bbt_mirror_descr;
 		/* update flash based bbt */
 		this->bbt_options |= NAND_BBT_USE_FLASH;
+		if (of_get_nand_no_oob_bbm(pdev->dev.of_node))
+			this->bbt_options |= NAND_BBT_NO_OOB_BBM;
 	}
 
 	init_completion(&host->op_completion);
