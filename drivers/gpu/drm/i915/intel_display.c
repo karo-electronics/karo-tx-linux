@@ -39,10 +39,37 @@
 #include "i915_trace.h"
 #include <drm/drm_dp_helper.h>
 #include <drm/drm_crtc_helper.h>
+#include <drm/drm_plane_helper.h>
+#include <drm/drm_rect.h>
 #include <linux/dma_remapping.h>
 
+/* Primary plane formats supported by all gen */
+#define COMMON_PRIMARY_FORMATS \
+	DRM_FORMAT_C8, \
+	DRM_FORMAT_RGB565, \
+	DRM_FORMAT_XRGB8888, \
+	DRM_FORMAT_ARGB8888
+
+/* Primary plane formats for gen <= 3 */
+static const uint32_t intel_primary_formats_gen2[] = {
+	COMMON_PRIMARY_FORMATS,
+	DRM_FORMAT_XRGB1555,
+	DRM_FORMAT_ARGB1555,
+};
+
+/* Primary plane formats for gen >= 4 */
+static const uint32_t intel_primary_formats_gen4[] = {
+	COMMON_PRIMARY_FORMATS, \
+	DRM_FORMAT_XBGR8888,
+	DRM_FORMAT_ABGR8888,
+	DRM_FORMAT_XRGB2101010,
+	DRM_FORMAT_ARGB2101010,
+	DRM_FORMAT_XBGR2101010,
+	DRM_FORMAT_ABGR2101010,
+};
+
 #define DIV_ROUND_CLOSEST_ULL(ll, d)	\
-	({ unsigned long long _tmp = (ll)+(d)/2; do_div(_tmp, d); _tmp; })
+({ unsigned long long _tmp = (ll)+(d)/2; do_div(_tmp, d); _tmp; })
 
 static void intel_increase_pllclock(struct drm_crtc *crtc);
 static void intel_crtc_update_cursor(struct drm_crtc *crtc, bool on);
@@ -1712,6 +1739,17 @@ static void chv_disable_pll(struct drm_i915_private *dev_priv, enum pipe pipe)
 	val &= ~DPIO_DCLKP_EN;
 	vlv_dpio_write(dev_priv, pipe, CHV_CMN_DW14(port), val);
 
+	/* disable left/right clock distribution */
+	if (pipe != PIPE_B) {
+		val = vlv_dpio_read(dev_priv, pipe, _CHV_CMN_DW5_CH0);
+		val &= ~(CHV_BUFLEFTENA1_MASK | CHV_BUFRIGHTENA1_MASK);
+		vlv_dpio_write(dev_priv, pipe, _CHV_CMN_DW5_CH0, val);
+	} else {
+		val = vlv_dpio_read(dev_priv, pipe, _CHV_CMN_DW1_CH1);
+		val &= ~(CHV_BUFLEFTENA2_MASK | CHV_BUFRIGHTENA2_MASK);
+		vlv_dpio_write(dev_priv, pipe, _CHV_CMN_DW1_CH1, val);
+	}
+
 	mutex_unlock(&dev_priv->dpio_lock);
 }
 
@@ -1748,6 +1786,9 @@ static void intel_prepare_shared_dpll(struct intel_crtc *crtc)
 	struct drm_device *dev = crtc->base.dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct intel_shared_dpll *pll = intel_crtc_to_shared_dpll(crtc);
+
+	if (WARN_ON(pll == NULL))
+		return;
 
 	WARN_ON(!pll->refcount);
 	if (pll->active == 0) {
@@ -3883,6 +3924,8 @@ static void intel_crtc_enable_planes(struct drm_crtc *crtc)
 	int pipe = intel_crtc->pipe;
 	int plane = intel_crtc->plane;
 
+	drm_vblank_on(dev, pipe);
+
 	intel_enable_primary_hw_plane(dev_priv, plane, pipe);
 	intel_enable_planes(crtc);
 	/* The fixup needs to happen before cursor is enabled */
@@ -3908,7 +3951,6 @@ static void intel_crtc_disable_planes(struct drm_crtc *crtc)
 	int plane = intel_crtc->plane;
 
 	intel_crtc_wait_for_pending_flips(crtc);
-	drm_crtc_vblank_off(crtc);
 
 	if (dev_priv->fbc.plane == plane)
 		intel_disable_fbc(dev);
@@ -3919,6 +3961,8 @@ static void intel_crtc_disable_planes(struct drm_crtc *crtc)
 	intel_crtc_update_cursor(crtc, false);
 	intel_disable_planes(crtc);
 	intel_disable_primary_hw_plane(dev_priv, plane, pipe);
+
+	drm_vblank_off(dev, pipe);
 }
 
 static void ironlake_crtc_enable(struct drm_crtc *crtc)
@@ -3997,8 +4041,6 @@ static void ironlake_crtc_enable(struct drm_crtc *crtc)
 		cpt_verify_modeset(dev, intel_crtc->pipe);
 
 	intel_crtc_enable_planes(crtc);
-
-	drm_crtc_vblank_on(crtc);
 }
 
 /* IPS only exists on ULT machines and is tied to pipe A. */
@@ -4112,8 +4154,6 @@ static void haswell_crtc_enable(struct drm_crtc *crtc)
 	 * to change the workaround. */
 	haswell_mode_set_planes_workaround(intel_crtc);
 	intel_crtc_enable_planes(crtc);
-
-	drm_crtc_vblank_on(crtc);
 }
 
 static void ironlake_pfit_disable(struct intel_crtc *crtc)
@@ -4623,8 +4663,6 @@ static void valleyview_crtc_enable(struct drm_crtc *crtc)
 
 	intel_crtc_enable_planes(crtc);
 
-	drm_crtc_vblank_on(crtc);
-
 	/* Underruns don't raise interrupts, so check manually. */
 	i9xx_check_fifo_underruns(dev);
 }
@@ -4716,8 +4754,6 @@ static void i9xx_crtc_enable(struct drm_crtc *crtc)
 	 */
 	if (IS_GEN2(dev))
 		intel_set_cpu_fifo_underrun_reporting(dev, pipe, true);
-
-	drm_crtc_vblank_on(crtc);
 
 	/* Underruns don't raise interrupts, so check manually. */
 	i9xx_check_fifo_underruns(dev);
@@ -4840,16 +4876,43 @@ void intel_crtc_update_dpms(struct drm_crtc *crtc)
 {
 	struct drm_device *dev = crtc->dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
+	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
 	struct intel_encoder *intel_encoder;
+	enum intel_display_power_domain domain;
+	unsigned long domains;
 	bool enable = false;
 
 	for_each_encoder_on_crtc(dev, crtc, intel_encoder)
 		enable |= intel_encoder->connectors_active;
 
-	if (enable)
-		dev_priv->display.crtc_enable(crtc);
-	else
-		dev_priv->display.crtc_disable(crtc);
+	if (enable) {
+		if (!intel_crtc->active) {
+			/*
+			 * FIXME: DDI plls and relevant code isn't converted
+			 * yet, so do runtime PM for DPMS only for all other
+			 * platforms for now.
+			 */
+			if (!HAS_DDI(dev)) {
+				domains = get_crtc_power_domains(crtc);
+				for_each_power_domain(domain, domains)
+					intel_display_power_get(dev_priv, domain);
+				intel_crtc->enabled_power_domains = domains;
+			}
+
+			dev_priv->display.crtc_enable(crtc);
+		}
+	} else {
+		if (intel_crtc->active) {
+			dev_priv->display.crtc_disable(crtc);
+
+			if (!HAS_DDI(dev)) {
+				domains = intel_crtc->enabled_power_domains;
+				for_each_power_domain(domain, domains)
+					intel_display_power_put(dev_priv, domain);
+				intel_crtc->enabled_power_domains = 0;
+			}
+		}
+	}
 
 	intel_crtc_update_sarea(crtc, enable);
 }
@@ -10553,12 +10616,17 @@ intel_set_config_compute_mode_changes(struct drm_mode_set *set,
 	if (is_crtc_connector_off(set)) {
 		config->mode_changed = true;
 	} else if (set->crtc->primary->fb != set->fb) {
-		/* If we have no fb then treat it as a full mode set */
+		/*
+		 * If we have no fb, we can only flip as long as the crtc is
+		 * active, otherwise we need a full mode set.  The crtc may
+		 * be active if we've only disabled the primary plane, or
+		 * in fastboot situations.
+		 */
 		if (set->crtc->primary->fb == NULL) {
 			struct intel_crtc *intel_crtc =
 				to_intel_crtc(set->crtc);
 
-			if (intel_crtc->active && i915.fastboot) {
+			if (intel_crtc->active) {
 				DRM_DEBUG_KMS("crtc has no fb, will flip\n");
 				config->fb_changed = true;
 			} else {
@@ -10796,10 +10864,24 @@ static int intel_crtc_set_config(struct drm_mode_set *set)
 		ret = intel_set_mode(set->crtc, set->mode,
 				     set->x, set->y, set->fb);
 	} else if (config->fb_changed) {
+		struct drm_i915_private *dev_priv = dev->dev_private;
+		struct intel_crtc *intel_crtc = to_intel_crtc(set->crtc);
+
 		intel_crtc_wait_for_pending_flips(set->crtc);
 
 		ret = intel_pipe_set_base(set->crtc,
 					  set->x, set->y, set->fb);
+
+		/*
+		 * We need to make sure the primary plane is re-enabled if it
+		 * has previously been turned off.
+		 */
+		if (!intel_crtc->primary_enabled && ret == 0) {
+			WARN_ON(!intel_crtc->active);
+			intel_enable_primary_hw_plane(dev_priv, intel_crtc->plane,
+						      intel_crtc->pipe);
+		}
+
 		/*
 		 * In the fastboot case this may be our only check of the
 		 * state after boot.  It would be better to only do it on
@@ -10949,17 +11031,216 @@ static void intel_shared_dpll_init(struct drm_device *dev)
 	BUG_ON(dev_priv->num_shared_dpll > I915_NUM_PLLS);
 }
 
+static int
+intel_primary_plane_disable(struct drm_plane *plane)
+{
+	struct drm_device *dev = plane->dev;
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	struct intel_plane *intel_plane = to_intel_plane(plane);
+	struct intel_crtc *intel_crtc;
+
+	if (!plane->fb)
+		return 0;
+
+	BUG_ON(!plane->crtc);
+
+	intel_crtc = to_intel_crtc(plane->crtc);
+
+	/*
+	 * Even though we checked plane->fb above, it's still possible that
+	 * the primary plane has been implicitly disabled because the crtc
+	 * coordinates given weren't visible, or because we detected
+	 * that it was 100% covered by a sprite plane.  Or, the CRTC may be
+	 * off and we've set a fb, but haven't actually turned on the CRTC yet.
+	 * In either case, we need to unpin the FB and let the fb pointer get
+	 * updated, but otherwise we don't need to touch the hardware.
+	 */
+	if (!intel_crtc->primary_enabled)
+		goto disable_unpin;
+
+	intel_crtc_wait_for_pending_flips(plane->crtc);
+	intel_disable_primary_hw_plane(dev_priv, intel_plane->plane,
+				       intel_plane->pipe);
+
+disable_unpin:
+	intel_unpin_fb_obj(to_intel_framebuffer(plane->fb)->obj);
+	plane->fb = NULL;
+
+	return 0;
+}
+
+static int
+intel_primary_plane_setplane(struct drm_plane *plane, struct drm_crtc *crtc,
+			     struct drm_framebuffer *fb, int crtc_x, int crtc_y,
+			     unsigned int crtc_w, unsigned int crtc_h,
+			     uint32_t src_x, uint32_t src_y,
+			     uint32_t src_w, uint32_t src_h)
+{
+	struct drm_device *dev = crtc->dev;
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
+	struct intel_plane *intel_plane = to_intel_plane(plane);
+	struct drm_rect dest = {
+		/* integer pixels */
+		.x1 = crtc_x,
+		.y1 = crtc_y,
+		.x2 = crtc_x + crtc_w,
+		.y2 = crtc_y + crtc_h,
+	};
+	struct drm_rect src = {
+		/* 16.16 fixed point */
+		.x1 = src_x,
+		.y1 = src_y,
+		.x2 = src_x + src_w,
+		.y2 = src_y + src_h,
+	};
+	const struct drm_rect clip = {
+		/* integer pixels */
+		.x2 = intel_crtc->active ? intel_crtc->config.pipe_src_w : 0,
+		.y2 = intel_crtc->active ? intel_crtc->config.pipe_src_h : 0,
+	};
+	bool visible;
+	int ret;
+
+	ret = drm_plane_helper_check_update(plane, crtc, fb,
+					    &src, &dest, &clip,
+					    DRM_PLANE_HELPER_NO_SCALING,
+					    DRM_PLANE_HELPER_NO_SCALING,
+					    false, true, &visible);
+
+	if (ret)
+		return ret;
+
+	/*
+	 * If the CRTC isn't enabled, we're just pinning the framebuffer,
+	 * updating the fb pointer, and returning without touching the
+	 * hardware.  This allows us to later do a drmModeSetCrtc with fb=-1 to
+	 * turn on the display with all planes setup as desired.
+	 */
+	if (!crtc->enabled) {
+		/*
+		 * If we already called setplane while the crtc was disabled,
+		 * we may have an fb pinned; unpin it.
+		 */
+		if (plane->fb)
+			intel_unpin_fb_obj(to_intel_framebuffer(plane->fb)->obj);
+
+		/* Pin and return without programming hardware */
+		return intel_pin_and_fence_fb_obj(dev,
+						  to_intel_framebuffer(fb)->obj,
+						  NULL);
+	}
+
+	intel_crtc_wait_for_pending_flips(crtc);
+
+	/*
+	 * If clipping results in a non-visible primary plane, we'll disable
+	 * the primary plane.  Note that this is a bit different than what
+	 * happens if userspace explicitly disables the plane by passing fb=0
+	 * because plane->fb still gets set and pinned.
+	 */
+	if (!visible) {
+		/*
+		 * Try to pin the new fb first so that we can bail out if we
+		 * fail.
+		 */
+		if (plane->fb != fb) {
+			ret = intel_pin_and_fence_fb_obj(dev,
+							 to_intel_framebuffer(fb)->obj,
+							 NULL);
+			if (ret)
+				return ret;
+		}
+
+		if (intel_crtc->primary_enabled)
+			intel_disable_primary_hw_plane(dev_priv,
+						       intel_plane->plane,
+						       intel_plane->pipe);
+
+
+		if (plane->fb != fb)
+			if (plane->fb)
+				intel_unpin_fb_obj(to_intel_framebuffer(plane->fb)->obj);
+
+		return 0;
+	}
+
+	ret = intel_pipe_set_base(crtc, src.x1, src.y1, fb);
+	if (ret)
+		return ret;
+
+	if (!intel_crtc->primary_enabled)
+		intel_enable_primary_hw_plane(dev_priv, intel_crtc->plane,
+					      intel_crtc->pipe);
+
+	return 0;
+}
+
+static void intel_primary_plane_destroy(struct drm_plane *plane)
+{
+	struct intel_plane *intel_plane = to_intel_plane(plane);
+	drm_plane_cleanup(plane);
+	kfree(intel_plane);
+}
+
+static const struct drm_plane_funcs intel_primary_plane_funcs = {
+	.update_plane = intel_primary_plane_setplane,
+	.disable_plane = intel_primary_plane_disable,
+	.destroy = intel_primary_plane_destroy,
+};
+
+static struct drm_plane *intel_primary_plane_create(struct drm_device *dev,
+						    int pipe)
+{
+	struct intel_plane *primary;
+	const uint32_t *intel_primary_formats;
+	int num_formats;
+
+	primary = kzalloc(sizeof(*primary), GFP_KERNEL);
+	if (primary == NULL)
+		return NULL;
+
+	primary->can_scale = false;
+	primary->max_downscale = 1;
+	primary->pipe = pipe;
+	primary->plane = pipe;
+	if (HAS_FBC(dev) && INTEL_INFO(dev)->gen < 4)
+		primary->plane = !pipe;
+
+	if (INTEL_INFO(dev)->gen <= 3) {
+		intel_primary_formats = intel_primary_formats_gen2;
+		num_formats = ARRAY_SIZE(intel_primary_formats_gen2);
+	} else {
+		intel_primary_formats = intel_primary_formats_gen4;
+		num_formats = ARRAY_SIZE(intel_primary_formats_gen4);
+	}
+
+	drm_universal_plane_init(dev, &primary->base, 0,
+				 &intel_primary_plane_funcs,
+				 intel_primary_formats, num_formats,
+				 DRM_PLANE_TYPE_PRIMARY);
+	return &primary->base;
+}
+
 static void intel_crtc_init(struct drm_device *dev, int pipe)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct intel_crtc *intel_crtc;
-	int i;
+	struct drm_plane *primary;
+	int i, ret;
 
 	intel_crtc = kzalloc(sizeof(*intel_crtc), GFP_KERNEL);
 	if (intel_crtc == NULL)
 		return;
 
-	drm_crtc_init(dev, &intel_crtc->base, &intel_crtc_funcs);
+	primary = intel_primary_plane_create(dev, pipe);
+	ret = drm_crtc_init_with_planes(dev, &intel_crtc->base, primary,
+					NULL, &intel_crtc_funcs);
+	if (ret) {
+		drm_plane_cleanup(primary);
+		kfree(intel_crtc);
+		return;
+	}
 
 	drm_mode_crtc_set_gamma_size(&intel_crtc->base, 256);
 	for (i = 0; i < 256; i++) {
