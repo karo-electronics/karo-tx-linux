@@ -1388,6 +1388,9 @@ static __init int kprobe_trace_self_tests_init(void)
 	struct trace_kprobe *tk;
 	struct ftrace_event_file *file;
 
+	if (tracing_is_disabled())
+		return -ENODEV;
+
 	target = kprobe_trace_selftest_target;
 
 	pr_info("Testing kprobe tracing: ");
