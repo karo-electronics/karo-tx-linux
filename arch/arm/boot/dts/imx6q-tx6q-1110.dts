@@ -18,9 +18,9 @@
 	compatible = "karo,imx6q-tx6q", "fsl,imx6q";
 
 	aliases {
-		display = &lvds0;
-		lvds0 = &lvds0;
-		lvds1 = &lvds1;
+		display = &ldb;
+		ipu1 = &ipu2;
+		mxcfb0 = &mxcfb1;
 	};
 
 	backlight0: backlight0 {
@@ -67,21 +67,20 @@
 		default-brightness-level = <50>;
 	};
 
-	panel0 {
-		compatible = "simple-panel";
-		power-supply = <&reg_3v3>;
-		backlight = <&backlight0>;
-	};
-
-	panel1 {
-		compatible = "simple-panel";
-		power-supply = <&reg_3v3>;
-		backlight = <&backlight1>;
+	mxcfb1: fb@0 {
+		compatible = "fsl,mxc_sdc_fb";
+		disp_dev = "ldb";
+		interface_pix_fmt = "RGB666";
+		mode_str ="LDB-XGA";
+		default_bpp = <16>;
+		int_clk = <0>;
+		late_init = <0>;
+		status = "okay";
 	};
 };
 
 &i2c3 {
-	polytouch2: eeti@04 {
+	polytouch1: eeti@04 {
 		compatible = "eeti,egalax_ts";
 		reg = <0x04>;
 		pinctrl-names = "default";
@@ -108,57 +107,17 @@
 };
 
 &kpp {
-	status = "disabled"; /* clashes with backlight1 PWM */
+	status = "disabled"; /* pads partially clash with backlight1 PWM */
 };
 
 &ldb {
+	ipu_id = <0>;
+	disp_id = <0>;
+	ext_ref = <0>;
+	mode = "sep0";
+	sec_ipu_id = <1>;
+	sec_disp_id = <1>;
 	status = "okay";
-
-	lvds0: lvds-channel@0 {
-		fsl,data-mapping = "spwg";
-		fsl,data-width = <18>;
-		status = "okay";
-
-		display-timings {
-			native-mode = <&lvds_timing0>;
-			lvds_timing0: hsd100pxn1 {
-				clock-frequency = <65000000>;
-				hactive = <1024>;
-				vactive = <768>;
-				hback-porch = <220>;
-				hfront-porch = <40>;
-				vback-porch = <21>;
-				vfront-porch = <7>;
-				hsync-len = <60>;
-				vsync-len = <10>;
-				de-active = <1>;
-				pixelclk-active = <1>;
-			};
-		};
-	};
-
-	lvds1: lvds-channel@1 {
-		fsl,data-mapping = "spwg";
-		fsl,data-width = <18>;
-		status = "okay";
-
-		display-timings {
-			native-mode = <&lvds_timing1>;
-			lvds_timing1: hsd100pxn1 {
-				clock-frequency = <65000000>;
-				hactive = <1024>;
-				vactive = <768>;
-				hback-porch = <220>;
-				hfront-porch = <40>;
-				vback-porch = <21>;
-				vfront-porch = <7>;
-				hsync-len = <60>;
-				vsync-len = <10>;
-				de-active = <1>;
-				pixelclk-active = <1>;
-			};
-		};
-	};
 };
 
 &pwm1 {

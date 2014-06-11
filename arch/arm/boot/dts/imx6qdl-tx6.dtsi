@@ -14,10 +14,8 @@
 
 / {
 	aliases {
-#if 0
-		can0 = &can2;
-		can1 = &can1;
-#endif
+		can0 = &flexcan2;
+		can1 = &flexcan1;
 		ethernet0 = &fec;
 		lcdif_23bit_pins_a = &pinctrl_disp0_1;
 		lcdif_24bit_pins_a = &pinctrl_disp0_2;
@@ -44,18 +42,18 @@
 			clock-frequency = <27000000>;
 		};
 	};
-#if 0
+
 	gpio-keys {
 		compatible = "gpio-keys";
 
 		power {
 			label = "Power Button";
 			gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
-			linux,code = <KEY_POWER>;
+			linux,code = <116>; /* KEY_POWER */
 			gpio-key,wakeup;
 		};
 	};
-#endif
+
 	leds {
 		compatible = "gpio-leds";
 
@@ -172,8 +170,6 @@
 		compatible = "karo,imx6qdl-tx6qdl-sgtl5000",
 			     "fsl,imx-audio-sgtl5000";
 		model = "sgtl5000-audio";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_audmux>;
 		ssi-controller = <&ssi1>;
 		audio-codec = <&sgtl5000>;
 		audio-routing =
@@ -186,24 +182,24 @@
 };
 
 &audmux {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_audmux>;
 	status = "okay";
 };
 
-#if 0
-&can1 {
+&flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
 	xceiver-supply = <&reg_can_xcvr>;
 	status = "okay";
 };
 
-&can2 {
+&flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	xceiver-supply = <&reg_can_xcvr>;
 	status = "okay";
 };
-#endif
 
 &ecspi1 {
 	pinctrl-names = "default";
@@ -607,27 +603,25 @@
 	};
 };
 
-#if 0
 &kpp {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_kpp>;
 	/* sample keymap */
 	/* row/col 0,1 are mapped to KPP row/col 6,7 */
 	linux,keymap = <
-		MATRIX_KEY(6, 6, KEY_POWER) /* 0x06060074 */
-		MATRIX_KEY(6, 7, KEY_KP0) /* 0x06070052 */
-		MATRIX_KEY(6, 2, KEY_KP1) /* 0x0602004f */
-		MATRIX_KEY(6, 3, KEY_KP2) /* 0x06030050 */
-		MATRIX_KEY(7, 6, KEY_KP3) /* 0x07060051 */
-		MATRIX_KEY(7, 7, KEY_KP4) /* 0x0707004b */
-		MATRIX_KEY(7, 2, KEY_KP5) /* 0x0702004c */
-		MATRIX_KEY(7, 3, KEY_KP6) /* 0x0703004d */
-		MATRIX_KEY(2, 6, KEY_KP7) /* 0x02060047 */
-		MATRIX_KEY(2, 7, KEY_KP8) /* 0x02070048 */
-		MATRIX_KEY(2, 2, KEY_KP9) /* 0x02020049 */
+		0x06060074 /* MATRIX_KEY(6, 6, 116) KEY_POWER */
+		0x06070052 /* MATRIX_KEY(6, 7, 82) KEY_KP0 */
+		0x0602004f /* MATRIX_KEY(6, 2, 79) KEY_KP1 */
+		0x06030050 /* MATRIX_KEY(6, 3, 80) KEY_KP2 */
+		0x07060051 /* MATRIX_KEY(7, 6, 81) KEY_KP3 */
+		0x0707004b /* MATRIX_KEY(7, 7, 75) KEY_KP4 */
+		0x0702004c /* MATRIX_KEY(7, 2, 76) KEY_KP5 */
+		0x0703004d /* MATRIX_KEY(7, 3, 77) KEY_KP6 */
+		0x02060047 /* MATRIX_KEY(2, 6, 71) KEY_KP7 */
+		0x02070048 /* MATRIX_KEY(2, 7, 72) KEY_KP8 */
+		0x02020049 /* MATRIX_KEY(2, 2, 73) KEY_KP9 */
 	>;
 };
-#endif
 
 &pwm1 {
 	pinctrl-names = "default";
