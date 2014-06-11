@@ -19,6 +19,7 @@
 
 	aliases {
 		display = &mxcfb3;
+		mxcfb2 = &mxcfb3;
 	};
 
 	backlight: backlight {
@@ -51,7 +52,7 @@
 		default_bpp = <16>;
 		int_clk = <0>;
 		late_init = <0>;
-		status = "disabled";
+		status = "okay";
 	};
 
 	lcd@0 {
@@ -62,18 +63,6 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_disp0_2>;
 		status = "okay";
-	};
-
-	v4l2_out {
-		compatible = "fsl,mxc_v4l2_output";
-		status = "okay";
-	};
-
-	mipi_dsi_reset: mipi-dsi-reset {
-		compatible = "gpio-reset";
-		reset-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <50>;
-		#reset-cells = <0>;
 	};
 };
 

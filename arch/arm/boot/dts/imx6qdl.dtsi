@@ -466,6 +466,7 @@
 			};
 
 			kpp: kpp@020b8000 {
+				compatible = "fsl,imx6qdl-kpp", "fsl,imx21-kpp";
 				reg = <0x020b8000 0x4000>;
 				interrupts = <0 82 IRQ_TYPE_LEVEL_HIGH>;
 			};
