@@ -17,6 +17,7 @@ int of_get_nand_ecc_step_size(struct device_node *np);
 int of_get_nand_ecc_strength(struct device_node *np);
 int of_get_nand_bus_width(struct device_node *np);
 bool of_get_nand_on_flash_bbt(struct device_node *np);
+bool of_get_nand_no_oob_bbm(struct device_node *np);
 
 #else /* CONFIG_OF_MTD */
 
@@ -41,6 +42,11 @@ static inline int of_get_nand_bus_width(struct device_node *np)
 }
 
 static inline bool of_get_nand_on_flash_bbt(struct device_node *np)
+{
+	return false;
+}
+
+static inline bool of_get_nand_no_oob_bbm(struct device_node *np)
 {
 	return false;
 }

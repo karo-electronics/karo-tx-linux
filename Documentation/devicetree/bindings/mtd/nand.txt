@@ -5,6 +5,7 @@
   "soft_bch".
 - nand-bus-width : 8 or 16 bus width if not present 8
 - nand-on-flash-bbt: boolean to enable on flash bbt option if not present false
+- nand-no-oob-bbm: boolean to disable writing bad block markers to flash
 
 - nand-ecc-strength: integer representing the number of bits to correct
 		     per ECC step.

@@ -1724,6 +1724,9 @@ static int gpmi_nand_init(struct gpmi_nand_data *this)
 	if (of_get_nand_on_flash_bbt(this->dev->of_node)) {
 		chip->bbt_options |= NAND_BBT_USE_FLASH | NAND_BBT_NO_OOB;
 
+		if (of_get_nand_no_oob_bbm(this->dev->of_node))
+			chip->bbt_options |= NAND_BBT_NO_OOB_BBM;
+
 		if (of_property_read_bool(this->dev->of_node,
 						"fsl,no-blockmark-swap"))
 			this->swap_block_mark = false;
