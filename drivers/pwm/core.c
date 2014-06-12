@@ -136,7 +136,7 @@ of_pwm_xlate_with_flags(struct pwm_chip *pc, const struct of_phandle_args *args)
 {
 	struct pwm_device *pwm;
 
-	if (pc->of_pwm_n_cells < 3)
+	if (args->args_count != 3)
 		return ERR_PTR(-EINVAL);
 
 	if (args->args[0] >= pc->npwm)
@@ -162,11 +162,14 @@ of_pwm_simple_xlate(struct pwm_chip *pc, const struct of_phandle_args *args)
 {
 	struct pwm_device *pwm;
 
-	if (pc->of_pwm_n_cells < 2)
+	if (args->args_count < 2)
 		return ERR_PTR(-EINVAL);
 
 	if (args->args[0] >= pc->npwm)
 		return ERR_PTR(-EINVAL);
+
+	if (args->args_count > 2)
+		return of_pwm_xlate_with_flags(pc, args);
 
 	pwm = pwm_request_from_chip(pc, args->args[0], NULL);
 	if (IS_ERR(pwm))
@@ -182,10 +185,8 @@ static void of_pwmchip_add(struct pwm_chip *chip)
 	if (!chip->dev || !chip->dev->of_node)
 		return;
 
-	if (!chip->of_xlate) {
+	if (!chip->of_xlate)
 		chip->of_xlate = of_pwm_simple_xlate;
-		chip->of_pwm_n_cells = 2;
-	}
 
 	of_node_get(chip->dev->of_node);
 }
@@ -533,13 +534,6 @@ struct pwm_device *of_pwm_get(struct device_node *np, const char *con_id)
 	if (IS_ERR(pc)) {
 		pr_err("%s(): PWM chip not found\n", __func__);
 		pwm = ERR_CAST(pc);
-		goto put;
-	}
-
-	if (args.args_count != pc->of_pwm_n_cells) {
-		pr_debug("%s: wrong #pwm-cells for %s\n", np->full_name,
-			 args.np->full_name);
-		pwm = ERR_PTR(-EINVAL);
 		goto put;
 	}
 

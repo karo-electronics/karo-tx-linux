@@ -484,7 +484,6 @@ static int pwm_samsung_probe(struct platform_device *pdev)
 			return ret;
 
 		chip->chip.of_xlate = of_pwm_xlate_with_flags;
-		chip->chip.of_pwm_n_cells = 3;
 	} else {
 		if (!pdev->dev.platform_data) {
 			dev_err(&pdev->dev, "no platform data specified\n");
