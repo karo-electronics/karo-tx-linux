@@ -174,7 +174,6 @@ struct pwm_chip {
 
 	struct pwm_device *	(*of_xlate)(struct pwm_chip *pc,
 					    const struct of_phandle_args *args);
-	unsigned int		of_pwm_n_cells;
 	bool			can_sleep;
 };
 
