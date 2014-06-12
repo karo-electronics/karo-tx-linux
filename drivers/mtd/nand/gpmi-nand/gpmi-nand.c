@@ -43,6 +43,29 @@ static struct nand_bbt_descr gpmi_bbt_descr = {
 	.pattern	= scan_ff_pattern
 };
 
+static uint8_t bbt_pattern[] = {'B', 'b', 't', '0' };
+static uint8_t mirror_pattern[] = {'1', 't', 'b', 'B' };
+
+static struct nand_bbt_descr bbt_main_no_oob_descr = {
+	.options = NAND_BBT_LASTBLOCK | NAND_BBT_WRITE |
+	NAND_BBT_2BIT | NAND_BBT_VERSION | NAND_BBT_PERCHIP |
+	NAND_BBT_NO_OOB,
+	.len = 4,
+	.veroffs = 4,
+	.maxblocks = NAND_BBT_SCAN_MAXBLOCKS,
+	.pattern = bbt_pattern,
+};
+
+static struct nand_bbt_descr bbt_mirror_no_oob_descr = {
+	.options = NAND_BBT_LASTBLOCK | NAND_BBT_WRITE |
+	NAND_BBT_2BIT | NAND_BBT_VERSION | NAND_BBT_PERCHIP |
+	NAND_BBT_NO_OOB,
+	.len = 4,
+	.veroffs = 4,
+	.maxblocks = NAND_BBT_SCAN_MAXBLOCKS,
+	.pattern = mirror_pattern,
+};
+
 /*
  * We may change the layout if we can get the ECC info from the datasheet,
  * else we will use all the (page + OOB).
@@ -1728,8 +1751,11 @@ static int gpmi_nand_init(struct gpmi_nand_data *this)
 			chip->bbt_options |= NAND_BBT_NO_OOB_BBM;
 
 		if (of_property_read_bool(this->dev->of_node,
-						"fsl,no-blockmark-swap"))
+						"fsl,no-blockmark-swap")) {
 			this->swap_block_mark = false;
+			chip->bbt_td = &bbt_main_no_oob_descr;
+			chip->bbt_md = &bbt_mirror_no_oob_descr;
+		}
 	}
 	dev_dbg(this->dev, "Blockmark swapping %sabled\n",
 		this->swap_block_mark ? "en" : "dis");
