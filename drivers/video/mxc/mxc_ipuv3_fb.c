@@ -1904,14 +1904,11 @@ static int mxcfb_dispdrv_init(struct platform_device *pdev,
 	if (!setting.default_bpp)
 		setting.default_bpp = 16;
 	setting.fbi = fbi;
-	if (!strlen(plat_data->disp_dev)) {
-		memcpy(disp_dev, default_dev, strlen(default_dev));
-		disp_dev[strlen(default_dev)] = '\0';
-	} else {
-		memcpy(disp_dev, plat_data->disp_dev,
-				strlen(plat_data->disp_dev));
-		disp_dev[strlen(plat_data->disp_dev)] = '\0';
-	}
+	if (!strlen(plat_data->disp_dev))
+		strlcpy(disp_dev, default_dev, sizeof(disp_dev));
+	else
+		strlcpy(disp_dev, plat_data->disp_dev, sizeof(disp_dev));
+
 
 	dev_info(&pdev->dev, "register mxc display driver %s\n", disp_dev);
 
@@ -1963,8 +1960,7 @@ static int mxcfb_option_setup(struct platform_device *pdev, struct fb_info *fbi)
 			continue;
 
 		if (!strncmp(opt, "dev=", 4)) {
-			memcpy(pdata->disp_dev, opt + 4, strlen(opt) - 4);
-			pdata->disp_dev[strlen(opt) - 4] = '\0';
+			strlcpy(pdata->disp_dev, opt + 4, sizeof(pdata->disp_dev));
 		} else if (!strncmp(opt, "if=", 3)) {
 			if (!strncmp(opt+3, "RGB24", 5))
 				pdata->interface_pix_fmt = IPU_PIX_FMT_RGB24;
@@ -2259,7 +2255,6 @@ static int mxcfb_get_of_property(struct platform_device *pdev,
 	const char *mode_str;
 	const char *pixfmt;
 	int err;
-	int len;
 	u32 bpp, int_clk;
 	u32 late_init;
 
@@ -2321,9 +2316,7 @@ static int mxcfb_get_of_property(struct platform_device *pdev,
 		return -ENOENT;
 	}
 
-	len = min(sizeof(plat_data->disp_dev) - 1, strlen(disp_dev));
-	memcpy(plat_data->disp_dev, disp_dev, len);
-	plat_data->disp_dev[len] = '\0';
+	strlcpy(plat_data->disp_dev, disp_dev, sizeof(plat_data->disp_dev));
 	plat_data->mode_str = (char *)mode_str;
 	plat_data->default_bpp = bpp;
 	plat_data->int_clk = (bool)int_clk;
