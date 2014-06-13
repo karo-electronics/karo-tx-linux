@@ -18,9 +18,9 @@
 	compatible = "karo,imx6q-tx6q", "fsl,imx6q";
 
 	aliases {
-		display = &ldb;
+		display = &lvds0;
 		ipu1 = &ipu2;
-		mxcfb0 = &mxcfb1;
+		mxcfb0 = &lvds0;
 	};
 
 	backlight0: backlight0 {
@@ -67,12 +67,12 @@
 		default-brightness-level = <50>;
 	};
 
-	mxcfb1: fb@0 {
+	lvds0: fb@0 {
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
 		interface_pix_fmt = "RGB666";
 		mode_str ="LDB-XGA";
-		default_bpp = <16>;
+		default_bpp = <32>;
 		int_clk = <0>;
 		late_init = <0>;
 		status = "okay";
