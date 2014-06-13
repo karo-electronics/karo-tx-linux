@@ -2179,7 +2179,7 @@ static int mxcfb_setup_overlay(struct platform_device *pdev,
 
 	mxcfbi_fg->ipu = ipu_get_soc(mxcfbi_bg->ipu_id);
 	if (IS_ERR(mxcfbi_fg->ipu)) {
-		ret = -ENODEV;
+		ret = PTR_ERR(mxcfbi_fg->ipu);
 		goto get_ipu_failed;
 	}
 	mxcfbi_fg->ipu_id = mxcfbi_bg->ipu_id;
@@ -2407,7 +2407,8 @@ static int mxcfb_probe(struct platform_device *pdev)
 
 	mxcfbi->ipu = ipu_get_soc(mxcfbi->ipu_id);
 	if (IS_ERR(mxcfbi->ipu)) {
-		ret = -ENODEV;
+		dev_err(&pdev->dev, "Failed to get IPU %d\n", mxcfbi->ipu_id);
+		ret = PTR_ERR(mxcfbi->ipu);
 		goto get_ipu_failed;
 	}
 
