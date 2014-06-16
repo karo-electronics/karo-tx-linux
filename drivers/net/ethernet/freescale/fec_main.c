@@ -2165,9 +2165,6 @@ fec_enet_open(struct net_device *ndev)
 	netif_start_queue(ndev);
 	fep->opened = 1;
 
-	/* reset phy */
-	fec_reset_phy(fep->pdev);
-
 	return 0;
 }
 
@@ -2603,6 +2600,8 @@ fec_probe(struct platform_device *pdev)
 	} else {
 		fep->reg_phy = NULL;
 	}
+
+	fec_reset_phy(pdev);
 
 	if (fep->bufdesc_ex)
 		fec_ptp_init(pdev);
