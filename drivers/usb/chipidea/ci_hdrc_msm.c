@@ -17,7 +17,7 @@
 
 #define MSM_USB_BASE	(ci->hw_bank.abs)
 
-static int ci_hdrc_msm_notify_event(struct ci_hdrc *ci, unsigned event)
+static void ci_hdrc_msm_notify_event(struct ci_hdrc *ci, unsigned event)
 {
 	struct device *dev = ci->gadget.dev.parent;
 	int val;
@@ -43,8 +43,6 @@ static int ci_hdrc_msm_notify_event(struct ci_hdrc *ci, unsigned event)
 		dev_dbg(dev, "unknown ci_hdrc event\n");
 		break;
 	}
-
-	return 0;
 }
 
 static struct ci_hdrc_platform_data ci_hdrc_msm_platdata = {

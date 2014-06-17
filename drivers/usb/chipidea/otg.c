@@ -103,7 +103,7 @@ static void ci_otg_work(struct work_struct *work)
 		ci->b_sess_valid_event = false;
 		ci_handle_vbus_change(ci);
 	} else
-		dev_dbg(ci->dev, "it should be quit event\n");
+		dev_err(ci->dev, "unexpected event occurs at %s\n", __func__);
 
 	enable_irq(ci->irq);
 }

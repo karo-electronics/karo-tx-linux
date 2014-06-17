@@ -53,24 +53,6 @@
 	};
 
 	soc {
-		gpu@00130000 {
-			compatible = "fsl,imx6dl-gpu", "fsl,imx6q-gpu";
-			reg = <0x00130000 0x4000>, <0x00134000 0x4000>,
-			      <0x0 0x0>;
-			reg-names = "iobase_3d", "iobase_2d",
-				    "phys_baseaddr";
-			interrupts = <0 9 0x04>, <0 10 0x04>;
-			interrupt-names = "irq_3d", "irq_2d";
-			clocks = <&clks 143>, <&clks 27>,
-				 <&clks 121>, <&clks 122>,
-				 <&clks 0>;
-			clock-names = "gpu2d_axi_clk", "gpu3d_axi_clk",
-				      "gpu2d_clk", "gpu3d_clk",
-				      "gpu3d_shader_clk";
-			resets = <&src 0>, <&src 3>;
-			reset-names = "gpu3d", "gpu2d";
-		};
-
 		ocram: sram@00900000 {
 			compatible = "mmio-sram";
 			reg = <0x00900000 0x20000>;
@@ -78,22 +60,13 @@
 		};
 
 		aips1: aips-bus@02000000 {
-			vpu@02040000 {
-				iramsize = <0>;
-				status = "okay";
-			};
-
 			iomuxc: iomuxc@020e0000 {
 				compatible = "fsl,imx6dl-iomuxc";
 			};
 
 			pxp: pxp@020f0000 {
-				compatible = "fsl,imx6dl-pxp-dma";
 				reg = <0x020f0000 0x4000>;
 				interrupts = <0 98 IRQ_TYPE_LEVEL_HIGH>;
-				clocks = <&clks 133>;
-				clock-names = "pxp-axi";
-				status = "disabled";
 			};
 
 			epdc: epdc@020f4000 {
