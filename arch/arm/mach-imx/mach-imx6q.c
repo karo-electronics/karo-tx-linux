@@ -15,7 +15,6 @@
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/export.h>
-#include <linux/gpio.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/irq.h>
@@ -23,7 +22,6 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
-#include <linux/of_gpio.h>
 #include <linux/of_platform.h>
 #include <linux/pm_opp.h>
 #include <linux/pci.h>
@@ -110,38 +108,9 @@ DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_PLX, 0x8609, ventana_pciesw_early_fixup);
 DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_PLX, 0x8606, ventana_pciesw_early_fixup);
 DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_PLX, 0x8604, ventana_pciesw_early_fixup);
 
-static void mmd_write_reg(struct phy_device *dev, int device, int reg, int val)
-{
-	phy_write(dev, 0x0d, device);
-	phy_write(dev, 0x0e, reg);
-	phy_write(dev, 0x0d, (1 << 14) | device);
-	phy_write(dev, 0x0e, val);
-}
-
-static int ksz9031rn_phy_fixup(struct phy_device *dev)
-{
-	/*
-	 * min rx data delay, max rx/tx clock delay,
-	 * min rx/tx control delay
-	 */
-	mmd_write_reg(dev, 2, 4, 0);
-	mmd_write_reg(dev, 2, 5, 0);
-	mmd_write_reg(dev, 2, 8, 0x003ff);
-
-	return 0;
-}
-
 static int ar8031_phy_fixup(struct phy_device *dev)
 {
 	u16 val;
-
-	/* disable phy AR8031 SmartEEE function. */
-	phy_write(dev, 0xd, 0x3);
-	phy_write(dev, 0xe, 0x805d);
-	phy_write(dev, 0xd, 0x4003);
-	val = phy_read(dev, 0xe);
-	val &= ~(0x1 << 8);
-	phy_write(dev, 0xe, val);
 
 	/* To enable AR8031 output a 125MHz clk from CLK_25M */
 	phy_write(dev, 0xd, 0x7);
@@ -292,38 +261,6 @@ static void __init imx6q_axi_init(void)
 	}
 }
 
-/*
- * Disable Hannstar LVDS panel CABC function.
- * This function turns the panel's backlight density automatically
- * according to the content shown on the panel which may cause
- * annoying unstable backlight issue.
- */
-static void __init imx6q_lvds_cabc_init(void)
-{
-	struct device_node *np = NULL;
-	int ret, lvds0_gpio, lvds1_gpio;
-
-	np = of_find_node_by_name(NULL, "lvds_cabc_ctrl");
-	if (!np)
-		return;
-
-	lvds0_gpio = of_get_named_gpio(np, "lvds0-gpios", 0);
-	if (gpio_is_valid(lvds0_gpio)) {
-		ret = gpio_request_one(lvds0_gpio, GPIOF_OUT_INIT_LOW,
-				"LVDS0 CABC enable");
-		if (ret)
-			pr_warn("failed to request LVDS0 CABC gpio\n");
-	}
-
-	lvds1_gpio = of_get_named_gpio(np, "lvds1-gpios", 0);
-	if (gpio_is_valid(lvds1_gpio)) {
-		ret = gpio_request_one(lvds1_gpio, GPIOF_OUT_INIT_LOW,
-				"LVDS1 CABC enable");
-		if (ret)
-			pr_warn("failed to request LVDS1 CABC gpio\n");
-	}
-}
-
 static void __init imx6q_init_machine(void)
 {
 	struct device *parent;
@@ -345,7 +282,6 @@ static void __init imx6q_init_machine(void)
 	cpu_is_imx6q() ?  imx6q_pm_init() : imx6dl_pm_init();
 	imx6q_1588_init();
 	imx6q_axi_init();
-	imx6q_lvds_cabc_init();
 }
 
 #define OCOTP_CFG3			0x440
@@ -449,7 +385,6 @@ static void __init imx6q_map_io(void)
 {
 	debug_ll_io_init();
 	imx_scu_map_io();
-	imx6_pm_map_io();
 }
 
 static void __init imx6q_init_irq(void)
@@ -468,12 +403,6 @@ static const char *imx6q_dt_compat[] __initconst = {
 };
 
 DT_MACHINE_START(IMX6Q, "Freescale i.MX6 Quad/DualLite (Device Tree)")
-	/*
-	 * i.MX6Q/DL maps system memory at 0x10000000 (offset 256MiB), and
-	 * GPU has a limit on physical address that it accesses, which must
-	 * be below 2GiB.
-	 */
-	.dma_zone_size	= (SZ_2G - SZ_256M),
 	.smp		= smp_ops(imx_smp_ops),
 	.map_io		= imx6q_map_io,
 	.init_irq	= imx6q_init_irq,

@@ -54,11 +54,6 @@
 #define ESDHC_DLL_OVERRIDE_VAL_SHIFT	9
 #define ESDHC_DLL_OVERRIDE_EN_SHIFT	8
 
-/* dll control register */
-#define ESDHC_DLL_CTRL			0x60
-#define ESDHC_DLL_OVERRIDE_VAL_SHIFT	9
-#define ESDHC_DLL_OVERRIDE_EN_SHIFT	8
-
 /* tune control register */
 #define ESDHC_TUNE_CTRL_STATUS		0x68
 #define  ESDHC_TUNE_CTRL_STEP		1
@@ -119,8 +114,6 @@
 #define ESDHC_FLAG_STD_TUNING		BIT(5)
 /* The IP has SDHCI_CAPABILITIES_1 register */
 #define ESDHC_FLAG_HAVE_CAP1		BIT(6)
-/* The IP has errata ERR004536 */
-#define ESDHC_FLAG_ERR004536		BIT(7)
 
 struct esdhc_soc_data {
 	u32 flags;
@@ -148,7 +141,7 @@ static struct esdhc_soc_data usdhc_imx6q_data = {
 
 static struct esdhc_soc_data usdhc_imx6sl_data = {
 	.flags = ESDHC_FLAG_USDHC | ESDHC_FLAG_STD_TUNING
-			| ESDHC_FLAG_HAVE_CAP1 | ESDHC_FLAG_ERR004536,
+			| ESDHC_FLAG_HAVE_CAP1,
 };
 
 struct pltfm_imx_data {
@@ -389,22 +382,6 @@ static u16 esdhc_readw_le(struct sdhci_host *host, int reg)
 			ret |= SDHCI_CTRL_TUNED_CLK;
 
 		ret &= ~SDHCI_CTRL_PRESET_VAL_ENABLE;
-
-		return ret;
-	}
-
-	if (unlikely(reg == SDHCI_TRANSFER_MODE)) {
-		if (esdhc_is_usdhc(imx_data)) {
-			u32 m = readl(host->ioaddr + ESDHC_MIX_CTRL);
-			ret = m & ESDHC_MIX_CTRL_SDHCI_MASK;
-			/* Swap AC23 bit */
-			if (m & ESDHC_MIX_CTRL_AC23EN) {
-				ret &= ~ESDHC_MIX_CTRL_AC23EN;
-				ret |= SDHCI_TRNS_AUTO_CMD23;
-			}
-		} else {
-			ret = readw(host->ioaddr + SDHCI_TRANSFER_MODE);
-		}
 
 		return ret;
 	}
@@ -903,11 +880,6 @@ static void esdhc_reset(struct sdhci_host *host, u8 mask)
 	sdhci_writel(host, host->ier, SDHCI_SIGNAL_ENABLE);
 }
 
-static unsigned int esdhc_get_max_timeout_counter(struct sdhci_host *host)
-{
-	return 1 << 28;
-}
-
 static struct sdhci_ops sdhci_esdhc_ops = {
 	.read_l = esdhc_readl_le,
 	.read_w = esdhc_readw_le,
@@ -937,7 +909,6 @@ sdhci_esdhc_imx_probe_dt(struct platform_device *pdev,
 			 struct esdhc_platform_data *boarddata)
 {
 	struct device_node *np = pdev->dev.of_node;
-	struct sdhci_host *host = platform_get_drvdata(pdev);
 
 	if (!np)
 		return -ENODEV;
@@ -970,12 +941,6 @@ sdhci_esdhc_imx_probe_dt(struct platform_device *pdev,
 
 	if (of_property_read_u32(np, "fsl,delay-line", &boarddata->delay_line))
 		boarddata->delay_line = 0;
-
-	if (of_find_property(np, "keep-power-in-suspend", NULL))
-		host->mmc->pm_caps |= MMC_PM_KEEP_POWER;
-
-	if (of_find_property(np, "enable-sdio-wakeup", NULL))
-		host->mmc->pm_caps |= MMC_PM_WAKE_SDIO_IRQ;
 
 	return 0;
 }
@@ -1065,17 +1030,8 @@ static int sdhci_esdhc_imx_probe(struct platform_device *pdev)
 	 */
 	if (esdhc_is_usdhc(imx_data)) {
 		writel(0x08100810, host->ioaddr + ESDHC_WTMK_LVL);
-		host->quirks2 |= SDHCI_QUIRK2_PRESET_VALUE_BROKEN |
-					SDHCI_QUIRK2_NOSTD_TIMEOUT_COUNTER;
+		host->quirks2 |= SDHCI_QUIRK2_PRESET_VALUE_BROKEN;
 		host->mmc->caps |= MMC_CAP_1_8V_DDR;
-
-		/*
-		 * errata ESDHC_FLAG_ERR004536 fix for MX6Q TO1.2 and MX6DL
-		 * TO1.1, it's harmless for MX6SL
-		 */
-		writel(readl(host->ioaddr + 0x6c) | BIT(7), host->ioaddr + 0x6c);
-		sdhci_esdhc_ops.get_max_timeout_counter =
-					esdhc_get_max_timeout_counter;
 	}
 
 	if (imx_data->socdata->flags & ESDHC_FLAG_MAN_TUNING)
@@ -1086,9 +1042,6 @@ static int sdhci_esdhc_imx_probe(struct platform_device *pdev)
 		writel(readl(host->ioaddr + ESDHC_TUNING_CTRL) |
 			ESDHC_STD_TUNING_EN | ESDHC_TUNING_START_TAP,
 			host->ioaddr + ESDHC_TUNING_CTRL);
-
-	if (imx_data->socdata->flags & ESDHC_FLAG_ERR004536)
-		host->quirks |= SDHCI_QUIRK_BROKEN_ADMA;
 
 	boarddata = &imx_data->boarddata;
 	if (sdhci_esdhc_imx_probe_dt(pdev, boarddata) < 0) {
@@ -1165,10 +1118,6 @@ static int sdhci_esdhc_imx_probe(struct platform_device *pdev)
 	} else {
 		host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
 	}
-
-	if (host->mmc->pm_caps & MMC_PM_KEEP_POWER &&
-		host->mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ)
-		device_init_wakeup(&pdev->dev, 1);
 
 	err = sdhci_add_host(host);
 	if (err)

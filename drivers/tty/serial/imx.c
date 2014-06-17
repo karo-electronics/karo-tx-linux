@@ -1272,20 +1272,8 @@ static void imx_shutdown(struct uart_port *port)
 	writel(temp, sport->port.membase + UCR1);
 	spin_unlock_irqrestore(&sport->port.lock, flags);
 
-	if (!uart_console(&sport->port)) {
-		clk_disable_unprepare(sport->clk_per);
-		clk_disable_unprepare(sport->clk_ipg);
-	}
-}
-
-static void imx_flush_buffer(struct uart_port *port)
-{
-	struct imx_port *sport = (struct imx_port *)port;
-
-	if (sport->dma_is_enabled) {
-		sport->tx_bytes = 0;
-		dmaengine_terminate_all(sport->dma_chan_tx);
-	}
+	clk_disable_unprepare(sport->clk_per);
+	clk_disable_unprepare(sport->clk_ipg);
 }
 
 static void imx_flush_buffer(struct uart_port *port)

@@ -61,6 +61,12 @@ enum imx_thermal_trip {
 #define IMX_TEMP_PASSIVE		85000
 #define IMX_TEMP_PASSIVE_COOL_DELTA	10000
 
+/*
+ * The maximum die temperature on imx parts is 105C, let's give some cushion
+ * for noise and possible temperature rise between measurements.
+ */
+#define IMX_TEMP_CRITICAL		100000
+
 #define IMX_POLLING_DELAY		2000 /* millisecond */
 #define IMX_PASSIVE_DELAY		1000
 
@@ -487,8 +493,8 @@ static int imx_thermal_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	data->trip_temp[IMX_TRIP_PASSIVE] = IMX_TEMP_PASSIVE;
-	data->trip_temp[IMX_TRIP_CRITICAL] = IMX_TEMP_CRITICAL;
+	data->temp_passive = IMX_TEMP_PASSIVE;
+	data->temp_critical = IMX_TEMP_CRITICAL;
 	data->tz = thermal_zone_device_register("imx_thermal_zone",
 						IMX_TRIP_NUM,
 						BIT(IMX_TRIP_PASSIVE), data,

@@ -18,7 +18,7 @@
  * Bug fixes and cleanup by Philippe De Muyter (phdm@macqel.be)
  * Copyright (c) 2004-2006 Macq Electronique SA.
  *
- * Copyright (C) 2010-2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2010-2011 Freescale Semiconductor, Inc.
  */
 
 #include <linux/module.h>
@@ -62,8 +62,6 @@
 #include "fec.h"
 
 static void set_multicast_list(struct net_device *ndev);
-static void fec_reset_phy(struct platform_device *pdev);
-static void fec_free_reset_gpio(struct platform_device *pdev);
 
 #if defined(CONFIG_ARM)
 #define FEC_ALIGNMENT	0xf
@@ -95,8 +93,6 @@ static void fec_free_reset_gpio(struct platform_device *pdev);
 #define FEC_QUIRK_HAS_CSUM		(1 << 5)
 /* Controller has hardware vlan support */
 #define FEC_QUIRK_HAS_VLAN		(1 << 6)
-/* Controller is FEC-MAC */
-#define FEC_QUIRK_FEC_MAC              (1 << 7)
 /* ENET IP errata ERR006358
  *
  * If the ready bit in the transmit buffer descriptor (TxBD[R]) is previously
@@ -115,7 +111,7 @@ static struct platform_device_id fec_devtype[] = {
 		.driver_data = 0,
 	}, {
 		.name = "imx25-fec",
-		.driver_data = FEC_QUIRK_USE_GASKET | FEC_QUIRK_FEC_MAC,
+		.driver_data = FEC_QUIRK_USE_GASKET,
 	}, {
 		.name = "imx27-fec",
 		.driver_data = 0,
@@ -844,8 +840,7 @@ fec_restart(struct net_device *ndev, int duplex)
 	 * enet-mac reset will reset mac address registers too,
 	 * so need to reconfigure it.
 	 */
-	if (id_entry->driver_data & FEC_QUIRK_ENET_MAC ||
-		id_entry->driver_data & FEC_QUIRK_FEC_MAC) {
+	if (id_entry->driver_data & FEC_QUIRK_ENET_MAC) {
 		memcpy(&temp_mac, ndev->dev_addr, ETH_ALEN);
 		writel(cpu_to_be32(temp_mac[0]), fep->hwp + FEC_ADDR_LOW);
 		writel(cpu_to_be32(temp_mac[1]), fep->hwp + FEC_ADDR_HIGH);
@@ -1279,13 +1274,13 @@ fec_enet_rx(struct net_device *ndev, int budget)
 		 * include that when passing upstream as it messes up
 		 * bridging applications.
 		 */
-		skb = __netdev_alloc_skb_ip_align(ndev, pkt_len - 4,
-			GFP_ATOMIC | __GFP_NOWARN);
+		skb = netdev_alloc_skb(ndev, pkt_len - 4 + NET_IP_ALIGN);
 
 		if (unlikely(!skb)) {
 			ndev->stats.rx_dropped++;
 		} else {
 			int payload_offset = (2 * ETH_ALEN);
+			skb_reserve(skb, NET_IP_ALIGN);
 			skb_put(skb, pkt_len - 4);	/* Make room */
 
 			/* Extract the frame data without the VLAN header. */
@@ -2164,7 +2159,6 @@ fec_enet_open(struct net_device *ndev)
 	phy_start(fep->phy_dev);
 	netif_start_queue(ndev);
 	fep->opened = 1;
-
 	return 0;
 }
 
@@ -2187,7 +2181,6 @@ fec_enet_close(struct net_device *ndev)
 	fec_enet_clk_enable(ndev, false);
 	pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 	fec_enet_free_buffers(ndev);
-	fec_free_reset_gpio(fep->pdev);
 
 	return 0;
 }
@@ -2441,11 +2434,9 @@ static int fec_enet_init(struct net_device *ndev)
 #ifdef CONFIG_OF
 static void fec_reset_phy(struct platform_device *pdev)
 {
-	int err;
+	int err, phy_reset;
 	int msec = 1;
 	struct device_node *np = pdev->dev.of_node;
-	struct net_device *ndev = platform_get_drvdata(pdev);
-	struct fec_enet_private *fep = netdev_priv(ndev);
 
 	if (!np)
 		return;
@@ -2455,33 +2446,18 @@ static void fec_reset_phy(struct platform_device *pdev)
 	if (msec > 1000)
 		msec = 1;
 
-	fep->phy_reset_gpio = of_get_named_gpio(np, "phy-reset-gpios", 0);
-	if (!gpio_is_valid(fep->phy_reset_gpio))
+	phy_reset = of_get_named_gpio(np, "phy-reset-gpios", 0);
+	if (!gpio_is_valid(phy_reset))
 		return;
 
-	err = devm_gpio_request_one(&pdev->dev, fep->phy_reset_gpio,
-				    GPIOF_OUT_INIT_HIGH, "phy-reset");
+	err = devm_gpio_request_one(&pdev->dev, phy_reset,
+				    GPIOF_OUT_INIT_LOW, "phy-reset");
 	if (err) {
 		dev_err(&pdev->dev, "failed to get phy-reset-gpios: %d\n", err);
 		return;
 	}
 	msleep(msec);
-	gpio_set_value(fep->phy_reset_gpio, 1);
-}
-
-static void fec_free_reset_gpio(struct platform_device *pdev)
-{
-	struct net_device *ndev = platform_get_drvdata(pdev);
-	struct fec_enet_private *fep = netdev_priv(ndev);
-	struct device_node *np = pdev->dev.of_node;
-	if (!np)
-		return;
-
-	fep->phy_reset_gpio = of_get_named_gpio(np, "phy-reset-gpios", 0);
-	if (!gpio_is_valid(fep->phy_reset_gpio))
-		return;
-
-	devm_gpio_free(&pdev->dev, fep->phy_reset_gpio);
+	gpio_set_value(phy_reset, 1);
 }
 #else /* CONFIG_OF */
 static void fec_reset_phy(struct platform_device *pdev)
@@ -2489,13 +2465,6 @@ static void fec_reset_phy(struct platform_device *pdev)
 	/*
 	 * In case of platform probe, the reset has been done
 	 * by machine code.
-	 */
-}
-
-static void fec_free_reset_gpio(struct platform_device *pdev)
-{
-	/*
-	 * make pair as api "fec_reset_phy()"
 	 */
 }
 #endif /* CONFIG_OF */
