@@ -664,9 +664,9 @@
 };
 
 &ehrpwm0 {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm0>;
+	status = "okay";
 };
 
 &elm {
@@ -694,10 +694,10 @@
 };
 
 &gpmc {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_gpmc_1>;
 	ranges = <0 0 0x08000000 0x10000000>;	/* CS0: NAND */
+	status = "okay";
 
 	nand@0 {
 		reg = <0 0 0>;
@@ -737,9 +737,9 @@
 };
 
 &i2c0 {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c0_1>;
+	status = "okay";
 
 	rtc1: ds1339@68 {
 		compatible = "dallas,ds1339";
@@ -815,11 +815,11 @@
 };
 
 &spi0 {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_cspi0>;
 	ti,spi-num-cs = <2>;
 	ti,pindir-d0-out-d1-in;
+	status = "okay";
 
 	spidev0: spi@0 {
 		compatible = "spidev";
@@ -880,8 +880,8 @@
 };
 
 &usb0 {
-	status = "okay";
 	dr_mode = "peripheral";
+	status = "okay";
 };
 
 &usb0_phy {
@@ -892,13 +892,13 @@
 };
 
 &usb1 {
-	status = "okay";
 	dr_mode = "host";
+	status = "okay";
 };
 
 &usb1_phy {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usb_host>;
 	vcc-supply = <&reg_usbhost>;
+	status = "okay";
 };
