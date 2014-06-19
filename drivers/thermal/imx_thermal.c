@@ -316,7 +316,7 @@ static int imx_get_trend(struct thermal_zone_device *tz,
 	return 0;
 }
 
-static const struct thermal_zone_device_ops imx_tz_ops = {
+static struct thermal_zone_device_ops imx_tz_ops = {
 	.bind = imx_bind,
 	.unbind = imx_unbind,
 	.get_temp = imx_get_temp,

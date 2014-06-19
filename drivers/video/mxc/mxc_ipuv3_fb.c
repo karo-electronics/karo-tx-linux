@@ -10,7 +10,7 @@
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
-
+#define DEBUG
 /*!
  * @defgroup Framebuffer Framebuffer Driver for SDC and ADC.
  */
@@ -446,8 +446,8 @@ static int mxcfb_set_par(struct fb_info *fbi)
 
 	if (ipu_ch_param_bad_alpha_pos(fbi_to_pixfmt(fbi)) &&
 	    mxc_fbi->alpha_chan_en) {
-		dev_err(fbi->device, "Bad pixel format for "
-				"graphics plane fb\n");
+		dev_err(fbi->device,
+			"Bad pixel format for graphics plane fb\n");
 		return -EINVAL;
 	}
 
@@ -570,8 +570,8 @@ static int mxcfb_set_par(struct fb_info *fbi)
 	if (mxc_fbi->dispdrv && mxc_fbi->dispdrv->drv->setup) {
 		retval = mxc_fbi->dispdrv->drv->setup(mxc_fbi->dispdrv, fbi);
 		if (retval < 0) {
-			dev_err(fbi->device, "setup error, dispdrv:%s.\n",
-					mxc_fbi->dispdrv->drv->name);
+			dev_err(fbi->device, "setup error, dispdrv: %s (%d)\n",
+				mxc_fbi->dispdrv->drv->name, retval);
 			return -EINVAL;
 		}
 	}
@@ -656,8 +656,8 @@ static int mxcfb_set_par(struct fb_info *fbi)
 	if (mxc_fbi->dispdrv && mxc_fbi->dispdrv->drv->enable) {
 		retval = mxc_fbi->dispdrv->drv->enable(mxc_fbi->dispdrv);
 		if (retval < 0) {
-			dev_err(fbi->device, "enable error, dispdrv:%s.\n",
-					mxc_fbi->dispdrv->drv->name);
+			dev_err(fbi->device, "enable error, dispdrv: %s (%d)\n",
+				mxc_fbi->dispdrv->drv->name, retval);
 			return -EINVAL;
 		}
 	}
@@ -2355,7 +2355,7 @@ static int mxcfb_probe(struct platform_device *pdev)
 
 	ret = mxcfb_get_of_property(pdev, plat_data);
 	if (ret < 0) {
-		dev_err(&pdev->dev, "get mxcfb of property fail\n");
+		dev_err(&pdev->dev, "get mxcfb of property failed: %d\n", ret);
 		return ret;
 	}
 

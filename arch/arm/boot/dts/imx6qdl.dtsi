@@ -26,6 +26,7 @@
 		gpio4 = &gpio5;
 		gpio5 = &gpio6;
 		gpio6 = &gpio7;
+		ipu0 = &ipu1;
 		i2c0 = &i2c1;
 		i2c1 = &i2c2;
 		i2c2 = &i2c3;
@@ -257,8 +258,14 @@
 				};
 
 				esai: esai@02024000 {
+					compatible = "fsl,imx6q-esai";
 					reg = <0x02024000 0x4000>;
 					interrupts = <0 51 IRQ_TYPE_LEVEL_HIGH>;
+					clocks = <&clks 118>, <&clks 156>;
+					clock-names = "core", "dma";
+					fsl,esai-dma-events = <24 23>;
+					fsl,flags = <1>;
+					status = "disabled";
 				};
 
 				ssi1: ssi@02028000 {
@@ -318,8 +325,17 @@
 
 			vpu: vpu@02040000 {
 				reg = <0x02040000 0x3c000>;
+				reg-names = "vpu_regs";
 				interrupts = <0 3 IRQ_TYPE_LEVEL_HIGH>,
 				             <0 12 IRQ_TYPE_LEVEL_HIGH>;
+				interrupt-names = "vpu_jpu_irq", "vpu_ipi_irq";
+				clocks = <&clks 168>, <&clks 140>, <&clks 142>;
+				clock-names = "vpu_clk", "mmdc_ch0_axi", "ocram";
+				iramsize = <0x21000>;
+				iram = <&ocram>;
+				resets = <&src 1>;
+				pu-supply = <&reg_pu>;
+				status = "disabled";
 			};
 
 			aipstz@0207c000 { /* AIPSTZ1 */
@@ -673,6 +689,19 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				compatible = "fsl,imx6q-ldb", "fsl,imx53-ldb";
+				reg = <0x020e0000 0x4000>;
+				clocks = <&clks 135>, <&clks 136>,
+					 <&clks 39>, <&clks 40>,
+					 <&clks 41>, <&clks 42>,
+					 <&clks 184>, <&clks 185>,
+					 <&clks 205>, <&clks 206>,
+					 <&clks 207>, <&clks 208>;
+				clock-names = "ldb_di0", "ldb_di1",
+					      "ipu1_di0_sel", "ipu1_di1_sel",
+					      "ipu2_di0_sel", "ipu2_di1_sel",
+					      "di0_div_3_5", "di1_div_3_5",
+					      "di0_div_7", "di1_div_7",
+					      "di0_div_sel", "di1_div_sel";
 				gpr = <&gpr>;
 				status = "disabled";
 
@@ -1046,9 +1075,14 @@
 			reg = <0x02400000 0x400000>;
 			interrupts = <0 6 IRQ_TYPE_LEVEL_HIGH>,
 				     <0 5 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&clks 130>, <&clks 131>, <&clks 132>;
-			clock-names = "bus", "di0", "di1";
+			clocks = <&clks 130>, <&clks 131>, <&clks 132>,
+				 <&clks 39>, <&clks 40>,
+				 <&clks 135>, <&clks 136>;
+			clock-names = "bus", "di0", "di1",
+				      "di0_sel", "di1_sel",
+				      "ldb_di0", "ldb_di1";
 			resets = <&src 2>;
+			bypass_reset = <0>;
 
 			ipu1_di0: port@2 {
 				#address-cells = <1>;

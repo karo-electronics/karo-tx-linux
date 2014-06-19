@@ -218,18 +218,6 @@ config SND_SOC_EUKREA_TLV320
 	  Enable I2S based access to the TLV320AIC23B codec attached
 	  to the SSI interface
 
-config SND_SOC_IMX_CS42888
-	tristate "SoC Audio support for i.MX boards with cs42888"
-	depends on OF && I2C
-	select SND_SOC_CS42888
-	select SND_SOC_IMX_PCM_DMA
-	select SND_SOC_FSL_ESAI
-	select SND_SOC_FSL_UTILS
-	help
-	 SoC Audio support for i.MX boards with cs42888
-	 Say Y if you want to add support for SoC audio on an i.MX board with
-	 a cs42888 codec.
-
 config SND_SOC_IMX_WM8962
 	tristate "SoC Audio support for i.MX boards with wm8962"
 	depends on OF && I2C && INPUT
@@ -268,29 +256,6 @@ config SND_SOC_IMX_MC13783
 	select SND_SOC_IMX_AUDMUX
 	select SND_SOC_MC13783
 	select SND_SOC_IMX_PCM_DMA
-
-config SND_SOC_IMX_HDMI
-	tristate "SoC Audio support for i.MX boards with HDMI port"
-	depends on MFD_MXC_HDMI
-	select SND_SOC_IMX_HDMI_DMA
-	select SND_SOC_FSL_HDMI
-	select SND_SOC_OMAP_HDMI_CODEC
-	help
-	  SoC Audio support for i.MX boards with HDMI audio
-	  Say Y if you want to add support for SoC audio on an i.MX board with
-	  IMX HDMI.
-
-config SND_SOC_IMX_SI476X
-	tristate "SoC Audio support for i.MX boards with si476x"
-	select SND_SOC_IMX_PCM_DMA
-	select SND_SOC_IMX_AUDMUX
-	select SND_SOC_FSL_SSI
-	select SND_SOC_FSL_UTILS
-	select SND_SOC_SI476X
-	help
-	  SoC Audio support for i.MX boards with SI476x
-	  Say Y if you want to add support for Soc audio for the AMFM Tuner chip
-	  SI476x module.
 
 endif # SND_IMX_SOC
 
