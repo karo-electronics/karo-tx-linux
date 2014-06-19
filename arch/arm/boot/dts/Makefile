@@ -195,7 +195,9 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx6dl-sabreauto.dtb \
 	imx6dl-sabrelite.dtb \
 	imx6dl-sabresd.dtb \
+	imx6dl-tx6dl-comtft.dtb \
 	imx6dl-tx6u-801x.dtb \
+	imx6dl-tx6u-811x.dtb \
 	imx6dl-wandboard.dtb \
 	imx6q-arm2.dtb \
 	imx6q-cm-fx6.dtb \
@@ -214,34 +216,16 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx6q-sabrelite.dtb \
 	imx6q-sabresd.dtb \
 	imx6q-sbc6x.dtb \
-	imx6q-udoo.dtb \
-	imx6q-wandboard.dtb \
-	imx6sl-evk.dtb \
-	vf610-colibri.dtb \
-	vf610-cosmic.dtb \
-	vf610-twr.dtb
-#	imx6dl-tx6dl-comtft.dtb \
-	imx6dl-tx6u-801x.dtb \
-	imx6dl-tx6u-811x.dtb \
-	imx6dl-wandboard.dtb \
-	imx6q-arm2.dtb \
-	imx6q-sabreauto.dtb \
-	imx6q-sabreauto-ecspi.dtb \
-	imx6q-sabreauto-flexcan1.dtb \
-	imx6q-sabreauto-gpmi-weim.dtb \
-	imx6q-sabrelite.dtb \
-	imx6q-sabresd.dtb \
-	imx6q-sabresd-hdcp.dtb \
-	imx6q-sabresd-ldo.dtb \
-	imx6q-sbc6x.dtb \
 	imx6q-tx6q-1010.dtb \
 	imx6q-tx6q-1010-comtft.dtb \
 	imx6q-tx6q-1020.dtb \
 	imx6q-tx6q-1020-comtft.dtb \
 	imx6q-tx6q-1110.dtb \
+	imx6q-udoo.dtb \
+	imx6q-wandboard.dtb \
 	imx6sl-evk.dtb \
-	imx6sl-evk-csi.dtb \
-	imx6sl-evk-ldo.dtb \
+	vf610-colibri.dtb \
+	vf610-cosmic.dtb \
 	vf610-twr.dtb
 dtb-$(CONFIG_ARCH_MXS) += imx23-evk.dtb \
 	imx23-olinuxino.dtb \

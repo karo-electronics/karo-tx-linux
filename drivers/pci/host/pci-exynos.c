@@ -265,58 +265,6 @@ static void exynos_pcie_power_off_phy(struct pcie_port *pp)
 	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_TRSV3_POWER);
 }
 
-static void exynos_pcie_power_on_phy(struct pcie_port *pp)
-{
-	u32 val;
-	struct exynos_pcie *exynos_pcie = to_exynos_pcie(pp);
-
-	val = exynos_phy_readl(exynos_pcie, PCIE_PHY_COMMON_POWER);
-	val &= ~PCIE_PHY_COMMON_PD_CMN;
-	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_COMMON_POWER);
-
-	val = exynos_phy_readl(exynos_pcie, PCIE_PHY_TRSV0_POWER);
-	val &= ~PCIE_PHY_TRSV0_PD_TSV;
-	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_TRSV0_POWER);
-
-	val = exynos_phy_readl(exynos_pcie, PCIE_PHY_TRSV1_POWER);
-	val &= ~PCIE_PHY_TRSV1_PD_TSV;
-	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_TRSV1_POWER);
-
-	val = exynos_phy_readl(exynos_pcie, PCIE_PHY_TRSV2_POWER);
-	val &= ~PCIE_PHY_TRSV2_PD_TSV;
-	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_TRSV2_POWER);
-
-	val = exynos_phy_readl(exynos_pcie, PCIE_PHY_TRSV3_POWER);
-	val &= ~PCIE_PHY_TRSV3_PD_TSV;
-	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_TRSV3_POWER);
-}
-
-static void exynos_pcie_power_off_phy(struct pcie_port *pp)
-{
-	u32 val;
-	struct exynos_pcie *exynos_pcie = to_exynos_pcie(pp);
-
-	val = exynos_phy_readl(exynos_pcie, PCIE_PHY_COMMON_POWER);
-	val |= PCIE_PHY_COMMON_PD_CMN;
-	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_COMMON_POWER);
-
-	val = exynos_phy_readl(exynos_pcie, PCIE_PHY_TRSV0_POWER);
-	val |= PCIE_PHY_TRSV0_PD_TSV;
-	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_TRSV0_POWER);
-
-	val = exynos_phy_readl(exynos_pcie, PCIE_PHY_TRSV1_POWER);
-	val |= PCIE_PHY_TRSV1_PD_TSV;
-	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_TRSV1_POWER);
-
-	val = exynos_phy_readl(exynos_pcie, PCIE_PHY_TRSV2_POWER);
-	val |= PCIE_PHY_TRSV2_PD_TSV;
-	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_TRSV2_POWER);
-
-	val = exynos_phy_readl(exynos_pcie, PCIE_PHY_TRSV3_POWER);
-	val |= PCIE_PHY_TRSV3_PD_TSV;
-	exynos_phy_writel(exynos_pcie, val, PCIE_PHY_TRSV3_POWER);
-}
-
 static void exynos_pcie_init_phy(struct pcie_port *pp)
 {
 	struct exynos_pcie *exynos_pcie = to_exynos_pcie(pp);

@@ -30,6 +30,8 @@ menu "Frame buffer Devices"
 source "drivers/video/fbdev/Kconfig"
 endmenu
 
+source "drivers/video/mxc/Kconfig"
+
 source "drivers/video/backlight/Kconfig"
 
 config VGASTATE

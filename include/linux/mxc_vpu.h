@@ -38,8 +38,8 @@ struct mxc_vpu_platform_data {
 struct vpu_mem_desc {
 	u32 size;
 	dma_addr_t phy_addr;
-	u32 cpu_addr;		/* cpu address to free the dma mem */
-	u32 virt_uaddr;		/* virtual user space address */
+	void *cpu_addr;		/* cpu address to free the dma mem */
+	void *virt_uaddr;		/* virtual user space address */
 };
 
 #define VPU_IOC_MAGIC  'V'
