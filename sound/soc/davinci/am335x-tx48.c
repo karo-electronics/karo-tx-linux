@@ -17,6 +17,7 @@
 #include <linux/timer.h>
 #include <linux/interrupt.h>
 #include <linux/of_platform.h>
+#include <linux/clk.h>
 #include <linux/i2c.h>
 #include <linux/edma.h>
 #include <sound/core.h>
@@ -33,8 +34,33 @@
 #include "davinci-mcasp.h"
 
 struct am335x_tx48_drvdata {
+	struct clk *mclk;
 	unsigned sysclk;
 };
+
+static int am335x_tx48_startup(struct snd_pcm_substream *substream)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_card *soc_card = rtd->card;
+	struct am335x_tx48_drvdata *drvdata =
+		snd_soc_card_get_drvdata(soc_card);
+
+	if (drvdata->mclk)
+		return clk_prepare_enable(drvdata->mclk);
+
+	return 0;
+}
+
+static void am335x_tx48_shutdown(struct snd_pcm_substream *substream)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_card *soc_card = rtd->card;
+	struct am335x_tx48_drvdata *drvdata =
+		snd_soc_card_get_drvdata(soc_card);
+
+	if (drvdata->mclk)
+		clk_disable_unprepare(drvdata->mclk);
+}
 
 static int sgtl5000_hw_params(struct snd_pcm_substream *substream,
 	struct snd_pcm_hw_params *params)
@@ -94,6 +120,8 @@ static int sgtl5000_hw_params(struct snd_pcm_substream *substream,
 }
 
 static struct snd_soc_ops am335x_tx48_ops = {
+	.startup = am335x_tx48_startup,
+	.shutdown = am335x_tx48_shutdown,
 	.hw_params = sgtl5000_hw_params,
 };
 
@@ -126,6 +154,7 @@ static int am335x_tx48_probe(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	struct am335x_tx48_drvdata *drvdata;
 	struct device_node *of_node;
+	struct clk *mclk;
 
 	of_node = of_parse_phandle(np, "ti,audio-codec", 0);
 	if (!of_node) {
@@ -151,14 +180,40 @@ static int am335x_tx48_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	mclk = devm_clk_get(&pdev->dev, "mclk");
+	if (PTR_ERR(mclk) == -EPROBE_DEFER) {
+		return -EPROBE_DEFER;
+	} else if (IS_ERR(mclk)) {
+		dev_dbg(&pdev->dev, "mclk not found\n");
+		mclk = NULL;
+	}
+
 	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
 	if (!drvdata)
 		return -ENOMEM;
 
 	ret = of_property_read_u32(np, "ti,codec-clock-rate", &drvdata->sysclk);
 	if (ret < 0) {
-		dev_err(&pdev->dev, "codec clock rate not set in DT\n");
-		return -EINVAL;
+		if (!drvdata->mclk) {
+			dev_err(&pdev->dev,
+				"No clock or clock rate defined.\n");
+			return -EINVAL;
+		}
+		drvdata->sysclk = clk_get_rate(drvdata->mclk);
+	} else if (drvdata->mclk) {
+		unsigned int requestd_rate = drvdata->sysclk;
+
+		ret = clk_set_rate(drvdata->mclk, drvdata->sysclk);
+		if (ret) {
+			dev_err(&pdev->dev, "Could not set mclk rate to %u\n",
+				drvdata->sysclk);
+			return ret;
+		}
+		drvdata->sysclk = clk_get_rate(drvdata->mclk);
+		if (drvdata->sysclk != requestd_rate)
+			dev_warn(&pdev->dev,
+				 "Could not get requested rate %u using %u\n",
+				 requestd_rate, drvdata->sysclk);
 	}
 
 	snd_soc_card_set_drvdata(&am335x_tx48_soc_card, drvdata);
