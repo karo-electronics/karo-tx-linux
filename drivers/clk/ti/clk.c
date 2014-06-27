@@ -57,6 +57,7 @@ void __init ti_dt_clocks_register(struct ti_dt_clk oclks[])
 				c->node_name);
 		}
 	}
+	of_clk_init(NULL);
 }
 
 struct clk_init_item {
