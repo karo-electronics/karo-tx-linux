@@ -808,6 +808,7 @@ static int vpu_dev_probe(struct platform_device *pdev)
 
 	drv_data->soc_data = soc_data;
 	INIT_LIST_HEAD(&drv_data->users);
+	mutex_init(&drv_data->lock);
 
 	init_waitqueue_head(&vpu_queue);
 
@@ -977,7 +978,8 @@ static int vpu_suspend(struct device *dev)
 
 	if (open_count) {
 		/* Wait for vpu go to idle state, suspect vpu cannot be changed
-		   to idle state after about 1 sec */
+		 * to idle state after about 1 sec
+		 */
 		timeout = jiffies + HZ;
 		while (READ_REG(BIT_BUSY_FLAG)) {
 			msleep(1);
