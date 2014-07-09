@@ -258,32 +258,32 @@ static int ldb_get_of_property(struct platform_device *pdev,
 
 	err = of_property_read_string(np, "mode", (const char **)&mode);
 	if (err) {
-		dev_dbg(&pdev->dev, "get of property mode fail\n");
+		dev_err(&pdev->dev, "get of property mode fail\n");
 		return err;
 	}
 	err = of_property_read_u32(np, "ext_ref", &ext_ref);
 	if (err) {
-		dev_dbg(&pdev->dev, "get of property ext_ref fail\n");
+		dev_err(&pdev->dev, "get of property ext_ref fail\n");
 		return err;
 	}
 	err = of_property_read_u32(np, "ipu_id", &ipu_id);
 	if (err) {
-		dev_dbg(&pdev->dev, "get of property ipu_id fail\n");
+		dev_err(&pdev->dev, "get of property ipu_id fail\n");
 		return err;
 	}
 	err = of_property_read_u32(np, "disp_id", &disp_id);
 	if (err) {
-		dev_dbg(&pdev->dev, "get of property disp_id fail\n");
+		dev_err(&pdev->dev, "get of property disp_id fail\n");
 		return err;
 	}
 	err = of_property_read_u32(np, "sec_ipu_id", &sec_ipu_id);
 	if (err) {
-		dev_dbg(&pdev->dev, "get of property sec_ipu_id fail\n");
+		dev_err(&pdev->dev, "get of property sec_ipu_id fail\n");
 		return err;
 	}
 	err = of_property_read_u32(np, "sec_disp_id", &sec_disp_id);
 	if (err) {
-		dev_dbg(&pdev->dev, "get of property sec_disp_id fail\n");
+		dev_err(&pdev->dev, "get of property sec_disp_id fail\n");
 		return err;
 	}
 

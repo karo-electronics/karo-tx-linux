@@ -2260,32 +2260,32 @@ static int mxcfb_get_of_property(struct platform_device *pdev,
 
 	err = of_property_read_string(np, "disp_dev", &disp_dev);
 	if (err < 0) {
-		dev_dbg(&pdev->dev, "get of property disp_dev fail\n");
+		dev_err(&pdev->dev, "get of property disp_dev fail\n");
 		return err;
 	}
 	err = of_property_read_string(np, "mode_str", &mode_str);
 	if (err < 0) {
-		dev_dbg(&pdev->dev, "get of property mode_str fail\n");
+		dev_err(&pdev->dev, "get of property mode_str fail\n");
 		return err;
 	}
 	err = of_property_read_string(np, "interface_pix_fmt", &pixfmt);
 	if (err) {
-		dev_dbg(&pdev->dev, "get of property pix fmt fail\n");
+		dev_err(&pdev->dev, "get of property pix fmt fail\n");
 		return err;
 	}
 	err = of_property_read_u32(np, "default_bpp", &bpp);
 	if (err) {
-		dev_dbg(&pdev->dev, "get of property bpp fail\n");
+		dev_err(&pdev->dev, "get of property bpp fail\n");
 		return err;
 	}
 	err = of_property_read_u32(np, "int_clk", &int_clk);
 	if (err) {
-		dev_dbg(&pdev->dev, "get of property int_clk fail\n");
+		dev_err(&pdev->dev, "get of property int_clk fail\n");
 		return err;
 	}
 	err = of_property_read_u32(np, "late_init", &late_init);
 	if (err) {
-		dev_dbg(&pdev->dev, "get of property late_init fail\n");
+		dev_err(&pdev->dev, "get of property late_init fail\n");
 		return err;
 	}
 
