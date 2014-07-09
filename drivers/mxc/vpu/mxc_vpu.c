@@ -805,6 +805,8 @@ static int vpu_dev_probe(struct platform_device *pdev)
 	mutex_init(&drv_data->lock);
 
 	init_waitqueue_head(&vpu_queue);
+	drv_data->workqueue = create_workqueue("vpu_wq");
+	INIT_WORK(&drv_data->work, vpu_worker_callback);
 
 	err = of_property_read_u32(np, "iramsize", &iramsize);
 	if (!err && iramsize) {
@@ -908,9 +910,6 @@ static int vpu_dev_probe(struct platform_device *pdev)
 
 	pm_runtime_enable(&pdev->dev);
 
-	vpu_data.workqueue = create_workqueue("vpu_wq");
-	INIT_WORK(&vpu_data.work, vpu_worker_callback);
-	mutex_init(&vpu_data.lock);
 	dev_info(vpu_dev, "VPU initialized\n");
 	return 0;
 
