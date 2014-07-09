@@ -102,7 +102,7 @@ static LIST_HEAD(mem_list);
 
 static int vpu_major;
 static struct class *vpu_class;
-static struct vpu_priv vpu_data;
+static struct vpu_priv *vpu_data;
 static u8 open_count;
 static struct clk *vpu_clk;
 static struct vpu_mem_desc bitwork_mem;
@@ -304,9 +304,9 @@ static int vpu_open(struct inode *inode, struct file *filp)
 	if (user_data == NULL)
 		return -ENOMEM;
 
-	user_data->vpu_data = &vpu_data;
+	user_data->vpu_data = vpu_data;
 
-	mutex_lock(&vpu_data.lock);
+	mutex_lock(&vpu_data->lock);
 
 	if (open_count++ == 0) {
 		pm_runtime_get_sync(vpu_dev);
@@ -314,7 +314,7 @@ static int vpu_open(struct inode *inode, struct file *filp)
 	}
 
 	filp->private_data = user_data;
-	mutex_unlock(&vpu_data.lock);
+	mutex_unlock(&vpu_data->lock);
 	return 0;
 }
 
@@ -876,7 +876,7 @@ static int vpu_dev_probe(struct platform_device *pdev)
 		goto err_out_class;
 	}
 	err = request_irq(vpu_ipi_irq, vpu_ipi_irq_handler, 0, "VPU_CODEC_IRQ",
-			  &vpu_data);
+			  drv_data);
 	if (err)
 		goto err_out_class;
 
@@ -903,12 +903,13 @@ static int vpu_dev_probe(struct platform_device *pdev)
 			goto err_out_class;
 		}
 		err = request_irq(vpu_jpu_irq, vpu_jpu_irq_handler, IRQF_TRIGGER_RISING,
-				"VPU_JPG_IRQ", &vpu_data);
+				"VPU_JPG_IRQ", drv_data);
 		if (err)
 			goto err_out_class;
 	}
 
 	pm_runtime_enable(&pdev->dev);
+	vpu_data = drv_data;
 
 	dev_info(vpu_dev, "VPU initialized\n");
 	return 0;
