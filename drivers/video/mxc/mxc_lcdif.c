@@ -29,7 +29,7 @@ struct mxc_lcd_platform_data {
 };
 
 struct mxc_lcdif_data {
-	struct platform_device *pdev;
+	struct device *dev;
 	struct mxc_dispdrv_handle *disp_lcdif;
 };
 
@@ -143,8 +143,7 @@ static int lcdif_init(struct mxc_dispdrv_handle *disp,
 {
 	int ret, i;
 	struct mxc_lcdif_data *lcdif = mxc_dispdrv_getdata(disp);
-	struct mxc_lcd_platform_data *plat_data
-			= lcdif->pdev->dev.platform_data;
+	struct mxc_lcd_platform_data *plat_data = lcdif->dev->platform_data;
 	struct fb_videomode *modedb = lcdif_modedb;
 	int modedb_sz = lcdif_modedb_sz;
 
@@ -184,27 +183,27 @@ static struct mxc_dispdrv_driver lcdif_drv = {
 	.deinit	= lcdif_deinit,
 };
 
-static int lcd_get_of_property(struct platform_device *pdev,
+static int lcd_get_of_property(struct device *dev,
 				struct mxc_lcd_platform_data *plat_data)
 {
-	struct device_node *np = pdev->dev.of_node;
+	struct device_node *np = dev->of_node;
 	int err;
 	u32 ipu_id, disp_id;
 	const char *default_ifmt;
 
 	err = of_property_read_string(np, "default_ifmt", &default_ifmt);
 	if (err) {
-		dev_err(&pdev->dev, "get of property default_ifmt fail\n");
+		dev_err(dev, "get of property default_ifmt fail\n");
 		return err;
 	}
 	err = of_property_read_u32(np, "ipu_id", &ipu_id);
 	if (err) {
-		dev_err(&pdev->dev, "get of property ipu_id fail\n");
+		dev_err(dev, "get of property ipu_id fail\n");
 		return err;
 	}
 	err = of_property_read_u32(np, "disp_id", &disp_id);
 	if (err) {
-		dev_err(&pdev->dev, "get of property disp_id fail\n");
+		dev_err(dev, "get of property disp_id fail\n");
 		return err;
 	}
 
@@ -233,7 +232,7 @@ static int lcd_get_of_property(struct platform_device *pdev,
 	else if (!strncmp(default_ifmt, "VYUY16", 6))
 				plat_data->default_ifmt = IPU_PIX_FMT_VYUY;
 	else {
-		dev_err(&pdev->dev, "err default_ifmt!\n");
+		dev_err(dev, "err default_ifmt!\n");
 		return -ENOENT;
 	}
 
@@ -259,7 +258,7 @@ static int mxc_lcdif_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	pdev->dev.platform_data = plat_data;
 
-	ret = lcd_get_of_property(pdev, plat_data);
+	ret = lcd_get_of_property(&pdev->dev, plat_data);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "get lcd of property fail\n");
 		return ret;
@@ -271,7 +270,7 @@ static int mxc_lcdif_probe(struct platform_device *pdev)
 		return PTR_ERR(pinctrl);
 	}
 
-	lcdif->pdev = pdev;
+	lcdif->dev = &pdev->dev;
 	lcdif->disp_lcdif = mxc_dispdrv_register(&lcdif_drv);
 	mxc_dispdrv_setdata(lcdif->disp_lcdif, lcdif);
 
@@ -283,7 +282,7 @@ static int mxc_lcdif_probe(struct platform_device *pdev)
 
 static int mxc_lcdif_remove(struct platform_device *pdev)
 {
-	struct mxc_lcdif_data *lcdif = dev_get_drvdata(&pdev->dev);
+	struct mxc_lcdif_data *lcdif = platform_get_drvdata(pdev);
 
 	mxc_dispdrv_puthandle(lcdif->disp_lcdif);
 	mxc_dispdrv_unregister(lcdif->disp_lcdif);
