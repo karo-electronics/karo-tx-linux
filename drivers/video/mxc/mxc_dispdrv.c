@@ -45,8 +45,7 @@ static LIST_HEAD(dispdrv_list);
 static DEFINE_MUTEX(dispdrv_lock);
 
 struct mxc_dispdrv_entry {
-	/* Note: drv always the first element */
-	struct mxc_dispdrv_driver *drv;
+	struct mxc_dispdrv_handle handle;
 	bool active;
 	void *priv;
 	struct list_head list;
@@ -64,18 +63,24 @@ struct mxc_dispdrv_handle *mxc_dispdrv_register(struct mxc_dispdrv_driver *drv)
 		return ERR_PTR(-ENOMEM);
 	}
 
-	new->drv = drv;
+	new->handle.drv = drv;
 	list_add_tail(&new->list, &dispdrv_list);
 
 	mutex_unlock(&dispdrv_lock);
 
-	return (struct mxc_dispdrv_handle *)new;
+	return &new->handle;
 }
 EXPORT_SYMBOL_GPL(mxc_dispdrv_register);
 
+static inline struct mxc_dispdrv_entry *to_dispdrv_entry(
+	struct mxc_dispdrv_handle *handle)
+{
+	return container_of(handle, struct mxc_dispdrv_entry, handle);
+}
+
 int mxc_dispdrv_unregister(struct mxc_dispdrv_handle *handle)
 {
-	struct mxc_dispdrv_entry *entry = (struct mxc_dispdrv_entry *)handle;
+	struct mxc_dispdrv_entry *entry = to_dispdrv_entry(handle);
 
 	if (entry) {
 		mutex_lock(&dispdrv_lock);
@@ -91,34 +96,37 @@ EXPORT_SYMBOL_GPL(mxc_dispdrv_unregister);
 struct mxc_dispdrv_handle *mxc_dispdrv_gethandle(char *name,
 	struct mxc_dispdrv_setting *setting)
 {
-	int ret, found = 0;
+	int ret;
 	struct mxc_dispdrv_entry *entry;
+	struct mxc_dispdrv_handle *handle = ERR_PTR(-ENODEV);
 
 	mutex_lock(&dispdrv_lock);
 	list_for_each_entry(entry, &dispdrv_list, list) {
-		if (!strcmp(entry->drv->name, name) && (entry->drv->init)) {
-			ret = entry->drv->init((struct mxc_dispdrv_handle *)
-				entry, setting);
+		struct mxc_dispdrv_handle *h = &entry->handle;
+
+		if (strcmp(h->drv->name, name) == 0 &&
+			h->drv->init) {
+			ret = h->drv->init(h, setting);
 			if (ret >= 0) {
 				entry->active = true;
-				found = 1;
+				handle = h;
 				break;
 			}
 		}
 	}
 	mutex_unlock(&dispdrv_lock);
 
-	return found ? (struct mxc_dispdrv_handle *)entry:ERR_PTR(-ENODEV);
+	return handle;
 }
 EXPORT_SYMBOL_GPL(mxc_dispdrv_gethandle);
 
 void mxc_dispdrv_puthandle(struct mxc_dispdrv_handle *handle)
 {
-	struct mxc_dispdrv_entry *entry = (struct mxc_dispdrv_entry *)handle;
+	struct mxc_dispdrv_entry *entry = to_dispdrv_entry(handle);
 
 	mutex_lock(&dispdrv_lock);
-	if (entry && entry->active && entry->drv->deinit) {
-		entry->drv->deinit(handle);
+	if (entry && entry->active && handle->drv->deinit) {
+		handle->drv->deinit(handle);
 		entry->active = false;
 	}
 	mutex_unlock(&dispdrv_lock);
@@ -128,7 +136,7 @@ EXPORT_SYMBOL_GPL(mxc_dispdrv_puthandle);
 
 int mxc_dispdrv_setdata(struct mxc_dispdrv_handle *handle, void *data)
 {
-	struct mxc_dispdrv_entry *entry = (struct mxc_dispdrv_entry *)handle;
+	struct mxc_dispdrv_entry *entry = to_dispdrv_entry(handle);
 
 	if (entry) {
 		entry->priv = data;
@@ -140,7 +148,7 @@ EXPORT_SYMBOL_GPL(mxc_dispdrv_setdata);
 
 void *mxc_dispdrv_getdata(struct mxc_dispdrv_handle *handle)
 {
-	struct mxc_dispdrv_entry *entry = (struct mxc_dispdrv_entry *)handle;
+	struct mxc_dispdrv_entry *entry = to_dispdrv_entry(handle);
 
 	if (entry) {
 		return entry->priv;
