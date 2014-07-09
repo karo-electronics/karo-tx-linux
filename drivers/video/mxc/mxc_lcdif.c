@@ -179,8 +179,8 @@ void lcdif_deinit(struct mxc_dispdrv_handle *disp)
 }
 
 static struct mxc_dispdrv_driver lcdif_drv = {
-	.name 	= DISPDRV_LCD,
-	.init 	= lcdif_init,
+	.name	= DISPDRV_LCD,
+	.init	= lcdif_init,
 	.deinit	= lcdif_deinit,
 };
 
