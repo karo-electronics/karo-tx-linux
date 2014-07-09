@@ -19,6 +19,9 @@
 #include <linux/of_device.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
+#include <video/of_display_timing.h>
+#include <video/of_videomode.h>
+#include <video/videomode.h>
 
 #include "mxc_dispdrv.h"
 
@@ -26,6 +29,7 @@ struct mxc_lcd_platform_data {
 	u32 default_ifmt;
 	u32 ipu_id;
 	u32 disp_id;
+	enum display_flags disp_flags;
 };
 
 struct mxc_lcdif_data {
@@ -205,6 +209,18 @@ static int lcd_get_of_property(struct device *dev,
 	if (err) {
 		dev_err(dev, "get of property disp_id fail\n");
 		return err;
+	}
+
+	{
+		struct videomode vm = { };
+
+		err = of_get_videomode(np, &vm, OF_USE_NATIVE_MODE);
+		if (err == 0) {
+			dev_dbg(dev, "Copying videomode from display-timings\n");
+			fb_videomode_from_videomode(&vm, &lcdif_modedb[0]);
+			plat_data->disp_flags = vm.flags;
+			lcdif_modedb_sz = 1;
+		}
 	}
 
 	plat_data->ipu_id = ipu_id;

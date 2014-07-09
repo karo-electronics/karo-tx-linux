@@ -38,6 +38,10 @@
 #include <linux/spinlock.h>
 #include <linux/of_device.h>
 #include <linux/mod_devicetable.h>
+#include <video/of_display_timing.h>
+#include <video/of_videomode.h>
+#include <video/videomode.h>
+
 #include "mxc_dispdrv.h"
 
 #define DISPDRV_LDB	"ldb"
@@ -285,6 +289,16 @@ static int ldb_get_of_property(struct platform_device *pdev,
 	if (err) {
 		dev_err(&pdev->dev, "get of property sec_disp_id fail\n");
 		return err;
+	}
+
+	if (of_display_timings_exist(np) == 1) {
+		struct videomode vm = { };
+
+		err = of_get_videomode(np, &vm, OF_USE_NATIVE_MODE);
+		if (err == 0) {
+			fb_videomode_from_videomode(&vm, &ldb_modedb[0]);
+			ldb_modedb_sz = 1;
+		}
 	}
 
 	plat_data->mode = parse_ldb_mode(mode);

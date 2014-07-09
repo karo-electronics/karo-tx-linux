@@ -87,7 +87,7 @@ struct mxcfb_info {
 
 	u32 pseudo_palette[16];
 
-	bool mode_found;
+	enum display_flags disp_flags;
 	struct completion flip_complete;
 	struct completion alpha_flip_complete;
 	struct completion vsync_complete;
@@ -595,7 +595,7 @@ static int mxcfb_set_par(struct fb_info *fbi)
 			sig_cfg.Hsync_pol = true;
 		if (fbi->var.sync & FB_SYNC_VERT_HIGH_ACT)
 			sig_cfg.Vsync_pol = true;
-		if (!(fbi->var.sync & FB_SYNC_CLK_LAT_FALL))
+		if (mxc_fbi->disp_flags & DISPLAY_FLAGS_PIXDATA_POSEDGE)
 			sig_cfg.clk_pol = true;
 		if (fbi->var.sync & FB_SYNC_DATA_INVERT)
 			sig_cfg.data_pol = true;
@@ -1894,7 +1894,7 @@ static int mxcfb_dispdrv_init(struct platform_device *pdev,
 {
 	struct ipuv3_fb_platform_data *plat_data = pdev->dev.platform_data;
 	struct mxcfb_info *mxcfbi = (struct mxcfb_info *)fbi->par;
-	struct mxc_dispdrv_setting setting;
+	struct mxc_dispdrv_setting setting = {};
 	char disp_dev[32], *default_dev = "lcd";
 	int ret = 0;
 
@@ -1925,6 +1925,7 @@ static int mxcfb_dispdrv_init(struct platform_device *pdev,
 		/* setting */
 		mxcfbi->ipu_id = setting.dev_id;
 		mxcfbi->ipu_di = setting.disp_id;
+		mxcfbi->disp_flags = setting.disp_flags;
 		dev_dbg(&pdev->dev, "di_pixfmt:0x%x, bpp:0x%x, di:%d, ipu:%d\n",
 				setting.if_fmt, setting.default_bpp,
 				setting.disp_id, setting.dev_id);
