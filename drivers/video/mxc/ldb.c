@@ -338,7 +338,7 @@ static int ldb_disp_setup(struct mxc_dispdrv_handle *disp, struct fb_info *fbi)
 	val = readl(ldb->control_reg);
 	val |= ldb->setting[setting_idx].ch_val;
 	writel(val, ldb->control_reg);
-	dev_dbg(&ldb->pdev->dev, "LDB setup, control reg:0x%x\n",
+	dev_dbg(&ldb->pdev->dev, "LDB setup, control reg: 0x%08x\n",
 			readl(ldb->control_reg));
 
 	/* vsync setup */
@@ -444,7 +444,7 @@ int ldb_fb_event(struct notifier_block *nb, unsigned long val, void *v)
 				data &= ~ldb->setting[index].ch_mask;
 				writel(data, ldb->control_reg);
 				dev_dbg(&ldb->pdev->dev,
-					"LDB blank, control reg:0x%x\n",
+					"LDB blank, control reg: 0x%08x\n",
 						readl(ldb->control_reg));
 			}
 		}
