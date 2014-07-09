@@ -13,6 +13,7 @@
 #ifndef __MXC_DISPDRV_H__
 #define __MXC_DISPDRV_H__
 #include <linux/fb.h>
+#include <video/display_timing.h>
 
 struct mxc_dispdrv_handle {
 	struct mxc_dispdrv_driver *drv;
@@ -28,6 +29,7 @@ struct mxc_dispdrv_setting {
 	/*feedback parameter*/
 	int dev_id;
 	int disp_id;
+	enum display_flags disp_flags;
 };
 
 struct mxc_dispdrv_driver {
