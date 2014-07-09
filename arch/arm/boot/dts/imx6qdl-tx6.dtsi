@@ -10,7 +10,7 @@
  */
 
 #include <dt-bindings/gpio/gpio.h>
-
+#include <dt-bindings/input/input.h>
 
 / {
 	aliases {
@@ -49,7 +49,7 @@
 		power {
 			label = "Power Button";
 			gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
-			linux,code = <116>; /* KEY_POWER */
+			linux,code = <KEY_POWER>;
 			gpio-key,wakeup;
 		};
 	};
@@ -614,17 +614,17 @@
 	/* sample keymap */
 	/* row/col 0,1 are mapped to KPP row/col 6,7 */
 	linux,keymap = <
-		0x06060074 /* MATRIX_KEY(6, 6, 116) KEY_POWER */
-		0x06070052 /* MATRIX_KEY(6, 7, 82) KEY_KP0 */
-		0x0602004f /* MATRIX_KEY(6, 2, 79) KEY_KP1 */
-		0x06030050 /* MATRIX_KEY(6, 3, 80) KEY_KP2 */
-		0x07060051 /* MATRIX_KEY(7, 6, 81) KEY_KP3 */
-		0x0707004b /* MATRIX_KEY(7, 7, 75) KEY_KP4 */
-		0x0702004c /* MATRIX_KEY(7, 2, 76) KEY_KP5 */
-		0x0703004d /* MATRIX_KEY(7, 3, 77) KEY_KP6 */
-		0x02060047 /* MATRIX_KEY(2, 6, 71) KEY_KP7 */
-		0x02070048 /* MATRIX_KEY(2, 7, 72) KEY_KP8 */
-		0x02020049 /* MATRIX_KEY(2, 2, 73) KEY_KP9 */
+		MATRIX_KEY(6, 6, KEY_POWER) /* 0x06060074 */
+		MATRIX_KEY(6, 7, KEY_KP0) /* 0x06070052 */
+		MATRIX_KEY(6, 2, KEY_KP1) /* 0x0602004f */
+		MATRIX_KEY(6, 3, KEY_KP2) /* 0x06030050 */
+		MATRIX_KEY(7, 6, KEY_KP3) /* 0x07060051 */
+		MATRIX_KEY(7, 7, KEY_KP4) /* 0x0707004b */
+		MATRIX_KEY(7, 2, KEY_KP5) /* 0x0702004c */
+		MATRIX_KEY(7, 3, KEY_KP6) /* 0x0703004d */
+		MATRIX_KEY(2, 6, KEY_KP7) /* 0x02060047 */
+		MATRIX_KEY(2, 7, KEY_KP8) /* 0x02070048 */
+		MATRIX_KEY(2, 2, KEY_KP9) /* 0x02020049 */
 	>;
 };
 
