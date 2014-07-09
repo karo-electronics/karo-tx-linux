@@ -66,12 +66,10 @@ struct vpu_priv {
 	struct mutex lock;
 	const struct mxc_vpu_soc_data *soc_data;
 	int clk_enabled;
-	struct list_head users;
 };
 
 struct vpu_user_data {
 	struct vpu_priv *vpu_data;
-	struct list_head list;
 	int clk_enable_cnt;
 };
 
@@ -307,9 +305,6 @@ static int vpu_open(struct inode *inode, struct file *filp)
 		return -ENOMEM;
 
 	user_data->vpu_data = &vpu_data;
-
-	INIT_LIST_HEAD(&user_data->list);
-	list_add(&user_data->list, &vpu_data.users);
 
 	mutex_lock(&vpu_data.lock);
 
@@ -807,7 +802,6 @@ static int vpu_dev_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	drv_data->soc_data = soc_data;
-	INIT_LIST_HEAD(&drv_data->users);
 	mutex_init(&drv_data->lock);
 
 	init_waitqueue_head(&vpu_queue);
