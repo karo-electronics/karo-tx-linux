@@ -10,7 +10,7 @@
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
-#define DEBUG
+
 /*!
  * @defgroup Framebuffer Framebuffer Driver for SDC and ADC.
  */
@@ -2007,7 +2007,7 @@ static int mxcfb_option_setup(struct platform_device *pdev, struct fb_info *fbi)
 			pdata->int_clk = true;
 			continue;
 		} else if (!strncmp(opt, "bpp=", 4)) {
-			/* bpp setting cannot overwirte fbpix setting */
+			/* bpp setting cannot overwrite fbpix setting */
 			if (fb_pix_fmt)
 				continue;
 
