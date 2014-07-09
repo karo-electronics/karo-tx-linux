@@ -24,7 +24,7 @@
 
 	backlight: backlight {
 		compatible = "pwm-backlight";
-		pwms = <&pwm2 0 500000>;
+		pwms = <&pwm2 0 500000 PWM_POLARITY_INVERTED>;
 		power-supply = <&reg_3v3>;
 		/*
 		 * a poor man's way to create a 1:1 relationship between
