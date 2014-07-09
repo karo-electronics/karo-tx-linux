@@ -244,6 +244,7 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 
 		input_report_abs(tsdata->input, ABS_MT_POSITION_X, x);
 		input_report_abs(tsdata->input, ABS_MT_POSITION_Y, y);
+		input_report_abs(tsdata->input, ABS_MT_PRESSURE, down);
 	}
 
 	input_mt_report_pointer_emulation(tsdata->input, true);
