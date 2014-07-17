@@ -10,7 +10,6 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-#define DEBUG
 
 #include <linux/module.h>
 #include <linux/moduleparam.h>
@@ -92,14 +91,14 @@ static int sgtl5000_hw_params(struct snd_pcm_substream *substream,
 		return -ENODEV;
 	}
 
-	dev_info(rtd->dev->parent, "%s: setting codec clock to %u.%03uMHz\n", __func__,
+	dev_dbg(rtd->dev->parent, "%s: setting codec clock to %u.%03uMHz\n", __func__,
 		sysclk / 1000000, sysclk / 1000 % 1000);
 	/* Set SGTL5000's SYSCLK */
 	ret = snd_soc_dai_set_sysclk(codec_dai, SGTL5000_SYSCLK, sysclk, 0);
 	if (ret)
 		return ret;
 
-	dev_info(rtd->dev->parent, "%s: setting mcasp clock to %u.%03uMHz\n", __func__,
+	dev_dbg(rtd->dev->parent, "%s: setting mcasp clock to %u.%03uMHz\n", __func__,
 		sysclk / 1000000, sysclk / 1000 % 1000);
 
 	/* set codec to master mode */
