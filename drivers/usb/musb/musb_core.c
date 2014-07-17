@@ -680,7 +680,6 @@ static irqreturn_t musb_stage0_irq(struct musb *musb, u8 int_usb,
 		default:
 			/* "should not happen" */
 			musb->is_active = 0;
-			break;
 		}
 	}
 
@@ -737,7 +736,6 @@ b_host:
 				if (hcd)
 					hcd->self.is_b_host = 0;
 			}
-			break;
 		}
 
 		musb_host_poke_root_hub(musb);
@@ -787,7 +785,6 @@ b_host:
 		default:
 			WARNING("unhandled DISCONNECT transition (%s)\n",
 				usb_otg_state_string(musb->xceiv->state));
-			break;
 		}
 	}
 
@@ -2014,7 +2011,6 @@ musb_init_controller(struct device *dev, int nIrq, void __iomem *ctrl)
 		break;
 	default:
 		dev_err(dev, "unsupported port mode %d\n", musb->port_mode);
-		break;
 	}
 
 	if (status < 0)
