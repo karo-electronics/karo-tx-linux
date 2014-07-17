@@ -1987,18 +1987,21 @@ musb_init_controller(struct device *dev, int nIrq, void __iomem *ctrl)
 
 	switch (musb->port_mode) {
 	case MUSB_PORT_MODE_HOST:
-		status = musb_host_setup(musb, plat->power);
+		status = musb_platform_set_mode(musb, MUSB_HOST);
 		if (status < 0)
 			goto fail3;
-		status = musb_platform_set_mode(musb, MUSB_HOST);
+		status = musb_host_setup(musb, plat->power);
 		break;
 	case MUSB_PORT_MODE_GADGET:
-		status = musb_gadget_setup(musb);
+		status = musb_platform_set_mode(musb, MUSB_PERIPHERAL);
 		if (status < 0)
 			goto fail3;
-		status = musb_platform_set_mode(musb, MUSB_PERIPHERAL);
+		status = musb_gadget_setup(musb);
 		break;
 	case MUSB_PORT_MODE_DUAL_ROLE:
+		status = musb_platform_set_mode(musb, MUSB_OTG);
+		if (status < 0)
+			goto fail3;
 		status = musb_host_setup(musb, plat->power);
 		if (status < 0)
 			goto fail3;
@@ -2007,7 +2010,6 @@ musb_init_controller(struct device *dev, int nIrq, void __iomem *ctrl)
 			musb_host_cleanup(musb);
 			goto fail3;
 		}
-		status = musb_platform_set_mode(musb, MUSB_OTG);
 		break;
 	default:
 		dev_err(dev, "unsupported port mode %d\n", musb->port_mode);
