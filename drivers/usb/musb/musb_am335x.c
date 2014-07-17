@@ -36,15 +36,15 @@ static int am335x_child_remove(struct platform_device *pdev)
 
 static const struct of_device_id am335x_child_of_match[] = {
 	{ .compatible = "ti,am33xx-usb" },
-	{  },
+	{  }
 };
 MODULE_DEVICE_TABLE(of, am335x_child_of_match);
 
 static struct platform_driver am335x_child_driver = {
 	.probe		= am335x_child_probe,
-	.remove         = am335x_child_remove,
-	.driver         = {
-		.name   = "am335x-usb-childs",
+	.remove		= am335x_child_remove,
+	.driver		= {
+		.name	= "am335x-usb-childs",
 		.of_match_table	= am335x_child_of_match,
 	},
 };
