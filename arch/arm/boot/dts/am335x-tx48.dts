@@ -327,17 +327,6 @@
 			pinctrl-0 = <&pinctrl_reg_usbotg>;
 			gpio = <&gpio2 30 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
-			regulator-boot-on;
-			regulator-always-on;
-		};
-
-		reg_usbhost: regulator@10 {
-			compatible = "regulator-fixed";
-			regulator-name = "usbhost-vbus";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_reg_usbhost>;
 		};
 	};
 
@@ -574,13 +563,6 @@
 	pinctrl_pwm0: pwm0grp-11 {
 		pinctrl-single,pins = <
 			0x190 (PIN_OUTPUT_PULLUP | MUX_MODE1)	/* mcasp0_aclkx.ehrpwm0a	PWM */
-		>;
-	};
-
-	pinctrl_reg_usbhost: usbhostgrp-1 {
-		pinctrl-single,pins = <
-			0x234 (PIN_OUTPUT_PULLDOWN | MUX_MODE0)	/* usb1_drvvbus.usb1_drvvbus	USBH_VBUSEN */
-			0x21c (PIN_INPUT_PULLUP | MUX_MODE7)	/* usb0_drvvbus.gpio0_18	#USBH_OC */
 		>;
 	};
 
@@ -912,6 +894,5 @@
 &usb1_phy {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbhost>;
-	vcc-supply = <&reg_usbhost>;
 	status = "okay";
 };
