@@ -27,7 +27,7 @@
 
 	cpus {
 		cpu@0 {
-			cpu0-supply = <&reg_sw2>;
+			cpu0-supply = <&sw2_reg>;
 		};
 	};
 
@@ -51,7 +51,7 @@
 	backlight: backlight@0 {
 		compatible = "pwm-backlight";
 		pwms = <&ehrpwm0 0 500000 PWM_POLARITY_INVERTED>;
-		power-supply = <&reg_3v3>;
+		power-supply = <&bb_out_reg>;
 		/*
 		 * a poor man's way to create a 1:1 relationship between
 		 * the PWM value and the actual duty cycle
@@ -241,43 +241,7 @@
 	regulators {
 		compatible = "simple-bus";
 
-		reg_3v3: regulator@0 {
-			compatible = "regulator-fixed";
-			regulator-name = "vbat";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			regulator-boot-on;
-		};
-
-		reg_sw1: regulator@1 {
-			// VDD_CORE voltage limits 0.95V - 1.1V with +/-4% tolerance
-			regulator-name = "vdd_core";
-			regulator-min-microvolt = <912000>;
-			regulator-max-microvolt = <1144000>;
-		};
-
-		reg_sw2: regulator@2 {
-			// VDD_MPU voltage limits 0.95V - 1.26V with +/-4% tolerance
-			regulator-name = "vdd_mpu";
-			regulator-min-microvolt = <912500>;
-			regulator-max-microvolt = <1312500>;
-		};
-
-		reg_sw4: regulator@3 {
-			compatible = "regulator-fixed";
-			regulator-name = "3v3";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-		};
-
-		reg_2v5: regulator@4 {
-			compatible = "regulator-fixed";
-			regulator-name = "2v5";
-			regulator-min-microvolt = <2500000>;
-			regulator-max-microvolt = <2500000>;
-		};
-
-		reg_lcd_pwr: regulator@5 {
+		reg_lcd_pwr: regulator@0 {
 			compatible = "regulator-fixed";
 			regulator-name = "LCD power";
 			pinctrl-names = "default";
@@ -290,7 +254,7 @@
 			regulator-always-on;
 		};
 
-		reg_lcd_rst: regulator@6 {
+		reg_lcd_rst: regulator@1 {
 			compatible = "regulator-fixed";
 			regulator-name = "LCD reset";
 			pinctrl-names = "default";
@@ -303,14 +267,7 @@
 			regulator-always-on;
 		};
 
-		reg_vmmc: regulator@7 {
-			compatible = "regulator-fixed";
-			regulator-name = "vmmc";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-		};
-
-		reg_can_xcvr: regulator@8 {
+		reg_can_xcvr: regulator@2 {
 			compatible = "regulator-fixed";
 			regulator-name = "can-xcvr";
 			pinctrl-names = "default";
@@ -322,7 +279,7 @@
 			regulator-always-on;
 		};
 
-		reg_usbotg: regulator@9 {
+		reg_usbotg: regulator@3 {
 			compatible = "regulator-fixed";
 			regulator-name = "usbotg-vbus";
 			regulator-min-microvolt = <3300000>;
@@ -743,17 +700,91 @@
 		compatible = "dallas,ds1339";
 		reg = <0x68>;
 	};
-/*
+
 	pmic: lt3589@34 {
-		compatible = "lt,lt3589";
+		compatible = "lltc,ltc3589-2";
 		reg = <0x34>;
+		interrupt-parent = <&intc>;
+		interrupts = <7>;
+
+		regulators {
+			sw1_reg: sw1 {
+				regulator-min-microvolt = <591930>;
+				regulator-max-microvolt = <1224671>;
+				lltc,fb-voltage-divider = <100000 158000>;
+				regulator-name = "vdd_core";
+				regulator-ramp-delay = <7000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			sw2_reg: sw2 {
+				regulator-min-microvolt = <704544>;
+				regulator-max-microvolt = <1363627>;
+				lltc,fb-voltage-divider = <180000 220000>;
+				regulator-name = "vdd_mpu";
+				regulator-ramp-delay = <7000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			sw3_reg: sw3 {
+				regulator-min-microvolt = <1364186>;
+				regulator-max-microvolt = <1670426>;
+				lltc,fb-voltage-divider = <270000 220000>;
+				regulator-name = "vdds_ddr";
+				regulator-ramp-delay = <7000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			bb_out_reg: bb-out {
+				regulator-min-microvolt = <3387341>;
+				regulator-max-microvolt = <3387341>;
+				lltc,fb-voltage-divider = <511000 158000>;
+				regulator-name = "vddio";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo1_reg: ldo1 {
+				regulator-min-microvolt = <1781818>;
+				regulator-max-microvolt = <1781818>;
+				lltc,fb-voltage-divider = <270000 220000>;
+				regulator-name = "vdds_rtc";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo2_reg: ldo2 {
+				regulator-min-microvolt = <1799991>;
+				regulator-max-microvolt = <1833324>;
+				lltc,fb-voltage-divider = <300000 180000>;
+				regulator-name = "vdd_etn";
+				regulator-ramp-delay = <7000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo3_reg: ldo3 {
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+				regulator-name = "vdds";
+			};
+
+			ldo4_reg: ldo4 {
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <3200000>;
+				regulator-name = "vpp";
+			};
+		};
 	};
-*/
+
 	sgtl5000: sgtl5000@0a {
 		compatible = "fsl,sgtl5000";
 		reg = <0x0a>;
-		VDDA-supply = <&reg_2v5>;
-		VDDIO-supply = <&reg_sw4>;
+		VDDA-supply = <&bb_out_reg>;
+		VDDIO-supply = <&bb_out_reg>;
 		clocks = <&mclk>;
 	};
 
@@ -804,7 +835,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_mmc1>;
 	cd-gpios = <&gpio3 15 GPIO_ACTIVE_LOW>;
-	vmmc-supply = <&reg_vmmc>;
+	vmmc-supply = <&bb_out_reg>;
 	status = "okay";
 };
 
