@@ -22,6 +22,7 @@ static int am335x_init(struct usb_phy *phy)
 {
 	struct am335x_phy *am_phy = dev_get_drvdata(phy->dev);
 
+	usb_gen_phy_init(phy);
 	phy_ctrl_power(am_phy->phy_ctrl, am_phy->id, true);
 	return 0;
 }
@@ -31,6 +32,7 @@ static void am335x_shutdown(struct usb_phy *phy)
 	struct am335x_phy *am_phy = dev_get_drvdata(phy->dev);
 
 	phy_ctrl_power(am_phy->phy_ctrl, am_phy->id, false);
+	usb_gen_phy_shutdown(phy);
 }
 
 static int am335x_phy_probe(struct platform_device *pdev)
