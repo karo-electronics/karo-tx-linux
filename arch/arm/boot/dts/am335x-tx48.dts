@@ -410,9 +410,9 @@
 		pinctrl-single,pins = <
 			0x15c (PIN_OUTPUT_PULLUP | MUX_MODE0)	/* spi0_cs0.spi0_cs0	CSPI_SS */
 			0x160 (PIN_OUTPUT_PULLUP | MUX_MODE0)	/* spi0_cs1.spi0_cs1	CSPI_SS*/
-			0x154 (PIN_INPUT_PULLUP | MUX_MODE0)	/* spi0_d0.spi0_d0	CSPI_MOSI*/
+			0x154 (PIN_OUTPUT | MUX_MODE0)		/* spi0_d0.spi0_d0	CSPI_MOSI*/
 			0x158 (PIN_INPUT_PULLUP | MUX_MODE0)	/* spi0_d1.spi0_d1	CSPI_MISO*/
-			0x150 (PIN_OUTPUT_PULLDOWN | MUX_MODE0)	/* spi0_sclk.spi0_sclk	CSPI_SCLK */
+			0x150 (PIN_INPUT_PULLDOWN | MUX_MODE0)	/* spi0_sclk.spi0_sclk	CSPI_SCLK */
 		>;
 	};
 
