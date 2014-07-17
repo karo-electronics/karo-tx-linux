@@ -592,10 +592,10 @@
 
 	pinctrl_ssi_1: ssi1grp-1 {
 		pinctrl-single,pins = <
-			0x1a8 (PIN_OUTPUT_PULLDOWN | MUX_MODE3)	/* mcasp0_axr1.mcasp1_axr0	SSI1_RXD */
-			0x1ac (PIN_OUTPUT_PULLDOWN | MUX_MODE3)	/* mcasp0_ahclkx.mcasp1_axr1	SSI1_TXD */
-			0x1a0 (PIN_OUTPUT_PULLDOWN | MUX_MODE3)	/* mcasp0_aclkr.mcasp1_aclkx	SSI1_CLK */
-			0x1a4 (PIN_OUTPUT_PULLDOWN | MUX_MODE3) /* mcasp0_fsr.mcasp1_fsx	SSI1_FS */
+			0x1a8 (PIN_INPUT_PULLUP | MUX_MODE3)	/* mcasp0_axr1.mcasp1_axr0	SSI1_RXD */
+			0x1ac (PIN_OUTPUT | MUX_MODE3)		/* mcasp0_ahclkx.mcasp1_axr1	SSI1_TXD */
+			0x1a0 (PIN_INPUT_PULLUP | MUX_MODE3)	/* mcasp0_aclkr.mcasp1_aclkx	SSI1_CLK */
+			0x1a4 (PIN_INPUT_PULLUP | MUX_MODE3)	/* mcasp0_fsr.mcasp1_fsx	SSI1_FS */
 		>;
 	};
 
