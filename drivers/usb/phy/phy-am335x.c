@@ -1,13 +1,13 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
-#include <linux/usb/otg.h>
-#include <linux/usb/usb_phy_generic.h>
 #include <linux/slab.h>
 #include <linux/clk.h>
-#include <linux/regulator/consumer.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/regulator/consumer.h>
+#include <linux/usb/otg.h>
+#include <linux/usb/usb_phy_generic.h>
 
 #include "am35x-phy-control.h"
 #include "phy-generic.h"
