@@ -287,6 +287,7 @@
 			gpio = <&gpio1 22 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			regulator-boot-on;
+			regulator-always-on;
 		};
 
 		reg_lcd_rst: regulator@6 {
@@ -299,6 +300,7 @@
 			gpio = <&gpio1 19 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			regulator-boot-on;
+			regulator-always-on;
 		};
 
 		reg_vmmc: regulator@7 {
@@ -316,6 +318,8 @@
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio0 22 GPIO_ACTIVE_LOW>;
+			regulator-boot-on;
+			regulator-always-on;
 		};
 
 		reg_usbotg: regulator@9 {
