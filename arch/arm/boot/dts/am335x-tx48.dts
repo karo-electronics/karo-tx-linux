@@ -21,6 +21,8 @@
 		lcdif_23bit_pins_a = &pinctrl_lcd_23bit;
 		lcdif_24bit_pins_a = &pinctrl_lcd_24bit;
 		reg_can_xcvr = &reg_can_xcvr;
+		usbhost = &usb1;
+		usbotg = &usb0;
 	};
 
 	cpus {
