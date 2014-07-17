@@ -24,6 +24,7 @@ static int of_remove_populated_child(struct device *dev, void *d)
 	struct platform_device *pdev = to_platform_device(dev);
 
 	of_device_unregister(pdev);
+	of_node_clear_flag(pdev->dev.of_node, OF_POPULATED);
 	return 0;
 }
 
