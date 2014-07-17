@@ -39,7 +39,7 @@
 			compatible = "fixed-clock";
 			reg = <0>;
 			#clock-cells = <0>;
-			clock-frequency = <27000000>;
+			clock-frequency = <26000000>;
 		};
 	};
 
@@ -296,7 +296,6 @@
 		ti,model = "TX48-SGTL5000";
 		ti,audio-codec = <&sgtl5000>;
 		ti,mcasp-controller = <&mcasp1>;
-		ti,codec-clock-rate = <27000000>;
 	};
 };
 
