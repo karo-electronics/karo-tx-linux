@@ -21,7 +21,7 @@ err:
 
 static const struct of_device_id am335x_child_of_match[] = {
 	{ .compatible = "ti,am33xx-usb" },
-	{  },
+	{  }
 };
 MODULE_DEVICE_TABLE(of, am335x_child_of_match);
 
