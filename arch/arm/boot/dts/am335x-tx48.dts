@@ -566,9 +566,10 @@
 		>;
 	};
 
-	pinctrl_reg_usbotg: usbotggrp-2 {
+	pinctrl_reg_usbotg: reg-usbotggrp-1 {
 		pinctrl-single,pins = <
 			0x100 (PIN_OUTPUT | MUX_MODE7)		/* mmc0_clk.gpio2_30		USBOTG_VBUSEN */
+			0x104 (PIN_INPUT_PULLUP | MUX_MODE7)	/* mmc0_cmd.gpio2_31		#USBOTG_OC */
 		>;
 	};
 
@@ -618,12 +619,6 @@
 		pinctrl-single,pins = <
 			0x234 (PIN_OUTPUT_PULLDOWN | MUX_MODE0)	/* usb1_drvvbus.usb1_drvvbus	USBH_VBUSEN */
 			0x21c (PIN_INPUT_PULLUP | MUX_MODE7)	/* usb0_drvvbus.gpio0_18	#USBH_OC */
-		>;
-	};
-
-	pinctrl_usbotg: usbotggrp-1 {
-		pinctrl-single,pins = <
-			0x104 (PIN_INPUT_PULLUP | MUX_MODE7)	/* mmc0_cmd.gpio2_31		#USBOTG_OC */
 		>;
 	};
 };
@@ -880,8 +875,6 @@
 };
 
 &usb0_phy {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usbotg>;
 	vcc-supply = <&reg_usbotg>;
 	status = "okay";
 };
