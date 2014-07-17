@@ -841,19 +841,14 @@ static int ldo_regulator_register(struct snd_soc_codec *codec,
 	struct sgtl5000_priv *sgtl5000 = snd_soc_codec_get_drvdata(codec);
 	struct regulator_config config = { };
 
-	ldo = kzalloc(sizeof(struct ldo_regulator), GFP_KERNEL);
-
-	if (!ldo) {
-		dev_err(codec->dev, "failed to allocate ldo_regulator\n");
+	ldo = devm_kzalloc(codec->dev, sizeof(*ldo), GFP_KERNEL);
+	if (!ldo)
 		return -ENOMEM;
-	}
 
-	ldo->desc.name = kstrdup(dev_name(codec->dev), GFP_KERNEL);
-	if (!ldo->desc.name) {
-		kfree(ldo);
-		dev_err(codec->dev, "failed to allocate decs name memory\n");
+	ldo->desc.name = devm_kstrdup(codec->dev, dev_name(codec->dev),
+				GFP_KERNEL);
+	if (!ldo->desc.name)
 		return -ENOMEM;
-	}
 
 	ldo->desc.type  = REGULATOR_VOLTAGE;
 	ldo->desc.owner = THIS_MODULE;
@@ -869,13 +864,8 @@ static int ldo_regulator_register(struct snd_soc_codec *codec,
 
 	ldo->dev = regulator_register(&ldo->desc, &config);
 	if (IS_ERR(ldo->dev)) {
-		int ret = PTR_ERR(ldo->dev);
-
 		dev_err(codec->dev, "failed to register regulator\n");
-		kfree(ldo->desc.name);
-		kfree(ldo);
-
-		return ret;
+		return PTR_ERR(ldo->dev);
 	}
 	sgtl5000->ldo = ldo;
 
@@ -891,8 +881,6 @@ static int ldo_regulator_remove(struct snd_soc_codec *codec)
 		return 0;
 
 	regulator_unregister(ldo->dev);
-	kfree(ldo->desc.name);
-	kfree(ldo);
 
 	return 0;
 }
