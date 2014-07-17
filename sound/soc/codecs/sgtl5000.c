@@ -806,6 +806,9 @@ static int ldo_regulator_disable(struct regulator_dev *dev)
 	struct ldo_regulator *ldo = rdev_get_drvdata(dev);
 	struct snd_soc_codec *codec = (struct snd_soc_codec *)ldo->codec_data;
 
+	if (ldo_regulator_is_enabled(dev))
+		return 0;
+
 	snd_soc_update_bits(codec, SGTL5000_CHIP_ANA_POWER,
 				SGTL5000_LINEREG_D_POWERUP,
 				0);
