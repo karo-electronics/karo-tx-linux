@@ -560,13 +560,6 @@ static struct drm_driver imx_drm_driver = {
 static int compare_of(struct device *dev, void *data)
 {
 	struct device_node *np = data;
-
-	/* Special case for LDB, one device for two channels */
-	if (of_node_cmp(np->name, "lvds-channel") == 0) {
-		np = of_get_parent(np);
-		of_node_put(np);
-	}
-
 	return dev->of_node == np;
 }
 
@@ -618,6 +611,11 @@ static int imx_drm_add_component(struct device *dev, struct device_node *node)
 {
 	struct imx_drm_component *component;
 
+	/* Special case for LDB, one device for two channels */
+	if (of_node_cmp(node->name, "lvds-channel") == 0) {
+		node = of_get_parent(node);
+		of_node_put(node);
+	}
 	if (imx_drm_find_component(dev, node))
 		return 0;
 
