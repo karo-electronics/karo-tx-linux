@@ -27,6 +27,7 @@
 		interface-pix-fmt = "rgb24";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_rgb24_vga1>;
+		fsl,panel = <&lcd>;
 		status = "okay";
 
 		port {
@@ -153,7 +154,7 @@
 	backlight: backlight {
 		compatible = "pwm-backlight";
 		pwms = <&pwm2 0 500000 PWM_POLARITY_INVERTED>;
-		power-supply = <&reg_3v3>;
+		power-supply = <&reg_lcd_pwr>;
 		brightness-levels = <
 			  0  1  2  3  4  5  6  7  8  9
 			 10 11 12 13 14 15 16 17 18 19
@@ -170,6 +171,14 @@
 		default-brightness-level = <50>;
 	};
 
+	lcd: panel {
+		compatible = "simple-panel";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lcd_reset>;
+		enable-gpios = <&gpio3 29 GPIO_ACTIVE_HIGH>;
+		backlight = <&backlight>;
+	};
+
 	regulators {
 		reg_lcd_pwr: regulator@5 {
 			compatible = "regulator-fixed";
@@ -181,20 +190,6 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_lcd_pwr>;
 			enable-active-high;
-			regulator-boot-on;
-		};
-
-		reg_lcd_reset: regulator@6 {
-			compatible = "regulator-fixed";
-			reg = <6>;
-			regulator-name = "LCD RESET";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio3 29 GPIO_ACTIVE_HIGH>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_lcd_reset>;
-			enable-active-high;
-			regulator-boot-on;
 		};
 	};
 };
