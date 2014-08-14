@@ -178,6 +178,8 @@
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio2 31 GPIO_ACTIVE_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_lcd_pwr>;
 			enable-active-high;
 			regulator-boot-on;
 		};
@@ -189,6 +191,8 @@
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio3 29 GPIO_ACTIVE_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_lcd_reset>;
 			enable-active-high;
 			regulator-boot-on;
 		};
@@ -252,6 +256,18 @@
 				MX53_PAD_GPIO_5__KPP_ROW_7 0x1f4
 				MX53_PAD_KEY_ROW2__KPP_ROW_2 0x1f4
 				MX53_PAD_KEY_ROW3__KPP_ROW_3 0x1f4
+			>;
+		};
+
+		pinctrl_lcd_reset: lcd-resetgrp {
+			fsl,pins = <
+				MX53_PAD_EIM_D29__GPIO3_29 0x1f0 /* LCD reset */
+			>;
+		};
+
+		pinctrl_lcd_pwr: lcd-pwrgrp {
+			fsl,pins = <
+				MX53_PAD_EIM_EB3__GPIO2_31 0x1f0 /* LCD enable */
 			>;
 		};
 
