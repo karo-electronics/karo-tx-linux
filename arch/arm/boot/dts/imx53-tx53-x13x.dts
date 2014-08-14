@@ -64,30 +64,28 @@
 	};
 
 	regulators {
-		reg_lcd_pwr0: regulator@5 {
+		regulator@5 {
 			compatible = "regulator-fixed";
 			reg = <5>;
-			regulator-name = "LVDS0 POWER";
+			regulator-name = "LVDS0 CABC";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio3 29 GPIO_ACTIVE_HIGH>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_lvds0_pwr>;
+			pinctrl-0 = <&pinctrl_lvds0_cabc>;
 			enable-active-high;
-			regulator-boot-on;
 		};
 
-		reg_lcd_pwr1: regulator@6 {
+		regulator@6 {
 			compatible = "regulator-fixed";
 			reg = <6>;
-			regulator-name = "LVDS1 POWER";
+			regulator-name = "LVDS1 CABC";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio2 31 GPIO_ACTIVE_HIGH>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_lvds1_pwr>;
+			pinctrl-0 = <&pinctrl_lvds1_cabc>;
 			enable-active-high;
-			regulator-boot-on;
 		};
 	};
 };
@@ -153,7 +151,7 @@
 			>;
 		};
 
-		pinctrl_lvds0_pwr: lvds0-pwrgrp {
+		pinctrl_lvds0_cabc: lvds0-cabcgrp {
 			fsl,pins = <
 				MX53_PAD_EIM_D29__GPIO3_29 0x1f0 /* LCD reset */
 			>;
@@ -169,7 +167,7 @@
 			>;
 		};
 
-		pinctrl_lvds1_pwr: lvds1-pwrgrp {
+		pinctrl_lvds1_cabc: lvds1-cabcgrp {
 			fsl,pins = <
 				MX53_PAD_EIM_EB3__GPIO2_31 0x1f0 /* LCD enable */
 			>;
