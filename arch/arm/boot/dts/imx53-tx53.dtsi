@@ -548,3 +548,7 @@
 	vbus-supply = <&reg_usbotg_vbus>;
 	status = "okay";
 };
+
+&vpu {
+	status = "disabled";
+};
