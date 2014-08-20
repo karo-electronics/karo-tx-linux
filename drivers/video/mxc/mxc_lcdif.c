@@ -156,7 +156,6 @@ static int lcdif_init(struct mxc_dispdrv_handle *disp,
 	setting->disp_id = plat_data->disp_id;
 	setting->disp_flags = plat_data->disp_flags;
 
-printk(KERN_DEBUG "%s: disp_flags=%08x\n", __func__, setting->disp_flags);
 	ret = fb_find_mode(&setting->fbi->var, setting->fbi, setting->dft_mode_str,
 				modedb, modedb_sz, NULL, setting->default_bpp);
 	if (!ret) {

@@ -1926,7 +1926,6 @@ static int mxcfb_dispdrv_init(struct platform_device *pdev,
 		mxcfbi->ipu_id = setting.dev_id;
 		mxcfbi->ipu_di = setting.disp_id;
 		mxcfbi->disp_flags = setting.disp_flags;
-printk(KERN_DEBUG "%s: disp_flags=%08x\n", __func__, mxcfbi->disp_flags);
 		dev_dbg(&pdev->dev, "di_pixfmt:0x%x, bpp:0x%x, di:%d, ipu:%d\n",
 				setting.if_fmt, setting.default_bpp,
 				setting.disp_id, setting.dev_id);
