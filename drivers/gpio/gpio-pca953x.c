@@ -518,6 +518,7 @@ static int pca953x_irq_setup(struct pca953x_chip *chip,
 			     int irq_base)
 {
 	struct i2c_client *client = chip->client;
+	struct gpio_chip *gpio_chip = &chip->gpio_chip;
 	int ret, i, offset = 0;
 
 	if (irq_base != -1
@@ -566,6 +567,17 @@ static int pca953x_irq_setup(struct pca953x_chip *chip,
 			dev_err(&client->dev,
 				"could not connect irqchip to gpiochip\n");
 			return ret;
+		}
+
+		for (i = 0; i < NBANK(chip); i++) {
+			int j;
+
+			for (j = 0; j < BANK_SZ; j++) {
+				int gpio = gpio_chip->base + i * BANK_SZ + j;
+				int irq = gpio_to_irq(gpio);
+
+				irq_set_parent(irq, client->irq);
+			}
 		}
 	}
 
