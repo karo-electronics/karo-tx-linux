@@ -19,14 +19,16 @@
 *****************************************************************************/
 
 
-#include "gc_hal_kernel_linux.h"
+extern gceSTATUS
+_DefaultAlloctorInit(
+    IN gckOS Os,
+    OUT gckALLOCATOR * Allocator
+    );
 
-gctINT
-gckMATH_ModuloInt(
-    IN gctINT X,
-    IN gctINT Y
-    )
+gcsALLOCATOR_DESC allocatorArray[] =
 {
-    if(Y ==0) {return 0;}
-    else {return X % Y;}
-}
+    /* Default allocator. */
+    gcmkDEFINE_ALLOCATOR_DESC("default", _DefaultAlloctorInit),
+};
+
+

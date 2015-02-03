@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2013 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -254,8 +254,8 @@ gckVGCOMMAND_StateCommand(
     IN gctUINT32 Pipe,
     IN gctPOINTER Logical,
     IN gctUINT32 Address,
-    IN gctSIZE_T Count,
-    IN OUT gctSIZE_T * Bytes
+    IN gctUINT32 Count,
+    IN OUT gctUINT32 * Bytes
     );
 
 /* Form a RESTART command at the specified location in the command buffer. */
@@ -265,7 +265,7 @@ gckVGCOMMAND_RestartCommand(
     IN gctPOINTER Logical,
     IN gctUINT32 FetchAddress,
     IN gctUINT FetchCount,
-    IN OUT gctSIZE_T * Bytes
+    IN OUT gctUINT32 * Bytes
     );
 
 /* Form a FETCH command at the specified location in the command buffer. */
@@ -275,7 +275,7 @@ gckVGCOMMAND_FetchCommand(
     IN gctPOINTER Logical,
     IN gctUINT32 FetchAddress,
     IN gctUINT FetchCount,
-    IN OUT gctSIZE_T * Bytes
+    IN OUT gctUINT32 * Bytes
     );
 
 /* Form a CALL command at the specified location in the command buffer. */
@@ -285,7 +285,7 @@ gckVGCOMMAND_CallCommand(
     IN gctPOINTER Logical,
     IN gctUINT32 FetchAddress,
     IN gctUINT FetchCount,
-    IN OUT gctSIZE_T * Bytes
+    IN OUT gctUINT32 * Bytes
     );
 
 /* Form a RETURN command at the specified location in the command buffer. */
@@ -293,7 +293,7 @@ gceSTATUS
 gckVGCOMMAND_ReturnCommand(
     IN gckVGCOMMAND Command,
     IN gctPOINTER Logical,
-    IN OUT gctSIZE_T * Bytes
+    IN OUT gctUINT32 * Bytes
     );
 
 /* Form an EVENT command at the specified location in the command buffer. */
@@ -303,7 +303,7 @@ gckVGCOMMAND_EventCommand(
     IN gctPOINTER Logical,
     IN gceBLOCK Block,
     IN gctINT32 InterruptId,
-    IN OUT gctSIZE_T * Bytes
+    IN OUT gctUINT32 * Bytes
     );
 
 /* Form an END command at the specified location in the command buffer. */
@@ -312,7 +312,7 @@ gckVGCOMMAND_EndCommand(
     IN gckVGCOMMAND Command,
     IN gctPOINTER Logical,
     IN gctINT32 InterruptId,
-    IN OUT gctSIZE_T * Bytes
+    IN OUT gctUINT32 * Bytes
     );
 
 #endif  /* __gc_hal_kernel_hardware_command_h_ */

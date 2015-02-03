@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2013 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -23,6 +23,9 @@
 #define __gc_hal_kernel_context_h_
 
 #include "gc_hal_kernel_buffer.h"
+
+/* Exprimental optimization. */
+#define REMOVE_DUPLICATED_COPY_FROM_USER 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,6 +64,9 @@ typedef struct _gcsCONTEXT
     /* Logical address of the context buffer. */
     gctUINT32_PTR               logical;
 
+    /* Hardware address of the context buffer. */
+    gctUINT32                   address;
+
     /* Pointer to the LINK commands. */
     gctPOINTER                  link2D;
     gctPOINTER                  link3D;
@@ -76,6 +82,20 @@ typedef struct _gcsCONTEXT
 }
 gcsCONTEXT;
 
+typedef struct _gcsRECORD_ARRAY_MAP * gcsRECORD_ARRAY_MAP_PTR;
+struct  _gcsRECORD_ARRAY_MAP
+{
+    /* User pointer key. */
+    gctUINT64                   key;
+
+    /* Kernel memory buffer. */
+    gcsSTATE_DELTA_RECORD_PTR   kData;
+
+    /* Next map. */
+    gcsRECORD_ARRAY_MAP_PTR     next;
+
+};
+
 /* gckCONTEXT structure that hold the current context. */
 struct _gckCONTEXT
 {
@@ -89,14 +109,14 @@ struct _gckCONTEXT
     gckHARDWARE                 hardware;
 
     /* Command buffer alignment. */
-    gctSIZE_T                   alignment;
-    gctSIZE_T                   reservedHead;
-    gctSIZE_T                   reservedTail;
+    gctUINT32                   alignment;
+    gctUINT32                   reservedHead;
+    gctUINT32                   reservedTail;
 
     /* Context buffer metrics. */
     gctSIZE_T                   stateCount;
-    gctSIZE_T                   totalSize;
-    gctSIZE_T                   bufferSize;
+    gctUINT32                   totalSize;
+    gctUINT32                   bufferSize;
     gctUINT32                   linkIndex2D;
     gctUINT32                   linkIndex3D;
     gctUINT32                   linkIndexXD;
@@ -118,7 +138,11 @@ struct _gckCONTEXT
 
     /* A copy of the user record array. */
     gctUINT                     recordArraySize;
+#if REMOVE_DUPLICATED_COPY_FROM_USER
+    gcsRECORD_ARRAY_MAP_PTR     recordArrayMap;
+#else
     gcsSTATE_DELTA_RECORD_PTR   recordArray;
+#endif
 
     /* Requested pipe select for context. */
     gcePIPE_SELECT              entryPipe;
@@ -129,6 +153,8 @@ struct _gckCONTEXT
     gctSIZE_T                   lastSize;
     gctUINT32                   lastIndex;
     gctBOOL                     lastFixed;
+
+    gctUINT32                   pipeSelectBytes;
 
     /* Hint array. */
 #if gcdSECURE_USER

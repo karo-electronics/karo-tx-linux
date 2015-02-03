@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2013 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -310,9 +310,9 @@ gckVGHARDWARE_Construct(
         hardware->clockState            = gcvTRUE;
         hardware->powerState            = gcvTRUE;
 
-        hardware->powerOffTime          = 0;
 #if gcdPOWEROFF_TIMEOUT
-        hardware->powerOffTimeout = gcdPOWEROFF_TIMEOUT;
+        hardware->powerOffTime          = 0;
+        hardware->powerOffTimeout       = gcdPOWEROFF_TIMEOUT;
 
         gcmkVERIFY_OK(gckOS_CreateTimer(Os,
                                         _VGPowerTimerFunction,
@@ -352,14 +352,16 @@ gckVGHARDWARE_Construct(
     while (gcvFALSE);
 
 #if gcdPOWEROFF_TIMEOUT
-        if (hardware->powerOffTimer != gcvNULL)
-        {
-            gcmkVERIFY_OK(gckOS_StopTimer(Os, hardware->powerOffTimer));
-            gcmkVERIFY_OK(gckOS_DestroyTimer(Os, hardware->powerOffTimer));
-        }
+    if (hardware->powerOffTimer != gcvNULL)
+    {
+        gcmkVERIFY_OK(gckOS_StopTimer(Os, hardware->powerOffTimer));
+        gcmkVERIFY_OK(gckOS_DestroyTimer(Os, hardware->powerOffTimer));
+    }
 #endif
 
-    if (hardware->pageTableDirty != gcvNULL)
+    gcmkVERIFY_OK(gckOS_SetGPUPower(Os, gcvCORE_VG, gcvFALSE, gcvFALSE));
+
+    if (hardware != gcvNULL && hardware->pageTableDirty != gcvNULL)
     {
         gcmkVERIFY_OK(gckOS_AtomDestroy(Os, hardware->pageTableDirty));
     }
@@ -368,8 +370,6 @@ gckVGHARDWARE_Construct(
     {
         gcmkVERIFY_OK(gckOS_Free(Os, hardware));
     }
-
-    gcmkVERIFY_OK(gckOS_SetGPUPower(Os, gcvCORE_VG, gcvFALSE, gcvFALSE));
 
     gcmkFOOTER();
     /* Return the status. */
@@ -889,7 +889,7 @@ gceSTATUS
 gckVGHARDWARE_Execute(
     IN gckVGHARDWARE Hardware,
     IN gctUINT32 Address,
-    IN gctSIZE_T Count
+    IN gctUINT32 Count
     )
 {
     gceSTATUS status;
@@ -1042,6 +1042,9 @@ gckVGHARDWARE_AlignToTile(
 **      gctPOINTER Logical
 **          Logical address to convert.
 **
+**      gctBOOL InUserSpace
+**          gcvTRUE if the memory in user space.
+**
 **      gctUINT32* Address
 **          Return hardware specific address.
 **
@@ -1053,14 +1056,15 @@ gceSTATUS
 gckVGHARDWARE_ConvertLogical(
     IN gckVGHARDWARE Hardware,
     IN gctPOINTER Logical,
+    IN gctBOOL InUserSpace,
     OUT gctUINT32 * Address
     )
 {
     gctUINT32 address;
     gceSTATUS status;
 
-    gcmkHEADER_ARG("Hardware=0x%x Logical=0x%x Address=0x%x",
-                   Hardware, Logical, Address);
+    gcmkHEADER_ARG("Hardware=0x%x Logical=0x%x InUserSpace=%d Address=0x%x",
+                   Hardware, Logical, InUserSpace, Address);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
@@ -1070,9 +1074,18 @@ gckVGHARDWARE_ConvertLogical(
     do
     {
         /* Convert logical address into a physical address. */
-        gcmkERR_BREAK(gckOS_GetPhysicalAddress(
-            Hardware->os, Logical, &address
-            ));
+        if (InUserSpace)
+        {
+            gcmkERR_BREAK(gckOS_UserLogicalToPhysical(
+                Hardware->os, Logical, &address
+                ));
+        }
+        else
+        {
+            gcmkERR_BREAK(gckOS_GetPhysicalAddress(
+                Hardware->os, Logical, &address
+                ));
+        }
 
         /* Return hardware specific address. */
         *Address = ((((gctUINT32) (address)) & ~(((gctUINT32) (((gctUINT32) ((((1 ? 1:0) - (0 ? 1:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 1:0) - (0 ? 1:0) + 1))))))) << (0 ? 1:0))) | (((gctUINT32) (0x0 & ((gctUINT32) ((((1 ? 1:0) - (0 ? 1:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 1:0) - (0 ? 1:0) + 1))))))) << (0 ? 1:0)));
@@ -1174,32 +1187,33 @@ gceSTATUS gckVGHARDWARE_SetMMU(
     do
     {
         /* Convert the logical address into an hardware address. */
-        gcmkERR_BREAK(gckVGHARDWARE_ConvertLogical(Hardware, Logical, &address) );
+        gcmkERR_BREAK(gckVGHARDWARE_ConvertLogical(Hardware, Logical,
+                                      gcvFALSE, &address));
 
         /* Write the AQMemoryFePageTable register. */
         gcmkERR_BREAK(gckOS_WriteRegisterEx(Hardware->os, gcvCORE_VG,
                                       0x00400,
-                                      gcmkFIXADDRESS(address)) );
+                                      gcmkFIXADDRESS(address)));
 
         /* Write the AQMemoryTxPageTable register. */
         gcmkERR_BREAK(gckOS_WriteRegisterEx(Hardware->os, gcvCORE_VG,
                                       0x00404,
-                                      gcmkFIXADDRESS(address)) );
+                                      gcmkFIXADDRESS(address)));
 
         /* Write the AQMemoryPePageTable register. */
         gcmkERR_BREAK(gckOS_WriteRegisterEx(Hardware->os, gcvCORE_VG,
                                       0x00408,
-                                      gcmkFIXADDRESS(address)) );
+                                      gcmkFIXADDRESS(address)));
 
         /* Write the AQMemoryPezPageTable register. */
         gcmkERR_BREAK(gckOS_WriteRegisterEx(Hardware->os, gcvCORE_VG,
                                       0x0040C,
-                                      gcmkFIXADDRESS(address)) );
+                                      gcmkFIXADDRESS(address)));
 
         /* Write the AQMemoryRaPageTable register. */
         gcmkERR_BREAK(gckOS_WriteRegisterEx(Hardware->os, gcvCORE_VG,
                                       0x00410,
-                                      gcmkFIXADDRESS(address)) );
+                                      gcmkFIXADDRESS(address)));
     }
     while (gcvFALSE);
 
@@ -1436,7 +1450,7 @@ static gceSTATUS _CommandStall(
         gcmkERR_BREAK(gckOS_WaitSignal(
             command->os,
             command->powerStallSignal,
-            gcdGPU_TIMEOUT));
+            command->kernel->kernel->timeOut));
 
 
     }
@@ -1800,17 +1814,10 @@ gckVGHARDWARE_SetPowerManagementState(
         acquired = gcvTRUE;
     }
 
-    if (flag & gcvPOWER_FLAG_STOP)
-    {
-    }
 
     /* Get time until stopped. */
     gcmkPROFILE_QUERY(time, stopTime);
 
-    /* Only process this when hardware is enabled. */
-    if (Hardware->clockState && Hardware->powerState)
-    {
-    }
 
     if (flag & gcvPOWER_FLAG_DELAY)
     {
@@ -1824,7 +1831,10 @@ gckVGHARDWARE_SetPowerManagementState(
 
     if (flag & gcvPOWER_FLAG_INITIALIZE)
     {
+
+        /* Initialize GPU here, replaced by InitializeHardware later */
         gcmkONERROR(gckVGHARDWARE_SetMMU(Hardware, Hardware->kernel->mmu->pageTableLogical));
+        gcmkVERIFY_OK(gckVGHARDWARE_SetFastClear(Hardware, -1));
 
         /* Force the command queue to reload the next context. */
         command->currentContext = 0;
@@ -1854,9 +1864,6 @@ gckVGHARDWARE_SetPowerManagementState(
     /* Get time until off. */
     gcmkPROFILE_QUERY(time, offTime);
 
-    if (flag & gcvPOWER_FLAG_START)
-    {
-    }
 
     /* Get time until started. */
     gcmkPROFILE_QUERY(time, startTime);
@@ -2023,6 +2030,7 @@ gckVGHARDWARE_SetPowerManagement(
     return gcvSTATUS_OK;
 }
 
+#if gcdPOWEROFF_TIMEOUT
 gceSTATUS
 gckVGHARDWARE_SetPowerOffTimeout(
     IN gckVGHARDWARE  Hardware,
@@ -2051,6 +2059,7 @@ gckVGHARDWARE_QueryPowerOffTimeout(
     gcmkFOOTER_ARG("*Timeout=%d", *Timeout);
     return gcvSTATUS_OK;
 }
+#endif
 
 gceSTATUS
 gckVGHARDWARE_QueryIdle(

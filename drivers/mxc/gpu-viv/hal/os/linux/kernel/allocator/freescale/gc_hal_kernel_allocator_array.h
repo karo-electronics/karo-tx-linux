@@ -19,14 +19,27 @@
 *****************************************************************************/
 
 
-#include "gc_hal_kernel_linux.h"
+extern gceSTATUS
+_DefaultAlloctorInit(
+    IN gckOS Os,
+    OUT gckALLOCATOR * Allocator
+    );
 
-gctINT
-gckMATH_ModuloInt(
-    IN gctINT X,
-    IN gctINT Y
-    )
+#if LINUX_CMA_FSL
+gceSTATUS
+_CMAFSLAlloctorInit(
+    IN gckOS Os,
+    OUT gckALLOCATOR * Allocator
+    );
+#endif
+
+gcsALLOCATOR_DESC allocatorArray[] =
 {
-    if(Y ==0) {return 0;}
-    else {return X % Y;}
-}
+#if LINUX_CMA_FSL
+    gcmkDEFINE_ALLOCATOR_DESC("cmafsl", _CMAFSLAlloctorInit),
+#endif
+    /* Default allocator. */
+    gcmkDEFINE_ALLOCATOR_DESC("default", _DefaultAlloctorInit),
+};
+
+

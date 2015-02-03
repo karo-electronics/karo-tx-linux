@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2013 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -29,6 +29,25 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef enum {
+    gcvHARDWARE_FUNCTION_MMU,
+    gcvHARDWARE_FUNCTION_FLUSH,
+
+    gcvHARDWARE_FUNCTION_NUM,
+}
+gceHARDWARE_FUNCTION;
+
+
+typedef struct _gcsHARWARE_FUNCTION
+{
+    /* Entry of the function. */
+    gctUINT32                   address;
+
+    /* Bytes of the function. */
+    gctUINT32                   bytes;
+}
+gcsHARDWARE_FUNCTION;
 
 /* gckHARDWARE object. */
 struct _gckHARDWARE
@@ -61,6 +80,7 @@ struct _gckHARDWARE
     gctUINT32                   powerThread;
     gceCHIPPOWERSTATE           chipPowerState;
     gctUINT32                   lastWaitLink;
+    gctUINT32                   lastEnd;
     gctBOOL                     clockState;
     gctBOOL                     powerState;
     gctPOINTER                  globalSemaphore;
@@ -71,6 +91,11 @@ struct _gckHARDWARE
 
     gctUINT32                   mmuVersion;
 
+    /* Whether use new MMU. It is meaningless
+    ** for old MMU since old MMU is always enabled.
+    */
+    gctBOOL                     enableMMU;
+
     /* Type */
     gceHARDWARE_TYPE            type;
 
@@ -80,19 +105,32 @@ struct _gckHARDWARE
     gctPOINTER                  powerOffTimer;
 #endif
 
-    gctPOINTER                  pageTableDirty;
-
 #if gcdENABLE_FSCALE_VAL_ADJUST
-    /* FSCALE_VAL when gcvPOWER_ON. */
     gctUINT32                   powerOnFscaleVal;
 #endif
+    gctPOINTER                  pageTableDirty;
 
 #if gcdLINK_QUEUE_SIZE
     struct _gckLINKQUEUE        linkQueue;
 #endif
 
     gctBOOL                     powerManagement;
+    gctBOOL                     powerManagementLock;
     gctBOOL                     gpuProfiler;
+
+    gctBOOL                     endAfterFlushMmuCache;
+
+    gctUINT32                   minFscaleValue;
+
+    gctPOINTER                  pendingEvent;
+
+    /* Function used by gckHARDWARE. */
+    gctPHYS_ADDR                functionPhysical;
+    gctPOINTER                  functionLogical;
+    gctUINT32                   functionAddress;
+    gctSIZE_T                   functionBytes;
+
+    gcsHARDWARE_FUNCTION        functions[gcvHARDWARE_FUNCTION_NUM];
 };
 
 gceSTATUS
@@ -112,20 +150,6 @@ gceSTATUS
 gckHARDWARE_GetFrameInfo(
     IN gckHARDWARE Hardware,
     OUT gcsHAL_FRAME_INFO * FrameInfo
-    );
-
-gceSTATUS
-gckHARDWARE_SetFscaleValue(
-    IN gckHARDWARE Hardware,
-    IN gctUINT32   FscaleValue
-    );
-
-gceSTATUS
-gckHARDWARE_GetFscaleValue(
-    IN gckHARDWARE Hardware,
-    IN gctUINT * FscaleValue,
-    IN gctUINT * MinFscaleValue,
-    IN gctUINT * MaxFscaleValue
     );
 
 #ifdef __cplusplus
