@@ -44,6 +44,8 @@ static const char *ipu1_di0_sels[]	= { "ipu1_di0_pre", "dummy", "dummy", "ldb_di
 static const char *ipu1_di1_sels[]	= { "ipu1_di1_pre", "dummy", "dummy", "ldb_di0", "ldb_di1", };
 static const char *ipu2_di0_sels[]	= { "ipu2_di0_pre", "dummy", "dummy", "ldb_di0", "ldb_di1", };
 static const char *ipu2_di1_sels[]	= { "ipu2_di1_pre", "dummy", "dummy", "ldb_di0", "ldb_di1", };
+static const char *di0_div_sels[]	= { "ldb_di0_div_3_5", "ldb_di0_div_7", };
+static const char *di1_div_sels[]	= { "ldb_di1_div_3_5", "ldb_di1_div_7", };
 static const char *hsi_tx_sels[]	= { "pll3_120m", "pll2_pfd2_396m", };
 static const char *pcie_axi_sels[]	= { "axi", "ahb", };
 static const char *ssi_sels[]		= { "pll3_pfd2_508m", "pll3_pfd3_454m", "pll4_audio_div", };
@@ -107,7 +109,9 @@ enum mx6q_clks {
 	sata_ref, sata_ref_100m, pcie_ref, pcie_ref_125m, enet_ref, usbphy1_gate,
 	usbphy2_gate, pll4_post_div, pll5_post_div, pll5_video_div, eim_slow,
 	spdif, cko2_sel, cko2_podf, cko2, cko, vdoa, pll4_audio_div,
-	lvds1_sel, lvds2_sel, lvds1_gate, lvds2_gate, esai_ahb, clk_max
+	lvds1_sel, lvds2_sel, lvds1_gate, lvds2_gate, esai_ahb,
+	ldb_di0_div_7, ldb_di1_div_7, di0_div_sel, di1_div_sel,
+	clk_max
 };
 
 static struct clk *clk[clk_max];
@@ -285,6 +289,8 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	clk[cko1_sel]         = imx_clk_mux("cko1_sel",         base + 0x60, 0,  4, cko1_sels,         ARRAY_SIZE(cko1_sels));
 	clk[cko2_sel]         = imx_clk_mux("cko2_sel",         base + 0x60, 16, 5, cko2_sels,         ARRAY_SIZE(cko2_sels));
 	clk[cko]              = imx_clk_mux("cko",              base + 0x60, 8, 1,  cko_sels,          ARRAY_SIZE(cko_sels));
+	clk[di0_div_sel]      = imx_clk_mux("ldb_di0_div_sel",      base + 0x20, 10, 1, di0_div_sels,      ARRAY_SIZE(di0_div_sels));
+	clk[di1_div_sel]      = imx_clk_mux("ldb_di1_div_sel",      base + 0x20, 11, 1, di1_div_sels,      ARRAY_SIZE(di1_div_sels));
 
 	/*                              name         reg      shift width busy: reg, shift parent_names  num_parents */
 	clk[periph]  = imx_clk_busy_mux("periph",  base + 0x14, 25,  1,   base + 0x48, 5,  periph_sels,  ARRAY_SIZE(periph_sels));
@@ -309,9 +315,11 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	clk[ipu1_podf]        = imx_clk_divider("ipu1_podf",        "ipu1_sel",          base + 0x3c, 11, 3);
 	clk[ipu2_podf]        = imx_clk_divider("ipu2_podf",        "ipu2_sel",          base + 0x3c, 16, 3);
 	clk[ldb_di0_div_3_5]  = imx_clk_fixed_factor("ldb_di0_div_3_5", "ldb_di0_sel", 2, 7);
-	clk[ldb_di0_podf]     = imx_clk_divider_flags("ldb_di0_podf", "ldb_di0_div_3_5", base + 0x20, 10, 1, 0);
+	clk[ldb_di0_div_7]    = imx_clk_fixed_factor("ldb_di0_div_7", "ldb_di0_sel", 1, 7);
+	clk[ldb_di0_podf]     = imx_clk_divider_flags("ldb_di0_podf", "ldb_di0_div_sel", base + 0x20, 10, 1, 0);
 	clk[ldb_di1_div_3_5]  = imx_clk_fixed_factor("ldb_di1_div_3_5", "ldb_di1_sel", 2, 7);
-	clk[ldb_di1_podf]     = imx_clk_divider_flags("ldb_di1_podf", "ldb_di1_div_3_5", base + 0x20, 11, 1, 0);
+	clk[ldb_di1_div_7]    = imx_clk_fixed_factor("ldb_di1_div_7", "ldb_di1_sel", 1, 7);
+	clk[ldb_di1_podf]     = imx_clk_divider_flags("ldb_di1_podf", "ldb_di1_div_sel", base + 0x20, 11, 1, 0);
 	clk[ipu1_di0_pre]     = imx_clk_divider("ipu1_di0_pre",     "ipu1_di0_pre_sel",  base + 0x34, 3,  3);
 	clk[ipu1_di1_pre]     = imx_clk_divider("ipu1_di1_pre",     "ipu1_di1_pre_sel",  base + 0x34, 12, 3);
 	clk[ipu2_di0_pre]     = imx_clk_divider("ipu2_di0_pre",     "ipu2_di0_pre_sel",  base + 0x38, 3,  3);
@@ -445,6 +453,20 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	clk_register_clkdev(clk[gpt_ipg], "ipg", "imx-gpt.0");
 	clk_register_clkdev(clk[gpt_ipg_per], "per", "imx-gpt.0");
 	clk_register_clkdev(clk[enet_ref], "enet_ref", NULL);
+
+	clk_register_clkdev(clk[ldb_di0], "ldb_di0", "20e0000.ldb");
+	clk_register_clkdev(clk[ldb_di0_div_3_5], "di0_div_3_5", "20e0000.ldb");
+	clk_register_clkdev(clk[ldb_di0_div_7], "di0_div_7", "20e0000.ldb");
+	clk_register_clkdev(clk[di0_div_sel], "di0_div_sel", "20e0000.ldb");
+	clk_register_clkdev(clk[ipu1_di0_sel], "ipu1_di0_sel", "20e0000.ldb");
+	clk_register_clkdev(clk[ipu2_di0_sel], "ipu2_di0_sel", "20e0000.ldb");
+
+	clk_register_clkdev(clk[ldb_di1], "ldb_di1", "20e0000.ldb");
+	clk_register_clkdev(clk[ldb_di1_div_3_5], "di1_div_3_5", "20e0000.ldb");
+	clk_register_clkdev(clk[ldb_di1_div_7], "di1_div_7", "20e0000.ldb");
+	clk_register_clkdev(clk[di1_div_sel], "di1_div_sel", "20e0000.ldb");
+	clk_register_clkdev(clk[ipu1_di1_sel], "ipu1_di1_sel", "20e0000.ldb");
+	clk_register_clkdev(clk[ipu2_di1_sel], "ipu2_di1_sel", "20e0000.ldb");
 
 	if ((imx_get_soc_revision() != IMX_CHIP_REVISION_1_0) ||
 	    cpu_is_imx6dl()) {
