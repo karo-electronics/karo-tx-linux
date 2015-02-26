@@ -538,14 +538,10 @@ static long vpu_ioctl(struct file *filp, u_int cmd,
 	{
 		struct vpu_mem_desc check_memory;
 
-		ret = copy_from_user(&check_memory,
-				(void __user *)arg,
-				sizeof(struct vpu_mem_desc));
-		if (ret != 0) {
-			dev_err(vpu_dev, "copy from user failure:%d\n", ret);
-			ret = -EFAULT;
-			break;
-		}
+		if (copy_from_user(&check_memory, (void __user *)arg,
+					sizeof(struct vpu_mem_desc)))
+			return -EFAULT;
+
 		check_memory.size = 1;
 		if (copy_to_user((void __user *)arg, &check_memory,
 					sizeof(struct vpu_mem_desc)))
@@ -686,7 +682,7 @@ static int vpu_map_hwregs(struct file *fp, struct vm_area_struct *vm)
 	 */
 	vm->vm_page_prot = pgprot_noncachedxn(vm->vm_page_prot);
 	pfn = phy_vpu_base_addr >> PAGE_SHIFT;
-	dev_dbg(vpu_dev, "size=0x%lx, page no.=0x%lx\n",
+	dev_dbg(vpu_dev, "size=0x%08lx, page no.=0x%08lx\n",
 		 vm->vm_end - vm->vm_start, pfn);
 	return remap_pfn_range(vm, vm->vm_start, pfn,
 			vm->vm_end - vm->vm_start,
@@ -835,14 +831,10 @@ static int vpu_dev_probe(struct platform_device *pdev)
 	vpu_dev = &pdev->dev;
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vpu_regs");
-	if (!res) {
-		dev_err(vpu_dev, "vpu: unable to get vpu base addr\n");
-		return -ENODEV;
-	}
-	phy_vpu_base_addr = res->start;
 	vpu_base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(vpu_base))
 		return PTR_ERR(vpu_base);
+	phy_vpu_base_addr = res->start;
 
 	vpu_major = register_chrdev(vpu_major, "mxc_vpu", &vpu_fops);
 	if (vpu_major < 0) {
@@ -1045,6 +1037,7 @@ static int vpu_resume(struct device *dev)
 
 			WRITE_REG(0x0, BIT_RESET_CTRL);
 			WRITE_REG(0x0, BIT_CODE_RUN);
+
 			/* MX6 RTL has a bug not to init MBC_SET_SUBBLK_EN on reset */
 			if (vpu_data->soc_data->quirk_subblk_en)
 				WRITE_REG(0x0, MBC_SET_SUBBLK_EN);
