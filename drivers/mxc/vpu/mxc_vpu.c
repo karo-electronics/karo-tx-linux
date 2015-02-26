@@ -867,8 +867,8 @@ static int vpu_dev_probe(struct platform_device *pdev)
 		err = vpu_ipi_irq;
 		goto err_out_class;
 	}
-	err = request_irq(vpu_ipi_irq, vpu_ipi_irq_handler, 0, "VPU_CODEC_IRQ",
-			  drv_data);
+	err = devm_request_irq(vpu_dev, vpu_ipi_irq, vpu_ipi_irq_handler, 0,
+			"VPU_CODEC_IRQ", drv_data);
 	if (err)
 		goto err_out_class;
 
@@ -894,7 +894,8 @@ static int vpu_dev_probe(struct platform_device *pdev)
 			err = vpu_jpu_irq;
 			goto err_out_class;
 		}
-		err = request_irq(vpu_jpu_irq, vpu_jpu_irq_handler, IRQF_TRIGGER_RISING,
+		err = devm_request_irq(vpu_dev, vpu_jpu_irq,
+				vpu_jpu_irq_handler, IRQF_TRIGGER_RISING,
 				"VPU_JPG_IRQ", drv_data);
 		if (err)
 			goto err_out_class;
@@ -920,10 +921,6 @@ static int vpu_dev_remove(struct platform_device *pdev)
 
 	pm_runtime_disable(&pdev->dev);
 
-	free_irq(vpu_ipi_irq, &vpu_data);
-#ifdef MXC_VPU_HAS_JPU
-	free_irq(vpu_jpu_irq, &vpu_data);
-#endif
 	cancel_work_sync(&vpu_data->work);
 	flush_workqueue(vpu_data->workqueue);
 	destroy_workqueue(vpu_data->workqueue);
