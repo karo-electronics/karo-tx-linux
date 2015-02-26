@@ -138,20 +138,18 @@ static struct regulator *vpu_regulator;
 
 static int vpu_clk_enable(struct vpu_priv *vpu_data)
 {
-	int ret = 0;
-
-	if (vpu_data->clk_enabled++ == 0)
-		ret = clk_prepare_enable(vpu_clk);
-
-	if (WARN_ON(vpu_data->clk_enabled <= 0))
+	if (WARN_ON(vpu_data->clk_enabled < 0))
 		return -EINVAL;
 
-	return ret;
+	if (vpu_data->clk_enabled++ == 0)
+		return clk_prepare_enable(vpu_clk);
+
+	return 0;
 }
 
 static int vpu_clk_disable(struct vpu_priv *vpu_data)
 {
-	if (WARN_ON(vpu_data->clk_enabled == 0))
+	if (WARN_ON(vpu_data->clk_enabled <= 0))
 		return -EINVAL;
 
 	if (--vpu_data->clk_enabled == 0)
