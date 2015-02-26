@@ -127,7 +127,7 @@ static wait_queue_head_t vpu_queue;
 
 static int vpu_jpu_irq;
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 static unsigned int regBk[64];
 static unsigned int pc_before_suspend;
 #endif
@@ -962,7 +962,7 @@ static int vpu_dev_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 static int vpu_suspend(struct device *dev)
 {
 	struct vpu_priv *vpu_data = dev_get_drvdata(dev);
@@ -1090,7 +1090,7 @@ static SIMPLE_DEV_PM_OPS(vpu_pm_ops, vpu_suspend, vpu_resume);
 #define VPU_PM_OPS &vpu_pm_ops
 #else
 #define VPU_PM_OPS NULL
-#endif /* !CONFIG_PM */
+#endif /* !CONFIG_PM_SLEEP */
 
 /*! Driver definition
  *
