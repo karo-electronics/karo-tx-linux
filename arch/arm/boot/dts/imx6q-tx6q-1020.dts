@@ -188,10 +188,6 @@
 	status = "disabled";
 };
 
-&ipu2 {
-	status = "disabled";
-};
-
 &iomuxc {
 	imx6qdl-tx6 {
 		pinctrl_usdhc4: usdhc4grp {
@@ -206,6 +202,10 @@
 			>;
 		};
 	};
+};
+
+&ipu2 {
+	status = "disabled";
 };
 
 &reg_lcd0_pwr {
