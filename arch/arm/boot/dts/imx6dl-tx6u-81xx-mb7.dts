@@ -14,11 +14,11 @@
 #include "imx6qdl-tx6.dtsi"
 
 / {
-	model = "Ka-Ro electronics TX6U-811x Module";
+	model = "Ka-Ro electronics TX6U-81xx Module";
 	compatible = "karo,imx6dl-tx6dl", "fsl,imx6dl";
 
 	aliases {
-		display = &ldb;
+		display = &lvds0;
 		lvds0 = &lvds0;
 		lvds1 = &lvds1;
 		mxcfb0 = &lvds0;
@@ -27,7 +27,7 @@
 
 	backlight0: backlight0 {
 		compatible = "pwm-backlight";
-		pwms = <&pwm2 0 500000 1>;
+		pwms = <&pwm2 0 500000 PWM_POLARITY_INVERTED>;
 		power-supply = <&reg_lcd0_pwr>;
 		/*
 		 * a poor man's way to create a 1:1 relationship between
@@ -49,7 +49,7 @@
 
 	backlight1: backlight1 {
 		compatible = "pwm-backlight";
-		pwms = <&pwm1 0 500000 0>;
+		pwms = <&pwm1 0 500000 PWM_POLARITY_INVERTED>;
 		power-supply = <&reg_lcd1_pwr>;
 		/*
 		 * a poor man's way to create a 1:1 relationship between
@@ -73,8 +73,7 @@
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
 		interface_pix_fmt = "RGB666";
-//		mode_str ="LDB-VGA";
-		mode_str ="LDB-NL12880BC20";
+		mode_str = "LDB-VGA";
 		default_bpp = <32>;
 		int_clk = <0>;
 		late_init = <0>;
@@ -83,16 +82,50 @@
 		status = "okay";
 
 		display-timings {
-			VGA {
+			native-mode = <&lvds0_timing1>;
+
+			lvds0_timing0: hsd100pxn1 {
+				clock-frequency = <65000000>;
+				hactive = <1024>;
+				vactive = <768>;
+				hback-porch = <220>;
+				hfront-porch = <40>;
+				vback-porch = <21>;
+				vfront-porch = <7>;
+				hsync-len = <60>;
+				vsync-len = <10>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <1>;
+			};
+
+			lvds0_timing1: VGA {
 				clock-frequency = <25200000>;
 				hactive = <640>;
 				vactive = <480>;
 				hback-porch = <48>;
-				hsync-len = <96>;
 				hfront-porch = <16>;
 				vback-porch = <31>;
-				vsync-len = <2>;
 				vfront-porch = <12>;
+				hsync-len = <96>;
+				vsync-len = <2>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+
+			lvds0_timing2: nl12880bc20 {
+				clock-frequency = <71000000>;
+				hactive = <1280>;
+				vactive = <800>;
+				hback-porch = <50>;
+				hfront-porch = <50>;
+				vback-porch = <5>;
+				vfront-porch = <5>;
+				hsync-len = <60>;
+				vsync-len = <13>;
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
@@ -104,14 +137,75 @@
 	lvds1: fb@1 {
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
-		interface_pix_fmt = "RGB666";
-		mode_str ="LDB-NL12880BC20";
-//		mode_str ="LDB-VGA";
+		interface_pix_fmt = "RGB24";
+		mode_str = "LDB-NL12880BC20";
 		default_bpp = <32>;
 		int_clk = <0>;
 		late_init = <0>;
+		fsl,data-mapping = "spwg";
+		fsl,data-width = <18>;
 		status = "okay";
+
+		display-timings {
+			native-mode = <&lvds1_timing2>;
+
+			lvds1_timing0: hsd100pxn1 {
+				clock-frequency = <65000000>;
+				hactive = <1024>;
+				vactive = <768>;
+				hback-porch = <220>;
+				hfront-porch = <40>;
+				vback-porch = <21>;
+				vfront-porch = <7>;
+				hsync-len = <60>;
+				vsync-len = <10>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <1>;
+			};
+
+			lvds1_timing1: VGA {
+				clock-frequency = <25200000>;
+				hactive = <640>;
+				vactive = <480>;
+				hback-porch = <48>;
+				hfront-porch = <16>;
+				vback-porch = <31>;
+				vfront-porch = <12>;
+				hsync-len = <96>;
+				vsync-len = <2>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+
+			lvds1_timing2: nl12880bc20 {
+				clock-frequency = <71000000>;
+				hactive = <1280>;
+				vactive = <800>;
+				hback-porch = <50>;
+				hfront-porch = <50>;
+				vback-porch = <5>;
+				vfront-porch = <5>;
+				hsync-len = <60>;
+				vsync-len = <13>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <1>;
+			};
+		};
 	};
+};
+
+&can1 {
+	status = "disabled";
+};
+
+&can2 {
+	xceiver-supply = <&reg_3v3>;
 };
 
 &i2c3 {
@@ -128,7 +222,7 @@
 };
 
 &iomuxc {
-	imx6dl-tx6u-811x {
+	imx6dl-tx6u-81xx {
 		pinctrl_eeti: eetigrp {
 			fsl,pins = <
 				MX6QDL_PAD_EIM_D22__GPIO3_IO22 0x1b0b1 /* Interrupt */
@@ -144,72 +238,11 @@
 &ldb {
 	ipu_id = <0>;
 	disp_id = <0>;
-	ext_ref = <1>;
-	mode = "sin1";
+	ext_ref = <0>;
+	mode = "sep0";
 	sec_ipu_id = <0>;
 	sec_disp_id = <1>;
-
-	fsl,data-mapping = "spwg";
-	fsl,data-width = <18>;
 	status = "okay";
-
-	lvds-channel@0 {
-		display-timings {
-			native-mode = <&lvds0_timing1>;
-
-			lvds0_timing0: hsd100pxn1 {
-				clock-frequency = <65000000>;
-				hactive = <1024>;
-				vactive = <768>;
-				hback-porch = <220>;
-				hfront-porch = <40>;
-				vback-porch = <21>;
-				vfront-porch = <7>;
-				hsync-len = <60>;
-				vsync-len = <10>;
-				de-active = <1>;
-				pixelclk-active = <1>;
-			};
-
-			lvds0_timing1: VGA {
-				clock-frequency = <25200000>;
-				hactive = <640>;
-				vactive = <480>;
-				hback-porch = <48>;
-				hsync-len = <96>;
-				hfront-porch = <16>;
-				vback-porch = <31>;
-				vsync-len = <2>;
-				vfront-porch = <12>;
-				hsync-active = <0>;
-				vsync-active = <0>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-		};
-	};
-
-	lvds-channel@1 {
-		display-timings {
-			native-mode = <&lvds1_timing0>;
-
-			lvds1_timing0: nl12880bc20 {
-				clock-frequency = <71000000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hback-porch = <50>;
-				hsync-len = <60>;
-				hfront-porch = <50>;
-				vback-porch = <5>;
-				vsync-len = <13>;
-				vfront-porch = <5>;
-				hsync-active = <0>;
-				vsync-active = <0>;
-				de-active = <1>;
-				pixelclk-active = <1>;
-			};
-		};
-	};
 };
 
 &pwm1 {

@@ -14,12 +14,12 @@
 #include "imx6qdl-tx6.dtsi"
 
 / {
-	model = "Ka-Ro electronics TX6U-801x Module";
+	model = "Ka-Ro electronics TX6U-8033 Module";
 	compatible = "karo,imx6dl-tx6dl", "fsl,imx6dl";
 
 	aliases {
-		display = &lcd;
-		mxcfb0 = &display;
+		display = &mxcfb0;
+		mxcfb0 = &mxcfb0;
 	};
 
 	backlight: backlight {
@@ -44,7 +44,7 @@
 		default-brightness-level = <50>;
 	};
 
-	display: fb@2 {
+	mxcfb0: fb@2 {
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "lcd";
 		interface_pix_fmt = "RGB24";
@@ -52,16 +52,6 @@
 		default_bpp = <32>;
 		int_clk = <1>;
 		late_init = <0>;
-		status = "okay";
-	};
-
-	lcd: lcd@0 {
-		compatible = "fsl,lcd";
-		ipu_id = <0>;
-		disp_id = <0>;
-		default_ifmt = "RGB24";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_disp0_2>;
 		status = "okay";
 
 		display-timings {
@@ -178,6 +168,40 @@
 			};
 		};
 	};
+
+	lcd: lcd@0 {
+		compatible = "fsl,lcd";
+		ipu_id = <0>;
+		disp_id = <0>;
+		default_ifmt = "RGB24";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_disp0_2>;
+		status = "okay";
+	};
+};
+
+&ds1339 {
+	status = "disabled";
+};
+
+&gpmi {
+	status = "disabled";
+};
+
+&iomuxc {
+	imx6qdl-tx6 {
+		pinctrl_usdhc4: usdhc4grp {
+			fsl,pins = <
+				MX6QDL_PAD_SD4_CMD__SD4_CMD		0x070b1
+				MX6QDL_PAD_SD4_CLK__SD4_CLK		0x070b1
+				MX6QDL_PAD_SD4_DAT0__SD4_DATA0		0x070b1
+				MX6QDL_PAD_SD4_DAT1__SD4_DATA1		0x070b1
+				MX6QDL_PAD_SD4_DAT2__SD4_DATA2		0x070b1
+				MX6QDL_PAD_SD4_DAT3__SD4_DATA3		0x070b1
+				MX6QDL_PAD_NANDF_ALE__SD4_RESET		0x0b0b1
+			>;
+		};
+	};
 };
 
 &reg_lcd0_pwr {
@@ -185,5 +209,14 @@
 };
 
 &reg_lcd1_pwr {
+	status = "okay";
+};
+
+&usdhc4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc4>;
+	bus-width = <4>;
+	no-1-8-v;
+	fsl,wp-controller;
 	status = "okay";
 };

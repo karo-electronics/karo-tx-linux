@@ -10,16 +10,15 @@
  */
 
 /dts-v1/;
-#include "imx6q.dtsi"
+#include "imx6dl.dtsi"
 #include "imx6qdl-tx6.dtsi"
 
 / {
-	model = "Ka-Ro electronics TX6Q-1110/-1130 Module";
-	compatible = "karo,imx6q-tx6q", "fsl,imx6q";
+	model = "Ka-Ro electronics TX6U-81xx Module";
+	compatible = "karo,imx6dl-tx6dl", "fsl,imx6dl";
 
 	aliases {
 		display = &lvds0;
-		ipu1 = &ipu2;
 		lvds0 = &lvds0;
 		lvds1 = &lvds1;
 		mxcfb0 = &lvds0;
@@ -28,8 +27,7 @@
 
 	backlight0: backlight0 {
 		compatible = "pwm-backlight";
-		pwms = <&pwm2 0 500000 PWM_POLARITY_INVERTED>;
-		power-supply = <&reg_lcd0_pwr>;
+		pwms = <&pwm2 0 500000 0>;
 		/*
 		 * a poor man's way to create a 1:1 relationship between
 		 * the PWM value and the actual duty cycle
@@ -50,8 +48,7 @@
 
 	backlight1: backlight1 {
 		compatible = "pwm-backlight";
-		pwms = <&pwm1 0 500000 PWM_POLARITY_INVERTED>;
-		power-supply = <&reg_lcd1_pwr>;
+		pwms = <&pwm1 0 500000 0>;
 		/*
 		 * a poor man's way to create a 1:1 relationship between
 		 * the PWM value and the actual duty cycle
@@ -74,7 +71,7 @@
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
 		interface_pix_fmt = "RGB666";
-		mode_str = "LDB-VGA";
+		mode_str = "LDB-XGA";
 		default_bpp = <32>;
 		int_clk = <0>;
 		late_init = <0>;
@@ -83,7 +80,7 @@
 		status = "okay";
 
 		display-timings {
-			native-mode = <&lvds0_timing1>;
+			native-mode = <&lvds0_timing0>;
 
 			lvds0_timing0: hsd100pxn1 {
 				clock-frequency = <65000000>;
@@ -130,7 +127,7 @@
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
-				pixelclk-active = <1>;
+				pixelclk-active = <0>;
 			};
 		};
 	};
@@ -138,8 +135,8 @@
 	lvds1: fb@1 {
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
-		interface_pix_fmt = "RGB24";
-		mode_str = "LDB-NL12880BC20";
+		interface_pix_fmt = "RGB666";
+		mode_str = "LDB-XGA";
 		default_bpp = <32>;
 		int_clk = <0>;
 		late_init = <0>;
@@ -148,7 +145,7 @@
 		status = "okay";
 
 		display-timings {
-			native-mode = <&lvds1_timing2>;
+			native-mode = <&lvds1_timing0>;
 
 			lvds1_timing0: hsd100pxn1 {
 				clock-frequency = <65000000>;
@@ -163,7 +160,7 @@
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
-				pixelclk-active = <1>;
+				pixelclk-active = <0>;
 			};
 
 			lvds1_timing1: VGA {
@@ -195,18 +192,10 @@
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
-				pixelclk-active = <1>;
+				pixelclk-active = <0>;
 			};
 		};
 	};
-};
-
-&can1 {
-	status = "disabled";
-};
-
-&can2 {
-	xceiver-supply = <&reg_3v3>;
 };
 
 &i2c3 {
@@ -223,17 +212,13 @@
 };
 
 &iomuxc {
-	imx6q-tx6q-11x0 {
+	imx6dl-tx6u-81xx {
 		pinctrl_eeti: eetigrp {
 			fsl,pins = <
 				MX6QDL_PAD_EIM_D22__GPIO3_IO22 0x1b0b1 /* Interrupt */
 			>;
 		};
 	};
-};
-
-&ipu2 {
-	status = "disabled";
 };
 
 &kpp {
@@ -251,17 +236,5 @@
 };
 
 &pwm1 {
-	status = "okay";
-};
-
-&reg_lcd0_pwr {
-	status = "okay";
-};
-
-&reg_lcd1_pwr {
-	status = "okay";
-};
-
-&sata {
 	status = "okay";
 };

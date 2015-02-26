@@ -10,16 +10,16 @@
  */
 
 /dts-v1/;
-#include "imx6q.dtsi"
+#include "imx6dl.dtsi"
 #include "imx6qdl-tx6.dtsi"
 
 / {
-	model = "Ka-Ro electronics TX6Q-1010 Module";
-	compatible = "karo,imx6q-tx6q", "fsl,imx6q";
+	model = "Ka-Ro electronics TX6U-801x/-803x Module";
+	compatible = "karo,imx6dl-tx6dl", "fsl,imx6dl";
 
 	aliases {
-		display = &lcd;
-		mxcfb0 = &display;
+		display = &mxcfb0;
+		mxcfb0 = &mxcfb0;
 	};
 
 	backlight: backlight {
@@ -44,7 +44,7 @@
 		default-brightness-level = <50>;
 	};
 
-	display: fb@2 {
+	mxcfb0: fb@2 {
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "lcd";
 		interface_pix_fmt = "RGB24";
@@ -52,16 +52,6 @@
 		default_bpp = <32>;
 		int_clk = <1>;
 		late_init = <0>;
-		status = "okay";
-	};
-
-	lcd: lcd@0 {
-		compatible = "fsl,lcd";
-		ipu_id = <0>;
-		disp_id = <0>;
-		default_ifmt = "RGB24";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_disp0_2>;
 		status = "okay";
 
 		display-timings {
@@ -178,10 +168,16 @@
 			};
 		};
 	};
-};
 
-&ipu2 {
-	status = "disabled";
+	lcd: lcd@0 {
+		compatible = "fsl,lcd";
+		ipu_id = <0>;
+		disp_id = <0>;
+		default_ifmt = "RGB24";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_disp0_2>;
+		status = "okay";
+	};
 };
 
 &reg_lcd0_pwr {
