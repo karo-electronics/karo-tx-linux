@@ -289,8 +289,8 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	clk[cko1_sel]         = imx_clk_mux("cko1_sel",         base + 0x60, 0,  4, cko1_sels,         ARRAY_SIZE(cko1_sels));
 	clk[cko2_sel]         = imx_clk_mux("cko2_sel",         base + 0x60, 16, 5, cko2_sels,         ARRAY_SIZE(cko2_sels));
 	clk[cko]              = imx_clk_mux("cko",              base + 0x60, 8, 1,  cko_sels,          ARRAY_SIZE(cko_sels));
-	clk[di0_div_sel]      = imx_clk_mux("ldb_di0_div_sel",      base + 0x20, 10, 1, di0_div_sels,      ARRAY_SIZE(di0_div_sels));
-	clk[di1_div_sel]      = imx_clk_mux("ldb_di1_div_sel",      base + 0x20, 11, 1, di1_div_sels,      ARRAY_SIZE(di1_div_sels));
+	clk[di0_div_sel]      = imx_clk_mux("ldb_di0_div_sel",  base + 0x20, 10, 1, di0_div_sels,      ARRAY_SIZE(di0_div_sels));
+	clk[di1_div_sel]      = imx_clk_mux("ldb_di1_div_sel",  base + 0x20, 11, 1, di1_div_sels,      ARRAY_SIZE(di1_div_sels));
 
 	/*                              name         reg      shift width busy: reg, shift parent_names  num_parents */
 	clk[periph]  = imx_clk_busy_mux("periph",  base + 0x14, 25,  1,   base + 0x48, 5,  periph_sels,  ARRAY_SIZE(periph_sels));
@@ -468,12 +468,6 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	clk_register_clkdev(clk[ipu1_di1_sel], "ipu1_di1_sel", "20e0000.ldb");
 	clk_register_clkdev(clk[ipu2_di1_sel], "ipu2_di1_sel", "20e0000.ldb");
 
-	if ((imx_get_soc_revision() != IMX_CHIP_REVISION_1_0) ||
-	    cpu_is_imx6dl()) {
-		clk_set_parent(clk[ldb_di0_sel], clk[pll5_video_div]);
-		clk_set_parent(clk[ldb_di1_sel], clk[pll5_video_div]);
-	}
-
 	clk_set_parent(clk[ipu1_di0_pre_sel], clk[pll5_video_div]);
 	clk_set_parent(clk[ipu1_di1_pre_sel], clk[pll5_video_div]);
 	clk_set_parent(clk[ipu2_di0_pre_sel], clk[pll5_video_div]);
@@ -482,6 +476,9 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	clk_set_parent(clk[ipu1_di1_sel], clk[ipu1_di1_pre]);
 	clk_set_parent(clk[ipu2_di0_sel], clk[ipu2_di0_pre]);
 	clk_set_parent(clk[ipu2_di1_sel], clk[ipu2_di1_pre]);
+
+	clk_set_parent(clk[di0_div_sel], clk[ldb_di0_div_7]);
+	clk_set_parent(clk[di1_div_sel], clk[ldb_di1_div_7]);
 
 	/*
 	 * The gpmi needs 100MHz frequency in the EDO/Sync mode,
@@ -506,8 +503,14 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	}
 
 	/* ipu clock initialization */
-	clk_set_parent(clk[ldb_di0_sel], clk[pll2_pfd0_352m]);
-	clk_set_parent(clk[ldb_di1_sel], clk[pll2_pfd0_352m]);
+	if ((imx_get_soc_revision() != IMX_CHIP_REVISION_1_0) ||
+	    cpu_is_imx6dl()) {
+		clk_set_parent(clk[ldb_di0_sel], clk[pll5_video_div]);
+		clk_set_parent(clk[ldb_di1_sel], clk[pll5_video_div]);
+	} else {
+		clk_set_parent(clk[ldb_di0_sel], clk[pll2_pfd0_352m]);
+		clk_set_parent(clk[ldb_di1_sel], clk[pll2_pfd0_352m]);
+	}
 	clk_set_parent(clk[ipu1_di0_pre_sel], clk[pll5_video_div]);
 	clk_set_parent(clk[ipu1_di1_pre_sel], clk[pll5_video_div]);
 	clk_set_parent(clk[ipu2_di0_pre_sel], clk[pll5_video_div]);

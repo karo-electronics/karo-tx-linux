@@ -73,9 +73,9 @@
 				    "phys_baseaddr";
 			interrupts = <0 9 0x04>, <0 10 0x04>;
 			interrupt-names = "irq_3d", "irq_2d";
-			clocks = <&clks 143>, <&clks 27>,
+			clocks = <&clks 26>, <&clks 27>,
 				 <&clks 121>, <&clks 122>,
-				 <&clks 0>;
+				 <&clks 74>;
 			clock-names = "gpu2d_axi_clk", "gpu3d_axi_clk",
 				      "gpu2d_clk", "gpu3d_clk",
 				      "gpu3d_shader_clk";
@@ -100,7 +100,7 @@
 
 		hdmi_video: hdmi_video@020e0000 {
 			compatible = "fsl,imx6dl-hdmi-video";
-			reg =  <0x020e0000 0x1000>;
+			reg = <0x020e0000 0x1000>;
 			reg-names = "hdmi_gpr";
 			interrupts = <0 115 0x04>;
 			clocks = <&clks 124>, <&clks 123>;
@@ -187,13 +187,4 @@
 
 &hdmi {
 	compatible = "fsl,imx6dl-hdmi";
-};
-
-&ldb {
-	clocks = <&clks 33>, <&clks 34>,
-		 <&clks 39>, <&clks 40>,
-		 <&clks 135>, <&clks 136>;
-	clock-names = "di0_pll", "di1_pll",
-		      "di0_sel", "di1_sel",
-		      "di0", "di1";
 };
