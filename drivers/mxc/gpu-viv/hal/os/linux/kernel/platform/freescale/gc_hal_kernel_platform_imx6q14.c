@@ -604,7 +604,12 @@ _SetPower(
     IN gctBOOL Enable
     )
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) ||		\
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0) &&	\
+		LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0))) ||	\
+	defined(CONFIG_PM)
     struct imx_priv* priv = Platform->priv;
+#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
     int ret;
@@ -764,7 +769,7 @@ _SetClock(
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_RUNTIME
 static int gpu_runtime_suspend(struct device *dev)
 {
     return 0;
@@ -774,7 +779,9 @@ static int gpu_runtime_resume(struct device *dev)
 {
     return 0;
 }
+#endif
 
+#ifdef CONFIG_PM
 static struct dev_pm_ops gpu_pm_ops;
 #endif
 #endif
@@ -795,6 +802,7 @@ _AdjustDriver(
     /* Override PM callbacks to add runtime PM callbacks. */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
     /* Fill local structure with original value. */
+#ifdef CONFIG_PM
     memcpy(&gpu_pm_ops, driver->driver.pm, sizeof(struct dev_pm_ops));
 
     /* Add runtime PM callback. */
@@ -806,6 +814,7 @@ _AdjustDriver(
 
     /* Replace callbacks. */
     driver->driver.pm = &gpu_pm_ops;
+#endif
 #endif
     return gcvSTATUS_OK;
 }
