@@ -231,13 +231,13 @@ static int parse_ldb_mode(char *mode)
  *    "ldb=sin0/1"       --      single mode on LVDS0/1
  *    "ldb=sep0/1" 	 --      separate mode begin from LVDS0/1
  *
- *    there are two LVDS channels(LVDS0 and LVDS1) which can transfer video
- *    datas, there two channels can be used as split/dual/single/separate mode.
+ *    There are two LVDS channels (LVDS0 and LVDS1) which can transfer video
+ *    data. These two channels can be used as split/dual/single/separate mode.
  *
- *    split mode means display data from DI0 or DI1 will send to both channels
+ *    split mode means display data from DI0 or DI1 will be sent to both channels
  *    LVDS0+LVDS1.
  *    dual mode means display data from DI0 or DI1 will be duplicated on LVDS0
- *    and LVDS1, it said, LVDS0 and LVDS1 has the same content.
+ *    and LVDS1, i.e. LVDS0 and LVDS1 has the same content.
  *    single mode means only work for DI0/DI1->LVDS0 or DI0/DI1->LVDS1.
  *    separate mode means you can make DI0/DI1->LVDS0 and DI0/DI1->LVDS1 work
  *    at the same time.
@@ -485,7 +485,7 @@ static int ldb_ipu_ldb_route(int ipu, int di, struct ldb_data *ldb)
 			(ROUTE_IPU_DI(ipu, di) << LVDS1_MUX_CTL_OFFS);
 		dev_dbg(&ldb->pdev->dev,
 			"Dual/Split mode both channels route to IPU%d-DI%d\n",
-			ipu, di);
+			ipu + 1, di);
 	} else if ((mode == LDB_SIN0) || (mode == LDB_SIN1)) {
 		reg &= ~(LVDS0_MUX_CTL_MASK | LVDS1_MUX_CTL_MASK);
 		channel = mode - LDB_SIN0;
@@ -493,7 +493,7 @@ static int ldb_ipu_ldb_route(int ipu, int di, struct ldb_data *ldb)
 		reg |= ROUTE_IPU_DI(ipu, di) << shift;
 		dev_dbg(&ldb->pdev->dev,
 			"Single mode channel %d route to IPU%d-DI%d\n",
-				channel, ipu, di);
+				channel, ipu + 1, di);
 	} else {
 		static bool first = true;
 
@@ -521,7 +521,7 @@ static int ldb_ipu_ldb_route(int ipu, int di, struct ldb_data *ldb)
 
 		dev_dbg(&ldb->pdev->dev,
 			"Separate mode channel %d route to IPU%d-DI%d\n",
-			channel, ipu, di);
+			channel, ipu + 1, di);
 	}
 	writel(reg, ldb->gpr3_reg);
 
@@ -546,8 +546,7 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 
 	/* if input format not valid, make RGB666 as default*/
 	if (!valid_mode(setting->if_fmt)) {
-		dev_warn(&ldb->pdev->dev, "Input pixel format not valid"
-					" use default RGB666\n");
+		dev_warn(&ldb->pdev->dev, "Input pixel format not valid use default RGB666\n");
 		setting->if_fmt = IPU_PIX_FMT_RGB666;
 	}
 
@@ -569,7 +568,7 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 
 		reg = readl(ldb->control_reg);
 
-		/* refrence resistor select */
+		/* reference resistor select */
 		reg &= ~LDB_BGREF_RMODE_MASK;
 		if (plat_data->ext_ref)
 			reg |= LDB_BGREF_RMODE_EXT;
@@ -598,8 +597,7 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 			ret = ldb->mode - LDB_SIN0;
 			if (plat_data->disp_id != ret) {
 				dev_warn(&ldb->pdev->dev,
-					"change IPU DI%d to IPU DI%d for LDB "
-					"channel%d.\n",
+					"change IPU DI%d to IPU DI%d for LDB channel%d.\n",
 					plat_data->disp_id, ret, ret);
 				plat_data->disp_id = ret;
 			}
@@ -608,16 +606,14 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 			if (plat_data->ipu_id == plat_data->sec_ipu_id &&
 				plat_data->disp_id == plat_data->sec_disp_id) {
 				dev_err(&ldb->pdev->dev,
-					"For LVDS separate mode,"
-					"two DIs should be different!\n");
+					"For LVDS separate mode, two DIs should be different!\n");
 				return -EINVAL;
 			}
 
 			if ((!plat_data->disp_id && ldb->mode == LDB_SEP1) ||
 				(plat_data->disp_id && ldb->mode == LDB_SEP0)) {
 				dev_dbg(&ldb->pdev->dev,
-					"LVDS separate mode:"
-					"swap DI configuration!\n");
+					"LVDS separate mode: swap DI configuration!\n");
 				ipu_id = plat_data->ipu_id;
 				disp_id = plat_data->disp_id;
 				plat_data->ipu_id = plat_data->sec_ipu_id;
@@ -661,7 +657,7 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 				reg |= LDB_CH1_MODE_EN_TO_DI1;
 			ch_mask = LDB_CH1_MODE_MASK;
 			ch_val = reg & LDB_CH1_MODE_MASK;
-		} else { /* separate mode*/
+		} else { /* separate mode */
 			setting->disp_id = plat_data->disp_id;
 
 			/* first output is LVDS0 or LVDS1 */
@@ -709,8 +705,7 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 			(ldb->mode == LDB_DUL_DI1) ||
 			(ldb->mode == LDB_SIN0) ||
 			(ldb->mode == LDB_SIN1)) {
-			dev_err(&ldb->pdev->dev, "for second ldb disp"
-					"ldb mode should in separate mode\n");
+			dev_err(&ldb->pdev->dev, "for second ldb disp ldb mode should be in separate mode\n");
 			return -EINVAL;
 		}
 
@@ -724,8 +719,7 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 		}
 		if (setting->dev_id == ldb->setting[0].ipu &&
 			setting->disp_id == ldb->setting[0].di) {
-			dev_err(&ldb->pdev->dev, "Err: for second ldb disp in"
-				"separate mode, DI should be different!\n");
+			dev_err(&ldb->pdev->dev, "Err: for second ldb disp in separate mode, DI should be different!\n");
 			return -EINVAL;
 		}
 
@@ -778,27 +772,31 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 	ldb->setting[setting_idx].ldb_di_clk = clk_get(&ldb->pdev->dev,
 							ldb_clk);
 	if (IS_ERR(ldb->setting[setting_idx].ldb_di_clk)) {
-		dev_err(&ldb->pdev->dev, "get ldb clk failed\n");
+		dev_err(&ldb->pdev->dev, "Failed to get %s clk: %ld\n",
+			ldb_clk, PTR_ERR(ldb->setting[setting_idx].ldb_di_clk));
 		return PTR_ERR(ldb->setting[setting_idx].ldb_di_clk);
 	}
 
 	ldb->setting[setting_idx].div_3_5_clk = clk_get(&ldb->pdev->dev,
 							div_3_5_clk);
 	if (IS_ERR(ldb->setting[setting_idx].div_3_5_clk)) {
-		dev_err(&ldb->pdev->dev, "get div 3.5 clk failed\n");
+		dev_err(&ldb->pdev->dev, "Failed to get %s clk: %ld\n",
+			div_3_5_clk, PTR_ERR(ldb->setting[setting_idx].div_3_5_clk));
 		return PTR_ERR(ldb->setting[setting_idx].div_3_5_clk);
 	}
 	ldb->setting[setting_idx].div_7_clk = clk_get(&ldb->pdev->dev,
 							div_7_clk);
 	if (IS_ERR(ldb->setting[setting_idx].div_7_clk)) {
-		dev_err(&ldb->pdev->dev, "get div 7 clk failed\n");
+		dev_err(&ldb->pdev->dev, "Failed to get %s clk: %ld\n",
+			div_7_clk, PTR_ERR(ldb->setting[setting_idx].div_7_clk));
 		return PTR_ERR(ldb->setting[setting_idx].div_7_clk);
 	}
 
 	ldb->setting[setting_idx].div_sel_clk = clk_get(&ldb->pdev->dev,
 							div_sel_clk);
 	if (IS_ERR(ldb->setting[setting_idx].div_sel_clk)) {
-		dev_err(&ldb->pdev->dev, "get div sel clk failed\n");
+		dev_err(&ldb->pdev->dev, "Failed to get %s clk: %ld\n",
+			div_sel_clk, PTR_ERR(ldb->setting[setting_idx].div_sel_clk));
 		return PTR_ERR(ldb->setting[setting_idx].div_sel_clk);
 	}
 
@@ -807,7 +805,8 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 	ldb->setting[setting_idx].di_clk = clk_get(&ldb->pdev->dev,
 							di_clk);
 	if (IS_ERR(ldb->setting[setting_idx].di_clk)) {
-		dev_err(&ldb->pdev->dev, "get di clk failed\n");
+		dev_err(&ldb->pdev->dev, "Failed to get %s clk: %ld\n",
+			di_clk, PTR_ERR(ldb->setting[setting_idx].di_clk));
 		return PTR_ERR(ldb->setting[setting_idx].di_clk);
 	}
 
@@ -860,8 +859,7 @@ static int ldb_post_disp_init(struct mxc_dispdrv_handle *disp,
 	ret = clk_set_parent(ldb->setting[setting_idx].di_clk,
 			ldb->setting[setting_idx].ldb_di_clk);
 	if (ret) {
-		dev_err(&ldb->pdev->dev, "fail to set ldb_di clk as"
-			"the parent of ipu_di clk\n");
+		dev_err(&ldb->pdev->dev, "fail to set ldb_di clk as the parent of ipu_di clk\n");
 		return ret;
 	}
 
@@ -869,16 +867,14 @@ static int ldb_post_disp_init(struct mxc_dispdrv_handle *disp,
 		ret = clk_set_parent(ldb->setting[setting_idx].div_sel_clk,
 				ldb->setting[setting_idx].div_3_5_clk);
 		if (ret) {
-			dev_err(&ldb->pdev->dev, "fail to set div 3.5 clk as"
-				"the parent of div sel clk\n");
+			dev_err(&ldb->pdev->dev, "fail to set div 3.5 clk as the parent of div sel clk\n");
 			return ret;
 		}
 	} else {
 		ret = clk_set_parent(ldb->setting[setting_idx].div_sel_clk,
 				ldb->setting[setting_idx].div_7_clk);
 		if (ret) {
-			dev_err(&ldb->pdev->dev, "fail to set div 7 clk as"
-				"the parent of div sel clk\n");
+			dev_err(&ldb->pdev->dev, "fail to set div 7 clk as the parent of div sel clk\n");
 			return ret;
 		}
 	}
