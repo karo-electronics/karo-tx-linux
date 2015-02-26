@@ -324,7 +324,7 @@ static int vpu_open(struct inode *inode, struct file *filp)
 static long vpu_ioctl(struct file *filp, u_int cmd,
 		     u_long arg)
 {
-	int ret = -EINVAL;
+	int ret;
 	struct vpu_user_data *user_data = filp->private_data;
 	struct vpu_priv *vpu_data = user_data->vpu_data;
 
@@ -389,6 +389,7 @@ static long vpu_ioctl(struct file *filp, u_int cmd,
 		kfree(rec);
 		mutex_unlock(&vpu_data->lock);
 
+		ret = 0;
 		break;
 	}
 	case VPU_IOC_WAIT4INT:
@@ -405,7 +406,7 @@ static long vpu_ioctl(struct file *filp, u_int cmd,
 			dev_warn(vpu_dev, "VPU interrupt received.\n");
 			ret = -ERESTARTSYS;
 		} else {
-			irq_status = 0;
+			ret = irq_status = 0;
 		}
 		break;
 	}
@@ -530,7 +531,7 @@ static long vpu_ioctl(struct file *filp, u_int cmd,
 		break;
 	case VPU_IOC_REG_DUMP:
 	case VPU_IOC_PHYMEM_DUMP:
-		ret = 0;
+		ret = -ENOTSUPP;
 		break;
 	case VPU_IOC_PHYMEM_CHECK:
 	{
@@ -564,6 +565,7 @@ static long vpu_ioctl(struct file *filp, u_int cmd,
 	}
 	default:
 		dev_err(vpu_dev, "No such IOCTL, cmd is %d\n", cmd);
+		ret = -EINVAL;
 	}
 	return ret;
 }
