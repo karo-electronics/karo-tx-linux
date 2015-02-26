@@ -1153,7 +1153,7 @@ void ipu_uninit_channel(struct ipu_soc *ipu, ipu_channel_t channel)
 	_ipu_put(ipu);
 
 	ret = pm_runtime_put_sync_suspend(ipu->dev);
-	if (ret < 0) {
+	if (ret < 0 && ret != -ENOSYS) {
 		dev_err(ipu->dev, "ch = %d, pm_runtime_put failed:%d!\n",
 				IPU_CHAN_ID(channel), ret);
 		dump_stack();
@@ -3048,6 +3048,7 @@ bool ipu_ch_param_bad_alpha_pos(uint32_t pixel_fmt)
 EXPORT_SYMBOL(ipu_ch_param_bad_alpha_pos);
 
 #ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 static int ipu_suspend(struct device *dev)
 {
 	struct ipu_soc *ipu = dev_get_drvdata(dev);
@@ -3076,7 +3077,9 @@ static int ipu_resume(struct device *dev)
 	dev_dbg(dev, "ipu resume.\n");
 	return 0;
 }
+#endif
 
+#ifdef CONFIG_PM_RUNTIME
 int ipu_runtime_suspend(struct device *dev)
 {
 #if 0
@@ -3094,6 +3097,7 @@ int ipu_runtime_resume(struct device *dev)
 #endif
 	return 0;
 }
+#endif
 
 static const struct dev_pm_ops ipu_pm_ops = {
 	SET_RUNTIME_PM_OPS(ipu_runtime_suspend, ipu_runtime_resume, NULL)
@@ -3106,11 +3110,11 @@ static const struct dev_pm_ops ipu_pm_ops = {
  */
 static struct platform_driver mxcipu_driver = {
 	.driver = {
-			.name		= "imx-ipuv3",
-			.of_match_table	= imx_ipuv3_dt_ids,
-		#ifdef CONFIG_PM
-			.pm	= &ipu_pm_ops,
-		#endif
+		.name		= "imx-ipuv3",
+		.of_match_table	= imx_ipuv3_dt_ids,
+#ifdef CONFIG_PM
+		.pm	= &ipu_pm_ops,
+#endif
 	},
 	.probe		= ipu_probe,
 	.id_table	= imx_ipu_type,
