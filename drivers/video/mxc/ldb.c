@@ -605,16 +605,16 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 			}
 		} else if (((ldb->mode == LDB_SEP0) || (ldb->mode == LDB_SEP1))
 				&& is_imx6_ldb(plat_data)) {
-			if (plat_data->disp_id == plat_data->sec_disp_id) {
+			if (plat_data->ipu_id == plat_data->sec_ipu_id &&
+				plat_data->disp_id == plat_data->sec_disp_id) {
 				dev_err(&ldb->pdev->dev,
 					"For LVDS separate mode,"
 					"two DIs should be different!\n");
 				return -EINVAL;
 			}
 
-			if (((!plat_data->disp_id) && (ldb->mode == LDB_SEP1))
-				|| ((plat_data->disp_id) &&
-					(ldb->mode == LDB_SEP0))) {
+			if ((!plat_data->disp_id && ldb->mode == LDB_SEP1) ||
+				(plat_data->disp_id && ldb->mode == LDB_SEP0)) {
 				dev_dbg(&ldb->pdev->dev,
 					"LVDS separate mode:"
 					"swap DI configuration!\n");
@@ -722,7 +722,8 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 			setting->dev_id = plat_data->ipu_id;
 			setting->disp_id = !plat_data->disp_id;
 		}
-		if (setting->disp_id == ldb->setting[0].di) {
+		if (setting->dev_id == ldb->setting[0].ipu &&
+			setting->disp_id == ldb->setting[0].di) {
 			dev_err(&ldb->pdev->dev, "Err: for second ldb disp in"
 				"separate mode, DI should be different!\n");
 			return -EINVAL;
