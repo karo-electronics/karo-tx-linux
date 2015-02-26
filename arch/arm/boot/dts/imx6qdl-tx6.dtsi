@@ -701,3 +701,7 @@
 	fsl,wp-controller;
 	status = "okay";
 };
+
+&vpu {
+	pu-supply = <&reg_3v3>;
+};
