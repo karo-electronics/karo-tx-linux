@@ -30,6 +30,8 @@ struct mxc_dispdrv_setting {
 	int dev_id;
 	int disp_id;
 	enum display_flags disp_flags;
+
+	struct fb_videomode *fbmode;
 };
 
 struct mxc_dispdrv_driver {

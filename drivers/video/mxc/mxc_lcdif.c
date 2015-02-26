@@ -154,7 +154,13 @@ static int lcdif_init(struct mxc_dispdrv_handle *disp,
 	/* use platform defined ipu/di */
 	setting->dev_id = plat_data->ipu_id;
 	setting->disp_id = plat_data->disp_id;
-	setting->disp_flags = plat_data->disp_flags;
+
+	if (setting->fbmode) {
+		modedb[0] = *setting->fbmode;
+		modedb_sz = 1;
+	} else {
+		setting->disp_flags = plat_data->disp_flags;
+	}
 
 	ret = fb_find_mode(&setting->fbi->var, setting->fbi, setting->dft_mode_str,
 				modedb, modedb_sz, NULL, setting->default_bpp);
@@ -210,18 +216,6 @@ static int lcd_get_of_property(struct device *dev,
 	if (err) {
 		dev_err(dev, "get of property disp_id fail\n");
 		return err;
-	}
-
-	{
-		struct videomode vm = { };
-
-		err = of_get_videomode(np, &vm, OF_USE_NATIVE_MODE);
-		if (err == 0) {
-			dev_dbg(dev, "Copying videomode from display-timings\n");
-			fb_videomode_from_videomode(&vm, &lcdif_modedb[0]);
-			plat_data->disp_flags = vm.flags;
-			lcdif_modedb_sz = 1;
-		}
 	}
 
 	plat_data->ipu_id = ipu_id;

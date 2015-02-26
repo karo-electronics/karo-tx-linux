@@ -291,16 +291,6 @@ static int ldb_get_of_property(struct platform_device *pdev,
 		return err;
 	}
 
-	if (of_display_timings_exist(np) == 1) {
-		struct videomode vm = { };
-
-		err = of_get_videomode(np, &vm, OF_USE_NATIVE_MODE);
-		if (err == 0) {
-			fb_videomode_from_videomode(&vm, &ldb_modedb[0]);
-			ldb_modedb_sz = 1;
-		}
-	}
-
 	plat_data->mode = parse_ldb_mode(mode);
 	plat_data->ext_ref = ext_ref;
 	plat_data->ipu_id = ipu_id;
@@ -825,6 +815,11 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 
 	if (is_imx6_ldb(plat_data))
 		ldb_ipu_ldb_route(setting->dev_id, setting->disp_id, ldb);
+
+	if (setting->fbmode) {
+		ldb_modedb[0] = *setting->fbmode;
+		ldb_modedb_sz = 1;
+	}
 
 	/* must use spec video mode defined by driver */
 	ret = fb_find_mode(&setting->fbi->var, setting->fbi, setting->dft_mode_str,

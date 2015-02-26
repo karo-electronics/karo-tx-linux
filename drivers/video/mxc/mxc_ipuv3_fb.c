@@ -48,7 +48,9 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
-
+#include <video/of_display_timing.h>
+#include <video/of_videomode.h>
+#include <video/videomode.h>
 #include "mxc_dispdrv.h"
 
 /*
@@ -1893,7 +1895,8 @@ static int mxcfb_dispdrv_init(struct platform_device *pdev,
 		struct fb_info *fbi)
 {
 	struct ipuv3_fb_platform_data *plat_data = pdev->dev.platform_data;
-	struct mxcfb_info *mxcfbi = (struct mxcfb_info *)fbi->par;
+	struct device_node *np = pdev->dev.of_node;
+	struct mxcfb_info *mxcfbi = fbi->par;
 	struct mxc_dispdrv_setting setting = {};
 	char disp_dev[32], *default_dev = "lcd";
 	int ret = 0;
@@ -1909,6 +1912,21 @@ static int mxcfb_dispdrv_init(struct platform_device *pdev,
 	else
 		strlcpy(disp_dev, plat_data->disp_dev, sizeof(disp_dev));
 
+	if (of_display_timings_exist(np) == 1) {
+		struct videomode vm = { };
+
+		setting.fbmode = kzalloc(sizeof(*setting.fbmode), GFP_KERNEL);
+		if (setting.fbmode == NULL)
+			return -ENOMEM;
+
+		ret = of_get_videomode(np, &vm, OF_USE_NATIVE_MODE);
+		if (ret)
+			goto err;
+
+		fb_videomode_from_videomode(&vm, setting.fbmode);
+		setting.disp_flags = vm.flags;
+		dev_dbg(&pdev->dev, "using video mode from DTB\n");
+	}
 
 	dev_info(&pdev->dev, "register mxc display driver %s\n", disp_dev);
 
@@ -1916,7 +1934,7 @@ static int mxcfb_dispdrv_init(struct platform_device *pdev,
 	if (IS_ERR(mxcfbi->dispdrv)) {
 		ret = PTR_ERR(mxcfbi->dispdrv);
 		dev_err(&pdev->dev, "NO mxc display driver found!\n");
-		return ret;
+		goto err;
 	} else {
 		/* fix-up  */
 		mxcfbi->ipu_di_pix_fmt = setting.if_fmt;
@@ -1931,13 +1949,15 @@ static int mxcfb_dispdrv_init(struct platform_device *pdev,
 				setting.disp_id, setting.dev_id);
 	}
 
+err:
+	kfree(setting.fbmode);
 	return ret;
 }
 
 /*
  * Parse user specified options (`video=trident:')
  * example:
- * 	video=mxcfb0:dev=lcd,800x480M-16@55,if=RGB565,bpp=16,noaccel
+ *	video=mxcfb0:dev=lcd,800x480M-16@55,if=RGB565,bpp=16,noaccel
  *	video=mxcfb0:dev=lcd,800x480M-16@55,if=RGB565,fbpix=RGB565
  */
 static int mxcfb_option_setup(struct platform_device *pdev, struct fb_info *fbi)
