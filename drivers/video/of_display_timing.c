@@ -255,7 +255,7 @@ int of_display_timings_exist(struct device_node *np)
 	if (!np)
 		return -EINVAL;
 
-	timings_np = of_parse_phandle(np, "display-timings", 0);
+	timings_np = of_get_child_by_name(np, "display-timings");
 	if (!timings_np)
 		return -EINVAL;
 
