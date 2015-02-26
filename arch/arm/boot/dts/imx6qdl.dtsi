@@ -331,7 +331,6 @@
 				interrupt-names = "vpu_jpu_irq", "vpu_ipi_irq";
 				clocks = <&clks 168>, <&clks 140>, <&clks 142>;
 				clock-names = "vpu_clk", "mmdc_ch0_axi", "ocram";
-				iramsize = <0x21000>;
 				iram = <&ocram>;
 				resets = <&src 1>;
 				pu-supply = <&reg_pu>;

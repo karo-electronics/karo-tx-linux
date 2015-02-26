@@ -126,7 +126,6 @@
 		aips1: aips-bus@02000000 {
 			vpu@02040000 {
 				compatible = "fsl,imx6dl-vpu";
-				iramsize = <0>;
 				status = "okay";
 			};
 

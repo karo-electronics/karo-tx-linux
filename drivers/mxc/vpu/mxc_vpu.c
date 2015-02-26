@@ -93,6 +93,7 @@ struct mxc_vpu_soc_data {
 		is_mx6dl:1,
 		is_mx6q:1,
 		has_jpu:1;
+	size_t iramsize;
 };
 
 static struct gen_pool *iram_pool;
@@ -757,6 +758,7 @@ static const struct mxc_vpu_soc_data imx6q_vpu_data = {
 	.regulator_required = 1,
 	.vpu_pwr_mgmnt = 1,
 	.has_jpu = 1,
+	.iramsize = 0x21000,
 };
 
 static const struct mxc_vpu_soc_data imx53_vpu_data = {
@@ -785,9 +787,7 @@ static int vpu_dev_probe(struct platform_device *pdev)
 	int err = 0;
 	struct device *temp_class;
 	struct resource *res;
-	unsigned long addr = 0;
 	struct device_node *np = pdev->dev.of_node;
-	u32 iramsize;
 	struct vpu_priv *drv_data;
 	const struct of_device_id *of_id = of_match_device(vpu_of_match,
 							&pdev->dev);
@@ -804,28 +804,21 @@ static int vpu_dev_probe(struct platform_device *pdev)
 	drv_data->workqueue = create_workqueue("vpu_wq");
 	INIT_WORK(&drv_data->work, vpu_worker_callback);
 
-	err = of_property_read_u32(np, "iramsize", &iramsize);
-	if (!err && iramsize) {
+	if (soc_data->iramsize) {
 		iram_pool = of_get_named_gen_pool(np, "iram", 0);
 		if (!iram_pool) {
 			dev_err(&pdev->dev, "iram pool not available\n");
 			return -ENOMEM;
 		}
 
-		iram_base = gen_pool_alloc(iram_pool, iramsize);
+		iram_base = gen_pool_alloc(iram_pool, soc_data->iramsize);
 		if (!iram_base) {
 			dev_err(&pdev->dev, "unable to alloc iram\n");
 			return -ENOMEM;
 		}
 
-		addr = gen_pool_virt_to_phys(iram_pool, iram_base);
-	}
-
-	if (addr == 0)
-		iram.start = iram.end = 0;
-	else {
-		iram.start = addr;
-		iram.end = addr + iramsize - 1;
+		iram.start = gen_pool_virt_to_phys(iram_pool, iram_base);
+		iram.end = iram.start + soc_data->iramsize - 1;
 	}
 
 	vpu_dev = &pdev->dev;
