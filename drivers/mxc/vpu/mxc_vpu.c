@@ -936,7 +936,6 @@ static int vpu_dev_remove(struct platform_device *pdev)
 	flush_workqueue(vpu_data->workqueue);
 	destroy_workqueue(vpu_data->workqueue);
 
-	iounmap(vpu_base);
 	if (iram.start)
 		gen_pool_free(iram_pool, iram_base, iram.end-iram.start+1);
 
