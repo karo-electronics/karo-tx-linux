@@ -320,11 +320,9 @@ static int find_ldb_setting(struct ldb_data *ldb, struct fb_info *fbi)
 	char id[16];
 	int i;
 
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < ARRAY_SIZE(id_di); i++) {
 		if (ldb->setting[i].active) {
-			memset(id, 0, 16);
-			memcpy(id, id_di[ldb->setting[i].di],
-				strlen(id_di[ldb->setting[i].di]));
+			strlcpy(id, id_di[ldb->setting[i].di], sizeof(id));
 			id[4] += ldb->setting[i].ipu;
 			if (!strcmp(id, fbi->fix.id))
 				return i;
@@ -915,8 +913,8 @@ static void ldb_disp_deinit(struct mxc_dispdrv_handle *disp)
 }
 
 static struct mxc_dispdrv_driver ldb_drv = {
-	.name 	= DISPDRV_LDB,
-	.init 	= ldb_disp_init,
+	.name	= DISPDRV_LDB,
+	.init	= ldb_disp_init,
 	.post_init = ldb_post_disp_init,
 	.deinit	= ldb_disp_deinit,
 	.setup = ldb_disp_setup,
@@ -949,12 +947,8 @@ static int ldb_resume(struct platform_device *pdev)
 }
 
 static struct platform_device_id imx_ldb_devtype[] = {
-	{
-		.name = "ldb-imx6",
-		.driver_data = LDB_IMX6,
-	}, {
-		/* sentinel */
-	}
+	{ "ldb-imx6", LDB_IMX6, },
+	{ /* sentinel */ }
 };
 
 static const struct of_device_id imx_ldb_dt_ids[] = {
