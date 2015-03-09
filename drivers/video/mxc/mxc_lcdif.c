@@ -17,7 +17,6 @@
 #include <linux/module.h>
 #include <linux/mxcfb.h>
 #include <linux/of_device.h>
-#include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <video/of_display_timing.h>
 #include <video/of_videomode.h>
@@ -253,7 +252,6 @@ static int lcd_get_of_property(struct device *dev,
 static int mxc_lcdif_probe(struct platform_device *pdev)
 {
 	int ret;
-	struct pinctrl *pinctrl;
 	struct mxc_lcdif_data *lcdif;
 	struct mxc_lcd_platform_data *plat_data;
 
@@ -273,12 +271,6 @@ static int mxc_lcdif_probe(struct platform_device *pdev)
 	if (ret < 0) {
 		dev_err(&pdev->dev, "get lcd of property fail\n");
 		return ret;
-	}
-
-	pinctrl = devm_pinctrl_get_select_default(&pdev->dev);
-	if (IS_ERR(pinctrl)) {
-		dev_err(&pdev->dev, "can't get/select pinctrl\n");
-		return PTR_ERR(pinctrl);
 	}
 
 	lcdif->dev = &pdev->dev;
