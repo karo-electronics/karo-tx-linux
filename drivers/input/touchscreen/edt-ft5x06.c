@@ -71,6 +71,8 @@
 #define EDT_RAW_DATA_RETRIES		100
 #define EDT_RAW_DATA_DELAY		1 /* msec */
 
+#define XFER_BUF_SIZE			4
+
 enum edt_ver {
 	M06,
 	M09,
@@ -94,6 +96,7 @@ struct edt_ft5x06_ts_data {
 	int reset_pin;
 	int irq_pin;
 	int wake_pin;
+	u8 xfer_buf[XFER_BUF_SIZE];
 
 #if defined(CONFIG_DEBUG_FS)
 	struct dentry *debug_dir;
@@ -257,7 +260,7 @@ out:
 static int edt_ft5x06_register_write(struct edt_ft5x06_ts_data *tsdata,
 				     u8 addr, u8 value)
 {
-	u8 wrbuf[4];
+	u8 *wrbuf = &tsdata->xfer_buf[0];
 
 	switch (tsdata->version) {
 	case M06:
@@ -282,7 +285,8 @@ static int edt_ft5x06_register_write(struct edt_ft5x06_ts_data *tsdata,
 static int edt_ft5x06_register_read(struct edt_ft5x06_ts_data *tsdata,
 				    u8 addr)
 {
-	u8 wrbuf[2], rdbuf[2];
+	u8 *wrbuf = &tsdata->xfer_buf[0];
+	u8 *rdbuf = &tsdata->xfer_buf[2];
 	int error;
 
 	switch (tsdata->version) {
@@ -639,7 +643,7 @@ static ssize_t edt_ft5x06_debugfs_raw_data_read(struct file *file,
 	int val, i, error;
 	size_t read = 0;
 	int colbytes;
-	char wrbuf[3];
+	char *wrbuf = &tsdata->xfer_buf[0];
 	u8 *rdbuf;
 
 	if (*off < 0 || *off >= tsdata->raw_bufsize)
@@ -687,8 +691,7 @@ static ssize_t edt_ft5x06_debugfs_raw_data_read(struct file *file,
 	wrbuf[1] = 0x0e;
 	for (i = 0; i < tsdata->num_x; i++) {
 		wrbuf[2] = i;  /* column index */
-		error = edt_ft5x06_ts_readwrite(tsdata->client,
-						sizeof(wrbuf), wrbuf,
+		error = edt_ft5x06_ts_readwrite(tsdata->client, 4, wrbuf,
 						colbytes, rdbuf);
 		if (error)
 			goto out;
@@ -795,20 +798,19 @@ static int edt_ft5x06_ts_identify(struct i2c_client *client,
 					struct edt_ft5x06_ts_data *tsdata,
 					char *fw_version)
 {
-	u8 rdbuf[EDT_NAME_LEN];
+	u8 *rdbuf = kzalloc(EDT_NAME_LEN, GFP_KERNEL);
 	char *p;
 	int error;
 	char *model_name = tsdata->name;
 
-	/* see what we find if we assume it is a M06 *
-	 * if we get less than EDT_NAME_LEN, we don't want
-	 * to have garbage in there
-	 */
-	memset(rdbuf, 0, sizeof(rdbuf));
+	if (rdbuf == NULL)
+		return -ENOMEM;
+
+	/* see what we find if we assume it is an M06 */
 	error = edt_ft5x06_ts_readwrite(client, 1, "\xbb",
 					EDT_NAME_LEN - 1, rdbuf);
 	if (error)
-		return error;
+		goto out;
 
 	/* if we find something consistent, stay with that assumption
 	 * at least M09 won't send 3 bytes here
@@ -817,7 +819,6 @@ static int edt_ft5x06_ts_identify(struct i2c_client *client,
 		tsdata->version = M06;
 
 		/* remove last '$' end marker */
-		rdbuf[EDT_NAME_LEN - 1] = '\0';
 		if (rdbuf[EDT_NAME_LEN - 2] == '$')
 			rdbuf[EDT_NAME_LEN - 2] = '\0';
 
@@ -834,20 +835,21 @@ static int edt_ft5x06_ts_identify(struct i2c_client *client,
 		error = edt_ft5x06_ts_readwrite(client, 1, "\xA6",
 						2, rdbuf);
 		if (error)
-			return error;
+			goto out;
 
 		strlcpy(fw_version, rdbuf, 2);
 
 		error = edt_ft5x06_ts_readwrite(client, 1, "\xA8",
 						1, rdbuf);
 		if (error)
-			return error;
+			goto out;
 
 		snprintf(model_name, EDT_NAME_LEN, "EP0%i%i0M09",
 			rdbuf[0] >> 4, rdbuf[0] & 0x0F);
 	}
-
-	return 0;
+out:
+	kfree(rdbuf);
+	return error;
 }
 
 #define EDT_ATTR_CHECKSET(name, reg) \
