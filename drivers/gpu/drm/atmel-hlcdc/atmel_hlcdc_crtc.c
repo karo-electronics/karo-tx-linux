@@ -100,6 +100,9 @@ static void atmel_hlcdc_crtc_mode_set_nofb(struct drm_crtc *c)
 
 	cfg |= ATMEL_HLCDC_CLKDIV(div);
 
+	if (adj->flags & DRM_MODE_FLAG_POL_PIXDATA_NEGEDGE)
+		cfg |= ATMEL_HLCDC_CLKPOL;
+
 	regmap_update_bits(regmap, ATMEL_HLCDC_CFG(0),
 			   ATMEL_HLCDC_CLKSEL | ATMEL_HLCDC_CLKDIV_MASK |
 			   ATMEL_HLCDC_CLKPOL, cfg);
@@ -111,6 +114,9 @@ static void atmel_hlcdc_crtc_mode_set_nofb(struct drm_crtc *c)
 
 	if (adj->flags & DRM_MODE_FLAG_NHSYNC)
 		cfg |= ATMEL_HLCDC_HSPOL;
+
+	if (adj->flags & DRM_MODE_FLAG_POL_DE_LOW)
+		cfg |= ATMEL_HLCDC_DISPPOL;
 
 	regmap_update_bits(regmap, ATMEL_HLCDC_CFG(5),
 			   ATMEL_HLCDC_HSPOL | ATMEL_HLCDC_VSPOL |
