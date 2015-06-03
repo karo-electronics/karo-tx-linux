@@ -1203,6 +1203,30 @@ config DEBUG_AT91_UART
 	bool
 	depends on ARCH_AT91
 
+choice
+	prompt "Select sama5d4 USART/UART for debugging output"
+	depends on AT91_DEBUG_LL_DBGU2
+	default DEBUG_SAMA5D4_USART
+
+config DEBUG_SAMA5D4_UART
+	bool "Use sama5d4 UART port"
+
+config DEBUG_SAMA5D4_USART
+	bool "Use sama5d4 USART port"
+
+endchoice
+
+config DEBUG_SAMA5D4_UART_PORT
+	int "SAMA5D4 Debug UART/USART Port Selection" if DEBUG_AT91_UART
+	depends on AT91_DEBUG_LL_DBGU2
+	default 3 if DEBUG_SAMA5D4_USART
+	default 0 if DEBUG_SAMA5D4_UART
+	range 0 4 if DEBUG_SAMA5D4_USART
+	range 0 1 if DEBUG_SAMA5D4_UART
+	help
+	  Choose USART port (0..4) on which kernel low-level debug messages
+	  should be output.
+
 config DEBUG_EXYNOS_UART
 	bool
 

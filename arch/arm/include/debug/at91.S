@@ -9,13 +9,44 @@
  *
 */
 
+#define SAMA5D4_UART_BASE(p)	((p) == 0 ? 0xf8004000 /* UART0 */ : \
+				 ((p) == 1 ? 0cfc004000 /* UART1 */ : \
+				0xf8004000))
+#define SAMA5D4_USART_BASE(p)	((p) == 0 ? 0xf802c000 /* USART0 */ : \
+				 (p) == 1 ? 0xf8030000 /* USART1 */ : \
+				 (p) == 2 ? 0xfc008000 /* USART2 */ : \
+				 (p) == 3 ? 0xfc00c000 /* USART3 */ : \
+				 (p) == 4 ? 0xfc010000 /* USART4 */ : \
+				0xfc00c000)
+
 #if defined(CONFIG_AT91_DEBUG_LL_DBGU0)
 #define AT91_DBGU 0xfffff200 /* AT91_BASE_DBGU0 */
 #elif defined(CONFIG_AT91_DEBUG_LL_DBGU1)
 #define AT91_DBGU 0xffffee00 /* AT91_BASE_DBGU1 */
+#elif defined(CONFIG_DEBUG_SAMA5D4_USART)
+#if CONFIG_DEBUG_SAMA5D4_UART_PORT == 0
+#define AT91_DBGU 0xf802c000 /* USART0 */
+#elif CONFIG_DEBUG_SAMA5D4_UART_PORT == 1
+#define AT91_DBGU 0xf8030000 /* USART1 */
+#elif CONFIG_DEBUG_SAMA5D4_UART_PORT == 2
+#define AT91_DBGU 0xfc008000 /* USART2 */
+#elif CONFIG_DEBUG_SAMA5D4_UART_PORT == 3
+#define AT91_DBGU 0xfc00c000 /* USART3 */
+#elif CONFIG_DEBUG_SAMA5D4_UART_PORT == 4
+#define AT91_DBGU 0xfc010000 /* USART4 */
 #else
-/* On sama5d4, use USART3 as low level serial console */
-#define AT91_DBGU 0xfc00c000 /* SAMA5D4_BASE_USART3 */
+#error Invalid SAMA5D4 Debug USART port selection
+#endif
+#elif defined(CONFIG_DEBUG_SAMA5D4_UART)
+#if CONFIG_DEBUG_SAMA5D4_UART_PORT == 0
+#define AT91_DBGU 0xf8004000 /* UART0 */
+#elif CONFIG_DEBUG_SAMA5D4_UART_PORT == 1
+#define AT91_DBGU 0cfc004000 /* UART1 */
+#else
+#error Invalid SAMA5D4 Debug UART port selection
+#endif
+#else
+#error Unsupported AT91 Debug UART selection
 #endif
 
 #ifdef CONFIG_MMU
