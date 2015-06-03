@@ -72,6 +72,8 @@
 		i2c0 = &i2c0;
 		i2c1 = &i2c1;
 		i2c2 = &i2c2;
+		spi0 = &spi0;
+		spi1 = &spi1;
 	};
 	cpus {
 		#address-cells = <1>;
@@ -894,6 +896,26 @@
 				status = "disabled";
 			};
 
+			spi1: spi@fc018000 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "atmel,at91rm9200-spi";
+				reg = <0xfc018000 0x100>;
+				interrupts = <38 IRQ_TYPE_LEVEL_HIGH 3>;
+				dmas = <&dma1
+					(AT91_XDMAC_DT_MEM_IF(0) | AT91_XDMAC_DT_PER_IF(1)
+					| AT91_XDMAC_DT_PERID(12))>,
+				       <&dma1
+					(AT91_XDMAC_DT_MEM_IF(0) | AT91_XDMAC_DT_PER_IF(1)
+					| AT91_XDMAC_DT_PERID(13))>;
+				dma-names = "tx", "rx";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_spi1>;
+				clocks = <&spi1_clk>;
+				clock-names = "spi_clk";
+				status = "disabled";
+			};
+
 			i2c0: i2c@f8014000 {
 				compatible = "atmel,at91sam9x5-i2c";
 				reg = <0xf8014000 0x4000>;
@@ -1637,6 +1659,16 @@
 							 AT91_PIOC 1 AT91_PERIPH_A AT91_PINCTRL_NONE	/* SPI0_MOSI */
 							 AT91_PIOC 2 AT91_PERIPH_A AT91_PINCTRL_NONE	/* SPI0_SPCK */
 							>;
+					};
+				};
+
+				spi1 {
+					pinctrl_spi1: spi1-0 {
+						atmel,pins = <
+							AT91_PIOB 18 AT91_PERIPH_A AT91_PINCTRL_NONE	/* SPI0_MISO */
+							AT91_PIOB 19 AT91_PERIPH_A AT91_PINCTRL_NONE	/* SPI0_MOSI */
+							AT91_PIOB 20 AT91_PERIPH_A AT91_PINCTRL_NONE	/* SPI0_SPCK */
+						>;
 					};
 				};
 
