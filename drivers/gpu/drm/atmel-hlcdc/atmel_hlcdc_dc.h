@@ -60,6 +60,11 @@ struct atmel_hlcdc_dc_desc {
 	int max_height;
 	const struct atmel_hlcdc_layer_desc *layers;
 	int nlayers;
+	int max_sync_width;
+	int max_hfp;
+	int max_hbp;
+	int max_vfp;
+	int max_vbp;
 };
 
 /**

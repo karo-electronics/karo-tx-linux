@@ -130,6 +130,25 @@ static const struct atmel_hlcdc_dc_desc atmel_hlcdc_dc_sama5d3 = {
 	.max_height = 2048,
 	.nlayers = ARRAY_SIZE(atmel_hlcdc_sama5d3_layers),
 	.layers = atmel_hlcdc_sama5d3_layers,
+	.max_sync_width = 64,
+	.max_hfp = 0x200,
+	.max_hbp = 0x200,
+	.max_vfp = 0x40,
+	.max_vbp = 0x3f,
+};
+
+static const struct atmel_hlcdc_dc_desc atmel_hlcdc_dc_sama5d4 = {
+	.min_width = 0,
+	.min_height = 0,
+	.max_width = 2048,
+	.max_height = 2048,
+	.nlayers = ARRAY_SIZE(atmel_hlcdc_sama5d3_layers),
+	.layers = atmel_hlcdc_sama5d3_layers,
+	.max_sync_width = 256,
+	.max_hfp = 0x100,
+	.max_hbp = 0x100,
+	.max_vfp = 0x100,
+	.max_vbp = 0xff,
 };
 
 static const struct of_device_id atmel_hlcdc_of_match[] = {
@@ -137,7 +156,11 @@ static const struct of_device_id atmel_hlcdc_of_match[] = {
 		.compatible = "atmel,sama5d3-hlcdc",
 		.data = &atmel_hlcdc_dc_sama5d3,
 	},
-	{ /* sentinel */ },
+	{
+		.compatible = "atmel,sama5d4-hlcdc",
+		.data = &atmel_hlcdc_dc_sama5d4,
+	},
+	{ /* sentinel */ }
 };
 
 int atmel_hlcdc_dc_mode_valid(struct atmel_hlcdc_dc *dc,
@@ -150,19 +173,19 @@ int atmel_hlcdc_dc_mode_valid(struct atmel_hlcdc_dc *dc,
 	int hback_porch = mode->htotal - mode->hsync_end;
 	int hsync_len = mode->hsync_end - mode->hsync_start;
 
-	if (hsync_len > 0x40 || hsync_len < 1)
+	if (hsync_len > dc->desc->max_sync_width || hsync_len < 1)
 		return MODE_HSYNC;
 
-	if (vsync_len > 0x40 || vsync_len < 1)
+	if (vsync_len > dc->desc->max_sync_width || vsync_len < 1)
 		return MODE_VSYNC;
 
-	if (hfront_porch > 0x200 || hfront_porch < 1 ||
-	    hback_porch > 0x200 || hback_porch < 1 ||
+	if (hfront_porch > dc->desc->max_hfp || hfront_porch < 1 ||
+	    hback_porch > dc->desc->max_hbp || hback_porch < 1 ||
 	    mode->hdisplay < 1)
 		return MODE_H_ILLEGAL;
 
-	if (vfront_porch > 0x40 || vfront_porch < 1 ||
-	    vback_porch > 0x40 || vback_porch < 0 ||
+	if (vfront_porch > dc->desc->max_vfp || vfront_porch < 1 ||
+	    vback_porch > dc->desc->max_vbp || vback_porch < 0 ||
 	    mode->vdisplay < 1)
 		return MODE_V_ILLEGAL;
 
@@ -596,7 +619,7 @@ static SIMPLE_DEV_PM_OPS(atmel_hlcdc_dc_drm_pm_ops,
 
 static const struct of_device_id atmel_hlcdc_dc_of_match[] = {
 	{ .compatible = "atmel,hlcdc-display-controller" },
-	{ },
+	{ }
 };
 
 static struct platform_driver atmel_hlcdc_dc_platform_driver = {
