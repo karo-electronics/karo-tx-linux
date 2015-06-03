@@ -185,7 +185,7 @@ static void at91_twi_dma_cleanup(struct at91_twi_dev *dev)
 	}
 	if (dma->buf_mapped) {
 		dma_unmap_single(dev->dev, sg_dma_address(&dma->sg),
-				 dev->buf_len, dma->direction);
+				sg_dma_len(&dma->sg), dma->direction);
 		dma->buf_mapped = false;
 	}
 
@@ -213,7 +213,7 @@ static void at91_twi_write_data_dma_callback(void *data)
 	struct at91_twi_dev *dev = (struct at91_twi_dev *)data;
 
 	dma_unmap_single(dev->dev, sg_dma_address(&dev->dma.sg),
-			 dev->buf_len, DMA_TO_DEVICE);
+			sg_dma_len(&dev->dma.sg), DMA_TO_DEVICE);
 
 	at91_twi_write(dev, AT91_TWI_CR, AT91_TWI_STOP);
 }
@@ -304,7 +304,7 @@ static void at91_twi_read_data_dma_callback(void *data)
 	struct at91_twi_dev *dev = (struct at91_twi_dev *)data;
 
 	dma_unmap_single(dev->dev, sg_dma_address(&dev->dma.sg),
-			 dev->buf_len, DMA_FROM_DEVICE);
+			sg_dma_len(&dev->dma.sg), DMA_FROM_DEVICE);
 
 	/* The last two bytes have to be read without using dma */
 	dev->buf += dev->buf_len - 2;
