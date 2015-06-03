@@ -1234,7 +1234,7 @@
 				clocks = <&h32ck>;
 			};
 
-			watchdog@fc068640 {
+			watchdog: watchdog@fc068640 {
 				compatible = "atmel,at91sam9260-wdt";
 				reg = <0xfc068640 0x10>;
 				status = "disabled";
