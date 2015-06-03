@@ -643,6 +643,7 @@ static int at91_twi_configure_dma(struct at91_twi_dev *dev, u32 phy_addr)
 	dma->chan_tx = dma_request_slave_channel_reason(dev->dev, "tx");
 	if (IS_ERR(dma->chan_tx)) {
 		ret = PTR_ERR(dma->chan_tx);
+		dev_err(dev->dev, "Failed to get tx DMA: %d\n", ret);
 		dma->chan_tx = NULL;
 		goto error;
 	}
@@ -650,6 +651,7 @@ static int at91_twi_configure_dma(struct at91_twi_dev *dev, u32 phy_addr)
 	dma->chan_rx = dma_request_slave_channel_reason(dev->dev, "rx");
 	if (IS_ERR(dma->chan_rx)) {
 		ret = PTR_ERR(dma->chan_rx);
+		dev_err(dev->dev, "Failed to get rx DMA: %d\n", ret);
 		dma->chan_rx = NULL;
 		goto error;
 	}
