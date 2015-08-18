@@ -236,6 +236,8 @@
 	phy-mode = "rmii";
 	phy-reset-gpios = <&gpio7 6 GPIO_ACTIVE_HIGH>;
 	phy-supply = <&reg_3v3_etn>;
+	clocks = <&clks 117>, <&clks 117>, <&clks 190>, <&clks 190>;
+	clock-names = "ipg", "ahb", "ptp", "enet_out";
 	status = "okay";
 };
 
