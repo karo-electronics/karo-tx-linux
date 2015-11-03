@@ -229,8 +229,22 @@
 	pinctrl-0 = <&pinctrl_enet>;
 	phy-mode = "rmii";
 	phy-reset-gpios = <&gpio7 6 GPIO_ACTIVE_HIGH>;
+	phy-handle = <&etnphy>;
 	phy-supply = <&reg_3v3_etn>;
 	status = "okay";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		etnphy: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <0>;
+			interrupt-parent = <&gpio2>;
+			interrupts = <4>;
+			status = "okay";
+		};
+	};
 };
 
 &gpmi {
