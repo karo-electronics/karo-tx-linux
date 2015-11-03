@@ -1,0 +1,18 @@
+/*
+ * Copyright 2015 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+#include "imx6ul.dtsi"
+#include "imx6ul-tx6ul.dtsi"
+
+/ {
+	model = "Ka-Ro electronics TXUL-0010 Module";
+	compatible = "karo,imx6ul-tx6ul", "fsl,imx6ul";
+
+	aliases {
+		mmc0 = &usdhc1;
+		/delete-property/ mmc1;
+	};
+};
