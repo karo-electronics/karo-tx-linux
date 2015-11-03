@@ -23,6 +23,7 @@
 #include <linux/mfd/syscon.h>
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
 #include <linux/of_device.h>
+#include <video/of_display_timing.h>
 #include <linux/of_graph.h>
 #include <video/of_videomode.h>
 #include <linux/regmap.h>
@@ -607,7 +608,8 @@ static int imx_ldb_bind(struct device *dev, struct device *master, void *data)
 			channel->edid = kmemdup(edidp, channel->edid_len,
 						GFP_KERNEL);
 		} else if (!channel->panel) {
-			ret = of_get_drm_display_mode(child, &channel->mode, 0);
+			ret = of_get_drm_display_mode(child, &channel->mode,
+						OF_USE_NATIVE_MODE);
 			if (!ret)
 				channel->mode_valid = 1;
 		}
