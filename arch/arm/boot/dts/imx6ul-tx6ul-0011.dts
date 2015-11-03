@@ -1,0 +1,49 @@
+/*
+ * Copyright 2015 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+#include "imx6ul.dtsi"
+#include "imx6ul-tx6ul.dtsi"
+
+/ {
+	model = "Ka-Ro electronics TXUL-0011 Module";
+	compatible = "karo,imx6ul-tx6ul", "fsl,imx6ul";
+
+	aliases {
+		mmc0 = &usdhc2;
+		mmc1 = &usdhc1;
+	};
+};
+
+&gpmi {
+	status = "disabled";
+};
+
+&iomuxc {
+	imx6qdl-tx6 {
+		pinctrl_usdhc2: usdhc2grp {
+			fsl,pins = <
+				MX6UL_PAD_NAND_WE_B__USDHC2_CMD		0x070b1
+				MX6UL_PAD_NAND_RE_B__USDHC2_CLK		0x070b1
+				MX6UL_PAD_NAND_DATA00__USDHC2_DATA0	0x070b1
+				MX6UL_PAD_NAND_DATA01__USDHC2_DATA1	0x070b1
+				MX6UL_PAD_NAND_DATA02__USDHC2_DATA2	0x070b1
+				MX6UL_PAD_NAND_DATA03__USDHC2_DATA3	0x070b1
+				/* eMMC RESET */
+				MX6UL_PAD_NAND_ALE__USDHC2_RESET_B	0x170b0
+			>;
+		};
+	};
+};
+
+&usdhc2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc2>;
+	bus-width = <4>;
+	no-1-8-v;
+	non-removable;
+	fsl,wp-controller;
+	status = "okay";
+};
