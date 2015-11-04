@@ -88,6 +88,7 @@
 		ds1339: rtc@68 {
 			compatible = "dallas,ds1339";
 			reg = <0x68>;
+			status = "disabled";
 		};
 	};
 
