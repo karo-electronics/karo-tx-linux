@@ -15,7 +15,7 @@
 
 / {
 	model = "Ka-Ro electronics TX6S-8035 Module";
-	compatible = "karo,imx6dl-tx6dl", "fsl,imx6dl";
+	compatible = "karo,imx6dl-tx6s", "fsl,imx6dl";
 
 	aliases {
 		display = &display;
