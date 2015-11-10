@@ -156,16 +156,30 @@
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_lcd1_pwr>;
+			pinctrl-0 = <&pinctrl_lcd_pwr>;
 			gpio = <&gpio5 4 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			regulator-boot-on;
 			regulator-always-on;
 		};
 
-		reg_usbh1_vbus: regulator@6 {
+		reg_lcd_reset: regulator@6 {
 			compatible = "regulator-fixed";
 			reg = <6>;
+			regulator-name = "LCD RESET";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_lcd_reset>;
+			gpio = <&gpio3 4 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			regulator-boot-on;
+			regulator-always-on;
+		};
+
+		reg_usbh1_vbus: regulator@7 {
+			compatible = "regulator-fixed";
+			reg = <7>;
 			regulator-name = "usbh1_vbus";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
@@ -175,9 +189,9 @@
 			enable-active-high;
 		};
 
-		reg_usbotg_vbus: regulator@7 {
+		reg_usbotg_vbus: regulator@8 {
 			compatible = "regulator-fixed";
-			reg = <7>;
+			reg = <8>;
 			regulator-name = "usbotg_vbus";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
@@ -545,9 +559,15 @@
 			>;
 		};
 
-		pinctrl_lcd1_pwr: lcd1-pwrgrp {
+		pinctrl_lcd_pwr: lcd-pwrgrp {
 			fsl,pins = <
 				MX6UL_PAD_SNVS_TAMPER4__GPIO5_IO04	0x0b0b0 /* LCD Power Enable */
+			>;
+		};
+
+		pinctrl_lcd_reset: lcd-resetgrp {
+			fsl,pins = <
+				MX6UL_PAD_LCD_RESET__GPIO3_IO04		0x0b0b0 /* LCD RESET */
 			>;
 		};
 
