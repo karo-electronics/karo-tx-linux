@@ -742,7 +742,7 @@
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
-				pixelclk-active = <0>;
+				pixelclk-active = <1>;
 			};
 
 			ETV570 {
@@ -758,7 +758,7 @@
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
-				pixelclk-active = <0>;
+				pixelclk-active = <1>;
 			};
 
 			ET0350 {
@@ -774,7 +774,7 @@
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
-				pixelclk-active = <0>;
+				pixelclk-active = <1>;
 			};
 
 			ET0430 {
@@ -790,7 +790,7 @@
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
-				pixelclk-active = <1>;
+				pixelclk-active = <0>;
 			};
 
 			ET0500 {
@@ -806,7 +806,7 @@
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
-				pixelclk-active = <0>;
+				pixelclk-active = <1>;
 			};
 
 			ET0700 { /* same as ET0500 */
@@ -822,7 +822,7 @@
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
-				pixelclk-active = <0>;
+				pixelclk-active = <1>;
 			};
 
 			ETQ570 {
@@ -838,7 +838,7 @@
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
-				pixelclk-active = <0>;
+				pixelclk-active = <1>;
 			};
 		};
 	};
