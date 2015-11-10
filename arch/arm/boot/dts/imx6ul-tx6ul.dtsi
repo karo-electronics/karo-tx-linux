@@ -306,7 +306,7 @@
 	phy-mode = "rmii";
 	phy-supply = <&reg_3v3_etn>;
 	phy-handle = <&etnphy1>;
-	status = "okay";
+	status = "disabled";
 };
 
 &gpmi {
