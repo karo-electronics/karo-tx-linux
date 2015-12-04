@@ -6,7 +6,7 @@ Required properties:
 
   - model		: The user-visible name of this sound complex
 
-  - ssi-controller	: The phandle of the i.MX SSI controller
+  - ssi-controller	: The phandle of the i.MX SSI (or SAI) controller
 
   - audio-codec		: The phandle of the SGTL5000 audio codec
 
@@ -39,6 +39,16 @@ Required properties:
 Note: The AUDMUX port numbering should start at 1, which is consistent with
 hardware manual.
 
+Optional properties:
+  - fsl,no-audmux	: boolean
+    			  Required for i.MX6UL (and maybe other SoCs)
+    			  which don't have an AUDMUX, but still
+			  feature the same audio subsystem otherwise.
+
+Note: Setting this property will make mux-int-port and mux-ext-port
+obsolete.
+
+
 Example:
 
 sound {
@@ -53,4 +63,18 @@ sound {
 		"Headphone Jack", "HP_OUT";
 	mux-int-port = <1>;
 	mux-ext-port = <3>;
+};
+
+or (e.g. for i.MX6UL):
+sound {
+	compatible = "karo,imx6ul-tx6ul-sgtl5000",
+		     "fsl,imx-audio-sgtl5000";
+	model = "imx6ul-tx6ul-sgtl5000";
+	ssi-controller = <&sai2>;
+	audio-codec = <&sgtl5000>;
+	audio-routing =
+		"MIC_IN", "Mic Jack",
+		"Mic Jack", "Mic Bias",
+		"Headphone Jack", "HP_OUT";
+	fsl,no-audmux;
 };
