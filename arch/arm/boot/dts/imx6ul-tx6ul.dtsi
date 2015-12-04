@@ -56,6 +56,7 @@
 		pwm0 = &pwm5;
 		reg_can_xcvr = &reg_can_xcvr;
 		serial2 = &uart5;
+		serial4 = &uart3;
 		spi0 = &ecspi2;
 		spi1 = &spi_gpio;
 		stk5led = &user_led;
