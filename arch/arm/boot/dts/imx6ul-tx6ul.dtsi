@@ -266,6 +266,19 @@
 			spi-max-frequency = <54000000>;
 		};
 	};
+
+	sound {
+		compatible = "karo,imx6ul-tx6ul-sgtl5000",
+			     "fsl,imx-audio-sgtl5000";
+		model = "imx6ul-tx6ul-sgtl5000-audio";
+		ssi-controller = <&sai2>;
+		audio-codec = <&sgtl5000>;
+		audio-routing =
+			"MIC_IN", "Mic Jack",
+			"Mic Jack", "Mic Bias",
+			"Headphone Jack", "HP_OUT";
+		fsl,no-audmux;
+	};
 };
 
 &can1 {
