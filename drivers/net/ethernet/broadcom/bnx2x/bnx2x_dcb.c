@@ -1,15 +1,17 @@
-/* bnx2x_dcb.c: Broadcom Everest network driver.
+/* bnx2x_dcb.c: QLogic Everest network driver.
  *
  * Copyright 2009-2013 Broadcom Corporation
+ * Copyright 2014 QLogic Corporation
+ * All rights reserved
  *
- * Unless you and Broadcom execute a separate written software license
+ * Unless you and QLogic execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
  * under the terms of the GNU General Public License version 2, available
  * at http://www.gnu.org/licenses/old-licenses/gpl-2.0.html (the "GPL").
  *
  * Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a
- * license other than the GPL, without Broadcom's express prior written
+ * software in any way with any other QLogic software provided under a
+ * license other than the GPL, without QLogic's express prior written
  * consent.
  *
  * Maintained by: Ariel Elior <ariel.elior@qlogic.com>
@@ -1850,6 +1852,8 @@ static void bnx2x_dcbx_fw_struct(struct bnx2x *bp,
 			if (bp->dcbx_port_params.ets.cos_params[cos].
 						pri_bitmask & pri_bit)
 					tt2cos[pri].cos = cos;
+
+		pfc_fw_cfg->dcb_outer_pri[pri]  = ttp[pri];
 	}
 
 	/* we never want the FW to add a 0 vlan tag */
@@ -2092,7 +2096,6 @@ static void bnx2x_dcbnl_get_pfc_cfg(struct net_device *netdev, int prio,
 static u8 bnx2x_dcbnl_set_all(struct net_device *netdev)
 {
 	struct bnx2x *bp = netdev_priv(netdev);
-	int rc = 0;
 
 	DP(BNX2X_MSG_DCB, "SET-ALL\n");
 
@@ -2110,9 +2113,7 @@ static u8 bnx2x_dcbnl_set_all(struct net_device *netdev)
 				       1);
 		bnx2x_dcbx_init(bp, true);
 	}
-	DP(BNX2X_MSG_DCB, "set_dcbx_params done (%d)\n", rc);
-	if (rc)
-		return 1;
+	DP(BNX2X_MSG_DCB, "set_dcbx_params done\n");
 
 	return 0;
 }
@@ -2303,8 +2304,8 @@ static int bnx2x_set_admin_app_up(struct bnx2x *bp, u8 idtype, u16 idval, u8 up)
 	return 0;
 }
 
-static u8 bnx2x_dcbnl_set_app_up(struct net_device *netdev, u8 idtype,
-				 u16 idval, u8 up)
+static int bnx2x_dcbnl_set_app_up(struct net_device *netdev, u8 idtype,
+				  u16 idval, u8 up)
 {
 	struct bnx2x *bp = netdev_priv(netdev);
 

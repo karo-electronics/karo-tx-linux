@@ -72,7 +72,7 @@ asmlinkage __visible void vsmp_irq_enable(void)
 }
 PV_CALLEE_SAVE_REGS_THUNK(vsmp_irq_enable);
 
-static unsigned __init_or_module vsmp_patch(u8 type, u16 clobbers, void *ibuf,
+static unsigned __init vsmp_patch(u8 type, u16 clobbers, void *ibuf,
 				  unsigned long addr, unsigned len)
 {
 	switch (type) {
@@ -152,7 +152,7 @@ static void __init detect_vsmp_box(void)
 		is_vsmp = 1;
 }
 
-int is_vsmp_box(void)
+static int is_vsmp_box(void)
 {
 	if (is_vsmp != -1)
 		return is_vsmp;
@@ -166,7 +166,7 @@ int is_vsmp_box(void)
 static void __init detect_vsmp_box(void)
 {
 }
-int is_vsmp_box(void)
+static int is_vsmp_box(void)
 {
 	return 0;
 }

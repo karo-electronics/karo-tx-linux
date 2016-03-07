@@ -53,17 +53,12 @@
 
 #ifdef __KERNEL__
 
+#include <linux/device.h>
+
 struct cma;
 struct page;
-struct device;
 
 #ifdef CONFIG_DMA_CMA
-
-/*
- * There is always at least global CMA area and a few optional device
- * private areas configured in kernel .config.
- */
-#define MAX_CMA_AREAS	(1 + CONFIG_CMA_AREAS)
 
 extern struct cma *dma_contiguous_default_area;
 
@@ -116,14 +111,12 @@ static inline int dma_declare_contiguous(struct device *dev, phys_addr_t size,
 	return ret;
 }
 
-struct page *dma_alloc_from_contiguous(struct device *dev, int count,
+struct page *dma_alloc_from_contiguous(struct device *dev, size_t count,
 				       unsigned int order);
 bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 				 int count);
 
 #else
-
-#define MAX_CMA_AREAS	(0)
 
 static inline struct cma *dev_get_cma_area(struct device *dev)
 {
@@ -151,7 +144,7 @@ int dma_declare_contiguous(struct device *dev, phys_addr_t size,
 }
 
 static inline
-struct page *dma_alloc_from_contiguous(struct device *dev, int count,
+struct page *dma_alloc_from_contiguous(struct device *dev, size_t count,
 				       unsigned int order)
 {
 	return NULL;

@@ -42,7 +42,7 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <lustre_lite.h>
+#include "../include/lustre_lite.h"
 #include "llite_internal.h"
 
 /** records that a write is in flight */
@@ -90,8 +90,7 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
 		struct ll_close_queue *lcq = ll_i2sbi(inode)->ll_lcq;
 
 		if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
-			CWARN("ino %lu/%u(flags %u) som valid it just after "
-			      "recovery\n",
+			CWARN("ino %lu/%u(flags %u) som valid it just after recovery\n",
 			      inode->i_ino, inode->i_generation,
 			      lli->lli_flags);
 		/* DONE_WRITING is allowed and inode has no dirty page. */
@@ -124,8 +123,8 @@ void ll_done_writing_attr(struct inode *inode, struct md_op_data *op_data)
 	op_data->op_flags |= MF_SOM_CHANGE;
 	/* Check if Size-on-MDS attributes are valid. */
 	if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
-		CERROR("ino %lu/%u(flags %u) som valid it just after "
-		       "recovery\n", inode->i_ino, inode->i_generation,
+		CERROR("ino %lu/%u(flags %u) som valid it just after recovery\n",
+		       inode->i_ino, inode->i_generation,
 		       lli->lli_flags);
 
 	if (!cl_local_size(inode)) {
@@ -155,7 +154,7 @@ void ll_ioepoch_close(struct inode *inode, struct md_op_data *op_data,
 
 			inode = igrab(inode);
 			LASSERT(inode);
-			GOTO(out, 0);
+			goto out;
 		}
 		if (flags & LLIF_DONE_WRITING) {
 			/* Some pages are still dirty, it is early to send
@@ -167,10 +166,10 @@ void ll_ioepoch_close(struct inode *inode, struct md_op_data *op_data,
 
 			inode = igrab(inode);
 			LASSERT(inode);
-			GOTO(out, 0);
+			goto out;
 		}
 	}
-	CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID"\n",
+	CDEBUG(D_INODE, "Epoch %llu closed on "DFID"\n",
 	       ll_i2info(inode)->lli_ioepoch, PFID(&lli->lli_fid));
 	op_data->op_flags |= MF_EPOCH_CLOSE;
 
@@ -184,14 +183,14 @@ void ll_ioepoch_close(struct inode *inode, struct md_op_data *op_data,
 		/* Pack Size-on-MDS inode attributes only if they has changed */
 		if (!(lli->lli_flags & LLIF_SOM_DIRTY)) {
 			spin_unlock(&lli->lli_lock);
-			GOTO(out, 0);
+			goto out;
 		}
 
 		/* There is a pending DONE_WRITE -- close epoch with no
 		 * attribute change. */
 		if (lli->lli_flags & LLIF_EPOCH_PENDING) {
 			spin_unlock(&lli->lli_lock);
-			GOTO(out, 0);
+			goto out;
 		}
 	}
 
@@ -218,11 +217,11 @@ int ll_som_update(struct inode *inode, struct md_op_data *op_data)
 
 	LASSERT(op_data != NULL);
 	if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
-		CERROR("ino %lu/%u(flags %u) som valid it just after "
-		       "recovery\n", inode->i_ino, inode->i_generation,
+		CERROR("ino %lu/%u(flags %u) som valid it just after recovery\n",
+		       inode->i_ino, inode->i_generation,
 		       lli->lli_flags);
 
-	OBDO_ALLOC(oa);
+	oa = kmem_cache_alloc(obdo_cachep, GFP_NOFS | __GFP_ZERO);
 	if (!oa) {
 		CERROR("can't allocate memory for Size-on-MDS update.\n");
 		return -ENOMEM;
@@ -238,9 +237,8 @@ int ll_som_update(struct inode *inode, struct md_op_data *op_data)
 		if (rc) {
 			oa->o_valid = 0;
 			if (rc != -ENOENT)
-				CERROR("inode_getattr failed (%d): unable to "
-				       "send a Size-on-MDS attribute update "
-				       "for inode %lu/%u\n", rc, inode->i_ino,
+				CERROR("inode_getattr failed (%d): unable to send a Size-on-MDS attribute update for inode %lu/%u\n",
+				       rc, inode->i_ino,
 				       inode->i_generation);
 		} else {
 			CDEBUG(D_INODE, "Size-on-MDS update on "DFID"\n",
@@ -254,7 +252,7 @@ int ll_som_update(struct inode *inode, struct md_op_data *op_data)
 			NULL, 0, NULL, 0, &request, NULL);
 	ptlrpc_req_finished(request);
 
-	OBDO_FREE(oa);
+	kmem_cache_free(obdo_cachep, oa);
 	return rc;
 }
 
@@ -285,31 +283,28 @@ static void ll_done_writing(struct inode *inode)
 
 	LASSERT(exp_connect_som(ll_i2mdexp(inode)));
 
-	OBD_ALLOC_PTR(op_data);
-	if (op_data == NULL) {
-		CERROR("can't allocate op_data\n");
+	op_data = kzalloc(sizeof(*op_data), GFP_NOFS);
+	if (!op_data)
 		return;
-	}
 
 	ll_prepare_done_writing(inode, op_data, &och);
 	/* If there is no @och, we do not do D_W yet. */
 	if (och == NULL)
-		GOTO(out, 0);
+		goto out;
 
 	rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, NULL);
-	if (rc == -EAGAIN) {
+	if (rc == -EAGAIN)
 		/* MDS has instructed us to obtain Size-on-MDS attribute from
 		 * OSTs and send setattr to back to MDS. */
 		rc = ll_som_update(inode, op_data);
-	} else if (rc) {
+	else if (rc)
 		CERROR("inode %lu mdc done_writing failed: rc = %d\n",
 		       inode->i_ino, rc);
-	}
 out:
 	ll_finish_md_op_data(op_data);
 	if (och) {
 		md_clear_open_replay_data(ll_i2sbi(inode)->ll_md_exp, och);
-		OBD_FREE_PTR(och);
+		kfree(och);
 	}
 }
 
@@ -367,8 +362,8 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret)
 	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CLOSE_THREAD))
 		return -EINTR;
 
-	OBD_ALLOC(lcq, sizeof(*lcq));
-	if (lcq == NULL)
+	lcq = kzalloc(sizeof(*lcq), GFP_NOFS);
+	if (!lcq)
 		return -ENOMEM;
 
 	spin_lock_init(&lcq->lcq_lock);
@@ -378,7 +373,7 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret)
 
 	task = kthread_run(ll_close_thread, lcq, "ll_close");
 	if (IS_ERR(task)) {
-		OBD_FREE(lcq, sizeof(*lcq));
+		kfree(lcq);
 		return PTR_ERR(task);
 	}
 
@@ -393,5 +388,5 @@ void ll_close_thread_shutdown(struct ll_close_queue *lcq)
 	atomic_inc(&lcq->lcq_stop);
 	wake_up(&lcq->lcq_waitq);
 	wait_for_completion(&lcq->lcq_comp);
-	OBD_FREE(lcq, sizeof(*lcq));
+	kfree(lcq);
 }

@@ -20,20 +20,12 @@
  *   Micky Ching (micky_ching@realsil.com.cn)
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #include <linux/blkdev.h>
 #include <linux/kthread.h>
 #include <linux/sched.h>
 #include <linux/workqueue.h>
 
 #include "rtsx.h"
-#include "rtsx_chip.h"
-#include "rtsx_transport.h"
-#include "rtsx_scsi.h"
-#include "rtsx_card.h"
-#include "general.h"
-
 #include "ms.h"
 #include "sd.h"
 #include "xd.h"
@@ -139,8 +131,8 @@ static int queuecommand_lck(struct scsi_cmnd *srb,
 
 	/* check for state-transition errors */
 	if (chip->srb != NULL) {
-		dev_err(&dev->pci->dev, "Error in %s: chip->srb = %p\n",
-			__func__, chip->srb);
+		dev_err(&dev->pci->dev, "Error: chip->srb = %p\n",
+			chip->srb);
 		return SCSI_MLQUEUE_HOST_BUSY;
 	}
 
@@ -238,7 +230,6 @@ static struct scsi_host_template rtsx_host_template = {
 
 	/* queue commands only, only one command per LUN */
 	.can_queue =			1,
-	.cmd_per_lun =			1,
 
 	/* unknown initiator id */
 	.this_id =			-1,
@@ -315,7 +306,7 @@ int rtsx_read_pci_cfg_byte(u8 bus, u8 dev, u8 func, u8 offset, u8 *val)
  */
 static int rtsx_suspend(struct pci_dev *pci, pm_message_t state)
 {
-	struct rtsx_dev *dev = (struct rtsx_dev *)pci_get_drvdata(pci);
+	struct rtsx_dev *dev = pci_get_drvdata(pci);
 	struct rtsx_chip *chip;
 
 	if (!dev)
@@ -350,7 +341,7 @@ static int rtsx_suspend(struct pci_dev *pci, pm_message_t state)
 
 static int rtsx_resume(struct pci_dev *pci)
 {
-	struct rtsx_dev *dev = (struct rtsx_dev *)pci_get_drvdata(pci);
+	struct rtsx_dev *dev = pci_get_drvdata(pci);
 	struct rtsx_chip *chip;
 
 	if (!dev)
@@ -396,7 +387,7 @@ static int rtsx_resume(struct pci_dev *pci)
 
 static void rtsx_shutdown(struct pci_dev *pci)
 {
-	struct rtsx_dev *dev = (struct rtsx_dev *)pci_get_drvdata(pci);
+	struct rtsx_dev *dev = pci_get_drvdata(pci);
 	struct rtsx_chip *chip;
 
 	if (!dev)
@@ -416,13 +407,11 @@ static void rtsx_shutdown(struct pci_dev *pci)
 		pci_disable_msi(pci);
 
 	pci_disable_device(pci);
-
-	return;
 }
 
 static int rtsx_control_thread(void *__dev)
 {
-	struct rtsx_dev *dev = (struct rtsx_dev *)__dev;
+	struct rtsx_dev *dev = __dev;
 	struct rtsx_chip *chip = dev->chip;
 	struct Scsi_Host *host = rtsx_to_host(dev);
 
@@ -465,20 +454,20 @@ static int rtsx_control_thread(void *__dev)
 		else if (chip->srb->device->id) {
 			dev_err(&dev->pci->dev, "Bad target number (%d:%d)\n",
 				chip->srb->device->id,
-				chip->srb->device->lun);
+				(u8)chip->srb->device->lun);
 			chip->srb->result = DID_BAD_TARGET << 16;
 		}
 
 		else if (chip->srb->device->lun > chip->max_lun) {
 			dev_err(&dev->pci->dev, "Bad LUN (%d:%d)\n",
 				chip->srb->device->id,
-				chip->srb->device->lun);
+				(u8)chip->srb->device->lun);
 			chip->srb->result = DID_BAD_TARGET << 16;
 		}
 
 		/* we've got a command, let's do it! */
 		else {
-			RTSX_DEBUG(scsi_show_command(chip->srb));
+			scsi_show_command(chip);
 			rtsx_invoke_transport(chip->srb, chip);
 		}
 
@@ -531,7 +520,7 @@ SkipForAbort:
 
 static int rtsx_polling_thread(void *__dev)
 {
-	struct rtsx_dev *dev = (struct rtsx_dev *)__dev;
+	struct rtsx_dev *dev = __dev;
 	struct rtsx_chip *chip = dev->chip;
 	struct sd_info *sd_card = &(chip->sd_card);
 	struct xd_info *xd_card = &(chip->xd_card);
@@ -547,7 +536,7 @@ static int rtsx_polling_thread(void *__dev)
 	for (;;) {
 
 		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(POLLING_INTERVAL);
+		schedule_timeout(msecs_to_jiffies(POLLING_INTERVAL));
 
 		/* lock the device pointers */
 		mutex_lock(&(dev->dev_mutex));
@@ -600,8 +589,7 @@ static irqreturn_t rtsx_interrupt(int irq, void *dev_id)
 		spin_unlock(&dev->reg_lock);
 		if (chip->int_reg == 0xFFFFFFFF)
 			return IRQ_HANDLED;
-		else
-			return IRQ_NONE;
+		return IRQ_NONE;
 	}
 
 	status = chip->int_reg;
@@ -659,8 +647,6 @@ static void rtsx_release_resources(struct rtsx_dev *dev)
 	wait_timeout(200);
 
 	if (dev->rtsx_resv_buf) {
-		dma_free_coherent(&(dev->pci->dev), RTSX_RESV_BUF_LEN,
-				dev->rtsx_resv_buf, dev->rtsx_resv_buf_addr);
 		dev->chip->host_cmds_ptr = NULL;
 		dev->chip->host_sg_tbl_ptr = NULL;
 	}
@@ -864,7 +850,7 @@ static int rtsx_probe(struct pci_dev *pci,
 	int err = 0;
 	struct task_struct *th;
 
-	RTSX_DEBUGP("Realtek PCI-E card reader detected\n");
+	dev_dbg(&pci->dev, "Realtek PCI-E card reader detected\n");
 
 	err = pci_enable_device(pci);
 	if (err < 0) {
@@ -930,8 +916,8 @@ static int rtsx_probe(struct pci_dev *pci,
 	dev_info(&pci->dev, "Original address: 0x%lx, remapped address: 0x%lx\n",
 		 (unsigned long)(dev->addr), (unsigned long)(dev->remap_addr));
 
-	dev->rtsx_resv_buf = dma_alloc_coherent(&(pci->dev), RTSX_RESV_BUF_LEN,
-			&(dev->rtsx_resv_buf_addr), GFP_KERNEL);
+	dev->rtsx_resv_buf = dmam_alloc_coherent(&pci->dev, RTSX_RESV_BUF_LEN,
+			&dev->rtsx_resv_buf_addr, GFP_KERNEL);
 	if (dev->rtsx_resv_buf == NULL) {
 		dev_err(&pci->dev, "alloc dma buffer fail\n");
 		err = -ENXIO;
@@ -1019,7 +1005,7 @@ errout:
 
 static void rtsx_remove(struct pci_dev *pci)
 {
-	struct rtsx_dev *dev = (struct rtsx_dev *)pci_get_drvdata(pci);
+	struct rtsx_dev *dev = pci_get_drvdata(pci);
 
 	dev_info(&pci->dev, "rtsx_remove() called\n");
 
@@ -1041,7 +1027,7 @@ static const struct pci_device_id rtsx_ids[] = {
 MODULE_DEVICE_TABLE(pci, rtsx_ids);
 
 /* pci_driver definition */
-static struct pci_driver driver = {
+static struct pci_driver rtsx_driver = {
 	.name = CR_DRIVER_NAME,
 	.id_table = rtsx_ids,
 	.probe = rtsx_probe,
@@ -1053,21 +1039,4 @@ static struct pci_driver driver = {
 	.shutdown = rtsx_shutdown,
 };
 
-static int __init rtsx_init(void)
-{
-	pr_info("Initializing Realtek PCIE storage driver...\n");
-
-	return pci_register_driver(&driver);
-}
-
-static void __exit rtsx_exit(void)
-{
-	pr_info("rtsx_exit() called\n");
-
-	pci_unregister_driver(&driver);
-
-	pr_info("%s module exit\n", CR_DRIVER_NAME);
-}
-
-module_init(rtsx_init)
-module_exit(rtsx_exit)
+module_pci_driver(rtsx_driver);

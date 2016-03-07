@@ -11,8 +11,6 @@
 
 #include <dt-bindings/clock/exynos5410.h>
 
-#include <linux/clk.h>
-#include <linux/clkdev.h>
 #include <linux/clk-provider.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
@@ -203,6 +201,8 @@ static void __init exynos5410_clk_init(struct device_node *np)
 			ARRAY_SIZE(exynos5410_div_clks));
 	samsung_clk_register_gate(ctx, exynos5410_gate_clks,
 			ARRAY_SIZE(exynos5410_gate_clks));
+
+	samsung_clk_of_add_provider(np, ctx);
 
 	pr_debug("Exynos5410: clock setup completed.\n");
 }

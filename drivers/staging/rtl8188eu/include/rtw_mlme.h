@@ -65,7 +65,7 @@
 #define _FW_UNDER_SURVEY	WIFI_SITE_MONITOR
 
 enum dot11AuthAlgrthmNum {
-	dot11AuthAlgrthm_Open = 0,
+	dot11AuthAlgrthm_Open = 0, /* open system */
 	dot11AuthAlgrthm_Shared,
 	dot11AuthAlgrthm_8021X,
 	dot11AuthAlgrthm_Auto,
@@ -436,8 +436,6 @@ void indicate_wx_scan_complete_event(struct adapter *padapter);
 void rtw_indicate_wx_assoc_event(struct adapter *padapter);
 void rtw_indicate_wx_disassoc_event(struct adapter *padapter);
 int event_thread(void *context);
-void rtw_join_timeout_handler(void *FunctionContext);
-void _rtw_scan_timeout_handler(void *FunctionContext);
 void rtw_free_network_queue(struct adapter *adapter, u8 isfreeall);
 int rtw_init_mlme_priv(struct adapter *adapter);
 void rtw_free_mlme_priv(struct mlme_priv *pmlmepriv);
@@ -537,7 +535,8 @@ void rtw_generate_random_ibss(u8 *pibss);
 struct wlan_network *rtw_find_network(struct __queue *scanned_queue, u8 *addr);
 struct wlan_network *rtw_get_oldest_wlan_network(struct __queue *scanned_queue);
 
-void rtw_free_assoc_resources(struct adapter *adapter, int lock_scanned_queue);
+void rtw_free_assoc_resources(struct adapter *adapter);
+void rtw_free_assoc_resources_locked(struct adapter *adapter);
 void rtw_indicate_disconnect(struct adapter *adapter);
 void rtw_indicate_connect(struct adapter *adapter);
 void rtw_indicate_scan_done(struct adapter *padapter, bool aborted);
@@ -553,46 +552,26 @@ void rtw_update_registrypriv_dev_network(struct adapter *adapter);
 
 void rtw_get_encrypt_decrypt_from_registrypriv(struct adapter *adapter);
 
-void _rtw_join_timeout_handler(struct adapter *adapter);
-void rtw_scan_timeout_handler(struct adapter *adapter);
+void _rtw_join_timeout_handler(unsigned long data);
+void rtw_scan_timeout_handler(unsigned long data);
 
-void rtw_dynamic_check_timer_handlder(struct adapter *adapter);
+void rtw_dynamic_check_timer_handlder(unsigned long data);
 #define rtw_is_scan_deny(adapter) false
 #define rtw_clear_scan_deny(adapter) do {} while (0)
 #define rtw_set_scan_deny_timer_hdl(adapter) do {} while (0)
 #define rtw_set_scan_deny(adapter, ms) do {} while (0)
 
-
-int _rtw_init_mlme_priv(struct adapter *padapter);
-
 void rtw_free_mlme_priv_ie_data(struct mlme_priv *pmlmepriv);
-
-void _rtw_free_mlme_priv(struct mlme_priv *pmlmepriv);
-
-int _rtw_enqueue_network(struct __queue *queue, struct wlan_network *pnetwork);
-
-struct wlan_network *_rtw_dequeue_network(struct __queue *queue);
 
 struct wlan_network *_rtw_alloc_network(struct mlme_priv *pmlmepriv);
 
-
-void _rtw_free_network(struct mlme_priv *pmlmepriv,
-		       struct wlan_network *pnetwork, u8 isfreeall);
 void _rtw_free_network_nolock(struct mlme_priv *pmlmepriv,
 			      struct wlan_network *pnetwork);
 
-
-struct wlan_network *_rtw_find_network(struct __queue *scanned_queue, u8 *addr);
-
-void _rtw_free_network_queue(struct adapter *padapter, u8 isfreeall);
-
 int rtw_if_up(struct adapter *padapter);
 
-
 u8 *rtw_get_capability_from_ie(u8 *ie);
-u8 *rtw_get_timestampe_from_ie(u8 *ie);
 u8 *rtw_get_beacon_interval_from_ie(u8 *ie);
-
 
 void rtw_joinbss_reset(struct adapter *padapter);
 

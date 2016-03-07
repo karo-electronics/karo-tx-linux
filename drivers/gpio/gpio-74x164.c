@@ -167,13 +167,11 @@ exit_destroy:
 static int gen_74x164_remove(struct spi_device *spi)
 {
 	struct gen_74x164_chip *chip = spi_get_drvdata(spi);
-	int ret;
 
-	ret = gpiochip_remove(&chip->gpio_chip);
-	if (!ret)
-		mutex_destroy(&chip->lock);
+	gpiochip_remove(&chip->gpio_chip);
+	mutex_destroy(&chip->lock);
 
-	return ret;
+	return 0;
 }
 
 static const struct of_device_id gen_74x164_dt_ids[] = {
@@ -185,7 +183,6 @@ MODULE_DEVICE_TABLE(of, gen_74x164_dt_ids);
 static struct spi_driver gen_74x164_driver = {
 	.driver = {
 		.name		= "74x164",
-		.owner		= THIS_MODULE,
 		.of_match_table	= gen_74x164_dt_ids,
 	},
 	.probe		= gen_74x164_probe,

@@ -7,10 +7,6 @@
 
 #include <linux/slab.h>
 #include <linux/interrupt.h>
-
-#include "qlcnic.h"
-#include "qlcnic_hw.h"
-
 #include <linux/swab.h>
 #include <linux/dma-mapping.h>
 #include <net/ip.h>
@@ -24,7 +20,8 @@
 #include <linux/hwmon-sysfs.h>
 #endif
 
-#define QLC_STATUS_UNSUPPORTED_CMD	-2
+#include "qlcnic.h"
+#include "qlcnic_hw.h"
 
 int qlcnicvf_config_bridged_mode(struct qlcnic_adapter *adapter, u32 enable)
 {
@@ -166,7 +163,7 @@ static int qlcnic_82xx_store_beacon(struct qlcnic_adapter *adapter,
 	u8 b_state, b_rate;
 
 	if (len != sizeof(u16))
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
 	memcpy(&beacon, buf, sizeof(u16));
 	err = qlcnic_validate_beacon(adapter, beacon, &b_state, &b_rate);
@@ -280,6 +277,7 @@ static ssize_t qlcnic_sysfs_read_crb(struct file *filp, struct kobject *kobj,
 	if (ret != 0)
 		return ret;
 	qlcnic_read_crb(adapter, buf, offset, size);
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 
 	return size;
 }
@@ -296,6 +294,7 @@ static ssize_t qlcnic_sysfs_write_crb(struct file *filp, struct kobject *kobj,
 	if (ret != 0)
 		return ret;
 
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 	qlcnic_write_crb(adapter, buf, offset, size);
 	return size;
 }
@@ -329,6 +328,7 @@ static ssize_t qlcnic_sysfs_read_mem(struct file *filp, struct kobject *kobj,
 		return -EIO;
 
 	memcpy(buf, &data, size);
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 
 	return size;
 }
@@ -346,6 +346,7 @@ static ssize_t qlcnic_sysfs_write_mem(struct file *filp, struct kobject *kobj,
 	if (ret != 0)
 		return ret;
 
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 	memcpy(&data, buf, size);
 
 	if (qlcnic_pci_mem_write_2M(adapter, offset, data))
@@ -379,17 +380,17 @@ static int validate_pm_config(struct qlcnic_adapter *adapter,
 		dest_pci_func = pm_cfg[i].dest_npar;
 		src_index = qlcnic_is_valid_nic_func(adapter, src_pci_func);
 		if (src_index < 0)
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 
 		dest_index = qlcnic_is_valid_nic_func(adapter, dest_pci_func);
 		if (dest_index < 0)
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 
 		s_esw_id = adapter->npars[src_index].phy_port;
 		d_esw_id = adapter->npars[dest_index].phy_port;
 
 		if (s_esw_id != d_esw_id)
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 	}
 
 	return 0;
@@ -410,8 +411,9 @@ static ssize_t qlcnic_sysfs_write_pm_config(struct file *filp,
 	count	= size / sizeof(struct qlcnic_pm_func_cfg);
 	rem	= size % sizeof(struct qlcnic_pm_func_cfg);
 	if (rem)
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 	pm_cfg = (struct qlcnic_pm_func_cfg *)buf;
 	ret = validate_pm_config(adapter, pm_cfg, count);
 
@@ -422,7 +424,7 @@ static ssize_t qlcnic_sysfs_write_pm_config(struct file *filp,
 		action = !!pm_cfg[i].action;
 		index = qlcnic_is_valid_nic_func(adapter, pci_func);
 		if (index < 0)
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 
 		id = adapter->npars[index].phy_port;
 		ret = qlcnic_config_port_mirroring(adapter, id,
@@ -435,7 +437,7 @@ static ssize_t qlcnic_sysfs_write_pm_config(struct file *filp,
 		pci_func = pm_cfg[i].pci_func;
 		index = qlcnic_is_valid_nic_func(adapter, pci_func);
 		if (index < 0)
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 		id = adapter->npars[index].phy_port;
 		adapter->npars[index].enable_pm = !!pm_cfg[i].action;
 		adapter->npars[index].dest_npar = id;
@@ -474,6 +476,7 @@ static ssize_t qlcnic_sysfs_read_pm_config(struct file *filp,
 		pm_cfg[pci_func].dest_npar = 0;
 		pm_cfg[pci_func].pci_func = i;
 	}
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 	return size;
 }
 
@@ -493,11 +496,11 @@ static int validate_esw_config(struct qlcnic_adapter *adapter,
 	for (i = 0; i < count; i++) {
 		pci_func = esw_cfg[i].pci_func;
 		if (pci_func >= ahw->max_vnic_func)
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 
 		if (adapter->ahw->op_mode == QLCNIC_MGMT_FUNC)
 			if (qlcnic_is_valid_nic_func(adapter, pci_func) < 0)
-				return QL_STATUS_INVALID_PARAM;
+				return -EINVAL;
 
 		switch (esw_cfg[i].op_mode) {
 		case QLCNIC_PORT_DEFAULTS:
@@ -511,25 +514,25 @@ static int validate_esw_config(struct qlcnic_adapter *adapter,
 
 			if (ret != QLCNIC_NON_PRIV_FUNC) {
 				if (esw_cfg[i].mac_anti_spoof != 0)
-					return QL_STATUS_INVALID_PARAM;
+					return -EINVAL;
 				if (esw_cfg[i].mac_override != 1)
-					return QL_STATUS_INVALID_PARAM;
+					return -EINVAL;
 				if (esw_cfg[i].promisc_mode != 1)
-					return QL_STATUS_INVALID_PARAM;
+					return -EINVAL;
 			}
 			break;
 		case QLCNIC_ADD_VLAN:
 			if (!IS_VALID_VLAN(esw_cfg[i].vlan_id))
-				return QL_STATUS_INVALID_PARAM;
+				return -EINVAL;
 			if (!esw_cfg[i].op_type)
-				return QL_STATUS_INVALID_PARAM;
+				return -EINVAL;
 			break;
 		case QLCNIC_DEL_VLAN:
 			if (!esw_cfg[i].op_type)
-				return QL_STATUS_INVALID_PARAM;
+				return -EINVAL;
 			break;
 		default:
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 		}
 	}
 
@@ -553,8 +556,9 @@ static ssize_t qlcnic_sysfs_write_esw_config(struct file *file,
 	count	= size / sizeof(struct qlcnic_esw_func_cfg);
 	rem	= size % sizeof(struct qlcnic_esw_func_cfg);
 	if (rem)
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 	esw_cfg = (struct qlcnic_esw_func_cfg *)buf;
 	ret = validate_esw_config(adapter, esw_cfg, count);
 	if (ret)
@@ -563,7 +567,7 @@ static ssize_t qlcnic_sysfs_write_esw_config(struct file *file,
 	for (i = 0; i < count; i++) {
 		if (adapter->ahw->op_mode == QLCNIC_MGMT_FUNC)
 			if (qlcnic_config_switch_port(adapter, &esw_cfg[i]))
-				return QL_STATUS_INVALID_PARAM;
+				return -EINVAL;
 
 		if (adapter->ahw->pci_func != esw_cfg[i].pci_func)
 			continue;
@@ -597,7 +601,7 @@ static ssize_t qlcnic_sysfs_write_esw_config(struct file *file,
 		pci_func = esw_cfg[i].pci_func;
 		index = qlcnic_is_valid_nic_func(adapter, pci_func);
 		if (index < 0)
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 		npar = &adapter->npars[index];
 		switch (esw_cfg[i].op_mode) {
 		case QLCNIC_PORT_DEFAULTS:
@@ -647,8 +651,9 @@ static ssize_t qlcnic_sysfs_read_esw_config(struct file *file,
 
 		esw_cfg[pci_func].pci_func = pci_func;
 		if (qlcnic_get_eswitch_port_config(adapter, &esw_cfg[pci_func]))
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 	}
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 	return size;
 }
 
@@ -661,11 +666,11 @@ static int validate_npar_config(struct qlcnic_adapter *adapter,
 	for (i = 0; i < count; i++) {
 		pci_func = np_cfg[i].pci_func;
 		if (qlcnic_is_valid_nic_func(adapter, pci_func) < 0)
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 
 		if (!IS_VALID_BW(np_cfg[i].min_bw) ||
 		    !IS_VALID_BW(np_cfg[i].max_bw))
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 	}
 	return 0;
 }
@@ -686,8 +691,9 @@ static ssize_t qlcnic_sysfs_write_npar_config(struct file *file,
 	count	= size / sizeof(struct qlcnic_npar_func_cfg);
 	rem	= size % sizeof(struct qlcnic_npar_func_cfg);
 	if (rem)
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 	np_cfg = (struct qlcnic_npar_func_cfg *)buf;
 	ret = validate_npar_config(adapter, np_cfg, count);
 	if (ret)
@@ -708,7 +714,7 @@ static ssize_t qlcnic_sysfs_write_npar_config(struct file *file,
 			return ret;
 		index = qlcnic_is_valid_nic_func(adapter, pci_func);
 		if (index < 0)
-			return QL_STATUS_INVALID_PARAM;
+			return -EINVAL;
 		adapter->npars[index].min_bw = nic_info.min_tx_bw;
 		adapter->npars[index].max_bw = nic_info.max_tx_bw;
 	}
@@ -759,6 +765,7 @@ static ssize_t qlcnic_sysfs_read_npar_config(struct file *file,
 		np_cfg[pci_func].max_tx_queues = nic_info.max_tx_ques;
 		np_cfg[pci_func].max_rx_queues = nic_info.max_rx_ques;
 	}
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 	return size;
 }
 
@@ -774,13 +781,13 @@ static ssize_t qlcnic_sysfs_get_port_stats(struct file *file,
 	int ret;
 
 	if (qlcnic_83xx_check(adapter))
-		return QLC_STATUS_UNSUPPORTED_CMD;
+		return -EOPNOTSUPP;
 
 	if (size != sizeof(struct qlcnic_esw_statistics))
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
 	if (offset >= adapter->ahw->max_vnic_func)
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
 	memset(&port_stats, 0, size);
 	ret = qlcnic_get_port_stats(adapter, offset, QLCNIC_QUERY_RX_COUNTER,
@@ -809,13 +816,13 @@ static ssize_t qlcnic_sysfs_get_esw_stats(struct file *file,
 	int ret;
 
 	if (qlcnic_83xx_check(adapter))
-		return QLC_STATUS_UNSUPPORTED_CMD;
+		return -EOPNOTSUPP;
 
 	if (size != sizeof(struct qlcnic_esw_statistics))
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
 	if (offset >= QLCNIC_NIU_MAX_XG_PORTS)
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
 	memset(&esw_stats, 0, size);
 	ret = qlcnic_get_eswitch_stats(adapter, offset, QLCNIC_QUERY_RX_COUNTER,
@@ -843,10 +850,10 @@ static ssize_t qlcnic_sysfs_clear_esw_stats(struct file *file,
 	int ret;
 
 	if (qlcnic_83xx_check(adapter))
-		return QLC_STATUS_UNSUPPORTED_CMD;
+		return -EOPNOTSUPP;
 
 	if (offset >= QLCNIC_NIU_MAX_XG_PORTS)
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
 	ret = qlcnic_clear_esw_stats(adapter, QLCNIC_STATS_ESWITCH, offset,
 				     QLCNIC_QUERY_RX_COUNTER);
@@ -873,10 +880,10 @@ static ssize_t qlcnic_sysfs_clear_port_stats(struct file *file,
 	int ret;
 
 	if (qlcnic_83xx_check(adapter))
-		return QLC_STATUS_UNSUPPORTED_CMD;
+		return -EOPNOTSUPP;
 
 	if (offset >= adapter->ahw->max_vnic_func)
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
 	ret = qlcnic_clear_esw_stats(adapter, QLCNIC_STATS_PORT, offset,
 				     QLCNIC_QUERY_RX_COUNTER);
@@ -916,6 +923,7 @@ static ssize_t qlcnic_sysfs_read_pci_config(struct file *file,
 
 	pci_cfg = (struct qlcnic_pci_func_cfg *)buf;
 	count = size / sizeof(struct qlcnic_pci_func_cfg);
+	qlcnic_swap32_buffer((u32 *)pci_info, size / sizeof(u32));
 	for (i = 0; i < count; i++) {
 		pci_cfg[i].pci_func = pci_info[i].id;
 		pci_cfg[i].func_type = pci_info[i].type;
@@ -942,9 +950,7 @@ static ssize_t qlcnic_83xx_sysfs_flash_read_handler(struct file *filp,
 	struct qlcnic_adapter *adapter = dev_get_drvdata(dev);
 
 	if (!size)
-		return QL_STATUS_INVALID_PARAM;
-	if (!buf)
-		return QL_STATUS_INVALID_PARAM;
+		return -EINVAL;
 
 	count = size / sizeof(u32);
 
@@ -969,6 +975,7 @@ static ssize_t qlcnic_83xx_sysfs_flash_read_handler(struct file *filp,
 	}
 
 	qlcnic_83xx_unlock_flash(adapter);
+	qlcnic_swap32_buffer((u32 *)p_read_buf, count);
 	memcpy(buf, p_read_buf, size);
 	kfree(p_read_buf);
 
@@ -986,9 +993,10 @@ static int qlcnic_83xx_sysfs_flash_bulk_write(struct qlcnic_adapter *adapter,
 	if (!p_cache)
 		return -ENOMEM;
 
+	count = size / sizeof(u32);
+	qlcnic_swap32_buffer((u32 *)buf, count);
 	memcpy(p_cache, buf, size);
 	p_src = p_cache;
-	count = size / sizeof(u32);
 
 	if (qlcnic_83xx_lock_flash(adapter) != 0) {
 		kfree(p_cache);
@@ -1053,6 +1061,7 @@ static int qlcnic_83xx_sysfs_flash_write(struct qlcnic_adapter *adapter,
 	if (!p_cache)
 		return -ENOMEM;
 
+	qlcnic_swap32_buffer((u32 *)buf, size / sizeof(u32));
 	memcpy(p_cache, buf, size);
 	p_src = p_cache;
 	count = size / sizeof(u32);
@@ -1117,9 +1126,6 @@ static ssize_t qlcnic_83xx_sysfs_flash_write_handler(struct file *filp,
 	unsigned long data;
 	struct device *dev = container_of(kobj, struct device, kobj);
 	struct qlcnic_adapter *adapter = dev_get_drvdata(dev);
-
-	if (!buf)
-		return QL_STATUS_INVALID_PARAM;
 
 	ret = kstrtoul(buf, 16, &data);
 

@@ -6,7 +6,7 @@
  *
  * License Terms: GNU General Public License, version 2
  * Author: Rabin Vincent <rabin.vincent@stericsson.com> for ST-Ericsson
- * Author: Viresh Kumar <viresh.linux@gmail.com> for ST Microelectronics
+ * Author: Viresh Kumar <vireshk@kernel.org> for ST Microelectronics
  */
 
 #include <linux/i2c.h>
@@ -68,7 +68,7 @@ MODULE_DEVICE_TABLE(of, stmpe_of_match);
 static int
 stmpe_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 {
-	int partnum;
+	enum stmpe_partnum partnum;
 	const struct of_device_id *of_id;
 
 	i2c_ci.data = (void *)id;
@@ -85,7 +85,7 @@ stmpe_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		dev_info(&i2c->dev, "matching on node name, compatible is preferred\n");
 		partnum = id->driver_data;
 	} else
-		partnum = (int)of_id->data;
+		partnum = (enum stmpe_partnum)of_id->data;
 
 	return stmpe_probe(&i2c_ci, partnum);
 }
@@ -112,7 +112,6 @@ MODULE_DEVICE_TABLE(i2c, stmpe_id);
 static struct i2c_driver stmpe_i2c_driver = {
 	.driver = {
 		.name = "stmpe-i2c",
-		.owner = THIS_MODULE,
 #ifdef CONFIG_PM
 		.pm = &stmpe_dev_pm_ops,
 #endif

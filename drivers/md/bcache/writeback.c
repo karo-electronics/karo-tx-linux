@@ -166,12 +166,12 @@ static void write_dirty_finish(struct closure *cl)
 	closure_return_with_destructor(cl, dirty_io_destructor);
 }
 
-static void dirty_endio(struct bio *bio, int error)
+static void dirty_endio(struct bio *bio)
 {
 	struct keybuf_key *w = bio->bi_private;
 	struct dirty_io *io = w->private;
 
-	if (error)
+	if (bio->bi_error)
 		SET_KEY_DIRTY(&w->key, false);
 
 	closure_put(&io->cl);
@@ -188,27 +188,27 @@ static void write_dirty(struct closure *cl)
 	io->bio.bi_bdev		= io->dc->bdev;
 	io->bio.bi_end_io	= dirty_endio;
 
-	closure_bio_submit(&io->bio, cl, &io->dc->disk);
+	closure_bio_submit(&io->bio, cl);
 
 	continue_at(cl, write_dirty_finish, system_wq);
 }
 
-static void read_dirty_endio(struct bio *bio, int error)
+static void read_dirty_endio(struct bio *bio)
 {
 	struct keybuf_key *w = bio->bi_private;
 	struct dirty_io *io = w->private;
 
 	bch_count_io_errors(PTR_CACHE(io->dc->disk.c, &w->key, 0),
-			    error, "reading dirty data from cache");
+			    bio->bi_error, "reading dirty data from cache");
 
-	dirty_endio(bio, error);
+	dirty_endio(bio);
 }
 
 static void read_dirty_submit(struct closure *cl)
 {
 	struct dirty_io *io = container_of(cl, struct dirty_io, cl);
 
-	closure_bio_submit(&io->bio, cl, &io->dc->disk);
+	closure_bio_submit(&io->bio, cl);
 
 	continue_at(cl, write_dirty, system_wq);
 }
@@ -239,7 +239,7 @@ static void read_dirty(struct cached_dev *dc)
 		if (KEY_START(&w->key) != dc->last_read ||
 		    jiffies_to_msecs(delay) > 50)
 			while (!kthread_should_stop() && delay)
-				delay = schedule_timeout_uninterruptible(delay);
+				delay = schedule_timeout_interruptible(delay);
 
 		dc->last_read	= KEY_OFFSET(&w->key);
 
@@ -436,7 +436,7 @@ static int bch_writeback_thread(void *arg)
 			while (delay &&
 			       !kthread_should_stop() &&
 			       !test_bit(BCACHE_DEV_DETACHING, &dc->disk.flags))
-				delay = schedule_timeout_uninterruptible(delay);
+				delay = schedule_timeout_interruptible(delay);
 		}
 	}
 
@@ -478,7 +478,7 @@ void bch_sectors_dirty_init(struct cached_dev *dc)
 	dc->disk.sectors_dirty_last = bcache_dev_sectors_dirty(&dc->disk);
 }
 
-int bch_cached_dev_writeback_init(struct cached_dev *dc)
+void bch_cached_dev_writeback_init(struct cached_dev *dc)
 {
 	sema_init(&dc->in_flight, 64);
 	init_rwsem(&dc->writeback_lock);
@@ -494,14 +494,20 @@ int bch_cached_dev_writeback_init(struct cached_dev *dc)
 	dc->writeback_rate_d_term	= 30;
 	dc->writeback_rate_p_term_inverse = 6000;
 
+	INIT_DELAYED_WORK(&dc->writeback_rate_update, update_writeback_rate);
+}
+
+int bch_cached_dev_writeback_start(struct cached_dev *dc)
+{
 	dc->writeback_thread = kthread_create(bch_writeback_thread, dc,
 					      "bcache_writeback");
 	if (IS_ERR(dc->writeback_thread))
 		return PTR_ERR(dc->writeback_thread);
 
-	INIT_DELAYED_WORK(&dc->writeback_rate_update, update_writeback_rate);
 	schedule_delayed_work(&dc->writeback_rate_update,
 			      dc->writeback_rate_update_seconds * HZ);
+
+	bch_writeback_queue(dc);
 
 	return 0;
 }

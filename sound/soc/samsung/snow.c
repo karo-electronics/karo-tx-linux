@@ -56,6 +56,7 @@ static int snow_late_probe(struct snd_soc_card *card)
 
 static struct snd_soc_card snow_snd = {
 	.name = "Snow-I2S",
+	.owner = THIS_MODULE,
 	.dai_link = snow_dai,
 	.num_links = ARRAY_SIZE(snow_dai),
 
@@ -92,6 +93,9 @@ static int snow_probe(struct platform_device *pdev)
 
 	card->dev = &pdev->dev;
 
+	/* Update card-name if provided through DT, else use default name */
+	snd_soc_of_parse_card_name(card, "samsung,model");
+
 	ret = devm_snd_soc_register_card(&pdev->dev, card);
 	if (ret) {
 		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n", ret);
@@ -103,14 +107,15 @@ static int snow_probe(struct platform_device *pdev)
 
 static const struct of_device_id snow_of_match[] = {
 	{ .compatible = "google,snow-audio-max98090", },
+	{ .compatible = "google,snow-audio-max98091", },
 	{ .compatible = "google,snow-audio-max98095", },
 	{},
 };
+MODULE_DEVICE_TABLE(of, snow_of_match);
 
 static struct platform_driver snow_driver = {
 	.driver = {
 		.name = "snow-audio",
-		.owner = THIS_MODULE,
 		.pm = &snd_soc_pm_ops,
 		.of_match_table = snow_of_match,
 	},

@@ -35,10 +35,10 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
-#include <linux/libcfs/libcfs.h>
+#include "../../include/linux/libcfs/libcfs.h"
 
-#include <lustre_dlm.h>
-#include <lustre_lib.h>
+#include "../include/lustre_dlm.h"
+#include "../include/lustre_lib.h"
 
 /**
  * Lock a lock and its resource.
@@ -50,9 +50,7 @@
  */
 struct ldlm_resource *lock_res_and_lock(struct ldlm_lock *lock)
 {
-	/* on server-side resource of lock doesn't change */
-	if ((lock->l_flags & LDLM_FL_NS_SRV) == 0)
-		spin_lock(&lock->l_lock);
+	spin_lock(&lock->l_lock);
 
 	lock_res(lock->l_resource);
 
@@ -70,7 +68,6 @@ void unlock_res_and_lock(struct ldlm_lock *lock)
 	lock->l_flags &= ~LDLM_FL_RES_LOCKED;
 
 	unlock_res(lock->l_resource);
-	if ((lock->l_flags & LDLM_FL_NS_SRV) == 0)
-		spin_unlock(&lock->l_lock);
+	spin_unlock(&lock->l_lock);
 }
 EXPORT_SYMBOL(unlock_res_and_lock);

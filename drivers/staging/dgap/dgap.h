@@ -121,7 +121,7 @@
 #define PCI_IO_OFFSET		0x00200000
 
 /* Size of IO (2MB) */
-#define PCI_IO_SIZE		0x00200000
+#define PCI_IO_SIZE_DGAP	0x00200000
 
 /* Number of boards we support at once. */
 #define	MAXBOARDS	32
@@ -172,7 +172,7 @@
 /*
  * Define a local default termios struct. All ports will be created
  * with this termios initially.  This is the same structure that is defined
- * as the default in tty_io.c with the same settings overriden as in serial.c
+ * as the default in tty_io.c with the same settings overridden as in serial.c
  *
  * In short, this should match the internal serial ports' defaults.
  */
@@ -409,7 +409,6 @@
 #define	ID	76
 #define CABLE	77
 #define CONNECT	78
-#define	IO	79
 #define	MEM	80
 #define DPSZ	81
 
@@ -529,7 +528,6 @@ struct macounter {
 struct board_t {
 	int		magic;		/* Board Magic number.  */
 	int		boardnum;	/* Board number: 0-3 */
-	int		firstminor;	/* First minor, e.g. 0, 30, 60 */
 
 	int		type;		/* Type of board */
 	char		*name;		/* Product Name */
@@ -559,7 +557,6 @@ struct board_t {
 
 	u16		nasync;		/* Number of ports on card */
 
-	u32		use_interrupts;	/* Should we be interrupt driven? */
 	ulong		irq;		/* Interrupt request number */
 	ulong		intr_count;	/* Count of interrupts */
 	u32		intr_used;	/* Non-zero if using interrupts */
@@ -574,7 +571,6 @@ struct board_t {
 	u8 __iomem	*re_map_port;	/* Remapped io port of the card */
 	u8 __iomem	*re_map_membase;/* Remapped memory of the card */
 
-	u8		runwait;	/* # Processes waiting for FEP  */
 	u8		inhibit_poller; /* Tells the poller to leave us alone */
 
 	struct channel_t *channels[MAXPORTS]; /* array of pointers to our */
@@ -587,12 +583,6 @@ struct board_t {
 	struct tty_port *printer_ports;
 	char		print_name[200];
 
-	u32		dgap_major_serial_registered;
-	u32		dgap_major_transparent_print_registered;
-
-	u32		dgap_serial_major;
-	u32		dgap_transparent_print_major;
-
 	struct bs_t __iomem *bd_bs;	/* Base structure pointer         */
 
 	char	*flipbuf;		/* Our flip buffer, alloced if    */
@@ -604,7 +594,6 @@ struct board_t {
 					/* by DPA                         */
 	u16		dpastatus;	/* The board "status", as defined */
 					/* by DPA                         */
-	wait_queue_head_t kme_wait;	/* Needed for DPA support         */
 
 	u32		conc_dl_status;	/* Status of any pending conc     */
 					/* download                       */
@@ -988,9 +977,6 @@ struct channel_t {
 	u32 ch_open_count;		/* open count			*/
 	u32	ch_flags;		/* Channel flags                */
 
-	u32	ch_close_delay;		/* How long we should drop      */
-					/* RTS/DTR for                  */
-
 	u32	ch_cpstime;		/* Time for CPS calculations    */
 
 	tcflag_t ch_c_iflag;		/* channel iflags               */
@@ -1165,8 +1151,6 @@ struct cnode {
 	union {
 		struct {
 			char  type;	/* Board Type           */
-			long  port;	/* I/O Address		*/
-			char  *portstr; /* I/O Address in string */
 			long  addr;	/* Memory Address	*/
 			char  *addrstr; /* Memory Address in string */
 			long  pcibus;	/* PCI BUS		*/
@@ -1177,8 +1161,6 @@ struct cnode {
 			char  *id;	/* tty id		*/
 			long  start;	/* start of tty counting */
 			char  *method;  /* Install method       */
-			char  v_type;
-			char  v_port;
 			char  v_addr;
 			char  v_pcibus;
 			char  v_pcislot;
@@ -1212,7 +1194,6 @@ struct cnode {
 			char  *id;
 			char  *idstr;
 			long  start;
-			char  v_type;
 			char  v_connect;
 			char  v_speed;
 			char  v_nport;
@@ -1226,7 +1207,6 @@ struct cnode {
 			char *id;
 			char *idstr;
 			long start;
-			char v_type;
 			char v_nport;
 			char v_id;
 			char v_start;

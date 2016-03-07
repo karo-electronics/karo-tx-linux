@@ -142,6 +142,8 @@
 	  hw_name ## _ ## offset }
 #define FALCON_OTHER_STAT(ext_name)					\
 	[FALCON_STAT_ ## ext_name] = { #ext_name, 0, 0 }
+#define GENERIC_SW_STAT(ext_name)				\
+	[GENERIC_STAT_ ## ext_name] = { #ext_name, 0, 0 }
 
 static const struct efx_hw_stat_desc falcon_stat_desc[FALCON_STAT_COUNT] = {
 	FALCON_DMA_STAT(tx_bytes, XgTxOctets),
@@ -191,6 +193,8 @@ static const struct efx_hw_stat_desc falcon_stat_desc[FALCON_STAT_COUNT] = {
 	FALCON_DMA_STAT(rx_length_error, XgRxLengthError),
 	FALCON_DMA_STAT(rx_internal_error, XgRxInternalMACError),
 	FALCON_OTHER_STAT(rx_nodesc_drop_cnt),
+	GENERIC_SW_STAT(rx_nodesc_trunc),
+	GENERIC_SW_STAT(rx_noskb_drops),
 };
 static const unsigned long falcon_stat_mask[] = {
 	[0 ... BITS_TO_LONGS(FALCON_STAT_COUNT) - 1] = ~0UL,
@@ -473,16 +477,29 @@ static irqreturn_t falcon_legacy_interrupt_a1(int irq, void *dev_id)
  *
  **************************************************************************
  */
+static int dummy_rx_push_rss_config(struct efx_nic *efx, bool user,
+				    const u32 *rx_indir_table)
+{
+	(void) efx;
+	(void) user;
+	(void) rx_indir_table;
+	return -ENOSYS;
+}
 
-static void falcon_b0_rx_push_rss_config(struct efx_nic *efx)
+static int falcon_b0_rx_push_rss_config(struct efx_nic *efx, bool user,
+					const u32 *rx_indir_table)
 {
 	efx_oword_t temp;
 
+	(void) user;
 	/* Set hash key for IPv4 */
 	memcpy(&temp, efx->rx_hash_key, sizeof(temp));
 	efx_writeo(efx, &temp, FR_BZ_RX_RSS_TKEY);
 
+	memcpy(efx->rx_indir_table, rx_indir_table,
+	       sizeof(efx->rx_indir_table));
 	efx_farch_rx_push_indir_table(efx);
+	return 0;
 }
 
 /**************************************************************************
@@ -2354,6 +2371,7 @@ static int falcon_probe_nic(struct efx_nic *efx)
 
 	efx->max_channels = (efx_nic_rev(efx) <= EFX_REV_FALCON_A1 ? 4 :
 			     EFX_MAX_CHANNELS);
+	efx->max_tx_channels = efx->max_channels;
 	efx->timer_quantum_ns = 4968; /* 621 cycles */
 
 	/* Initialise I2C adapter */
@@ -2503,7 +2521,7 @@ static int falcon_init_nic(struct efx_nic *efx)
 	falcon_init_rx_cfg(efx);
 
 	if (efx_nic_rev(efx) >= EFX_REV_FALCON_B0) {
-		falcon_b0_rx_push_rss_config(efx);
+		falcon_b0_rx_push_rss_config(efx, false, efx->rx_indir_table);
 
 		/* Set destination of both TX and RX Flush events */
 		EFX_POPULATE_OWORD_1(temp, FRF_BZ_FLS_EVQ_ID, 0);
@@ -2574,6 +2592,7 @@ static size_t falcon_update_nic_stats(struct efx_nic *efx, u64 *full_stats,
 				     stats[FALCON_STAT_rx_bytes] -
 				     stats[FALCON_STAT_rx_good_bytes] -
 				     stats[FALCON_STAT_rx_control] * 64);
+		efx_update_sw_stats(efx, stats);
 	}
 
 	if (full_stats)
@@ -2584,7 +2603,9 @@ static size_t falcon_update_nic_stats(struct efx_nic *efx, u64 *full_stats,
 		core_stats->tx_packets = stats[FALCON_STAT_tx_packets];
 		core_stats->rx_bytes = stats[FALCON_STAT_rx_bytes];
 		core_stats->tx_bytes = stats[FALCON_STAT_tx_bytes];
-		core_stats->rx_dropped = stats[FALCON_STAT_rx_nodesc_drop_cnt];
+		core_stats->rx_dropped = stats[FALCON_STAT_rx_nodesc_drop_cnt] +
+					 stats[GENERIC_STAT_rx_nodesc_trunc] +
+					 stats[GENERIC_STAT_rx_noskb_drops];
 		core_stats->multicast = stats[FALCON_STAT_rx_multicast];
 		core_stats->rx_length_errors =
 			stats[FALCON_STAT_rx_gtjumbo] +
@@ -2680,6 +2701,8 @@ static int falcon_set_wol(struct efx_nic *efx, u32 type)
  */
 
 const struct efx_nic_type falcon_a1_nic_type = {
+	.is_vf = false,
+	.mem_bar = EFX_MEM_BAR,
 	.mem_map_size = falcon_a1_mem_map_size,
 	.probe = falcon_probe_nic,
 	.remove = falcon_remove_nic,
@@ -2722,7 +2745,7 @@ const struct efx_nic_type falcon_a1_nic_type = {
 	.tx_init = efx_farch_tx_init,
 	.tx_remove = efx_farch_tx_remove,
 	.tx_write = efx_farch_tx_write,
-	.rx_push_rss_config = efx_port_dummy_op_void,
+	.rx_push_rss_config = dummy_rx_push_rss_config,
 	.rx_probe = efx_farch_rx_probe,
 	.rx_init = efx_farch_rx_init,
 	.rx_remove = efx_farch_rx_remove,
@@ -2776,6 +2799,8 @@ const struct efx_nic_type falcon_a1_nic_type = {
 };
 
 const struct efx_nic_type falcon_b0_nic_type = {
+	.is_vf = false,
+	.mem_bar = EFX_MEM_BAR,
 	.mem_map_size = falcon_b0_mem_map_size,
 	.probe = falcon_probe_nic,
 	.remove = falcon_remove_nic,

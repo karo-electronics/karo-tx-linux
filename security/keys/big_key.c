@@ -21,6 +21,16 @@
 MODULE_LICENSE("GPL");
 
 /*
+ * Layout of key payload words.
+ */
+enum {
+	big_key_data,
+	big_key_path,
+	big_key_path_2nd_part,
+	big_key_len,
+};
+
+/*
  * If the data is under this limit, there's no point creating a shm file to
  * hold it as the permanently resident metadata for the shmem fs will be at
  * least as large as the data.
@@ -33,9 +43,9 @@ MODULE_LICENSE("GPL");
  */
 struct key_type key_type_big_key = {
 	.name			= "big_key",
-	.def_lookup_type	= KEYRING_SEARCH_LOOKUP_DIRECT,
-	.instantiate		= big_key_instantiate,
-	.match			= user_match,
+	.preparse		= big_key_preparse,
+	.free_preparse		= big_key_free_preparse,
+	.instantiate		= generic_key_instantiate,
 	.revoke			= big_key_revoke,
 	.destroy		= big_key_destroy,
 	.describe		= big_key_describe,
@@ -43,11 +53,11 @@ struct key_type key_type_big_key = {
 };
 
 /*
- * Instantiate a big key
+ * Preparse a big key
  */
-int big_key_instantiate(struct key *key, struct key_preparsed_payload *prep)
+int big_key_preparse(struct key_preparsed_payload *prep)
 {
-	struct path *path = (struct path *)&key->payload.data2;
+	struct path *path = (struct path *)&prep->payload.data[big_key_path];
 	struct file *file;
 	ssize_t written;
 	size_t datalen = prep->datalen;
@@ -58,11 +68,9 @@ int big_key_instantiate(struct key *key, struct key_preparsed_payload *prep)
 		goto error;
 
 	/* Set an arbitrary quota */
-	ret = key_payload_reserve(key, 16);
-	if (ret < 0)
-		goto error;
+	prep->quotalen = 16;
 
-	key->type_data.x[1] = datalen;
+	prep->payload.data[big_key_len] = (void *)(unsigned long)datalen;
 
 	if (datalen > BIG_KEY_FILE_THRESHOLD) {
 		/* Create a shmem file to store the data in.  This will permit the data
@@ -73,7 +81,7 @@ int big_key_instantiate(struct key *key, struct key_preparsed_payload *prep)
 		file = shmem_kernel_file_setup("", datalen, 0);
 		if (IS_ERR(file)) {
 			ret = PTR_ERR(file);
-			goto err_quota;
+			goto error;
 		}
 
 		written = kernel_write(file, prep->data, prep->datalen, 0);
@@ -93,21 +101,31 @@ int big_key_instantiate(struct key *key, struct key_preparsed_payload *prep)
 	} else {
 		/* Just store the data in a buffer */
 		void *data = kmalloc(datalen, GFP_KERNEL);
-		if (!data) {
-			ret = -ENOMEM;
-			goto err_quota;
-		}
+		if (!data)
+			return -ENOMEM;
 
-		key->payload.data = memcpy(data, prep->data, prep->datalen);
+		prep->payload.data[big_key_data] = data;
+		memcpy(data, prep->data, prep->datalen);
 	}
 	return 0;
 
 err_fput:
 	fput(file);
-err_quota:
-	key_payload_reserve(key, 0);
 error:
 	return ret;
+}
+
+/*
+ * Clear preparsement.
+ */
+void big_key_free_preparse(struct key_preparsed_payload *prep)
+{
+	if (prep->datalen > BIG_KEY_FILE_THRESHOLD) {
+		struct path *path = (struct path *)&prep->payload.data[big_key_path];
+		path_put(path);
+	} else {
+		kfree(prep->payload.data[big_key_data]);
+	}
 }
 
 /*
@@ -116,11 +134,12 @@ error:
  */
 void big_key_revoke(struct key *key)
 {
-	struct path *path = (struct path *)&key->payload.data2;
+	struct path *path = (struct path *)&key->payload.data[big_key_path];
 
 	/* clear the quota */
 	key_payload_reserve(key, 0);
-	if (key_is_instantiated(key) && key->type_data.x[1] > BIG_KEY_FILE_THRESHOLD)
+	if (key_is_instantiated(key) &&
+	    (size_t)key->payload.data[big_key_len] > BIG_KEY_FILE_THRESHOLD)
 		vfs_truncate(path, 0);
 }
 
@@ -129,14 +148,16 @@ void big_key_revoke(struct key *key)
  */
 void big_key_destroy(struct key *key)
 {
-	if (key->type_data.x[1] > BIG_KEY_FILE_THRESHOLD) {
-		struct path *path = (struct path *)&key->payload.data2;
+	size_t datalen = (size_t)key->payload.data[big_key_len];
+
+	if (datalen) {
+		struct path *path = (struct path *)&key->payload.data[big_key_path];
 		path_put(path);
 		path->mnt = NULL;
 		path->dentry = NULL;
 	} else {
-		kfree(key->payload.data);
-		key->payload.data = NULL;
+		kfree(key->payload.data[big_key_data]);
+		key->payload.data[big_key_data] = NULL;
 	}
 }
 
@@ -145,12 +166,12 @@ void big_key_destroy(struct key *key)
  */
 void big_key_describe(const struct key *key, struct seq_file *m)
 {
-	unsigned long datalen = key->type_data.x[1];
+	size_t datalen = (size_t)key->payload.data[big_key_len];
 
 	seq_puts(m, key->description);
 
 	if (key_is_instantiated(key))
-		seq_printf(m, ": %lu [%s]",
+		seq_printf(m, ": %zu [%s]",
 			   datalen,
 			   datalen > BIG_KEY_FILE_THRESHOLD ? "file" : "buff");
 }
@@ -161,14 +182,14 @@ void big_key_describe(const struct key *key, struct seq_file *m)
  */
 long big_key_read(const struct key *key, char __user *buffer, size_t buflen)
 {
-	unsigned long datalen = key->type_data.x[1];
+	size_t datalen = (size_t)key->payload.data[big_key_len];
 	long ret;
 
 	if (!buffer || buflen < datalen)
 		return datalen;
 
 	if (datalen > BIG_KEY_FILE_THRESHOLD) {
-		struct path *path = (struct path *)&key->payload.data2;
+		struct path *path = (struct path *)&key->payload.data[big_key_path];
 		struct file *file;
 		loff_t pos;
 
@@ -183,7 +204,8 @@ long big_key_read(const struct key *key, char __user *buffer, size_t buflen)
 			ret = -EIO;
 	} else {
 		ret = datalen;
-		if (copy_to_user(buffer, key->payload.data, datalen) != 0)
+		if (copy_to_user(buffer, key->payload.data[big_key_data],
+				 datalen) != 0)
 			ret = -EFAULT;
 	}
 

@@ -3,8 +3,9 @@
  * for access to MPT (Message Passing Technology) firmware.
  *
  * This code is based on drivers/scsi/mpt3sas/mpt3sas_base.c
- * Copyright (C) 2012-2013  LSI Corporation
- *  (mailto:DL-MPTFusionLinux@lsi.com)
+ * Copyright (C) 2012-2014  LSI Corporation
+ * Copyright (C) 2013-2014 Avago Technologies
+ *  (mailto: MPT-FusionLinux.pdl@avagotech.com)
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -82,15 +83,17 @@ static int msix_disable = -1;
 module_param(msix_disable, int, 0);
 MODULE_PARM_DESC(msix_disable, " disable msix routed interrupts (default=0)");
 
-static int max_msix_vectors = 8;
+static int max_msix_vectors = -1;
 module_param(max_msix_vectors, int, 0);
 MODULE_PARM_DESC(max_msix_vectors,
-	" max msix vectors - (default=8)");
+	" max msix vectors");
 
 static int mpt3sas_fwfault_debug;
 MODULE_PARM_DESC(mpt3sas_fwfault_debug,
 	" enable detection of firmware fault and halt firmware - (default=0)");
 
+static int
+_base_get_ioc_facts(struct MPT3SAS_ADAPTER *ioc, int sleep_flag);
 
 /**
  * _scsih_set_fwfault_debug - global setting of ioc->fwfault_debug.
@@ -105,9 +108,12 @@ _scsih_set_fwfault_debug(const char *val, struct kernel_param *kp)
 	if (ret)
 		return ret;
 
+	/* global ioc spinlock to protect controller list on list operations */
 	pr_info("setting fwfault_debug(%d)\n", mpt3sas_fwfault_debug);
+	spin_lock(&gioc_lock);
 	list_for_each_entry(ioc, &mpt3sas_ioc_list, list)
 		ioc->fwfault_debug = mpt3sas_fwfault_debug;
+	spin_unlock(&gioc_lock);
 	return 0;
 }
 module_param_call(mpt3sas_fwfault_debug, _scsih_set_fwfault_debug,
@@ -154,7 +160,7 @@ _base_fault_reset_work(struct work_struct *work)
 
 
 	spin_lock_irqsave(&ioc->ioc_reset_in_progress_lock, flags);
-	if (ioc->shost_recovery)
+	if (ioc->shost_recovery || ioc->pci_error_recovery)
 		goto rearm_timer;
 	spin_unlock_irqrestore(&ioc->ioc_reset_in_progress_lock, flags);
 
@@ -162,6 +168,20 @@ _base_fault_reset_work(struct work_struct *work)
 	if ((doorbell & MPI2_IOC_STATE_MASK) == MPI2_IOC_STATE_MASK) {
 		pr_err(MPT3SAS_FMT "SAS host is non-operational !!!!\n",
 		    ioc->name);
+
+		/* It may be possible that EEH recovery can resolve some of
+		 * pci bus failure issues rather removing the dead ioc function
+		 * by considering controller is in a non-operational state. So
+		 * here priority is given to the EEH recovery. If it doesn't
+		 * not resolve this issue, mpt3sas driver will consider this
+		 * controller to non-operational state and remove the dead ioc
+		 * function.
+		 */
+		if (ioc->non_operational_loop++ < 5) {
+			spin_lock_irqsave(&ioc->ioc_reset_in_progress_lock,
+							 flags);
+			goto rearm_timer;
+		}
 
 		/*
 		 * Call _scsih_flush_pending_cmds callback so that we flush all
@@ -178,7 +198,7 @@ _base_fault_reset_work(struct work_struct *work)
 		ioc->remove_host = 1;
 		/*Remove the Dead Host */
 		p = kthread_run(mpt3sas_remove_dead_ioc_func, ioc,
-		    "mpt3sas_dead_ioc_%d", ioc->id);
+		    "%s_dead_ioc_%d", ioc->driver_name, ioc->id);
 		if (IS_ERR(p))
 			pr_err(MPT3SAS_FMT
 			"%s: Running mpt3sas_dead_ioc thread failed !!!!\n",
@@ -189,6 +209,8 @@ _base_fault_reset_work(struct work_struct *work)
 			ioc->name, __func__);
 		return; /* don't rearm timer */
 	}
+
+	ioc->non_operational_loop = 0;
 
 	if ((doorbell & MPI2_IOC_STATE_MASK) != MPI2_IOC_STATE_OPERATIONAL) {
 		rc = mpt3sas_base_hard_reset_handler(ioc, CAN_SLEEP,
@@ -232,7 +254,8 @@ mpt3sas_base_start_watchdog(struct MPT3SAS_ADAPTER *ioc)
 
 	INIT_DELAYED_WORK(&ioc->fault_reset_work, _base_fault_reset_work);
 	snprintf(ioc->fault_reset_work_q_name,
-	    sizeof(ioc->fault_reset_work_q_name), "poll_%d_status", ioc->id);
+	    sizeof(ioc->fault_reset_work_q_name), "poll_%s%d_status",
+	    ioc->driver_name, ioc->id);
 	ioc->fault_reset_work_q =
 		create_singlethread_workqueue(ioc->fault_reset_work_q_name);
 	if (!ioc->fault_reset_work_q) {
@@ -266,7 +289,7 @@ mpt3sas_base_stop_watchdog(struct MPT3SAS_ADAPTER *ioc)
 	ioc->fault_reset_work_q = NULL;
 	spin_unlock_irqrestore(&ioc->ioc_reset_in_progress_lock, flags);
 	if (wq) {
-		if (!cancel_delayed_work(&ioc->fault_reset_work))
+		if (!cancel_delayed_work_sync(&ioc->fault_reset_work))
 			flush_workqueue(wq);
 		destroy_workqueue(wq);
 	}
@@ -321,7 +344,6 @@ mpt3sas_halt_firmware(struct MPT3SAS_ADAPTER *ioc)
 		panic("panic in %s\n", __func__);
 }
 
-#ifdef CONFIG_SCSI_MPT3SAS_LOGGING
 /**
  * _base_sas_ioc_info - verbose translation of the ioc status
  * @ioc: per adapter object
@@ -575,7 +597,8 @@ _base_display_event_data(struct MPT3SAS_ADAPTER *ioc,
 		desc = "Device Status Change";
 		break;
 	case MPI2_EVENT_IR_OPERATION_STATUS:
-		desc = "IR Operation Status";
+		if (!ioc->hide_ir_msg)
+			desc = "IR Operation Status";
 		break;
 	case MPI2_EVENT_SAS_DISCOVERY:
 	{
@@ -606,16 +629,23 @@ _base_display_event_data(struct MPT3SAS_ADAPTER *ioc,
 		desc = "SAS Enclosure Device Status Change";
 		break;
 	case MPI2_EVENT_IR_VOLUME:
-		desc = "IR Volume";
+		if (!ioc->hide_ir_msg)
+			desc = "IR Volume";
 		break;
 	case MPI2_EVENT_IR_PHYSICAL_DISK:
-		desc = "IR Physical Disk";
+		if (!ioc->hide_ir_msg)
+			desc = "IR Physical Disk";
 		break;
 	case MPI2_EVENT_IR_CONFIGURATION_CHANGE_LIST:
-		desc = "IR Configuration Change List";
+		if (!ioc->hide_ir_msg)
+			desc = "IR Configuration Change List";
 		break;
 	case MPI2_EVENT_LOG_ENTRY_ADDED:
-		desc = "Log Entry Added";
+		if (!ioc->hide_ir_msg)
+			desc = "Log Entry Added";
+		break;
+	case MPI2_EVENT_TEMP_THRESHOLD:
+		desc = "Temperature Threshold";
 		break;
 	}
 
@@ -624,7 +654,6 @@ _base_display_event_data(struct MPT3SAS_ADAPTER *ioc,
 
 	pr_info(MPT3SAS_FMT "%s\n", ioc->name, desc);
 }
-#endif
 
 /**
  * _base_sas_log_info - verbose translation of firmware log info
@@ -669,7 +698,10 @@ _base_sas_log_info(struct MPT3SAS_ADAPTER *ioc , u32 log_info)
 		originator_str = "PL";
 		break;
 	case 2:
-		originator_str = "IR";
+		if (!ioc->hide_ir_msg)
+			originator_str = "IR";
+		else
+			originator_str = "WarpDrive";
 		break;
 	}
 
@@ -704,13 +736,13 @@ _base_display_reply_info(struct MPT3SAS_ADAPTER *ioc, u16 smid, u8 msix_index,
 		return;
 	}
 	ioc_status = le16_to_cpu(mpi_reply->IOCStatus);
-#ifdef CONFIG_SCSI_MPT3SAS_LOGGING
+
 	if ((ioc_status & MPI2_IOCSTATUS_MASK) &&
 	    (ioc->logging_level & MPT_DEBUG_REPLY)) {
 		_base_sas_ioc_info(ioc , mpi_reply,
 		   mpt3sas_base_get_msg_frame(ioc, smid));
 	}
-#endif
+
 	if (ioc_status & MPI2_IOCSTATUS_FLAG_LOG_INFO_AVAILABLE) {
 		loginfo = le32_to_cpu(mpi_reply->IOCLogInfo);
 		_base_sas_log_info(ioc, loginfo);
@@ -777,9 +809,9 @@ _base_async_event(struct MPT3SAS_ADAPTER *ioc, u8 msix_index, u32 reply)
 		return 1;
 	if (mpi_reply->Function != MPI2_FUNCTION_EVENT_NOTIFICATION)
 		return 1;
-#ifdef CONFIG_SCSI_MPT3SAS_LOGGING
+
 	_base_display_event_data(ioc, mpi_reply);
-#endif
+
 	if (!(mpi_reply->AckRequired & MPI2_EVENT_NOTIFICATION_ACK_REQUIRED))
 		goto out;
 	smid = mpt3sas_base_get_smid(ioc, ioc->base_cb_idx);
@@ -1003,8 +1035,36 @@ _base_interrupt(int irq, void *bus_id)
 	}
 
 	wmb();
-	writel(reply_q->reply_post_host_index | (msix_index <<
-	    MPI2_RPHI_MSIX_INDEX_SHIFT), &ioc->chip->ReplyPostHostIndex);
+	if (ioc->is_warpdrive) {
+		writel(reply_q->reply_post_host_index,
+		ioc->reply_post_host_index[msix_index]);
+		atomic_dec(&reply_q->busy);
+		return IRQ_HANDLED;
+	}
+
+	/* Update Reply Post Host Index.
+	 * For those HBA's which support combined reply queue feature
+	 * 1. Get the correct Supplemental Reply Post Host Index Register.
+	 *    i.e. (msix_index / 8)th entry from Supplemental Reply Post Host
+	 *    Index Register address bank i.e replyPostRegisterIndex[],
+	 * 2. Then update this register with new reply host index value
+	 *    in ReplyPostIndex field and the MSIxIndex field with
+	 *    msix_index value reduced to a value between 0 and 7,
+	 *    using a modulo 8 operation. Since each Supplemental Reply Post
+	 *    Host Index Register supports 8 MSI-X vectors.
+	 *
+	 * For other HBA's just update the Reply Post Host Index register with
+	 * new reply host index value in ReplyPostIndex Field and msix_index
+	 * value in MSIxIndex field.
+	 */
+	if (ioc->msix96_vector)
+		writel(reply_q->reply_post_host_index | ((msix_index  & 7) <<
+			MPI2_RPHI_MSIX_INDEX_SHIFT),
+			ioc->replyPostRegisterIndex[msix_index/8]);
+	else
+		writel(reply_q->reply_post_host_index | (msix_index <<
+			MPI2_RPHI_MSIX_INDEX_SHIFT),
+			&ioc->chip->ReplyPostHostIndex);
 	atomic_dec(&reply_q->busy);
 	return IRQ_HANDLED;
 }
@@ -1292,6 +1352,149 @@ _base_build_zero_len_sge_ieee(struct MPT3SAS_ADAPTER *ioc, void *paddr)
 }
 
 /**
+ * _base_build_sg_scmd - main sg creation routine
+ * @ioc: per adapter object
+ * @scmd: scsi command
+ * @smid: system request message index
+ * Context: none.
+ *
+ * The main routine that builds scatter gather table from a given
+ * scsi request sent via the .queuecommand main handler.
+ *
+ * Returns 0 success, anything else error
+ */
+static int
+_base_build_sg_scmd(struct MPT3SAS_ADAPTER *ioc,
+		struct scsi_cmnd *scmd, u16 smid)
+{
+	Mpi2SCSIIORequest_t *mpi_request;
+	dma_addr_t chain_dma;
+	struct scatterlist *sg_scmd;
+	void *sg_local, *chain;
+	u32 chain_offset;
+	u32 chain_length;
+	u32 chain_flags;
+	int sges_left;
+	u32 sges_in_segment;
+	u32 sgl_flags;
+	u32 sgl_flags_last_element;
+	u32 sgl_flags_end_buffer;
+	struct chain_tracker *chain_req;
+
+	mpi_request = mpt3sas_base_get_msg_frame(ioc, smid);
+
+	/* init scatter gather flags */
+	sgl_flags = MPI2_SGE_FLAGS_SIMPLE_ELEMENT;
+	if (scmd->sc_data_direction == DMA_TO_DEVICE)
+		sgl_flags |= MPI2_SGE_FLAGS_HOST_TO_IOC;
+	sgl_flags_last_element = (sgl_flags | MPI2_SGE_FLAGS_LAST_ELEMENT)
+	    << MPI2_SGE_FLAGS_SHIFT;
+	sgl_flags_end_buffer = (sgl_flags | MPI2_SGE_FLAGS_LAST_ELEMENT |
+	    MPI2_SGE_FLAGS_END_OF_BUFFER | MPI2_SGE_FLAGS_END_OF_LIST)
+	    << MPI2_SGE_FLAGS_SHIFT;
+	sgl_flags = sgl_flags << MPI2_SGE_FLAGS_SHIFT;
+
+	sg_scmd = scsi_sglist(scmd);
+	sges_left = scsi_dma_map(scmd);
+	if (sges_left < 0) {
+		sdev_printk(KERN_ERR, scmd->device,
+		 "pci_map_sg failed: request for %d bytes!\n",
+		 scsi_bufflen(scmd));
+		return -ENOMEM;
+	}
+
+	sg_local = &mpi_request->SGL;
+	sges_in_segment = ioc->max_sges_in_main_message;
+	if (sges_left <= sges_in_segment)
+		goto fill_in_last_segment;
+
+	mpi_request->ChainOffset = (offsetof(Mpi2SCSIIORequest_t, SGL) +
+	    (sges_in_segment * ioc->sge_size))/4;
+
+	/* fill in main message segment when there is a chain following */
+	while (sges_in_segment) {
+		if (sges_in_segment == 1)
+			ioc->base_add_sg_single(sg_local,
+			    sgl_flags_last_element | sg_dma_len(sg_scmd),
+			    sg_dma_address(sg_scmd));
+		else
+			ioc->base_add_sg_single(sg_local, sgl_flags |
+			    sg_dma_len(sg_scmd), sg_dma_address(sg_scmd));
+		sg_scmd = sg_next(sg_scmd);
+		sg_local += ioc->sge_size;
+		sges_left--;
+		sges_in_segment--;
+	}
+
+	/* initializing the chain flags and pointers */
+	chain_flags = MPI2_SGE_FLAGS_CHAIN_ELEMENT << MPI2_SGE_FLAGS_SHIFT;
+	chain_req = _base_get_chain_buffer_tracker(ioc, smid);
+	if (!chain_req)
+		return -1;
+	chain = chain_req->chain_buffer;
+	chain_dma = chain_req->chain_buffer_dma;
+	do {
+		sges_in_segment = (sges_left <=
+		    ioc->max_sges_in_chain_message) ? sges_left :
+		    ioc->max_sges_in_chain_message;
+		chain_offset = (sges_left == sges_in_segment) ?
+		    0 : (sges_in_segment * ioc->sge_size)/4;
+		chain_length = sges_in_segment * ioc->sge_size;
+		if (chain_offset) {
+			chain_offset = chain_offset <<
+			    MPI2_SGE_CHAIN_OFFSET_SHIFT;
+			chain_length += ioc->sge_size;
+		}
+		ioc->base_add_sg_single(sg_local, chain_flags | chain_offset |
+		    chain_length, chain_dma);
+		sg_local = chain;
+		if (!chain_offset)
+			goto fill_in_last_segment;
+
+		/* fill in chain segments */
+		while (sges_in_segment) {
+			if (sges_in_segment == 1)
+				ioc->base_add_sg_single(sg_local,
+				    sgl_flags_last_element |
+				    sg_dma_len(sg_scmd),
+				    sg_dma_address(sg_scmd));
+			else
+				ioc->base_add_sg_single(sg_local, sgl_flags |
+				    sg_dma_len(sg_scmd),
+				    sg_dma_address(sg_scmd));
+			sg_scmd = sg_next(sg_scmd);
+			sg_local += ioc->sge_size;
+			sges_left--;
+			sges_in_segment--;
+		}
+
+		chain_req = _base_get_chain_buffer_tracker(ioc, smid);
+		if (!chain_req)
+			return -1;
+		chain = chain_req->chain_buffer;
+		chain_dma = chain_req->chain_buffer_dma;
+	} while (1);
+
+
+ fill_in_last_segment:
+
+	/* fill the last segment */
+	while (sges_left) {
+		if (sges_left == 1)
+			ioc->base_add_sg_single(sg_local, sgl_flags_end_buffer |
+			    sg_dma_len(sg_scmd), sg_dma_address(sg_scmd));
+		else
+			ioc->base_add_sg_single(sg_local, sgl_flags |
+			    sg_dma_len(sg_scmd), sg_dma_address(sg_scmd));
+		sg_scmd = sg_next(sg_scmd);
+		sg_local += ioc->sge_size;
+		sges_left--;
+	}
+
+	return 0;
+}
+
+/**
  * _base_build_sg_scmd_ieee - main sg creation routine for IEEE format
  * @ioc: per adapter object
  * @scmd: scsi command
@@ -1332,7 +1535,7 @@ _base_build_sg_scmd_ieee(struct MPT3SAS_ADAPTER *ioc,
 
 	sg_scmd = scsi_sglist(scmd);
 	sges_left = scsi_dma_map(scmd);
-	if (!sges_left) {
+	if (sges_left < 0) {
 		sdev_printk(KERN_ERR, scmd->device,
 			"pci_map_sg failed: request for %d bytes!\n",
 			scsi_bufflen(scmd));
@@ -1401,7 +1604,7 @@ _base_build_sg_scmd_ieee(struct MPT3SAS_ADAPTER *ioc,
  fill_in_last_segment:
 
 	/* fill the last segment */
-	while (sges_left) {
+	while (sges_left > 0) {
 		if (sges_left == 1)
 			_base_add_sg_single_ieee(sg_local,
 			    simple_sgl_flags_last, 0, sg_dma_len(sg_scmd),
@@ -1482,17 +1685,22 @@ static int
 _base_config_dma_addressing(struct MPT3SAS_ADAPTER *ioc, struct pci_dev *pdev)
 {
 	struct sysinfo s;
-	char *desc = NULL;
+	u64 consistent_dma_mask;
+
+	if (ioc->dma_mask)
+		consistent_dma_mask = DMA_BIT_MASK(64);
+	else
+		consistent_dma_mask = DMA_BIT_MASK(32);
 
 	if (sizeof(dma_addr_t) > 4) {
 		const uint64_t required_mask =
 		    dma_get_required_mask(&pdev->dev);
 		if ((required_mask > DMA_BIT_MASK(32)) &&
 		    !pci_set_dma_mask(pdev, DMA_BIT_MASK(64)) &&
-		    !pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64))) {
+		    !pci_set_consistent_dma_mask(pdev, consistent_dma_mask)) {
 			ioc->base_add_sg_single = &_base_add_sg_single_64;
 			ioc->sge_size = sizeof(Mpi2SGESimple64_t);
-			desc = "64";
+			ioc->dma_mask = 64;
 			goto out;
 		}
 	}
@@ -1501,16 +1709,27 @@ _base_config_dma_addressing(struct MPT3SAS_ADAPTER *ioc, struct pci_dev *pdev)
 	    && !pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32))) {
 		ioc->base_add_sg_single = &_base_add_sg_single_32;
 		ioc->sge_size = sizeof(Mpi2SGESimple32_t);
-		desc = "32";
+		ioc->dma_mask = 32;
 	} else
 		return -ENODEV;
 
  out:
 	si_meminfo(&s);
 	pr_info(MPT3SAS_FMT
-		"%s BIT PCI BUS DMA ADDRESSING SUPPORTED, total mem (%ld kB)\n",
-		ioc->name, desc, convert_to_kb(s.totalram));
+		"%d BIT PCI BUS DMA ADDRESSING SUPPORTED, total mem (%ld kB)\n",
+		ioc->name, ioc->dma_mask, convert_to_kb(s.totalram));
 
+	return 0;
+}
+
+static int
+_base_change_consistent_dma_mask(struct MPT3SAS_ADAPTER *ioc,
+				      struct pci_dev *pdev)
+{
+	if (pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64))) {
+		if (pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32)))
+			return -ENODEV;
+	}
 	return 0;
 }
 
@@ -1527,6 +1746,14 @@ _base_check_enable_msix(struct MPT3SAS_ADAPTER *ioc)
 	int base;
 	u16 message_control;
 
+	/* Check whether controller SAS2008 B0 controller,
+	 * if it is SAS2008 B0 controller use IO-APIC instead of MSIX
+	 */
+	if (ioc->pdev->device == MPI2_MFGPAGE_DEVID_SAS2008 &&
+	    ioc->pdev->revision == SAS2_PCI_DEVICE_B0_REVISION) {
+		return -EINVAL;
+	}
+
 	base = pci_find_capability(ioc->pdev, PCI_CAP_ID_MSIX);
 	if (!base) {
 		dfailprintk(ioc, pr_info(MPT3SAS_FMT "msix not supported\n",
@@ -1535,11 +1762,19 @@ _base_check_enable_msix(struct MPT3SAS_ADAPTER *ioc)
 	}
 
 	/* get msix vector count */
-
-	pci_read_config_word(ioc->pdev, base + 2, &message_control);
-	ioc->msix_vector_count = (message_control & 0x3FF) + 1;
-	if (ioc->msix_vector_count > 8)
-		ioc->msix_vector_count = 8;
+	/* NUMA_IO not supported for older controllers */
+	if (ioc->pdev->device == MPI2_MFGPAGE_DEVID_SAS2004 ||
+	    ioc->pdev->device == MPI2_MFGPAGE_DEVID_SAS2008 ||
+	    ioc->pdev->device == MPI2_MFGPAGE_DEVID_SAS2108_1 ||
+	    ioc->pdev->device == MPI2_MFGPAGE_DEVID_SAS2108_2 ||
+	    ioc->pdev->device == MPI2_MFGPAGE_DEVID_SAS2108_3 ||
+	    ioc->pdev->device == MPI2_MFGPAGE_DEVID_SAS2116_1 ||
+	    ioc->pdev->device == MPI2_MFGPAGE_DEVID_SAS2116_2)
+		ioc->msix_vector_count = 1;
+	else {
+		pci_read_config_word(ioc->pdev, base + 2, &message_control);
+		ioc->msix_vector_count = (message_control & 0x3FF) + 1;
+	}
 	dinitprintk(ioc, pr_info(MPT3SAS_FMT
 		"msix is supported, vector_count(%d)\n",
 		ioc->name, ioc->msix_vector_count));
@@ -1562,6 +1797,8 @@ _base_free_irq(struct MPT3SAS_ADAPTER *ioc)
 
 	list_for_each_entry_safe(reply_q, next, &ioc->reply_queue_list, list) {
 		list_del(&reply_q->list);
+		irq_set_affinity_hint(reply_q->vector, NULL);
+		free_cpumask_var(reply_q->affinity_hint);
 		synchronize_irq(reply_q->vector);
 		free_irq(reply_q->vector, reply_q);
 		kfree(reply_q);
@@ -1591,13 +1828,18 @@ _base_request_irq(struct MPT3SAS_ADAPTER *ioc, u8 index, u32 vector)
 	reply_q->ioc = ioc;
 	reply_q->msix_index = index;
 	reply_q->vector = vector;
+
+	if (!alloc_cpumask_var(&reply_q->affinity_hint, GFP_KERNEL))
+		return -ENOMEM;
+	cpumask_clear(reply_q->affinity_hint);
+
 	atomic_set(&reply_q->busy, 0);
 	if (ioc->msix_enable)
 		snprintf(reply_q->name, MPT_NAME_LENGTH, "%s%d-msix%d",
-		    MPT3SAS_DRIVER_NAME, ioc->id, index);
+		    ioc->driver_name, ioc->id, index);
 	else
 		snprintf(reply_q->name, MPT_NAME_LENGTH, "%s%d",
-		    MPT3SAS_DRIVER_NAME, ioc->id);
+		    ioc->driver_name, ioc->id);
 	r = request_irq(vector, _base_interrupt, IRQF_SHARED, reply_q->name,
 	    reply_q);
 	if (r) {
@@ -1624,65 +1866,45 @@ _base_request_irq(struct MPT3SAS_ADAPTER *ioc, u8 index, u32 vector)
 static void
 _base_assign_reply_queues(struct MPT3SAS_ADAPTER *ioc)
 {
+	unsigned int cpu, nr_cpus, nr_msix, index = 0;
 	struct adapter_reply_queue *reply_q;
-	int cpu_id;
-	int cpu_grouping, loop, grouping, grouping_mod;
-	int reply_queue;
 
 	if (!_base_is_controller_msix_enabled(ioc))
 		return;
 
 	memset(ioc->cpu_msix_table, 0, ioc->cpu_msix_table_sz);
 
-	/* NUMA Hardware bug workaround - drop to less reply queues */
-	if (ioc->reply_queue_count > ioc->facts.MaxMSIxVectors) {
-		ioc->reply_queue_count = ioc->facts.MaxMSIxVectors;
-		reply_queue = 0;
-		list_for_each_entry(reply_q, &ioc->reply_queue_list, list) {
-			reply_q->msix_index = reply_queue;
-			if (++reply_queue == ioc->reply_queue_count)
-				reply_queue = 0;
-		}
-	}
+	nr_cpus = num_online_cpus();
+	nr_msix = ioc->reply_queue_count = min(ioc->reply_queue_count,
+					       ioc->facts.MaxMSIxVectors);
+	if (!nr_msix)
+		return;
 
-	/* when there are more cpus than available msix vectors,
-	 * then group cpus togeather on same irq
-	 */
-	if (ioc->cpu_count > ioc->msix_vector_count) {
-		grouping = ioc->cpu_count / ioc->msix_vector_count;
-		grouping_mod = ioc->cpu_count % ioc->msix_vector_count;
-		if (grouping < 2 || (grouping == 2 && !grouping_mod))
-			cpu_grouping = 2;
-		else if (grouping < 4 || (grouping == 4 && !grouping_mod))
-			cpu_grouping = 4;
-		else if (grouping < 8 || (grouping == 8 && !grouping_mod))
-			cpu_grouping = 8;
-		else
-			cpu_grouping = 16;
-	} else
-		cpu_grouping = 0;
+	cpu = cpumask_first(cpu_online_mask);
 
-	loop = 0;
-	reply_q = list_entry(ioc->reply_queue_list.next,
-	     struct adapter_reply_queue, list);
-	for_each_online_cpu(cpu_id) {
-		if (!cpu_grouping) {
-			ioc->cpu_msix_table[cpu_id] = reply_q->msix_index;
-			reply_q = list_entry(reply_q->list.next,
-			    struct adapter_reply_queue, list);
-		} else {
-			if (loop < cpu_grouping) {
-				ioc->cpu_msix_table[cpu_id] =
-				    reply_q->msix_index;
-				loop++;
-			} else {
-				reply_q = list_entry(reply_q->list.next,
-				    struct adapter_reply_queue, list);
-				ioc->cpu_msix_table[cpu_id] =
-				    reply_q->msix_index;
-				loop = 1;
-			}
+	list_for_each_entry(reply_q, &ioc->reply_queue_list, list) {
+
+		unsigned int i, group = nr_cpus / nr_msix;
+
+		if (cpu >= nr_cpus)
+			break;
+
+		if (index < nr_cpus % nr_msix)
+			group++;
+
+		for (i = 0 ; i < group ; i++) {
+			ioc->cpu_msix_table[cpu] = index;
+			cpumask_or(reply_q->affinity_hint,
+				   reply_q->affinity_hint, get_cpu_mask(cpu));
+			cpu = cpumask_next(cpu, cpu_online_mask);
 		}
+
+		if (irq_set_affinity_hint(reply_q->vector,
+					   reply_q->affinity_hint))
+			dinitprintk(ioc, pr_info(MPT3SAS_FMT
+			    "error setting affinity hint for irq vector %d\n",
+			    ioc->name, reply_q->vector));
+		index++;
 	}
 }
 
@@ -1729,11 +1951,15 @@ _base_enable_msix(struct MPT3SAS_ADAPTER *ioc)
 	  ": %d, max_msix_vectors: %d\n", ioc->name, ioc->msix_vector_count,
 	  ioc->cpu_count, max_msix_vectors);
 
+	if (!ioc->rdpq_array_enable && max_msix_vectors == -1)
+		max_msix_vectors = 8;
+
 	if (max_msix_vectors > 0) {
 		ioc->reply_queue_count = min_t(int, max_msix_vectors,
 			ioc->reply_queue_count);
 		ioc->msix_vector_count = ioc->reply_queue_count;
-	}
+	} else if (max_msix_vectors == 0)
+		goto try_ioapic;
 
 	entries = kcalloc(ioc->reply_queue_count, sizeof(struct msix_entry),
 	    GFP_KERNEL);
@@ -1747,10 +1973,10 @@ _base_enable_msix(struct MPT3SAS_ADAPTER *ioc)
 	for (i = 0, a = entries; i < ioc->reply_queue_count; i++, a++)
 		a->entry = i;
 
-	r = pci_enable_msix(ioc->pdev, entries, ioc->reply_queue_count);
+	r = pci_enable_msix_exact(ioc->pdev, entries, ioc->reply_queue_count);
 	if (r) {
 		dfailprintk(ioc, pr_info(MPT3SAS_FMT
-			"pci_enable_msix failed (r=%d) !!!\n",
+			"pci_enable_msix_exact failed (r=%d) !!!\n",
 			ioc->name, r));
 		kfree(entries);
 		goto try_ioapic;
@@ -1773,9 +1999,40 @@ _base_enable_msix(struct MPT3SAS_ADAPTER *ioc)
 /* failback to io_apic interrupt routing */
  try_ioapic:
 
+	ioc->reply_queue_count = 1;
 	r = _base_request_irq(ioc, 0, ioc->pdev->irq);
 
 	return r;
+}
+
+/**
+ * mpt3sas_base_unmap_resources - free controller resources
+ * @ioc: per adapter object
+ */
+void
+mpt3sas_base_unmap_resources(struct MPT3SAS_ADAPTER *ioc)
+{
+	struct pci_dev *pdev = ioc->pdev;
+
+	dexitprintk(ioc, printk(MPT3SAS_FMT "%s\n",
+		ioc->name, __func__));
+
+	_base_free_irq(ioc);
+	_base_disable_msix(ioc);
+
+	if (ioc->msix96_vector)
+		kfree(ioc->replyPostRegisterIndex);
+
+	if (ioc->chip_phys) {
+		iounmap(ioc->chip);
+		ioc->chip_phys = 0;
+	}
+
+	if (pci_is_enabled(pdev)) {
+		pci_release_selected_regions(ioc->pdev, ioc->bars);
+		pci_disable_pcie_error_reporting(pdev);
+		pci_disable_device(pdev);
+	}
 }
 
 /**
@@ -1808,7 +2065,7 @@ mpt3sas_base_map_resources(struct MPT3SAS_ADAPTER *ioc)
 
 
 	if (pci_request_selected_regions(pdev, ioc->bars,
-	    MPT3SAS_DRIVER_NAME)) {
+	    ioc->driver_name)) {
 		pr_warn(MPT3SAS_FMT "pci_request_selected_regions: failed\n",
 			ioc->name);
 		ioc->bars = 0;
@@ -1829,7 +2086,8 @@ mpt3sas_base_map_resources(struct MPT3SAS_ADAPTER *ioc)
 		goto out_fail;
 	}
 
-	for (i = 0, memap_sz = 0, pio_sz = 0 ; i < DEVICE_COUNT_RESOURCE; i++) {
+	for (i = 0, memap_sz = 0, pio_sz = 0; (i < DEVICE_COUNT_RESOURCE) &&
+	     (!memap_sz || !pio_sz); i++) {
 		if (pci_resource_flags(pdev, i) & IORESOURCE_IO) {
 			if (pio_sz)
 				continue;
@@ -1842,19 +2100,60 @@ mpt3sas_base_map_resources(struct MPT3SAS_ADAPTER *ioc)
 			chip_phys = (u64)ioc->chip_phys;
 			memap_sz = pci_resource_len(pdev, i);
 			ioc->chip = ioremap(ioc->chip_phys, memap_sz);
-			if (ioc->chip == NULL) {
-				pr_err(MPT3SAS_FMT "unable to map adapter memory!\n",
-					ioc->name);
-				r = -EINVAL;
-				goto out_fail;
-			}
 		}
 	}
 
+	if (ioc->chip == NULL) {
+		pr_err(MPT3SAS_FMT "unable to map adapter memory! "
+			" or resource not found\n", ioc->name);
+		r = -EINVAL;
+		goto out_fail;
+	}
+
 	_base_mask_interrupts(ioc);
+
+	r = _base_get_ioc_facts(ioc, CAN_SLEEP);
+	if (r)
+		goto out_fail;
+
+	if (!ioc->rdpq_array_enable_assigned) {
+		ioc->rdpq_array_enable = ioc->rdpq_array_capable;
+		ioc->rdpq_array_enable_assigned = 1;
+	}
+
 	r = _base_enable_msix(ioc);
 	if (r)
 		goto out_fail;
+
+	/* Use the Combined reply queue feature only for SAS3 C0 & higher
+	 * revision HBAs and also only when reply queue count is greater than 8
+	 */
+	if (ioc->msix96_vector && ioc->reply_queue_count > 8) {
+		/* Determine the Supplemental Reply Post Host Index Registers
+		 * Addresse. Supplemental Reply Post Host Index Registers
+		 * starts at offset MPI25_SUP_REPLY_POST_HOST_INDEX_OFFSET and
+		 * each register is at offset bytes of
+		 * MPT3_SUP_REPLY_POST_HOST_INDEX_REG_OFFSET from previous one.
+		 */
+		ioc->replyPostRegisterIndex = kcalloc(
+		     MPT3_SUP_REPLY_POST_HOST_INDEX_REG_COUNT,
+		     sizeof(resource_size_t *), GFP_KERNEL);
+		if (!ioc->replyPostRegisterIndex) {
+			dfailprintk(ioc, printk(MPT3SAS_FMT
+			"allocation for reply Post Register Index failed!!!\n",
+								   ioc->name));
+			r = -ENOMEM;
+			goto out_fail;
+		}
+
+		for (i = 0; i < MPT3_SUP_REPLY_POST_HOST_INDEX_REG_COUNT; i++) {
+			ioc->replyPostRegisterIndex[i] = (resource_size_t *)
+			     ((u8 *)&ioc->chip->Doorbell +
+			     MPI25_SUP_REPLY_POST_HOST_INDEX_OFFSET +
+			     (i * MPT3_SUP_REPLY_POST_HOST_INDEX_REG_OFFSET));
+		}
+	} else
+		ioc->msix96_vector = 0;
 
 	list_for_each_entry(reply_q, &ioc->reply_queue_list, list)
 		pr_info(MPT3SAS_FMT "%s: IRQ %d\n",
@@ -1871,12 +2170,7 @@ mpt3sas_base_map_resources(struct MPT3SAS_ADAPTER *ioc)
 	return 0;
 
  out_fail:
-	if (ioc->chip_phys)
-		iounmap(ioc->chip);
-	ioc->chip_phys = 0;
-	pci_release_selected_regions(ioc->pdev, ioc->bars);
-	pci_disable_pcie_error_reporting(pdev);
-	pci_disable_device(pdev);
+	mpt3sas_base_unmap_resources(ioc);
 	return r;
 }
 
@@ -2057,6 +2351,7 @@ mpt3sas_base_free_smid(struct MPT3SAS_ADAPTER *ioc, u16 smid)
 		}
 		ioc->scsi_lookup[i].cb_idx = 0xFF;
 		ioc->scsi_lookup[i].scmd = NULL;
+		ioc->scsi_lookup[i].direct_io = 0;
 		list_add(&ioc->scsi_lookup[i].tracker_list, &ioc->free_list);
 		spin_unlock_irqrestore(&ioc->scsi_lookup_lock, flags);
 
@@ -2216,7 +2511,265 @@ mpt3sas_base_put_smid_default(struct MPT3SAS_ADAPTER *ioc, u16 smid)
 	    &ioc->scsi_lookup_lock);
 }
 
+/**
+ * _base_display_OEMs_branding - Display branding string
+ * @ioc: per adapter object
+ *
+ * Return nothing.
+ */
+static void
+_base_display_OEMs_branding(struct MPT3SAS_ADAPTER *ioc)
+{
+	if (ioc->pdev->subsystem_vendor != PCI_VENDOR_ID_INTEL)
+		return;
 
+	switch (ioc->pdev->subsystem_vendor) {
+	case PCI_VENDOR_ID_INTEL:
+		switch (ioc->pdev->device) {
+		case MPI2_MFGPAGE_DEVID_SAS2008:
+			switch (ioc->pdev->subsystem_device) {
+			case MPT2SAS_INTEL_RMS2LL080_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_INTEL_RMS2LL080_BRANDING);
+				break;
+			case MPT2SAS_INTEL_RMS2LL040_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_INTEL_RMS2LL040_BRANDING);
+				break;
+			case MPT2SAS_INTEL_SSD910_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_INTEL_SSD910_BRANDING);
+				break;
+			default:
+				pr_info(MPT3SAS_FMT
+				 "Intel(R) Controller: Subsystem ID: 0x%X\n",
+				 ioc->name, ioc->pdev->subsystem_device);
+				break;
+			}
+		case MPI2_MFGPAGE_DEVID_SAS2308_2:
+			switch (ioc->pdev->subsystem_device) {
+			case MPT2SAS_INTEL_RS25GB008_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_INTEL_RS25GB008_BRANDING);
+				break;
+			case MPT2SAS_INTEL_RMS25JB080_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_INTEL_RMS25JB080_BRANDING);
+				break;
+			case MPT2SAS_INTEL_RMS25JB040_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_INTEL_RMS25JB040_BRANDING);
+				break;
+			case MPT2SAS_INTEL_RMS25KB080_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_INTEL_RMS25KB080_BRANDING);
+				break;
+			case MPT2SAS_INTEL_RMS25KB040_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_INTEL_RMS25KB040_BRANDING);
+				break;
+			case MPT2SAS_INTEL_RMS25LB040_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_INTEL_RMS25LB040_BRANDING);
+				break;
+			case MPT2SAS_INTEL_RMS25LB080_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_INTEL_RMS25LB080_BRANDING);
+				break;
+			default:
+				pr_info(MPT3SAS_FMT
+				 "Intel(R) Controller: Subsystem ID: 0x%X\n",
+				 ioc->name, ioc->pdev->subsystem_device);
+				break;
+			}
+		case MPI25_MFGPAGE_DEVID_SAS3008:
+			switch (ioc->pdev->subsystem_device) {
+			case MPT3SAS_INTEL_RMS3JC080_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+					MPT3SAS_INTEL_RMS3JC080_BRANDING);
+				break;
+
+			case MPT3SAS_INTEL_RS3GC008_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+					MPT3SAS_INTEL_RS3GC008_BRANDING);
+				break;
+			case MPT3SAS_INTEL_RS3FC044_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+					MPT3SAS_INTEL_RS3FC044_BRANDING);
+				break;
+			case MPT3SAS_INTEL_RS3UC080_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+					MPT3SAS_INTEL_RS3UC080_BRANDING);
+				break;
+			default:
+				pr_info(MPT3SAS_FMT
+				 "Intel(R) Controller: Subsystem ID: 0x%X\n",
+				 ioc->name, ioc->pdev->subsystem_device);
+				break;
+			}
+			break;
+		default:
+			pr_info(MPT3SAS_FMT
+			 "Intel(R) Controller: Subsystem ID: 0x%X\n",
+			 ioc->name, ioc->pdev->subsystem_device);
+			break;
+		}
+		break;
+	case PCI_VENDOR_ID_DELL:
+		switch (ioc->pdev->device) {
+		case MPI2_MFGPAGE_DEVID_SAS2008:
+			switch (ioc->pdev->subsystem_device) {
+			case MPT2SAS_DELL_6GBPS_SAS_HBA_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				 MPT2SAS_DELL_6GBPS_SAS_HBA_BRANDING);
+				break;
+			case MPT2SAS_DELL_PERC_H200_ADAPTER_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				 MPT2SAS_DELL_PERC_H200_ADAPTER_BRANDING);
+				break;
+			case MPT2SAS_DELL_PERC_H200_INTEGRATED_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				 MPT2SAS_DELL_PERC_H200_INTEGRATED_BRANDING);
+				break;
+			case MPT2SAS_DELL_PERC_H200_MODULAR_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				 MPT2SAS_DELL_PERC_H200_MODULAR_BRANDING);
+				break;
+			case MPT2SAS_DELL_PERC_H200_EMBEDDED_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				 MPT2SAS_DELL_PERC_H200_EMBEDDED_BRANDING);
+				break;
+			case MPT2SAS_DELL_PERC_H200_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				 MPT2SAS_DELL_PERC_H200_BRANDING);
+				break;
+			case MPT2SAS_DELL_6GBPS_SAS_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				 MPT2SAS_DELL_6GBPS_SAS_BRANDING);
+				break;
+			default:
+				pr_info(MPT3SAS_FMT
+				   "Dell 6Gbps HBA: Subsystem ID: 0x%X\n",
+				   ioc->name, ioc->pdev->subsystem_device);
+				break;
+			}
+			break;
+		case MPI25_MFGPAGE_DEVID_SAS3008:
+			switch (ioc->pdev->subsystem_device) {
+			case MPT3SAS_DELL_12G_HBA_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+					MPT3SAS_DELL_12G_HBA_BRANDING);
+				break;
+			default:
+				pr_info(MPT3SAS_FMT
+				   "Dell 12Gbps HBA: Subsystem ID: 0x%X\n",
+				   ioc->name, ioc->pdev->subsystem_device);
+				break;
+			}
+			break;
+		default:
+			pr_info(MPT3SAS_FMT
+			   "Dell HBA: Subsystem ID: 0x%X\n", ioc->name,
+			   ioc->pdev->subsystem_device);
+			break;
+		}
+		break;
+	case PCI_VENDOR_ID_CISCO:
+		switch (ioc->pdev->device) {
+		case MPI25_MFGPAGE_DEVID_SAS3008:
+			switch (ioc->pdev->subsystem_device) {
+			case MPT3SAS_CISCO_12G_8E_HBA_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+					MPT3SAS_CISCO_12G_8E_HBA_BRANDING);
+				break;
+			case MPT3SAS_CISCO_12G_8I_HBA_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+					MPT3SAS_CISCO_12G_8I_HBA_BRANDING);
+				break;
+			case MPT3SAS_CISCO_12G_AVILA_HBA_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+					MPT3SAS_CISCO_12G_AVILA_HBA_BRANDING);
+				break;
+			default:
+				pr_info(MPT3SAS_FMT
+				  "Cisco 12Gbps SAS HBA: Subsystem ID: 0x%X\n",
+				  ioc->name, ioc->pdev->subsystem_device);
+				break;
+			}
+			break;
+		case MPI25_MFGPAGE_DEVID_SAS3108_1:
+			switch (ioc->pdev->subsystem_device) {
+			case MPT3SAS_CISCO_12G_AVILA_HBA_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				MPT3SAS_CISCO_12G_AVILA_HBA_BRANDING);
+				break;
+			case MPT3SAS_CISCO_12G_COLUSA_MEZZANINE_HBA_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				MPT3SAS_CISCO_12G_COLUSA_MEZZANINE_HBA_BRANDING
+				);
+				break;
+			default:
+				pr_info(MPT3SAS_FMT
+				 "Cisco 12Gbps SAS HBA: Subsystem ID: 0x%X\n",
+				 ioc->name, ioc->pdev->subsystem_device);
+				break;
+			}
+			break;
+		default:
+			pr_info(MPT3SAS_FMT
+			   "Cisco SAS HBA: Subsystem ID: 0x%X\n",
+			   ioc->name, ioc->pdev->subsystem_device);
+			break;
+		}
+		break;
+	case MPT2SAS_HP_3PAR_SSVID:
+		switch (ioc->pdev->device) {
+		case MPI2_MFGPAGE_DEVID_SAS2004:
+			switch (ioc->pdev->subsystem_device) {
+			case MPT2SAS_HP_DAUGHTER_2_4_INTERNAL_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_HP_DAUGHTER_2_4_INTERNAL_BRANDING);
+				break;
+			default:
+				pr_info(MPT3SAS_FMT
+				   "HP 6Gbps SAS HBA: Subsystem ID: 0x%X\n",
+				   ioc->name, ioc->pdev->subsystem_device);
+				break;
+			}
+		case MPI2_MFGPAGE_DEVID_SAS2308_2:
+			switch (ioc->pdev->subsystem_device) {
+			case MPT2SAS_HP_2_4_INTERNAL_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_HP_2_4_INTERNAL_BRANDING);
+				break;
+			case MPT2SAS_HP_2_4_EXTERNAL_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_HP_2_4_EXTERNAL_BRANDING);
+				break;
+			case MPT2SAS_HP_1_4_INTERNAL_1_4_EXTERNAL_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				 MPT2SAS_HP_1_4_INTERNAL_1_4_EXTERNAL_BRANDING);
+				break;
+			case MPT2SAS_HP_EMBEDDED_2_4_INTERNAL_SSDID:
+				pr_info(MPT3SAS_FMT "%s\n", ioc->name,
+				    MPT2SAS_HP_EMBEDDED_2_4_INTERNAL_BRANDING);
+				break;
+			default:
+				pr_info(MPT3SAS_FMT
+				   "HP 6Gbps SAS HBA: Subsystem ID: 0x%X\n",
+				   ioc->name, ioc->pdev->subsystem_device);
+				break;
+			}
+		default:
+			pr_info(MPT3SAS_FMT
+			   "HP SAS HBA: Subsystem ID: 0x%X\n",
+			   ioc->name, ioc->pdev->subsystem_device);
+			break;
+		}
+	default:
+		break;
+	}
+}
 
 /**
  * _base_display_ioc_capabilities - Disply IOC's capabilities.
@@ -2247,6 +2800,8 @@ _base_display_ioc_capabilities(struct MPT3SAS_ADAPTER *ioc)
 	   (bios_version & 0x0000FF00) >> 8,
 	    bios_version & 0x000000FF);
 
+	_base_display_OEMs_branding(ioc);
+
 	pr_info(MPT3SAS_FMT "Protocol=(", ioc->name);
 
 	if (ioc->facts.ProtocolFlags & MPI2_IOCFACTS_PROTOCOL_SCSI_INITIATOR) {
@@ -2263,10 +2818,12 @@ _base_display_ioc_capabilities(struct MPT3SAS_ADAPTER *ioc)
 	pr_info("), ");
 	pr_info("Capabilities=(");
 
-	if (ioc->facts.IOCCapabilities &
+	if (!ioc->hide_ir_msg) {
+		if (ioc->facts.IOCCapabilities &
 		    MPI2_IOCFACTS_CAPABILITY_INTEGRATED_RAID) {
 			pr_info("Raid");
 			i++;
+		}
 	}
 
 	if (ioc->facts.IOCCapabilities & MPI2_IOCFACTS_CAPABILITY_TLR) {
@@ -2449,6 +3006,7 @@ _base_static_config_pages(struct MPT3SAS_ADAPTER *ioc)
 	mpt3sas_config_get_ioc_pg8(ioc, &mpi_reply, &ioc->ioc_pg8);
 	mpt3sas_config_get_iounit_pg0(ioc, &mpi_reply, &ioc->iounit_pg0);
 	mpt3sas_config_get_iounit_pg1(ioc, &mpi_reply, &ioc->iounit_pg1);
+	mpt3sas_config_get_iounit_pg8(ioc, &mpi_reply, &ioc->iounit_pg8);
 	_base_display_ioc_capabilities(ioc);
 
 	/*
@@ -2465,6 +3023,9 @@ _base_static_config_pages(struct MPT3SAS_ADAPTER *ioc)
 		    MPI2_IOUNITPAGE1_DISABLE_TASK_SET_FULL_HANDLING;
 	ioc->iounit_pg1.Flags = cpu_to_le32(iounit_pg1_flags);
 	mpt3sas_config_set_iounit_pg1(ioc, &mpi_reply, &ioc->iounit_pg1);
+
+	if (ioc->iounit_pg8.NumSensors)
+		ioc->temp_sensors_count = ioc->iounit_pg8.NumSensors;
 }
 
 /**
@@ -2478,7 +3039,8 @@ _base_static_config_pages(struct MPT3SAS_ADAPTER *ioc)
 static void
 _base_release_memory_pools(struct MPT3SAS_ADAPTER *ioc)
 {
-	int i;
+	int i = 0;
+	struct reply_post_struct *rps;
 
 	dexitprintk(ioc, pr_info(MPT3SAS_FMT "%s\n", ioc->name,
 	    __func__));
@@ -2523,15 +3085,25 @@ _base_release_memory_pools(struct MPT3SAS_ADAPTER *ioc)
 		ioc->reply_free = NULL;
 	}
 
-	if (ioc->reply_post_free) {
-		pci_pool_free(ioc->reply_post_free_dma_pool,
-		    ioc->reply_post_free, ioc->reply_post_free_dma);
+	if (ioc->reply_post) {
+		do {
+			rps = &ioc->reply_post[i];
+			if (rps->reply_post_free) {
+				pci_pool_free(
+				    ioc->reply_post_free_dma_pool,
+				    rps->reply_post_free,
+				    rps->reply_post_free_dma);
+				dexitprintk(ioc, pr_info(MPT3SAS_FMT
+				    "reply_post_free_pool(0x%p): free\n",
+				    ioc->name, rps->reply_post_free));
+				rps->reply_post_free = NULL;
+			}
+		} while (ioc->rdpq_array_enable &&
+			   (++i < ioc->reply_queue_count));
+
 		if (ioc->reply_post_free_dma_pool)
 			pci_pool_destroy(ioc->reply_post_free_dma_pool);
-		dexitprintk(ioc, pr_info(MPT3SAS_FMT
-		    "reply_post_free_pool(0x%p): free\n", ioc->name,
-		    ioc->reply_post_free));
-		ioc->reply_post_free = NULL;
+		kfree(ioc->reply_post);
 	}
 
 	if (ioc->config_page) {
@@ -2592,13 +3164,23 @@ _base_allocate_memory_pools(struct MPT3SAS_ADAPTER *ioc,  int sleep_flag)
 	/* command line tunables for max sgl entries */
 	if (max_sgl_entries != -1)
 		sg_tablesize = max_sgl_entries;
-	else
-		sg_tablesize = MPT3SAS_SG_DEPTH;
+	else {
+		if (ioc->hba_mpi_version_belonged == MPI2_VERSION)
+			sg_tablesize = MPT2SAS_SG_DEPTH;
+		else
+			sg_tablesize = MPT3SAS_SG_DEPTH;
+	}
 
-	if (sg_tablesize < MPT3SAS_MIN_PHYS_SEGMENTS)
-		sg_tablesize = MPT3SAS_MIN_PHYS_SEGMENTS;
-	else if (sg_tablesize > MPT3SAS_MAX_PHYS_SEGMENTS)
-		sg_tablesize = MPT3SAS_MAX_PHYS_SEGMENTS;
+	if (sg_tablesize < MPT_MIN_PHYS_SEGMENTS)
+		sg_tablesize = MPT_MIN_PHYS_SEGMENTS;
+	else if (sg_tablesize > MPT_MAX_PHYS_SEGMENTS) {
+		sg_tablesize = min_t(unsigned short, sg_tablesize,
+				      SCSI_MAX_SG_CHAIN_SEGMENTS);
+		pr_warn(MPT3SAS_FMT
+		 "sg_tablesize(%u) is bigger than kernel"
+		 " defined SCSI_MAX_SG_SEGMENTS(%u)\n", ioc->name,
+		 sg_tablesize, MPT_MAX_PHYS_SEGMENTS);
+	}
 	ioc->shost->sg_tablesize = sg_tablesize;
 
 	ioc->hi_priority_depth = facts->HighPriorityCredit;
@@ -2677,6 +3259,65 @@ _base_allocate_memory_pools(struct MPT3SAS_ADAPTER *ioc,  int sleep_flag)
 	    "chains_per_io(%d)\n", ioc->name, ioc->max_sges_in_main_message,
 	    ioc->max_sges_in_chain_message, ioc->shost->sg_tablesize,
 	    ioc->chains_needed_per_io));
+
+	/* reply post queue, 16 byte align */
+	reply_post_free_sz = ioc->reply_post_queue_depth *
+	    sizeof(Mpi2DefaultReplyDescriptor_t);
+
+	sz = reply_post_free_sz;
+	if (_base_is_controller_msix_enabled(ioc) && !ioc->rdpq_array_enable)
+		sz *= ioc->reply_queue_count;
+
+	ioc->reply_post = kcalloc((ioc->rdpq_array_enable) ?
+	    (ioc->reply_queue_count):1,
+	    sizeof(struct reply_post_struct), GFP_KERNEL);
+
+	if (!ioc->reply_post) {
+		pr_err(MPT3SAS_FMT "reply_post_free pool: kcalloc failed\n",
+			ioc->name);
+		goto out;
+	}
+	ioc->reply_post_free_dma_pool = pci_pool_create("reply_post_free pool",
+	    ioc->pdev, sz, 16, 0);
+	if (!ioc->reply_post_free_dma_pool) {
+		pr_err(MPT3SAS_FMT
+		 "reply_post_free pool: pci_pool_create failed\n",
+		 ioc->name);
+		goto out;
+	}
+	i = 0;
+	do {
+		ioc->reply_post[i].reply_post_free =
+		    pci_pool_alloc(ioc->reply_post_free_dma_pool,
+		    GFP_KERNEL,
+		    &ioc->reply_post[i].reply_post_free_dma);
+		if (!ioc->reply_post[i].reply_post_free) {
+			pr_err(MPT3SAS_FMT
+			"reply_post_free pool: pci_pool_alloc failed\n",
+			ioc->name);
+			goto out;
+		}
+		memset(ioc->reply_post[i].reply_post_free, 0, sz);
+		dinitprintk(ioc, pr_info(MPT3SAS_FMT
+		    "reply post free pool (0x%p): depth(%d),"
+		    "element_size(%d), pool_size(%d kB)\n", ioc->name,
+		    ioc->reply_post[i].reply_post_free,
+		    ioc->reply_post_queue_depth, 8, sz/1024));
+		dinitprintk(ioc, pr_info(MPT3SAS_FMT
+		    "reply_post_free_dma = (0x%llx)\n", ioc->name,
+		    (unsigned long long)
+		    ioc->reply_post[i].reply_post_free_dma));
+		total_sz += sz;
+	} while (ioc->rdpq_array_enable && (++i < ioc->reply_queue_count));
+
+	if (ioc->dma_mask == 64) {
+		if (_base_change_consistent_dma_mask(ioc, ioc->pdev) != 0) {
+			pr_warn(MPT3SAS_FMT
+			    "no suitable consistent DMA mask for %s\n",
+			    ioc->name, pci_name(ioc->pdev));
+			goto out;
+		}
+	}
 
 	ioc->scsiio_depth = ioc->hba_queue_depth -
 	    ioc->hi_priority_depth - ioc->internal_depth;
@@ -2892,40 +3533,6 @@ _base_allocate_memory_pools(struct MPT3SAS_ADAPTER *ioc,  int sleep_flag)
 		ioc->name, (unsigned long long)ioc->reply_free_dma));
 	total_sz += sz;
 
-	/* reply post queue, 16 byte align */
-	reply_post_free_sz = ioc->reply_post_queue_depth *
-	    sizeof(Mpi2DefaultReplyDescriptor_t);
-	if (_base_is_controller_msix_enabled(ioc))
-		sz = reply_post_free_sz * ioc->reply_queue_count;
-	else
-		sz = reply_post_free_sz;
-	ioc->reply_post_free_dma_pool = pci_pool_create("reply_post_free pool",
-	    ioc->pdev, sz, 16, 0);
-	if (!ioc->reply_post_free_dma_pool) {
-		pr_err(MPT3SAS_FMT
-			"reply_post_free pool: pci_pool_create failed\n",
-			ioc->name);
-		goto out;
-	}
-	ioc->reply_post_free = pci_pool_alloc(ioc->reply_post_free_dma_pool ,
-	    GFP_KERNEL, &ioc->reply_post_free_dma);
-	if (!ioc->reply_post_free) {
-		pr_err(MPT3SAS_FMT
-			"reply_post_free pool: pci_pool_alloc failed\n",
-			ioc->name);
-		goto out;
-	}
-	memset(ioc->reply_post_free, 0, sz);
-	dinitprintk(ioc, pr_info(MPT3SAS_FMT "reply post free pool" \
-	    "(0x%p): depth(%d), element_size(%d), pool_size(%d kB)\n",
-	    ioc->name, ioc->reply_post_free, ioc->reply_post_queue_depth, 8,
-	    sz/1024));
-	dinitprintk(ioc, pr_info(MPT3SAS_FMT
-		"reply_post_free_dma = (0x%llx)\n",
-		ioc->name, (unsigned long long)
-	    ioc->reply_post_free_dma));
-	total_sz += sz;
-
 	ioc->config_page_sz = 512;
 	ioc->config_page = pci_alloc_consistent(ioc->pdev,
 	    ioc->config_page_sz, &ioc->config_page_dma);
@@ -3017,6 +3624,9 @@ _base_wait_on_iocstate(struct MPT3SAS_ADAPTER *ioc, u32 ioc_state, int timeout,
  *
  * Notes: MPI2_HIS_IOC2SYS_DB_STATUS - set to one when IOC writes to doorbell.
  */
+static int
+_base_diag_reset(struct MPT3SAS_ADAPTER *ioc, int sleep_flag);
+
 static int
 _base_wait_for_doorbell_int(struct MPT3SAS_ADAPTER *ioc, int timeout,
 	int sleep_flag)
@@ -3332,7 +3942,7 @@ mpt3sas_base_sas_iounit_control(struct MPT3SAS_ADAPTER *ioc,
 	u16 smid;
 	u32 ioc_state;
 	unsigned long timeleft;
-	u8 issue_reset;
+	bool issue_reset = false;
 	int rc;
 	void *request;
 	u16 wait_state_count;
@@ -3396,7 +4006,7 @@ mpt3sas_base_sas_iounit_control(struct MPT3SAS_ADAPTER *ioc,
 		_debug_dump_mf(mpi_request,
 		    sizeof(Mpi2SasIoUnitControlRequest_t)/4);
 		if (!(ioc->base_cmds.status & MPT3_CMD_RESET))
-			issue_reset = 1;
+			issue_reset = true;
 		goto issue_host_reset;
 	}
 	if (ioc->base_cmds.status & MPT3_CMD_REPLY_VALID)
@@ -3436,7 +4046,7 @@ mpt3sas_base_scsi_enclosure_processor(struct MPT3SAS_ADAPTER *ioc,
 	u16 smid;
 	u32 ioc_state;
 	unsigned long timeleft;
-	u8 issue_reset;
+	bool issue_reset = false;
 	int rc;
 	void *request;
 	u16 wait_state_count;
@@ -3494,7 +4104,7 @@ mpt3sas_base_scsi_enclosure_processor(struct MPT3SAS_ADAPTER *ioc,
 		_debug_dump_mf(mpi_request,
 		    sizeof(Mpi2SepRequest_t)/4);
 		if (!(ioc->base_cmds.status & MPT3_CMD_RESET))
-			issue_reset = 1;
+			issue_reset = false;
 		goto issue_host_reset;
 	}
 	if (ioc->base_cmds.status & MPT3_CMD_REPLY_VALID)
@@ -3560,6 +4170,64 @@ _base_get_port_facts(struct MPT3SAS_ADAPTER *ioc, int port, int sleep_flag)
 }
 
 /**
+ * _base_wait_for_iocstate - Wait until the card is in READY or OPERATIONAL
+ * @ioc: per adapter object
+ * @timeout:
+ * @sleep_flag: CAN_SLEEP or NO_SLEEP
+ *
+ * Returns 0 for success, non-zero for failure.
+ */
+static int
+_base_wait_for_iocstate(struct MPT3SAS_ADAPTER *ioc, int timeout,
+	int sleep_flag)
+{
+	u32 ioc_state;
+	int rc;
+
+	dinitprintk(ioc, printk(MPT3SAS_FMT "%s\n", ioc->name,
+	    __func__));
+
+	if (ioc->pci_error_recovery) {
+		dfailprintk(ioc, printk(MPT3SAS_FMT
+		    "%s: host in pci error recovery\n", ioc->name, __func__));
+		return -EFAULT;
+	}
+
+	ioc_state = mpt3sas_base_get_iocstate(ioc, 0);
+	dhsprintk(ioc, printk(MPT3SAS_FMT "%s: ioc_state(0x%08x)\n",
+	    ioc->name, __func__, ioc_state));
+
+	if (((ioc_state & MPI2_IOC_STATE_MASK) == MPI2_IOC_STATE_READY) ||
+	    (ioc_state & MPI2_IOC_STATE_MASK) == MPI2_IOC_STATE_OPERATIONAL)
+		return 0;
+
+	if (ioc_state & MPI2_DOORBELL_USED) {
+		dhsprintk(ioc, printk(MPT3SAS_FMT
+		    "unexpected doorbell active!\n", ioc->name));
+		goto issue_diag_reset;
+	}
+
+	if ((ioc_state & MPI2_IOC_STATE_MASK) == MPI2_IOC_STATE_FAULT) {
+		mpt3sas_base_fault_info(ioc, ioc_state &
+		    MPI2_DOORBELL_DATA_MASK);
+		goto issue_diag_reset;
+	}
+
+	ioc_state = _base_wait_on_iocstate(ioc, MPI2_IOC_STATE_READY,
+	    timeout, sleep_flag);
+	if (ioc_state) {
+		dfailprintk(ioc, printk(MPT3SAS_FMT
+		    "%s: failed going to ready state (ioc_state=0x%x)\n",
+		    ioc->name, __func__, ioc_state));
+		return -EFAULT;
+	}
+
+ issue_diag_reset:
+	rc = _base_diag_reset(ioc, sleep_flag);
+	return rc;
+}
+
+/**
  * _base_get_ioc_facts - obtain ioc facts reply and save in ioc
  * @ioc: per adapter object
  * @sleep_flag: CAN_SLEEP or NO_SLEEP
@@ -3577,6 +4245,13 @@ _base_get_ioc_facts(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 	dinitprintk(ioc, pr_info(MPT3SAS_FMT "%s\n", ioc->name,
 	    __func__));
 
+	r = _base_wait_for_iocstate(ioc, 10, sleep_flag);
+	if (r) {
+		dfailprintk(ioc, printk(MPT3SAS_FMT
+		    "%s: failed getting to correct state\n",
+		    ioc->name, __func__));
+		return r;
+	}
 	mpi_reply_sz = sizeof(Mpi2IOCFactsReply_t);
 	mpi_request_sz = sizeof(Mpi2IOCFactsRequest_t);
 	memset(&mpi_request, 0, mpi_request_sz);
@@ -3608,6 +4283,9 @@ _base_get_ioc_facts(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 	facts->IOCCapabilities = le32_to_cpu(mpi_reply.IOCCapabilities);
 	if ((facts->IOCCapabilities & MPI2_IOCFACTS_CAPABILITY_INTEGRATED_RAID))
 		ioc->ir_firmware = 1;
+	if ((facts->IOCCapabilities &
+	      MPI2_IOCFACTS_CAPABILITY_RDPQ_ARRAY_CAPABLE))
+		ioc->rdpq_array_capable = 1;
 	facts->FWVersion.Word = le32_to_cpu(mpi_reply.FWVersion.Word);
 	facts->IOCRequestFrameSize =
 	    le16_to_cpu(mpi_reply.IOCRequestFrameSize);
@@ -3644,9 +4322,12 @@ _base_send_ioc_init(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 {
 	Mpi2IOCInitRequest_t mpi_request;
 	Mpi2IOCInitReply_t mpi_reply;
-	int r;
+	int i, r = 0;
 	struct timeval current_time;
 	u16 ioc_status;
+	u32 reply_post_free_array_sz = 0;
+	Mpi2IOCInitRDPQArrayEntry *reply_post_free_array = NULL;
+	dma_addr_t reply_post_free_array_dma;
 
 	dinitprintk(ioc, pr_info(MPT3SAS_FMT "%s\n", ioc->name,
 	    __func__));
@@ -3656,7 +4337,7 @@ _base_send_ioc_init(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 	mpi_request.WhoInit = MPI2_WHOINIT_HOST_DRIVER;
 	mpi_request.VF_ID = 0; /* TODO */
 	mpi_request.VP_ID = 0;
-	mpi_request.MsgVersion = cpu_to_le16(MPI2_VERSION);
+	mpi_request.MsgVersion = cpu_to_le16(ioc->hba_mpi_version_belonged);
 	mpi_request.HeaderVersion = cpu_to_le16(MPI2_HEADER_VERSION);
 
 	if (_base_is_controller_msix_enabled(ioc))
@@ -3675,9 +4356,31 @@ _base_send_ioc_init(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 	    cpu_to_le64((u64)ioc->request_dma);
 	mpi_request.ReplyFreeQueueAddress =
 	    cpu_to_le64((u64)ioc->reply_free_dma);
-	mpi_request.ReplyDescriptorPostQueueAddress =
-	    cpu_to_le64((u64)ioc->reply_post_free_dma);
 
+	if (ioc->rdpq_array_enable) {
+		reply_post_free_array_sz = ioc->reply_queue_count *
+		    sizeof(Mpi2IOCInitRDPQArrayEntry);
+		reply_post_free_array = pci_alloc_consistent(ioc->pdev,
+			reply_post_free_array_sz, &reply_post_free_array_dma);
+		if (!reply_post_free_array) {
+			pr_err(MPT3SAS_FMT
+			"reply_post_free_array: pci_alloc_consistent failed\n",
+			ioc->name);
+			r = -ENOMEM;
+			goto out;
+		}
+		memset(reply_post_free_array, 0, reply_post_free_array_sz);
+		for (i = 0; i < ioc->reply_queue_count; i++)
+			reply_post_free_array[i].RDPQBaseAddress =
+			    cpu_to_le64(
+				(u64)ioc->reply_post[i].reply_post_free_dma);
+		mpi_request.MsgFlags = MPI2_IOCINIT_MSGFLAG_RDPQ_ARRAY_MODE;
+		mpi_request.ReplyDescriptorPostQueueAddress =
+		    cpu_to_le64((u64)reply_post_free_array_dma);
+	} else {
+		mpi_request.ReplyDescriptorPostQueueAddress =
+		    cpu_to_le64((u64)ioc->reply_post[0].reply_post_free_dma);
+	}
 
 	/* This time stamp specifies number of milliseconds
 	 * since epoch ~ midnight January 1, 1970.
@@ -3705,7 +4408,7 @@ _base_send_ioc_init(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 	if (r != 0) {
 		pr_err(MPT3SAS_FMT "%s: handshake failed (r=%d)\n",
 		    ioc->name, __func__, r);
-		return r;
+		goto out;
 	}
 
 	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) & MPI2_IOCSTATUS_MASK;
@@ -3715,7 +4418,12 @@ _base_send_ioc_init(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 		r = -EIO;
 	}
 
-	return 0;
+out:
+	if (reply_post_free_array)
+		pci_free_consistent(ioc->pdev, reply_post_free_array_sz,
+				    reply_post_free_array,
+				    reply_post_free_array_dma);
+	return r;
 }
 
 /**
@@ -4263,9 +4971,10 @@ _base_make_ioc_operational(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 	u32 reply_address;
 	u16 smid;
 	struct _tr_list *delayed_tr, *delayed_tr_next;
+	u8 hide_flag;
 	struct adapter_reply_queue *reply_q;
 	long reply_post_free;
-	u32 reply_post_free_sz;
+	u32 reply_post_free_sz, index = 0;
 
 	dinitprintk(ioc, pr_info(MPT3SAS_FMT "%s\n", ioc->name,
 	    __func__));
@@ -4293,6 +5002,7 @@ _base_make_ioc_operational(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 		ioc->scsi_lookup[i].cb_idx = 0xFF;
 		ioc->scsi_lookup[i].smid = smid;
 		ioc->scsi_lookup[i].scmd = NULL;
+		ioc->scsi_lookup[i].direct_io = 0;
 		list_add_tail(&ioc->scsi_lookup[i].tracker_list,
 		    &ioc->free_list);
 	}
@@ -4336,9 +5046,9 @@ _base_make_ioc_operational(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 		_base_assign_reply_queues(ioc);
 
 	/* initialize Reply Post Free Queue */
-	reply_post_free = (long)ioc->reply_post_free;
 	reply_post_free_sz = ioc->reply_post_queue_depth *
 	    sizeof(Mpi2DefaultReplyDescriptor_t);
+	reply_post_free = (long)ioc->reply_post[index].reply_post_free;
 	list_for_each_entry(reply_q, &ioc->reply_queue_list, list) {
 		reply_q->reply_post_host_index = 0;
 		reply_q->reply_post_free = (Mpi2ReplyDescriptorsUnion_t *)
@@ -4348,7 +5058,15 @@ _base_make_ioc_operational(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 			    cpu_to_le64(ULLONG_MAX);
 		if (!_base_is_controller_msix_enabled(ioc))
 			goto skip_init_reply_post_free_queue;
-		reply_post_free += reply_post_free_sz;
+		/*
+		 * If RDPQ is enabled, switch to the next allocation.
+		 * Otherwise advance within the contiguous region.
+		 */
+		if (ioc->rdpq_array_enable)
+			reply_post_free = (long)
+			    ioc->reply_post[++index].reply_post_free;
+		else
+			reply_post_free += reply_post_free_sz;
 	}
  skip_init_reply_post_free_queue:
 
@@ -4362,8 +5080,15 @@ _base_make_ioc_operational(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 
 	/* initialize reply post host index */
 	list_for_each_entry(reply_q, &ioc->reply_queue_list, list) {
-		writel(reply_q->msix_index << MPI2_RPHI_MSIX_INDEX_SHIFT,
-		    &ioc->chip->ReplyPostHostIndex);
+		if (ioc->msix96_vector)
+			writel((reply_q->msix_index & 7)<<
+			   MPI2_RPHI_MSIX_INDEX_SHIFT,
+			   ioc->replyPostRegisterIndex[reply_q->msix_index/8]);
+		else
+			writel(reply_q->msix_index <<
+				MPI2_RPHI_MSIX_INDEX_SHIFT,
+				&ioc->chip->ReplyPostHostIndex);
+
 		if (!_base_is_controller_msix_enabled(ioc))
 			goto skip_init_reply_post_host_index;
 	}
@@ -4380,6 +5105,16 @@ _base_make_ioc_operational(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 
 
 	if (ioc->is_driver_loading) {
+
+		if (ioc->is_warpdrive && ioc->manu_pg10.OEMIdentifier
+		    == 0x80) {
+			hide_flag = (u8) (
+			    le32_to_cpu(ioc->manu_pg10.OEMSpecificFlags0) &
+			    MFG_PAGE10_HIDE_SSDS_MASK);
+			if (hide_flag != MFG_PAGE10_HIDE_SSDS_MASK)
+				ioc->mfg_pg10_hide_flag = hide_flag;
+		}
+
 		ioc->wait_for_discovery_to_complete =
 		    _base_determine_wait_on_discovery(ioc);
 
@@ -4402,11 +5137,11 @@ _base_make_ioc_operational(struct MPT3SAS_ADAPTER *ioc, int sleep_flag)
 void
 mpt3sas_base_free_resources(struct MPT3SAS_ADAPTER *ioc)
 {
-	struct pci_dev *pdev = ioc->pdev;
-
 	dexitprintk(ioc, pr_info(MPT3SAS_FMT "%s\n", ioc->name,
 	    __func__));
 
+	/* synchronizing freeing resource with pci_access_mutex lock */
+	mutex_lock(&ioc->pci_access_mutex);
 	if (ioc->chip_phys && ioc->chip) {
 		_base_mask_interrupts(ioc);
 		ioc->shost_recovery = 1;
@@ -4414,18 +5149,8 @@ mpt3sas_base_free_resources(struct MPT3SAS_ADAPTER *ioc)
 		ioc->shost_recovery = 0;
 	}
 
-	_base_free_irq(ioc);
-	_base_disable_msix(ioc);
-
-	if (ioc->chip_phys && ioc->chip)
-		iounmap(ioc->chip);
-	ioc->chip_phys = 0;
-
-	if (pci_is_enabled(pdev)) {
-		pci_release_selected_regions(ioc->pdev, ioc->bars);
-		pci_disable_pcie_error_reporting(pdev);
-		pci_disable_device(pdev);
-	}
+	mpt3sas_base_unmap_resources(ioc);
+	mutex_unlock(&ioc->pci_access_mutex);
 	return;
 }
 
@@ -4459,28 +5184,58 @@ mpt3sas_base_attach(struct MPT3SAS_ADAPTER *ioc)
 		goto out_free_resources;
 	}
 
+	if (ioc->is_warpdrive) {
+		ioc->reply_post_host_index = kcalloc(ioc->cpu_msix_table_sz,
+		    sizeof(resource_size_t *), GFP_KERNEL);
+		if (!ioc->reply_post_host_index) {
+			dfailprintk(ioc, pr_info(MPT3SAS_FMT "allocation "
+				"for cpu_msix_table failed!!!\n", ioc->name));
+			r = -ENOMEM;
+			goto out_free_resources;
+		}
+	}
+
+	ioc->rdpq_array_enable_assigned = 0;
+	ioc->dma_mask = 0;
 	r = mpt3sas_base_map_resources(ioc);
 	if (r)
 		goto out_free_resources;
 
+	if (ioc->is_warpdrive) {
+		ioc->reply_post_host_index[0] = (resource_size_t __iomem *)
+		    &ioc->chip->ReplyPostHostIndex;
+
+		for (i = 1; i < ioc->cpu_msix_table_sz; i++)
+			ioc->reply_post_host_index[i] =
+			(resource_size_t __iomem *)
+			((u8 __iomem *)&ioc->chip->Doorbell + (0x4000 + ((i - 1)
+			* 4)));
+	}
 
 	pci_set_drvdata(ioc->pdev, ioc->shost);
 	r = _base_get_ioc_facts(ioc, CAN_SLEEP);
 	if (r)
 		goto out_free_resources;
 
-	/*
-	 * In SAS3.0,
-	 * SCSI_IO, SMP_PASSTHRU, SATA_PASSTHRU, Target Assist, and
-	 * Target Status - all require the IEEE formated scatter gather
-	 * elements.
-	 */
-
-	ioc->build_sg_scmd = &_base_build_sg_scmd_ieee;
-	ioc->build_sg = &_base_build_sg_ieee;
-	ioc->build_zero_len_sge = &_base_build_zero_len_sge_ieee;
-	ioc->mpi25 = 1;
-	ioc->sge_size_ieee = sizeof(Mpi2IeeeSgeSimple64_t);
+	switch (ioc->hba_mpi_version_belonged) {
+	case MPI2_VERSION:
+		ioc->build_sg_scmd = &_base_build_sg_scmd;
+		ioc->build_sg = &_base_build_sg;
+		ioc->build_zero_len_sge = &_base_build_zero_len_sge;
+		break;
+	case MPI25_VERSION:
+		/*
+		 * In SAS3.0,
+		 * SCSI_IO, SMP_PASSTHRU, SATA_PASSTHRU, Target Assist, and
+		 * Target Status - all require the IEEE formated scatter gather
+		 * elements.
+		 */
+		ioc->build_sg_scmd = &_base_build_sg_scmd_ieee;
+		ioc->build_sg = &_base_build_sg_ieee;
+		ioc->build_zero_len_sge = &_base_build_zero_len_sge_ieee;
+		ioc->sge_size_ieee = sizeof(Mpi2IeeeSgeSimple64_t);
+		break;
+	}
 
 	/*
 	 * These function pointers for other requests that don't
@@ -4590,11 +5345,13 @@ mpt3sas_base_attach(struct MPT3SAS_ADAPTER *ioc)
 	_base_unmask_events(ioc, MPI2_EVENT_IR_PHYSICAL_DISK);
 	_base_unmask_events(ioc, MPI2_EVENT_IR_OPERATION_STATUS);
 	_base_unmask_events(ioc, MPI2_EVENT_LOG_ENTRY_ADDED);
+	_base_unmask_events(ioc, MPI2_EVENT_TEMP_THRESHOLD);
 
 	r = _base_make_ioc_operational(ioc, CAN_SLEEP);
 	if (r)
 		goto out_free_resources;
 
+	ioc->non_operational_loop = 0;
 	return 0;
 
  out_free_resources:
@@ -4605,6 +5362,8 @@ mpt3sas_base_attach(struct MPT3SAS_ADAPTER *ioc)
 	_base_release_memory_pools(ioc);
 	pci_set_drvdata(ioc->pdev, NULL);
 	kfree(ioc->cpu_msix_table);
+	if (ioc->is_warpdrive)
+		kfree(ioc->reply_post_host_index);
 	kfree(ioc->pd_handles);
 	kfree(ioc->blocking_handles);
 	kfree(ioc->tm_cmds.reply);
@@ -4644,6 +5403,8 @@ mpt3sas_base_detach(struct MPT3SAS_ADAPTER *ioc)
 	_base_release_memory_pools(ioc);
 	pci_set_drvdata(ioc->pdev, NULL);
 	kfree(ioc->cpu_msix_table);
+	if (ioc->is_warpdrive)
+		kfree(ioc->reply_post_host_index);
 	kfree(ioc->pd_handles);
 	kfree(ioc->blocking_handles);
 	kfree(ioc->pfacts);
@@ -4835,6 +5596,12 @@ mpt3sas_base_hard_reset_handler(struct MPT3SAS_ADAPTER *ioc, int sleep_flag,
 	r = _base_get_ioc_facts(ioc, CAN_SLEEP);
 	if (r)
 		goto out;
+
+	if (ioc->rdpq_array_enable && !ioc->rdpq_array_capable)
+		panic("%s: Issue occurred with flashing controller firmware."
+		      "Please reboot the system and ensure that the correct"
+		      " firmware version is running\n", ioc->name);
+
 	r = _base_make_ioc_operational(ioc, sleep_flag);
 	if (!r)
 		_base_reset_handler(ioc, MPT3_IOC_DONE_RESET);

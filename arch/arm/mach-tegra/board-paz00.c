@@ -17,9 +17,10 @@
  *
  */
 
+#include <linux/gpio/machine.h>
 #include <linux/platform_device.h>
-#include <linux/gpio/driver.h>
 #include <linux/rfkill-gpio.h>
+
 #include "board.h"
 
 static struct rfkill_gpio_platform_data wifi_rfkill_platform_data = {
@@ -38,8 +39,8 @@ static struct platform_device wifi_rfkill_device = {
 static struct gpiod_lookup_table wifi_gpio_lookup = {
 	.dev_id = "rfkill_gpio",
 	.table = {
-		GPIO_LOOKUP_IDX("tegra-gpio", 25, NULL, 0, 0),
-		GPIO_LOOKUP_IDX("tegra-gpio", 85, NULL, 1, 0),
+		GPIO_LOOKUP("tegra-gpio", 25, "reset", 0),
+		GPIO_LOOKUP("tegra-gpio", 85, "shutdown", 0),
 		{ },
 	},
 };

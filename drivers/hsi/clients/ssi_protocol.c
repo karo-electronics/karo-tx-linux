@@ -783,7 +783,7 @@ static void ssip_rx_strans(struct hsi_client *cl, u32 cmd)
 	}
 	ssip_set_rxstate(ssi, RECEIVING);
 	if (unlikely(SSIP_MSG_ID(cmd) != ssi->rxid)) {
-		dev_err(&cl->device, "START TRANS id %d expeceted %d\n",
+		dev_err(&cl->device, "START TRANS id %d expected %d\n",
 					SSIP_MSG_ID(cmd), ssi->rxid);
 		spin_unlock(&ssi->lock);
 		goto out1;
@@ -901,7 +901,7 @@ out:
 	ssip_free_data(msg);
 }
 
-void ssip_port_event(struct hsi_client *cl, unsigned long event)
+static void ssip_port_event(struct hsi_client *cl, unsigned long event)
 {
 	switch (event) {
 	case HSI_EVENT_START_RX:
@@ -1115,7 +1115,7 @@ static int ssi_protocol_probe(struct device *dev)
 		goto out;
 	}
 
-	ssi->netdev = alloc_netdev(0, ifname, ssip_pn_setup);
+	ssi->netdev = alloc_netdev(0, ifname, NET_NAME_UNKNOWN, ssip_pn_setup);
 	if (!ssi->netdev) {
 		dev_err(dev, "No memory for netdev\n");
 		err = -ENOMEM;

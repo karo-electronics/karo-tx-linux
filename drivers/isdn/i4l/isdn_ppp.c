@@ -301,6 +301,8 @@ isdn_ppp_open(int min, struct file *file)
 	is->compflags = 0;
 
 	is->reset = isdn_ppp_ccp_reset_alloc(is);
+	if (!is->reset)
+		return -ENOMEM;
 
 	is->lp = NULL;
 	is->mp_seqno = 0;       /* MP sequence number */
@@ -320,6 +322,10 @@ isdn_ppp_open(int min, struct file *file)
 	 * VJ header compression init
 	 */
 	is->slcomp = slhc_init(16, 16);	/* not necessary for 2. link in bundle */
+	if (IS_ERR(is->slcomp)) {
+		isdn_ppp_ccp_reset_free(is);
+		return PTR_ERR(is->slcomp);
+	}
 #endif
 #ifdef CONFIG_IPPP_FILTER
 	is->pass_filter = NULL;
@@ -379,12 +385,12 @@ isdn_ppp_release(int min, struct file *file)
 #endif
 #ifdef CONFIG_IPPP_FILTER
 	if (is->pass_filter) {
-		sk_unattached_filter_destroy(is->pass_filter);
+		bpf_prog_destroy(is->pass_filter);
 		is->pass_filter = NULL;
 	}
 
 	if (is->active_filter) {
-		sk_unattached_filter_destroy(is->active_filter);
+		bpf_prog_destroy(is->active_filter);
 		is->active_filter = NULL;
 	}
 #endif
@@ -567,10 +573,8 @@ isdn_ppp_ioctl(int min, struct file *file, unsigned int cmd, unsigned long arg)
 			is->maxcid = val;
 #ifdef CONFIG_ISDN_PPP_VJ
 			sltmp = slhc_init(16, val);
-			if (!sltmp) {
-				printk(KERN_ERR "ippp, can't realloc slhc struct\n");
-				return -ENOMEM;
-			}
+			if (IS_ERR(sltmp))
+				return PTR_ERR(sltmp);
 			if (is->slcomp)
 				slhc_free(is->slcomp);
 			is->slcomp = sltmp;
@@ -639,12 +643,11 @@ isdn_ppp_ioctl(int min, struct file *file, unsigned int cmd, unsigned long arg)
 		fprog.filter = code;
 
 		if (is->pass_filter) {
-			sk_unattached_filter_destroy(is->pass_filter);
+			bpf_prog_destroy(is->pass_filter);
 			is->pass_filter = NULL;
 		}
 		if (fprog.filter != NULL)
-			err = sk_unattached_filter_create(&is->pass_filter,
-							  &fprog);
+			err = bpf_prog_create(&is->pass_filter, &fprog);
 		else
 			err = 0;
 		kfree(code);
@@ -664,12 +667,11 @@ isdn_ppp_ioctl(int min, struct file *file, unsigned int cmd, unsigned long arg)
 		fprog.filter = code;
 
 		if (is->active_filter) {
-			sk_unattached_filter_destroy(is->active_filter);
+			bpf_prog_destroy(is->active_filter);
 			is->active_filter = NULL;
 		}
 		if (fprog.filter != NULL)
-			err = sk_unattached_filter_create(&is->active_filter,
-							  &fprog);
+			err = bpf_prog_create(&is->active_filter, &fprog);
 		else
 			err = 0;
 		kfree(code);
@@ -1174,14 +1176,14 @@ isdn_ppp_push_higher(isdn_net_dev *net_dev, isdn_net_local *lp, struct sk_buff *
 	}
 
 	if (is->pass_filter
-	    && SK_RUN_FILTER(is->pass_filter, skb) == 0) {
+	    && BPF_PROG_RUN(is->pass_filter, skb) == 0) {
 		if (is->debug & 0x2)
 			printk(KERN_DEBUG "IPPP: inbound frame filtered.\n");
 		kfree_skb(skb);
 		return;
 	}
 	if (!(is->active_filter
-	      && SK_RUN_FILTER(is->active_filter, skb) == 0)) {
+	      && BPF_PROG_RUN(is->active_filter, skb) == 0)) {
 		if (is->debug & 0x2)
 			printk(KERN_DEBUG "IPPP: link-active filter: resetting huptimer.\n");
 		lp->huptimer = 0;
@@ -1320,14 +1322,14 @@ isdn_ppp_xmit(struct sk_buff *skb, struct net_device *netdev)
 	}
 
 	if (ipt->pass_filter
-	    && SK_RUN_FILTER(ipt->pass_filter, skb) == 0) {
+	    && BPF_PROG_RUN(ipt->pass_filter, skb) == 0) {
 		if (ipt->debug & 0x4)
 			printk(KERN_DEBUG "IPPP: outbound frame filtered.\n");
 		kfree_skb(skb);
 		goto unlock;
 	}
 	if (!(ipt->active_filter
-	      && SK_RUN_FILTER(ipt->active_filter, skb) == 0)) {
+	      && BPF_PROG_RUN(ipt->active_filter, skb) == 0)) {
 		if (ipt->debug & 0x4)
 			printk(KERN_DEBUG "IPPP: link-active filter: resetting huptimer.\n");
 		lp->huptimer = 0;
@@ -1517,9 +1519,9 @@ int isdn_ppp_autodial_filter(struct sk_buff *skb, isdn_net_local *lp)
 	}
 
 	drop |= is->pass_filter
-		&& SK_RUN_FILTER(is->pass_filter, skb) == 0;
+		&& BPF_PROG_RUN(is->pass_filter, skb) == 0;
 	drop |= is->active_filter
-		&& SK_RUN_FILTER(is->active_filter, skb) == 0;
+		&& BPF_PROG_RUN(is->active_filter, skb) == 0;
 
 	skb_push(skb, IPPP_MAX_HEADER - 4);
 	return drop;

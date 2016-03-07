@@ -1,6 +1,7 @@
 #ifndef _LINUX_DMA_MAPPING_H
 #define _LINUX_DMA_MAPPING_H
 
+#include <linux/sizes.h>
 #include <linux/string.h>
 #include <linux/device.h>
 #include <linux/err.h>
@@ -34,6 +35,10 @@ struct dma_map_ops {
 	void (*unmap_page)(struct device *dev, dma_addr_t dma_handle,
 			   size_t size, enum dma_data_direction dir,
 			   struct dma_attrs *attrs);
+	/*
+	 * map_sg returns 0 on error and a value > 0 on success.
+	 * It should never return a value < 0.
+	 */
 	int (*map_sg)(struct device *dev, struct scatterlist *sg,
 		      int nents, enum dma_data_direction dir,
 		      struct dma_attrs *attrs);
@@ -129,16 +134,21 @@ static inline int dma_coerce_mask_and_coherent(struct device *dev, u64 mask)
 
 extern u64 dma_get_required_mask(struct device *dev);
 
-#ifndef set_arch_dma_coherent_ops
-static inline int set_arch_dma_coherent_ops(struct device *dev)
-{
-	return 0;
-}
+#ifndef arch_setup_dma_ops
+static inline void arch_setup_dma_ops(struct device *dev, u64 dma_base,
+				      u64 size, struct iommu_ops *iommu,
+				      bool coherent) { }
+#endif
+
+#ifndef arch_teardown_dma_ops
+static inline void arch_teardown_dma_ops(struct device *dev) { }
 #endif
 
 static inline unsigned int dma_get_max_seg_size(struct device *dev)
 {
-	return dev->dma_parms ? dev->dma_parms->max_segment_size : 65536;
+	if (dev->dma_parms && dev->dma_parms->max_segment_size)
+		return dev->dma_parms->max_segment_size;
+	return SZ_64K;
 }
 
 static inline unsigned int dma_set_max_seg_size(struct device *dev,
@@ -147,14 +157,15 @@ static inline unsigned int dma_set_max_seg_size(struct device *dev,
 	if (dev->dma_parms) {
 		dev->dma_parms->max_segment_size = size;
 		return 0;
-	} else
-		return -EIO;
+	}
+	return -EIO;
 }
 
 static inline unsigned long dma_get_seg_boundary(struct device *dev)
 {
-	return dev->dma_parms ?
-		dev->dma_parms->segment_boundary_mask : 0xffffffff;
+	if (dev->dma_parms && dev->dma_parms->segment_boundary_mask)
+		return dev->dma_parms->segment_boundary_mask;
+	return DMA_BIT_MASK(32);
 }
 
 static inline int dma_set_seg_boundary(struct device *dev, unsigned long mask)
@@ -162,8 +173,8 @@ static inline int dma_set_seg_boundary(struct device *dev, unsigned long mask)
 	if (dev->dma_parms) {
 		dev->dma_parms->segment_boundary_mask = mask;
 		return 0;
-	} else
-		return -EIO;
+	}
+	return -EIO;
 }
 
 #ifndef dma_max_pfn
@@ -263,6 +274,32 @@ struct dma_attrs;
 #define dma_unmap_sg_attrs(dev, sgl, nents, dir, attrs) \
 	dma_unmap_sg(dev, sgl, nents, dir)
 
+#else
+static inline void *dma_alloc_writecombine(struct device *dev, size_t size,
+					   dma_addr_t *dma_addr, gfp_t gfp)
+{
+	DEFINE_DMA_ATTRS(attrs);
+	dma_set_attr(DMA_ATTR_WRITE_COMBINE, &attrs);
+	return dma_alloc_attrs(dev, size, dma_addr, gfp, &attrs);
+}
+
+static inline void dma_free_writecombine(struct device *dev, size_t size,
+					 void *cpu_addr, dma_addr_t dma_addr)
+{
+	DEFINE_DMA_ATTRS(attrs);
+	dma_set_attr(DMA_ATTR_WRITE_COMBINE, &attrs);
+	return dma_free_attrs(dev, size, cpu_addr, dma_addr, &attrs);
+}
+
+static inline int dma_mmap_writecombine(struct device *dev,
+					struct vm_area_struct *vma,
+					void *cpu_addr, dma_addr_t dma_addr,
+					size_t size)
+{
+	DEFINE_DMA_ATTRS(attrs);
+	dma_set_attr(DMA_ATTR_WRITE_COMBINE, &attrs);
+	return dma_mmap_attrs(dev, vma, cpu_addr, dma_addr, size, &attrs);
+}
 #endif /* CONFIG_HAVE_DMA_ATTRS */
 
 #ifdef CONFIG_NEED_DMA_MAP_STATE

@@ -46,10 +46,10 @@
 #ifndef LOV_CL_INTERNAL_H
 #define LOV_CL_INTERNAL_H
 
-# include <linux/libcfs/libcfs.h>
+#include "../../include/linux/libcfs/libcfs.h"
 
-#include <obd.h>
-#include <cl_object.h>
+#include "../include/obd.h"
+#include "../include/cl_object.h"
 #include "lov_internal.h"
 
 /** \defgroup lov lov
@@ -438,7 +438,6 @@ struct lovsub_page {
 	struct cl_page_slice lsb_cl;
 };
 
-
 struct lov_thread_info {
 	struct cl_object_conf   lti_stripe_conf;
 	struct lu_fid	   lti_fid;
@@ -515,12 +514,12 @@ struct lov_io {
 	 * starting position within a file, for the current io loop iteration
 	 * (stripe), used by ci_io_loop().
 	 */
-	obd_off	    lis_pos;
+	u64	    lis_pos;
 	/**
 	 * end position with in a file, for the current stripe io. This is
 	 * exclusive (i.e., next offset after last byte affected by io).
 	 */
-	obd_off	    lis_endpos;
+	u64	    lis_endpos;
 
 	int		lis_mem_frozen;
 	int		lis_stripe_count;
@@ -611,7 +610,6 @@ int   lov_sublock_modify(const struct lu_env *env, struct lov_lock *lov,
 			   struct lovsub_lock *sublock,
 			   const struct cl_lock_descr *d, int idx);
 
-
 int   lov_page_init(const struct lu_env *env, struct cl_object *ob,
 			   struct cl_page *page, struct page *vmpage);
 int   lovsub_page_init(const struct lu_env *env, struct cl_object *ob,
@@ -636,9 +634,6 @@ struct lov_lock_link *lov_lock_link_find(const struct lu_env *env,
 struct lov_io_sub    *lov_page_subio(const struct lu_env *env,
 					 struct lov_io *lio,
 					 const struct cl_page_slice *slice);
-
-void lov_lsm_decref(struct lov_object *lov, struct lov_stripe_md *lsm);
-struct lov_stripe_md *lov_lsm_addref(struct lov_object *lov);
 
 #define lov_foreach_target(lov, var)		    \
 	for (var = 0; var < lov_targets_nr(lov); ++var)

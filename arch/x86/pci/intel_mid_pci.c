@@ -35,6 +35,9 @@
 
 #define PCIE_CAP_OFFSET	0x100
 
+/* Quirks for the listed devices */
+#define PCI_DEVICE_ID_INTEL_MRFL_MMC	0x1190
+
 /* Fixed BAR fields */
 #define PCIE_VNDR_CAP_ID_FIXED_BAR 0x00	/* Fixed BAR (TBD) */
 #define PCI_FIXED_BAR_0_SIZE	0x04
@@ -208,28 +211,62 @@ static int pci_write(struct pci_bus *bus, unsigned int devfn, int where,
 
 static int intel_mid_pci_irq_enable(struct pci_dev *dev)
 {
-	u8 pin;
-	struct io_apic_irq_attr irq_attr;
+	struct irq_alloc_info info;
+	int polarity;
+	int ret;
 
-	pci_read_config_byte(dev, PCI_INTERRUPT_PIN, &pin);
+	if (pci_has_managed_irq(dev))
+		return 0;
+
+	switch (intel_mid_identify_cpu()) {
+	case INTEL_MID_CPU_CHIP_TANGIER:
+		polarity = IOAPIC_POL_HIGH;
+
+		/* Special treatment for IRQ0 */
+		if (dev->irq == 0) {
+			/*
+			 * TNG has IRQ0 assigned to eMMC controller. But there
+			 * are also other devices with bogus PCI configuration
+			 * that have IRQ0 assigned. This check ensures that
+			 * eMMC gets it.
+			 */
+			if (dev->device != PCI_DEVICE_ID_INTEL_MRFL_MMC)
+				return -EBUSY;
+		}
+		break;
+	default:
+		polarity = IOAPIC_POL_LOW;
+		break;
+	}
+
+	ioapic_set_alloc_attr(&info, dev_to_node(&dev->dev), 1, polarity);
 
 	/*
 	 * MRST only have IOAPIC, the PCI irq lines are 1:1 mapped to
 	 * IOAPIC RTE entries, so we just enable RTE for the device.
 	 */
-	irq_attr.ioapic = mp_find_ioapic(dev->irq);
-	irq_attr.ioapic_pin = dev->irq;
-	irq_attr.trigger = 1; /* level */
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER)
-		irq_attr.polarity = 0; /* active high */
-	else
-		irq_attr.polarity = 1; /* active low */
-	io_apic_set_pci_routing(&dev->dev, dev->irq, &irq_attr);
+	ret = mp_map_gsi_to_irq(dev->irq, IOAPIC_MAP_ALLOC, &info);
+	if (ret < 0)
+		return ret;
+
+	dev->irq_managed = 1;
 
 	return 0;
 }
 
-struct pci_ops intel_mid_pci_ops = {
+static void intel_mid_pci_irq_disable(struct pci_dev *dev)
+{
+	if (pci_has_managed_irq(dev)) {
+		mp_unmap_irq(dev->irq);
+		dev->irq_managed = 0;
+		/*
+		 * Don't reset dev->irq here, otherwise
+		 * intel_mid_pci_irq_enable() will fail on next call.
+		 */
+	}
+}
+
+static struct pci_ops intel_mid_pci_ops = {
 	.read = pci_read,
 	.write = pci_write,
 };
@@ -245,6 +282,7 @@ int __init intel_mid_pci_init(void)
 	pr_info("Intel MID platform detected, using MID PCI ops\n");
 	pci_mmcfg_late_init();
 	pcibios_enable_irq = intel_mid_pci_irq_enable;
+	pcibios_disable_irq = intel_mid_pci_irq_disable;
 	pci_root_ops = intel_mid_pci_ops;
 	pci_soc_mode = 1;
 	/* Continue with standard init */
@@ -280,7 +318,6 @@ static void mrst_power_off_unused_dev(struct pci_dev *dev)
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x0801, mrst_power_off_unused_dev);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x0809, mrst_power_off_unused_dev);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x080C, mrst_power_off_unused_dev);
-DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x0812, mrst_power_off_unused_dev);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x0815, mrst_power_off_unused_dev);
 
 /*

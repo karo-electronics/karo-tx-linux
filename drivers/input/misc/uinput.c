@@ -311,12 +311,17 @@ static int uinput_open(struct inode *inode, struct file *file)
 static int uinput_validate_absbits(struct input_dev *dev)
 {
 	unsigned int cnt;
-	int retval = 0;
+	int nslot;
 
-	for (cnt = 0; cnt < ABS_CNT; cnt++) {
+	if (!test_bit(EV_ABS, dev->evbit))
+		return 0;
+
+	/*
+	 * Check if absmin/absmax/absfuzz/absflat are sane.
+	 */
+
+	for_each_set_bit(cnt, dev->absbit, ABS_CNT) {
 		int min, max;
-		if (!test_bit(cnt, dev->absbit))
-			continue;
 
 		min = input_abs_get_min(dev, cnt);
 		max = input_abs_get_max(dev, cnt);
@@ -327,8 +332,7 @@ static int uinput_validate_absbits(struct input_dev *dev)
 				UINPUT_NAME, cnt,
 				input_abs_get_min(dev, cnt),
 				input_abs_get_max(dev, cnt));
-			retval = -EINVAL;
-			break;
+			return -EINVAL;
 		}
 
 		if (input_abs_get_flat(dev, cnt) >
@@ -340,11 +344,18 @@ static int uinput_validate_absbits(struct input_dev *dev)
 				input_abs_get_flat(dev, cnt),
 				input_abs_get_min(dev, cnt),
 				input_abs_get_max(dev, cnt));
-			retval = -EINVAL;
-			break;
+			return -EINVAL;
 		}
 	}
-	return retval;
+
+	if (test_bit(ABS_MT_SLOT, dev->absbit)) {
+		nslot = input_abs_get_max(dev, ABS_MT_SLOT) + 1;
+		input_mt_init_slots(dev, nslot, 0);
+	} else if (test_bit(ABS_MT_POSITION_X, dev->absbit)) {
+		input_set_events_per_packet(dev, 60);
+	}
+
+	return 0;
 }
 
 static int uinput_allocate_device(struct uinput_device *udev)
@@ -410,19 +421,9 @@ static int uinput_setup_device(struct uinput_device *udev,
 		input_abs_set_flat(dev, i, user_dev->absflat[i]);
 	}
 
-	/* check if absmin/absmax/absfuzz/absflat are filled as
-	 * told in Documentation/input/input-programming.txt */
-	if (test_bit(EV_ABS, dev->evbit)) {
-		retval = uinput_validate_absbits(dev);
-		if (retval < 0)
-			goto exit;
-		if (test_bit(ABS_MT_SLOT, dev->absbit)) {
-			int nslot = input_abs_get_max(dev, ABS_MT_SLOT) + 1;
-			input_mt_init_slots(dev, nslot, 0);
-		} else if (test_bit(ABS_MT_POSITION_X, dev->absbit)) {
-			input_set_events_per_packet(dev, 60);
-		}
-	}
+	retval = uinput_validate_absbits(dev);
+	if (retval < 0)
+		goto exit;
 
 	udev->state = UIST_SETUP_COMPLETE;
 	retval = count;
@@ -720,6 +721,12 @@ static long uinput_ioctl_handler(struct file *file, unsigned int cmd,
 	}
 
 	switch (cmd) {
+		case UI_GET_VERSION:
+			if (put_user(UINPUT_VERSION,
+				     (unsigned int __user *)p))
+				retval = -EFAULT;
+			goto out;
+
 		case UI_DEV_CREATE:
 			retval = uinput_create_device(udev);
 			goto out;

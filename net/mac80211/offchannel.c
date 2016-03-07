@@ -46,7 +46,7 @@ static void ieee80211_offchannel_ps_enable(struct ieee80211_sub_if_data *sdata)
 	}
 
 	if (!local->offchannel_ps_enabled ||
-	    !(local->hw.flags & IEEE80211_HW_PS_NULLFUNC_STACK))
+	    !ieee80211_hw_check(&local->hw, PS_NULLFUNC_STACK))
 		/*
 		 * If power save was enabled, no need to send a nullfunc
 		 * frame because AP knows that we are sleeping. But if the
@@ -57,7 +57,7 @@ static void ieee80211_offchannel_ps_enable(struct ieee80211_sub_if_data *sdata)
 		 * to send a new nullfunc frame to inform the AP that we
 		 * are again sleeping.
 		 */
-		ieee80211_send_nullfunc(local, sdata, 1);
+		ieee80211_send_nullfunc(local, sdata, true);
 }
 
 /* inform AP that we are awake again, unless power save is enabled */
@@ -66,7 +66,7 @@ static void ieee80211_offchannel_ps_disable(struct ieee80211_sub_if_data *sdata)
 	struct ieee80211_local *local = sdata->local;
 
 	if (!local->ps_sdata)
-		ieee80211_send_nullfunc(local, sdata, 0);
+		ieee80211_send_nullfunc(local, sdata, false);
 	else if (local->offchannel_ps_enabled) {
 		/*
 		 * In !IEEE80211_HW_PS_NULLFUNC_STACK case the hardware
@@ -93,7 +93,7 @@ static void ieee80211_offchannel_ps_disable(struct ieee80211_sub_if_data *sdata)
 		 * restart the timer now and send a nullfunc frame to inform
 		 * the AP that we are awake.
 		 */
-		ieee80211_send_nullfunc(local, sdata, 0);
+		ieee80211_send_nullfunc(local, sdata, false);
 		mod_timer(&local->dynamic_ps_timer, jiffies +
 			  msecs_to_jiffies(local->hw.conf.dynamic_ps_timeout));
 	}
@@ -119,8 +119,9 @@ void ieee80211_offchannel_stop_vifs(struct ieee80211_local *local)
 	 * before sending nullfunc to enable powersave at the AP.
 	 */
 	ieee80211_stop_queues_by_reason(&local->hw, IEEE80211_MAX_QUEUE_MAP,
-					IEEE80211_QUEUE_STOP_REASON_OFFCHANNEL);
-	ieee80211_flush_queues(local, NULL);
+					IEEE80211_QUEUE_STOP_REASON_OFFCHANNEL,
+					false);
+	ieee80211_flush_queues(local, NULL, false);
 
 	mutex_lock(&local->iflist_mtx);
 	list_for_each_entry(sdata, &local->interfaces, list) {
@@ -182,7 +183,8 @@ void ieee80211_offchannel_return(struct ieee80211_local *local)
 	mutex_unlock(&local->iflist_mtx);
 
 	ieee80211_wake_queues_by_reason(&local->hw, IEEE80211_MAX_QUEUE_MAP,
-					IEEE80211_QUEUE_STOP_REASON_OFFCHANNEL);
+					IEEE80211_QUEUE_STOP_REASON_OFFCHANNEL,
+					false);
 }
 
 void ieee80211_handle_roc_started(struct ieee80211_roc_work *roc)
@@ -396,7 +398,7 @@ void ieee80211_sw_roc_work(struct work_struct *work)
 		ieee80211_roc_notify_destroy(roc, !roc->abort);
 
 		if (started && !on_channel) {
-			ieee80211_flush_queues(local, NULL);
+			ieee80211_flush_queues(local, NULL, false);
 
 			local->tmp_channel = NULL;
 			ieee80211_hw_config(local, 0);

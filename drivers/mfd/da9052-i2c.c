@@ -140,13 +140,6 @@ static int da9052_i2c_probe(struct i2c_client *client,
 	if (!da9052)
 		return -ENOMEM;
 
-	if (!i2c_check_functionality(client->adapter,
-				     I2C_FUNC_SMBUS_BYTE_DATA)) {
-		dev_info(&client->dev, "Error in %s:i2c_check_functionality\n",
-			 __func__);
-		return  -ENODEV;
-	}
-
 	da9052->dev = &client->dev;
 	da9052->chip_irq = client->irq;
 	da9052->fix_io = da9052_i2c_fix;
@@ -181,11 +174,7 @@ static int da9052_i2c_probe(struct i2c_client *client,
 		return ret;
 	}
 
-	ret = da9052_device_init(da9052, id->driver_data);
-	if (ret != 0)
-		return ret;
-
-	return 0;
+	return da9052_device_init(da9052, id->driver_data);
 }
 
 static int da9052_i2c_remove(struct i2c_client *client)
@@ -202,7 +191,6 @@ static struct i2c_driver da9052_i2c_driver = {
 	.id_table = da9052_i2c_id,
 	.driver = {
 		.name = "da9052",
-		.owner = THIS_MODULE,
 #ifdef CONFIG_OF
 		.of_match_table = dialog_dt_ids,
 #endif

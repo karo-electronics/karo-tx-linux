@@ -227,7 +227,8 @@ int __init sbni_probe(int unit)
 	struct net_device *dev;
 	int err;
 
-	dev = alloc_netdev(sizeof(struct net_local), "sbni", sbni_devsetup);
+	dev = alloc_netdev(sizeof(struct net_local), "sbni",
+			   NET_NAME_UNKNOWN, sbni_devsetup);
 	if (!dev)
 		return -ENOMEM;
 
@@ -1357,6 +1358,8 @@ sbni_ioctl( struct net_device  *dev,  struct ifreq  *ifr,  int  cmd )
 		if( !slave_dev  ||  !(slave_dev->flags & IFF_UP) ) {
 			netdev_err(dev, "trying to enslave non-active device %s\n",
 				   slave_name);
+			if (slave_dev)
+				dev_put(slave_dev);
 			return  -EPERM;
 		}
 
@@ -1477,8 +1480,8 @@ int __init init_module( void )
 	int err;
 
 	while( num < SBNI_MAX_NUM_CARDS ) {
-		dev = alloc_netdev(sizeof(struct net_local), 
-				   "sbni%d", sbni_devsetup);
+		dev = alloc_netdev(sizeof(struct net_local), "sbni%d",
+				   NET_NAME_UNKNOWN, sbni_devsetup);
 		if( !dev)
 			break;
 

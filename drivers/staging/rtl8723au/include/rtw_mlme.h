@@ -50,11 +50,11 @@
 #define	WIFI_SITE_MONITOR	0x00000800
 
 #define	WIFI_MP_STATE		0x00010000
-#define	WIFI_MP_CTX_BACKGROUND	0x00020000	/*  in continous tx background */
-#define	WIFI_MP_CTX_ST		0x00040000	/*  in continous tx with single-tone */
-#define	WIFI_MP_CTX_BACKGROUND_PENDING	0x00080000	/*  pending in continous tx background due to out of skb */
-#define	WIFI_MP_CTX_CCK_HW	0x00100000	/*  in continous tx */
-#define	WIFI_MP_CTX_CCK_CS	0x00200000	/*  in continous tx with carrier suppression */
+#define	WIFI_MP_CTX_BACKGROUND	0x00020000	/*  in continuous tx background */
+#define	WIFI_MP_CTX_ST		0x00040000	/*  in continuous tx with single-tone */
+#define	WIFI_MP_CTX_BACKGROUND_PENDING	0x00080000	/*  pending in continuous tx background due to out of skb */
+#define	WIFI_MP_CTX_CCK_HW	0x00100000	/*  in continuous tx */
+#define	WIFI_MP_CTX_CCK_CS	0x00200000	/*  in continuous tx with carrier suppression */
 #define   WIFI_MP_LPBK_STATE	0x00400000
 
 #define _FW_UNDER_LINKING	WIFI_UNDER_LINKING
@@ -163,24 +163,6 @@ struct mlme_priv {
 	u32 assoc_req_len;
 	u32 assoc_rsp_len;
 	u8 *assoc_rsp;
-	u32 wps_assoc_resp_ie_len;
-	u8 *wps_assoc_resp_ie;
-	u8 *wps_probe_resp_ie;
-	u32 wps_probe_resp_ie_len;
-	u8 *wps_beacon_ie;
-	u32 wps_beacon_ie_len;
-	u32 p2p_go_probe_resp_ie_len; /* for GO */
-	u32 p2p_assoc_req_ie_len;
-	u8 *p2p_beacon_ie;
-	u8 *p2p_probe_req_ie;
-	u8 *p2p_probe_resp_ie;
-	u8 *p2p_go_probe_resp_ie; /* for GO */
-	u8 *p2p_assoc_req_ie;
-	u32 p2p_beacon_ie_len;
-	u32 p2p_probe_req_ie_len;
-	u32 p2p_probe_resp_ie_len;
-	u8 *wfd_assoc_req_ie;
-	u32 wfd_assoc_req_ie_len;
 
 #ifdef CONFIG_8723AU_AP_MODE
 	/* Number of associated Non-ERP stations (i.e., stations using 802.11b
@@ -213,16 +195,6 @@ struct mlme_priv {
 	u8		update_bcn;
 
 #endif /* ifdef CONFIG_8723AU_AP_MODE */
-
-	u8 *wfd_beacon_ie;
-	u8 *wfd_probe_req_ie;
-	u8 *wfd_probe_resp_ie;
-	u8 *wfd_go_probe_resp_ie; /* for GO */
-
-	u32 wfd_beacon_ie_len;
-	u32 wfd_probe_req_ie_len;
-	u32 wfd_probe_resp_ie_len;
-	u32 wfd_go_probe_resp_ie_len; /* for GO */
 };
 
 void rtw_joinbss_event_prehandle23a(struct rtw_adapter *adapter, u8 *pbuf);
@@ -240,6 +212,9 @@ int rtw_init_mlme_priv23a(struct rtw_adapter *adapter);
 
 void rtw_free_mlme_priv23a(struct mlme_priv *pmlmepriv);
 
+int rtw_do_join_adhoc(struct rtw_adapter *adapter);
+int rtw_do_join_network(struct rtw_adapter *adapter,
+			struct wlan_network *candidate);
 int rtw_select_and_join_from_scanned_queue23a(struct mlme_priv *pmlmepriv);
 int rtw_set_key23a(struct rtw_adapter *adapter,
 		struct security_priv *psecuritypriv, int keyid, u8 set_tx);
@@ -295,7 +270,7 @@ static inline void _clr_fwstate_(struct mlme_priv *pmlmepriv, int state)
 static inline void clr_fwstate(struct mlme_priv *pmlmepriv, int state)
 {
 	spin_lock_bh(&pmlmepriv->lock);
-	if (check_fwstate(pmlmepriv, state) == true)
+	if (check_fwstate(pmlmepriv, state))
 		pmlmepriv->fw_state ^= state;
 	spin_unlock_bh(&pmlmepriv->lock);
 }
@@ -307,9 +282,6 @@ static inline void clr_fwstate_ex(struct mlme_priv *pmlmepriv, int state)
 	spin_unlock_bh(&pmlmepriv->lock);
 }
 
-u16 rtw_get_capability23a(struct wlan_bssid_ex *bss);
-void rtw_update_scanned_network23a(struct rtw_adapter *adapter,
-				struct wlan_bssid_ex *target);
 void rtw_disconnect_hdl23a_under_linked(struct rtw_adapter *adapter,
 				     struct sta_info *psta, u8 free_assoc);
 void rtw_generate_random_ibss23a(u8 *pibss);
@@ -330,8 +302,6 @@ void rtw_init_registrypriv_dev_network23a(struct rtw_adapter *adapter);
 
 void rtw_update_registrypriv_dev_network23a(struct rtw_adapter *adapter);
 
-void rtw_get_encrypt_decrypt_from_registrypriv23a(struct rtw_adapter *adapter);
-
 void rtw_scan_timeout_handler23a(unsigned long data);
 
 void rtw_dynamic_check_timer_handler(unsigned long data);
@@ -344,27 +314,23 @@ void rtw23a_free_mlme_priv_ie_data(struct mlme_priv *pmlmepriv);
 
 void _rtw_free_mlme_priv23a(struct mlme_priv *pmlmepriv);
 
-struct wlan_network *rtw_alloc_network(struct mlme_priv *pmlmepriv, int gfp);
+struct wlan_network *rtw_alloc_network(struct mlme_priv *pmlmepriv, gfp_t gfp);
 
 int rtw_if_up23a(struct rtw_adapter *padapter);
 
 int rtw_linked_check(struct rtw_adapter *padapter);
 
-__le16 *rtw_get_capability23a_from_ie(u8 *ie);
-__le16 *rtw_get_beacon_interval23a_from_ie(u8 *ie);
-
-
 void rtw_joinbss_reset23a(struct rtw_adapter *padapter);
 
-unsigned int rtw_restructure_ht_ie23a(struct rtw_adapter *padapter, u8 *in_ie,
-				   u8 *out_ie, uint in_len, uint *pout_len);
+bool rtw_restructure_ht_ie23a(struct rtw_adapter *padapter, u8 *in_ie,
+			      u8 *out_ie, uint in_len, uint *pout_len);
 void rtw_update_ht_cap23a(struct rtw_adapter *padapter,
 		       u8 *pie, uint ie_len);
 void rtw_issue_addbareq_cmd23a(struct rtw_adapter *padapter,
 			    struct xmit_frame *pxmitframe);
 
-int rtw_is_same_ibss23a(struct rtw_adapter *adapter,
-		     struct wlan_network *pnetwork);
+bool rtw_is_same_ibss23a(struct rtw_adapter *adapter,
+			 struct wlan_network *pnetwork);
 int is_same_network23a(struct wlan_bssid_ex *src, struct wlan_bssid_ex *dst);
 
 void rtw23a_roaming(struct rtw_adapter *adapter,

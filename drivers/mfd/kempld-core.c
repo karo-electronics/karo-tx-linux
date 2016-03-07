@@ -24,7 +24,8 @@
 
 #define MAX_ID_LEN 4
 static char force_device_id[MAX_ID_LEN + 1] = "";
-module_param_string(force_device_id, force_device_id, sizeof(force_device_id), 0);
+module_param_string(force_device_id, force_device_id,
+		    sizeof(force_device_id), 0);
 MODULE_PARM_DESC(force_device_id, "Override detected product");
 
 /*
@@ -36,7 +37,7 @@ static void kempld_get_hardware_mutex(struct kempld_device_data *pld)
 {
 	/* The mutex bit will read 1 until access has been granted */
 	while (ioread8(pld->io_index) & KEMPLD_MUTEX_KEY)
-		msleep(1);
+		usleep_range(1000, 3000);
 }
 
 static void kempld_release_hardware_mutex(struct kempld_device_data *pld)
@@ -447,7 +448,6 @@ static int kempld_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct kempld_device_data *pld;
 	struct resource *ioport;
-	int ret;
 
 	pld = devm_kzalloc(dev, sizeof(*pld), GFP_KERNEL);
 	if (!pld)
@@ -470,11 +470,7 @@ static int kempld_probe(struct platform_device *pdev)
 	mutex_init(&pld->lock);
 	platform_set_drvdata(pdev, pld);
 
-	ret = kempld_detect_device(pld);
-	if (ret)
-		return ret;
-
-	return 0;
+	return kempld_detect_device(pld);
 }
 
 static int kempld_remove(struct platform_device *pdev)
@@ -493,14 +489,21 @@ static int kempld_remove(struct platform_device *pdev)
 static struct platform_driver kempld_driver = {
 	.driver		= {
 		.name	= "kempld",
-		.owner	= THIS_MODULE,
 	},
 	.probe		= kempld_probe,
 	.remove		= kempld_remove,
 };
 
-static struct dmi_system_id __initdata kempld_dmi_table[] = {
+static struct dmi_system_id kempld_dmi_table[] __initdata = {
 	{
+		.ident = "BBL6",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+			DMI_MATCH(DMI_BOARD_NAME, "COMe-bBL6"),
+		},
+		.driver_data = (void *)&kempld_platform_data_generic,
+		.callback = kempld_create_platform_device,
+	}, {
 		.ident = "BHL6",
 		.matches = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
@@ -508,8 +511,23 @@ static struct dmi_system_id __initdata kempld_dmi_table[] = {
 		},
 		.driver_data = (void *)&kempld_platform_data_generic,
 		.callback = kempld_create_platform_device,
-	},
-	{
+	}, {
+		.ident = "CBL6",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+			DMI_MATCH(DMI_BOARD_NAME, "COMe-cBL6"),
+		},
+		.driver_data = (void *)&kempld_platform_data_generic,
+		.callback = kempld_create_platform_device,
+	}, {
+		.ident = "CBW6",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+			DMI_MATCH(DMI_BOARD_NAME, "COMe-cBW6"),
+		},
+		.driver_data = (void *)&kempld_platform_data_generic,
+		.callback = kempld_create_platform_device,
+	}, {
 		.ident = "CCR2",
 		.matches = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
@@ -733,12 +751,12 @@ MODULE_DEVICE_TABLE(dmi, kempld_dmi_table);
 static int __init kempld_init(void)
 {
 	const struct dmi_system_id *id;
-	int ret;
 
 	if (force_device_id[0]) {
-		for (id = kempld_dmi_table; id->matches[0].slot != DMI_NONE; id++)
+		for (id = kempld_dmi_table;
+		     id->matches[0].slot != DMI_NONE; id++)
 			if (strstr(id->ident, force_device_id))
-				if (id->callback && id->callback(id))
+				if (id->callback && !id->callback(id))
 					break;
 		if (id->matches[0].slot == DMI_NONE)
 			return -ENODEV;
@@ -747,11 +765,7 @@ static int __init kempld_init(void)
 			return -ENODEV;
 	}
 
-	ret = platform_driver_register(&kempld_driver);
-	if (ret)
-		return ret;
-
-	return 0;
+	return platform_driver_register(&kempld_driver);
 }
 
 static void __exit kempld_exit(void)

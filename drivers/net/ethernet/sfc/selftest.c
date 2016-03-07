@@ -46,7 +46,7 @@ struct efx_loopback_payload {
 	struct iphdr ip;
 	struct udphdr udp;
 	__be16 iteration;
-	const char msg[64];
+	char msg[64];
 } __packed;
 
 /* Loopback test source MAC address */
@@ -114,7 +114,10 @@ static int efx_test_nvram(struct efx_nic *efx, struct efx_self_tests *tests)
 
 	if (efx->type->test_nvram) {
 		rc = efx->type->test_nvram(efx);
-		tests->nvram = rc ? -1 : 1;
+		if (rc == -EPERM)
+			rc = 0;
+		else
+			tests->nvram = rc ? -1 : 1;
 	}
 
 	return rc;
@@ -188,7 +191,7 @@ static int efx_test_eventq_irq(struct efx_nic *efx,
 		schedule_timeout_uninterruptible(wait);
 
 		efx_for_each_channel(channel, efx) {
-			napi_disable(&channel->napi_str);
+			efx_stop_eventq(channel);
 			if (channel->eventq_read_ptr !=
 			    read_ptr[channel->channel]) {
 				set_bit(channel->channel, &napi_ran);
@@ -200,8 +203,7 @@ static int efx_test_eventq_irq(struct efx_nic *efx,
 				if (efx_nic_event_test_irq_cpu(channel) >= 0)
 					clear_bit(channel->channel, &int_pend);
 			}
-			napi_enable(&channel->napi_str);
-			efx_nic_eventq_read_ack(channel);
+			efx_start_eventq(channel);
 		}
 
 		wait *= 2;
@@ -254,6 +256,12 @@ static int efx_test_phy(struct efx_nic *efx, struct efx_self_tests *tests,
 	mutex_lock(&efx->mac_lock);
 	rc = efx->phy_op->run_tests(efx, tests->phy_ext, flags);
 	mutex_unlock(&efx->mac_lock);
+	if (rc == -EPERM)
+		rc = 0;
+	else
+		netif_info(efx, drv, efx->net_dev,
+			   "%s phy selftest\n", rc ? "Failed" : "Passed");
+
 	return rc;
 }
 
@@ -661,6 +669,9 @@ static int efx_test_loopbacks(struct efx_nic *efx, struct efx_self_tests *tests,
 	efx->loopback_selftest = NULL;
 	wmb();
 	kfree(state);
+
+	if (rc == -EPERM)
+		rc = 0;
 
 	return rc;
 }

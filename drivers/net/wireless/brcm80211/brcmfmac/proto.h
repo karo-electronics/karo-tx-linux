@@ -16,15 +16,28 @@
 #ifndef BRCMFMAC_PROTO_H
 #define BRCMFMAC_PROTO_H
 
+
+enum proto_addr_mode {
+	ADDR_INDIRECT	= 0,
+	ADDR_DIRECT
+};
+
+
 struct brcmf_proto {
-	int (*hdrpull)(struct brcmf_pub *drvr, bool do_fws, u8 *ifidx,
-		       struct sk_buff *skb);
+	int (*hdrpull)(struct brcmf_pub *drvr, bool do_fws,
+		       struct sk_buff *skb, struct brcmf_if **ifp);
 	int (*query_dcmd)(struct brcmf_pub *drvr, int ifidx, uint cmd,
 			  void *buf, uint len);
 	int (*set_dcmd)(struct brcmf_pub *drvr, int ifidx, uint cmd, void *buf,
 			uint len);
 	int (*txdata)(struct brcmf_pub *drvr, int ifidx, u8 offset,
 		      struct sk_buff *skb);
+	void (*configure_addr_mode)(struct brcmf_pub *drvr, int ifidx,
+				    enum proto_addr_mode addr_mode);
+	void (*delete_peer)(struct brcmf_pub *drvr, int ifidx,
+			    u8 peer[ETH_ALEN]);
+	void (*add_tdls_peer)(struct brcmf_pub *drvr, int ifidx,
+			      u8 peer[ETH_ALEN]);
 	void *pd;
 };
 
@@ -33,9 +46,19 @@ int brcmf_proto_attach(struct brcmf_pub *drvr);
 void brcmf_proto_detach(struct brcmf_pub *drvr);
 
 static inline int brcmf_proto_hdrpull(struct brcmf_pub *drvr, bool do_fws,
-				      u8 *ifidx, struct sk_buff *skb)
+				      struct sk_buff *skb,
+				      struct brcmf_if **ifp)
 {
-	return drvr->proto->hdrpull(drvr, do_fws, ifidx, skb);
+	struct brcmf_if *tmp = NULL;
+
+	/* assure protocol is always called with
+	 * non-null initialized pointer.
+	 */
+	if (ifp)
+		*ifp = NULL;
+	else
+		ifp = &tmp;
+	return drvr->proto->hdrpull(drvr, do_fws, skb, ifp);
 }
 static inline int brcmf_proto_query_dcmd(struct brcmf_pub *drvr, int ifidx,
 					 uint cmd, void *buf, uint len)
@@ -48,9 +71,25 @@ static inline int brcmf_proto_set_dcmd(struct brcmf_pub *drvr, int ifidx,
 	return drvr->proto->set_dcmd(drvr, ifidx, cmd, buf, len);
 }
 static inline int brcmf_proto_txdata(struct brcmf_pub *drvr, int ifidx,
-				       u8 offset, struct sk_buff *skb)
+				     u8 offset, struct sk_buff *skb)
 {
 	return drvr->proto->txdata(drvr, ifidx, offset, skb);
+}
+static inline void
+brcmf_proto_configure_addr_mode(struct brcmf_pub *drvr, int ifidx,
+				enum proto_addr_mode addr_mode)
+{
+	drvr->proto->configure_addr_mode(drvr, ifidx, addr_mode);
+}
+static inline void
+brcmf_proto_delete_peer(struct brcmf_pub *drvr, int ifidx, u8 peer[ETH_ALEN])
+{
+	drvr->proto->delete_peer(drvr, ifidx, peer);
+}
+static inline void
+brcmf_proto_add_tdls_peer(struct brcmf_pub *drvr, int ifidx, u8 peer[ETH_ALEN])
+{
+	drvr->proto->add_tdls_peer(drvr, ifidx, peer);
 }
 
 

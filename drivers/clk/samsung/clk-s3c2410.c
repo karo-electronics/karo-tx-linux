@@ -8,8 +8,6 @@
  * Common Clock Framework support for S3C2410 and following SoCs.
  */
 
-#include <linux/clk.h>
-#include <linux/clkdev.h>
 #include <linux/clk-provider.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
@@ -466,6 +464,8 @@ void __init s3c2410_common_clk_init(struct device_node *np, unsigned long xti_f,
 	}
 
 	s3c2410_clk_sleep_init();
+
+	samsung_clk_of_add_provider(np, ctx);
 }
 
 static void __init s3c2410_clk_init(struct device_node *np)

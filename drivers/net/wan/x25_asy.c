@@ -81,8 +81,8 @@ static struct x25_asy *x25_asy_alloc(void)
 		char name[IFNAMSIZ];
 		sprintf(name, "x25asy%d", i);
 
-		dev = alloc_netdev(sizeof(struct x25_asy),
-				   name, x25_asy_setup);
+		dev = alloc_netdev(sizeof(struct x25_asy), name,
+				   NET_NAME_UNKNOWN, x25_asy_setup);
 		if (!dev)
 			return NULL;
 
@@ -549,15 +549,11 @@ static void x25_asy_receive_buf(struct tty_struct *tty,
 
 static int x25_asy_open_tty(struct tty_struct *tty)
 {
-	struct x25_asy *sl = tty->disc_data;
+	struct x25_asy *sl;
 	int err;
 
 	if (tty->ops->write == NULL)
 		return -EOPNOTSUPP;
-
-	/* First make sure we're not already connected. */
-	if (sl && sl->magic == X25_ASY_MAGIC)
-		return -EEXIST;
 
 	/* OK.  Find a free X.25 channel to use. */
 	sl = x25_asy_alloc();

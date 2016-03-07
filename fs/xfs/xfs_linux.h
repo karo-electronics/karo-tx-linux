@@ -21,18 +21,6 @@
 #include <linux/types.h>
 
 /*
- * XFS_BIG_BLKNOS needs block layer disk addresses to be 64 bits.
- * XFS_BIG_INUMS requires XFS_BIG_BLKNOS to be set.
- */
-#if defined(CONFIG_LBDAF) || (BITS_PER_LONG == 64)
-# define XFS_BIG_BLKNOS	1
-# define XFS_BIG_INUMS	1
-#else
-# define XFS_BIG_BLKNOS	0
-# define XFS_BIG_INUMS	0
-#endif
-
-/*
  * Kernel specific type declarations for XFS
  */
 typedef signed char		__int8_t;
@@ -44,31 +32,16 @@ typedef unsigned int		__uint32_t;
 typedef signed long long int	__int64_t;
 typedef unsigned long long int	__uint64_t;
 
-typedef __uint32_t		inst_t;		/* an instruction */
-
 typedef __s64			xfs_off_t;	/* <file offset> type */
 typedef unsigned long long	xfs_ino_t;	/* <inode> type */
 typedef __s64			xfs_daddr_t;	/* <disk address> type */
-typedef char *			xfs_caddr_t;	/* <core address> type */
 typedef __u32			xfs_dev_t;
 typedef __u32			xfs_nlink_t;
-
-/* __psint_t is the same size as a pointer */
-#if (BITS_PER_LONG == 32)
-typedef __int32_t __psint_t;
-typedef __uint32_t __psunsigned_t;
-#elif (BITS_PER_LONG == 64)
-typedef __int64_t __psint_t;
-typedef __uint64_t __psunsigned_t;
-#else
-#error BITS_PER_LONG must be 32 or 64
-#endif
 
 #include "xfs_types.h"
 
 #include "kmem.h"
 #include "mrlock.h"
-#include "time.h"
 #include "uuid.h"
 
 #include <linux/semaphore.h>
@@ -113,7 +86,7 @@ typedef __uint64_t __psunsigned_t;
 #include <asm/byteorder.h>
 #include <asm/unaligned.h>
 
-#include "xfs_vnode.h"
+#include "xfs_fs.h"
 #include "xfs_stats.h"
 #include "xfs_sysctl.h"
 #include "xfs_iops.h"
@@ -127,15 +100,6 @@ typedef __uint64_t __psunsigned_t;
 #define XFS_NATIVE_HOST 1
 #else
 #undef XFS_NATIVE_HOST
-#endif
-
-/*
- * Feature macros (disable/enable)
- */
-#ifdef CONFIG_SMP
-#define HAVE_PERCPU_SB	/* per cpu superblock counters are a 2.6 feature */
-#else
-#undef  HAVE_PERCPU_SB	/* per cpu superblock counters are a 2.6 feature */
 #endif
 
 #define irix_sgid_inherit	xfs_params.sgid_inherit.val
@@ -190,6 +154,29 @@ typedef __uint64_t __psunsigned_t;
 #define MIN(a,b)	(min(a,b))
 #define MAX(a,b)	(max(a,b))
 #define howmany(x, y)	(((x)+((y)-1))/(y))
+
+static inline void delay(long ticks)
+{
+	schedule_timeout_uninterruptible(ticks);
+}
+
+/*
+ * XFS wrapper structure for sysfs support. It depends on external data
+ * structures and is embedded in various internal data structures to implement
+ * the XFS sysfs object heirarchy. Define it here for broad access throughout
+ * the codebase.
+ */
+struct xfs_kobj {
+	struct kobject		kobject;
+	struct completion	complete;
+};
+
+struct xstats {
+	struct xfsstats __percpu	*xs_stats;
+	struct xfs_kobj			xs_kobj;
+};
+
+extern struct xstats xfsstats;
 
 /* Kernel uid/gid conversion. These are used to convert to/from the on disk
  * uid_t/gid_t types to the kuid_t/kgid_t types that the kernel uses internally.
@@ -331,7 +318,7 @@ static inline __uint64_t roundup_64(__uint64_t x, __uint32_t y)
 {
 	x += y - 1;
 	do_div(x, y);
-	return(x * y);
+	return x * y;
 }
 
 static inline __uint64_t howmany_64(__uint64_t x, __uint32_t y)
@@ -380,5 +367,11 @@ static inline __uint64_t howmany_64(__uint64_t x, __uint32_t y)
 
 #endif /* XFS_WARN */
 #endif /* DEBUG */
+
+#ifdef CONFIG_XFS_RT
+#define XFS_IS_REALTIME_INODE(ip) ((ip)->i_d.di_flags & XFS_DIFLAG_REALTIME)
+#else
+#define XFS_IS_REALTIME_INODE(ip) (0)
+#endif
 
 #endif /* __XFS_LINUX__ */

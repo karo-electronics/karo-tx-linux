@@ -12,14 +12,17 @@
  */
 
 #include <linux/export.h>
+#include <linux/module.h>
 #include <linux/regmap.h>
 #include <linux/platform_device.h>
 #include <linux/clk-provider.h>
 #include <linux/reset-controller.h>
 
 #include "common.h"
+#include "clk-rcg.h"
 #include "clk-regmap.h"
 #include "reset.h"
+#include "gdsc.h"
 
 struct qcom_cc {
 	struct qcom_reset_controller reset;
@@ -27,29 +30,76 @@ struct qcom_cc {
 	struct clk *clks[];
 };
 
-int qcom_cc_probe(struct platform_device *pdev, const struct qcom_cc_desc *desc)
+const
+struct freq_tbl *qcom_find_freq(const struct freq_tbl *f, unsigned long rate)
+{
+	if (!f)
+		return NULL;
+
+	for (; f->freq; f++)
+		if (rate <= f->freq)
+			return f;
+
+	/* Default to our fastest rate */
+	return f - 1;
+}
+EXPORT_SYMBOL_GPL(qcom_find_freq);
+
+int qcom_find_src_index(struct clk_hw *hw, const struct parent_map *map, u8 src)
+{
+	int i, num_parents = clk_hw_get_num_parents(hw);
+
+	for (i = 0; i < num_parents; i++)
+		if (src == map[i].src)
+			return i;
+
+	return -ENOENT;
+}
+EXPORT_SYMBOL_GPL(qcom_find_src_index);
+
+struct regmap *
+qcom_cc_map(struct platform_device *pdev, const struct qcom_cc_desc *desc)
 {
 	void __iomem *base;
 	struct resource *res;
+	struct device *dev = &pdev->dev;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	base = devm_ioremap_resource(dev, res);
+	if (IS_ERR(base))
+		return ERR_CAST(base);
+
+	return devm_regmap_init_mmio(dev, base, desc->config);
+}
+EXPORT_SYMBOL_GPL(qcom_cc_map);
+
+static void qcom_cc_del_clk_provider(void *data)
+{
+	of_clk_del_provider(data);
+}
+
+static void qcom_cc_reset_unregister(void *data)
+{
+	reset_controller_unregister(data);
+}
+
+static void qcom_cc_gdsc_unregister(void *data)
+{
+	gdsc_unregister(data);
+}
+
+int qcom_cc_really_probe(struct platform_device *pdev,
+			 const struct qcom_cc_desc *desc, struct regmap *regmap)
+{
 	int i, ret;
 	struct device *dev = &pdev->dev;
 	struct clk *clk;
 	struct clk_onecell_data *data;
 	struct clk **clks;
-	struct regmap *regmap;
 	struct qcom_reset_controller *reset;
 	struct qcom_cc *cc;
 	size_t num_clks = desc->num_clks;
 	struct clk_regmap **rclks = desc->clks;
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	base = devm_ioremap_resource(dev, res);
-	if (IS_ERR(base))
-		return PTR_ERR(base);
-
-	regmap = devm_regmap_init_mmio(dev, base, desc->config);
-	if (IS_ERR(regmap))
-		return PTR_ERR(regmap);
 
 	cc = devm_kzalloc(dev, sizeof(*cc) + sizeof(*clks) * num_clks,
 			  GFP_KERNEL);
@@ -76,6 +126,8 @@ int qcom_cc_probe(struct platform_device *pdev, const struct qcom_cc_desc *desc)
 	if (ret)
 		return ret;
 
+	devm_add_action(dev, qcom_cc_del_clk_provider, pdev->dev.of_node);
+
 	reset = &cc->reset;
 	reset->rcdev.of_node = dev->of_node;
 	reset->rcdev.ops = &qcom_reset_ops;
@@ -83,19 +135,37 @@ int qcom_cc_probe(struct platform_device *pdev, const struct qcom_cc_desc *desc)
 	reset->rcdev.nr_resets = desc->num_resets;
 	reset->regmap = regmap;
 	reset->reset_map = desc->resets;
-	platform_set_drvdata(pdev, &reset->rcdev);
 
 	ret = reset_controller_register(&reset->rcdev);
 	if (ret)
-		of_clk_del_provider(dev->of_node);
+		return ret;
 
-	return ret;
+	devm_add_action(dev, qcom_cc_reset_unregister, &reset->rcdev);
+
+	if (desc->gdscs && desc->num_gdscs) {
+		ret = gdsc_register(dev, desc->gdscs, desc->num_gdscs,
+				    &reset->rcdev, regmap);
+		if (ret)
+			return ret;
+	}
+
+	devm_add_action(dev, qcom_cc_gdsc_unregister, dev);
+
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(qcom_cc_really_probe);
+
+int qcom_cc_probe(struct platform_device *pdev, const struct qcom_cc_desc *desc)
+{
+	struct regmap *regmap;
+
+	regmap = qcom_cc_map(pdev, desc);
+	if (IS_ERR(regmap))
+		return PTR_ERR(regmap);
+
+	return qcom_cc_really_probe(pdev, desc, regmap);
 }
 EXPORT_SYMBOL_GPL(qcom_cc_probe);
 
-void qcom_cc_remove(struct platform_device *pdev)
-{
-	of_clk_del_provider(pdev->dev.of_node);
-	reset_controller_unregister(platform_get_drvdata(pdev));
-}
-EXPORT_SYMBOL_GPL(qcom_cc_remove);
+MODULE_LICENSE("GPL v2");

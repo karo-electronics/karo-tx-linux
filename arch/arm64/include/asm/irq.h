@@ -3,8 +3,13 @@
 
 #include <asm-generic/irq.h>
 
-extern void (*handle_arch_irq)(struct pt_regs *);
-extern void migrate_irqs(void);
+struct pt_regs;
+
 extern void set_handle_irq(void (*handle_irq)(struct pt_regs *));
+
+static inline int nr_legacy_irqs(void)
+{
+	return 0;
+}
 
 #endif

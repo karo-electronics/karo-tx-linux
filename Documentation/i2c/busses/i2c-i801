@@ -25,8 +25,14 @@ Supported adapters:
   * Intel Avoton (SOC)
   * Intel Wellsburg (PCH)
   * Intel Coleto Creek (PCH)
+  * Intel Wildcat Point (PCH)
   * Intel Wildcat Point-LP (PCH)
   * Intel BayTrail (SOC)
+  * Intel Sunrise Point-H (PCH)
+  * Intel Sunrise Point-LP (PCH)
+  * Intel DNV (SOC)
+  * Intel Broxton (SOC)
+  * Intel Lewisburg (PCH)
    Datasheets: Publicly available at the Intel website
 
 On Intel Patsburg and later chipsets, both the normal host SMBus controller

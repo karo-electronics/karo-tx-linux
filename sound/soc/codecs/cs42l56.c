@@ -115,52 +115,7 @@ static const struct reg_default cs42l56_reg_defaults[] = {
 static bool cs42l56_readable_register(struct device *dev, unsigned int reg)
 {
 	switch (reg) {
-	case CS42L56_CHIP_ID_1:
-	case CS42L56_CHIP_ID_2:
-	case CS42L56_PWRCTL_1:
-	case CS42L56_PWRCTL_2:
-	case CS42L56_CLKCTL_1:
-	case CS42L56_CLKCTL_2:
-	case CS42L56_SERIAL_FMT:
-	case CS42L56_CLASSH_CTL:
-	case CS42L56_MISC_CTL:
-	case CS42L56_INT_STATUS:
-	case CS42L56_PLAYBACK_CTL:
-	case CS42L56_DSP_MUTE_CTL:
-	case CS42L56_ADCA_MIX_VOLUME:
-	case CS42L56_ADCB_MIX_VOLUME:
-	case CS42L56_PCMA_MIX_VOLUME:
-	case CS42L56_PCMB_MIX_VOLUME:
-	case CS42L56_ANAINPUT_ADV_VOLUME:
-	case CS42L56_DIGINPUT_ADV_VOLUME:
-	case CS42L56_MASTER_A_VOLUME:
-	case CS42L56_MASTER_B_VOLUME:
-	case CS42L56_BEEP_FREQ_ONTIME:
-	case CS42L56_BEEP_FREQ_OFFTIME:
-	case CS42L56_BEEP_TONE_CFG:
-	case CS42L56_TONE_CTL:
-	case CS42L56_CHAN_MIX_SWAP:
-	case CS42L56_AIN_REFCFG_ADC_MUX:
-	case CS42L56_HPF_CTL:
-	case CS42L56_MISC_ADC_CTL:
-	case CS42L56_GAIN_BIAS_CTL:
-	case CS42L56_PGAA_MUX_VOLUME:
-	case CS42L56_PGAB_MUX_VOLUME:
-	case CS42L56_ADCA_ATTENUATOR:
-	case CS42L56_ADCB_ATTENUATOR:
-	case CS42L56_ALC_EN_ATTACK_RATE:
-	case CS42L56_ALC_RELEASE_RATE:
-	case CS42L56_ALC_THRESHOLD:
-	case CS42L56_NOISE_GATE_CTL:
-	case CS42L56_ALC_LIM_SFT_ZC:
-	case CS42L56_AMUTE_HPLO_MUX:
-	case CS42L56_HPA_VOLUME:
-	case CS42L56_HPB_VOLUME:
-	case CS42L56_LOA_VOLUME:
-	case CS42L56_LOB_VOLUME:
-	case CS42L56_LIM_THRESHOLD_CTL:
-	case CS42L56_LIM_CTL_RELEASE_RATE:
-	case CS42L56_LIM_ATTACK_RATE:
+	case CS42L56_CHIP_ID_1 ... CS42L56_LIM_ATTACK_RATE:
 		return true;
 	default:
 		return false;
@@ -171,9 +126,9 @@ static bool cs42l56_volatile_register(struct device *dev, unsigned int reg)
 {
 	switch (reg) {
 	case CS42L56_INT_STATUS:
-		return 1;
+		return true;
 	default:
-		return 0;
+		return false;
 	}
 }
 
@@ -185,21 +140,18 @@ static DECLARE_TLV_DB_SCALE(tone_tlv, -1050, 150, 0);
 static DECLARE_TLV_DB_SCALE(preamp_tlv, 0, 1000, 0);
 static DECLARE_TLV_DB_SCALE(pga_tlv, -600, 50, 0);
 
-static const unsigned int ngnb_tlv[] = {
-	TLV_DB_RANGE_HEAD(2),
+static const DECLARE_TLV_DB_RANGE(ngnb_tlv,
 	0, 1, TLV_DB_SCALE_ITEM(-8200, 600, 0),
-	2, 5, TLV_DB_SCALE_ITEM(-7600, 300, 0),
-};
-static const unsigned int ngb_tlv[] = {
-	TLV_DB_RANGE_HEAD(2),
+	2, 5, TLV_DB_SCALE_ITEM(-7600, 300, 0)
+);
+static const DECLARE_TLV_DB_RANGE(ngb_tlv,
 	0, 2, TLV_DB_SCALE_ITEM(-6400, 600, 0),
-	3, 7, TLV_DB_SCALE_ITEM(-4600, 300, 0),
-};
-static const unsigned int alc_tlv[] = {
-	TLV_DB_RANGE_HEAD(2),
+	3, 7, TLV_DB_SCALE_ITEM(-4600, 300, 0)
+);
+static const DECLARE_TLV_DB_RANGE(alc_tlv,
 	0, 2, TLV_DB_SCALE_ITEM(-3000, 600, 0),
-	3, 7, TLV_DB_SCALE_ITEM(-1200, 300, 0),
-};
+	3, 7, TLV_DB_SCALE_ITEM(-1200, 300, 0)
+);
 
 static const char * const beep_config_text[] = {
 	"Off", "Single", "Multiple", "Continuous"
@@ -318,24 +270,32 @@ static const struct soc_enum adca_swap_enum =
 			      ARRAY_SIZE(left_swap_text),
 			      left_swap_text,
 			      swap_values);
+static const struct snd_kcontrol_new adca_swap_mux =
+	SOC_DAPM_ENUM("Route", adca_swap_enum);
 
 static const struct soc_enum pcma_swap_enum =
 	SOC_VALUE_ENUM_SINGLE(CS42L56_CHAN_MIX_SWAP, 4, 3,
 			      ARRAY_SIZE(left_swap_text),
 			      left_swap_text,
 			      swap_values);
+static const struct snd_kcontrol_new pcma_swap_mux =
+	SOC_DAPM_ENUM("Route", pcma_swap_enum);
 
 static const struct soc_enum adcb_swap_enum =
 	SOC_VALUE_ENUM_SINGLE(CS42L56_CHAN_MIX_SWAP, 2, 3,
 			      ARRAY_SIZE(right_swap_text),
 			      right_swap_text,
 			      swap_values);
+static const struct snd_kcontrol_new adcb_swap_mux =
+	SOC_DAPM_ENUM("Route", adcb_swap_enum);
 
 static const struct soc_enum pcmb_swap_enum =
 	SOC_VALUE_ENUM_SINGLE(CS42L56_CHAN_MIX_SWAP, 6, 3,
 			      ARRAY_SIZE(right_swap_text),
 			      right_swap_text,
 			      swap_values);
+static const struct snd_kcontrol_new pcmb_swap_mux =
+	SOC_DAPM_ENUM("Route", pcmb_swap_enum);
 
 static const struct snd_kcontrol_new hpa_switch =
 	SOC_DAPM_SINGLE("Switch", CS42L56_PWRCTL_2, 6, 1, 1);
@@ -421,15 +381,15 @@ static const struct soc_enum ng_delay_enum =
 static const struct snd_kcontrol_new cs42l56_snd_controls[] = {
 
 	SOC_DOUBLE_R_SX_TLV("Master Volume", CS42L56_MASTER_A_VOLUME,
-			      CS42L56_MASTER_B_VOLUME, 0, 0x34, 0xfd, adv_tlv),
+			      CS42L56_MASTER_B_VOLUME, 0, 0x34, 0xE4, adv_tlv),
 	SOC_DOUBLE("Master Mute Switch", CS42L56_DSP_MUTE_CTL, 0, 1, 1, 1),
 
 	SOC_DOUBLE_R_SX_TLV("ADC Mixer Volume", CS42L56_ADCA_MIX_VOLUME,
-			      CS42L56_ADCB_MIX_VOLUME, 0, 0x88, 0xa9, hl_tlv),
+			      CS42L56_ADCB_MIX_VOLUME, 0, 0x88, 0x90, hl_tlv),
 	SOC_DOUBLE("ADC Mixer Mute Switch", CS42L56_DSP_MUTE_CTL, 6, 7, 1, 1),
 
 	SOC_DOUBLE_R_SX_TLV("PCM Mixer Volume", CS42L56_PCMA_MIX_VOLUME,
-			      CS42L56_PCMB_MIX_VOLUME, 0, 0x88, 0xa9, hl_tlv),
+			      CS42L56_PCMB_MIX_VOLUME, 0, 0x88, 0x90, hl_tlv),
 	SOC_DOUBLE("PCM Mixer Mute Switch", CS42L56_DSP_MUTE_CTL, 4, 5, 1, 1),
 
 	SOC_SINGLE_TLV("Analog Advisory Volume",
@@ -438,16 +398,16 @@ static const struct snd_kcontrol_new cs42l56_snd_controls[] = {
 			  CS42L56_DIGINPUT_ADV_VOLUME, 0, 0x00, 1, adv_tlv),
 
 	SOC_DOUBLE_R_SX_TLV("PGA Volume", CS42L56_PGAA_MUX_VOLUME,
-			      CS42L56_PGAB_MUX_VOLUME, 0, 0x34, 0xfd, pga_tlv),
+			      CS42L56_PGAB_MUX_VOLUME, 0, 0x34, 0x24, pga_tlv),
 	SOC_DOUBLE_R_TLV("ADC Volume", CS42L56_ADCA_ATTENUATOR,
 			      CS42L56_ADCB_ATTENUATOR, 0, 0x00, 1, adc_tlv),
 	SOC_DOUBLE("ADC Mute Switch", CS42L56_MISC_ADC_CTL, 2, 3, 1, 1),
 	SOC_DOUBLE("ADC Boost Switch", CS42L56_GAIN_BIAS_CTL, 3, 2, 1, 1),
 
 	SOC_DOUBLE_R_SX_TLV("Headphone Volume", CS42L56_HPA_VOLUME,
-			      CS42L56_HPA_VOLUME, 0, 0x44, 0x55, hl_tlv),
+			      CS42L56_HPB_VOLUME, 0, 0x84, 0x48, hl_tlv),
 	SOC_DOUBLE_R_SX_TLV("LineOut Volume", CS42L56_LOA_VOLUME,
-			      CS42L56_LOA_VOLUME, 0, 0x44, 0x55, hl_tlv),
+			      CS42L56_LOB_VOLUME, 0, 0x84, 0x48, hl_tlv),
 
 	SOC_SINGLE_TLV("Bass Shelving Volume", CS42L56_TONE_CTL,
 			0, 0x00, 1, tone_tlv),
@@ -466,11 +426,6 @@ static const struct snd_kcontrol_new cs42l56_snd_controls[] = {
 	SOC_SINGLE("PCMB Invert", CS42L56_PLAYBACK_CTL, 3, 1, 1),
 	SOC_SINGLE("ADCA Invert", CS42L56_MISC_ADC_CTL, 2, 1, 1),
 	SOC_SINGLE("ADCB Invert", CS42L56_MISC_ADC_CTL, 3, 1, 1),
-
-	SOC_ENUM("PCMA Swap", pcma_swap_enum),
-	SOC_ENUM("PCMB Swap", pcmb_swap_enum),
-	SOC_ENUM("ADCA Swap", adca_swap_enum),
-	SOC_ENUM("ADCB Swap", adcb_swap_enum),
 
 	SOC_DOUBLE("HPF Switch", CS42L56_HPF_CTL, 5, 7, 1, 1),
 	SOC_DOUBLE("HPF Freeze Switch", CS42L56_HPF_CTL, 4, 6, 1, 1),
@@ -570,6 +525,16 @@ static const struct snd_soc_dapm_widget cs42l56_dapm_widgets[] = {
 	SND_SOC_DAPM_ADC("ADCA", NULL, CS42L56_PWRCTL_1, 1, 1),
 	SND_SOC_DAPM_ADC("ADCB", NULL, CS42L56_PWRCTL_1, 2, 1),
 
+	SND_SOC_DAPM_MUX("ADCA Swap Mux", SND_SOC_NOPM, 0, 0,
+		&adca_swap_mux),
+	SND_SOC_DAPM_MUX("ADCB Swap Mux", SND_SOC_NOPM, 0, 0,
+		&adcb_swap_mux),
+
+	SND_SOC_DAPM_MUX("PCMA Swap Mux", SND_SOC_NOPM, 0, 0,
+		&pcma_swap_mux),
+	SND_SOC_DAPM_MUX("PCMB Swap Mux", SND_SOC_NOPM, 0, 0,
+		&pcmb_swap_mux),
+
 	SND_SOC_DAPM_DAC("DACA", NULL, SND_SOC_NOPM, 0, 0),
 	SND_SOC_DAPM_DAC("DACB", NULL, SND_SOC_NOPM, 0, 0),
 
@@ -607,8 +572,19 @@ static const struct snd_soc_dapm_route cs42l56_audio_map[] = {
 	{"Digital Output Mux", NULL, "ADCA"},
 	{"Digital Output Mux", NULL, "ADCB"},
 
-	{"ADCB", NULL, "ADCB Mux"},
-	{"ADCA", NULL, "ADCA Mux"},
+	{"ADCB", NULL, "ADCB Swap Mux"},
+	{"ADCA", NULL, "ADCA Swap Mux"},
+
+	{"ADCA Swap Mux", NULL, "ADCA"},
+	{"ADCB Swap Mux", NULL, "ADCB"},
+
+	{"DACA", "Left", "ADCA Swap Mux"},
+	{"DACA", "LR 2", "ADCA Swap Mux"},
+	{"DACA", "Right", "ADCA Swap Mux"},
+
+	{"DACB", "Left", "ADCB Swap Mux"},
+	{"DACB", "LR 2", "ADCB Swap Mux"},
+	{"DACB", "Right", "ADCB Swap Mux"},
 
 	{"ADCA Mux", NULL, "AIN3A"},
 	{"ADCA Mux", NULL, "AIN2A"},
@@ -633,30 +609,32 @@ static const struct snd_soc_dapm_route cs42l56_audio_map[] = {
 	{"PGAB Input Mux", NULL, "AIN2B"},
 	{"PGAB Input Mux", NULL, "AIN3B"},
 
-	{"LOB", NULL, "Lineout Right"},
-	{"LOA", NULL, "Lineout Left"},
-
-	{"Lineout Right", "Switch", "LINEOUTB Input Mux"},
-	{"Lineout Left", "Switch", "LINEOUTA Input Mux"},
+	{"LOB", "Switch", "LINEOUTB Input Mux"},
+	{"LOA", "Switch", "LINEOUTA Input Mux"},
 
 	{"LINEOUTA Input Mux", "PGAA", "PGAA"},
 	{"LINEOUTB Input Mux", "PGAB", "PGAB"},
 	{"LINEOUTA Input Mux", "DACA", "DACA"},
 	{"LINEOUTB Input Mux", "DACB", "DACB"},
 
-	{"HPA", NULL, "Headphone Left"},
-	{"HPB", NULL, "Headphone Right"},
-
-	{"Headphone Right", "Switch", "HPB Input Mux"},
-	{"Headphone Left", "Switch", "HPA Input Mux"},
+	{"HPA", "Switch", "HPB Input Mux"},
+	{"HPB", "Switch", "HPA Input Mux"},
 
 	{"HPA Input Mux", "PGAA", "PGAA"},
 	{"HPB Input Mux", "PGAB", "PGAB"},
 	{"HPA Input Mux", "DACA", "DACA"},
 	{"HPB Input Mux", "DACB", "DACB"},
 
-	{"DACB", NULL, "HiFi Playback"},
-	{"DACA", NULL, "HiFi Playback"},
+	{"DACA", NULL, "PCMA Swap Mux"},
+	{"DACB", NULL, "PCMB Swap Mux"},
+
+	{"PCMB Swap Mux", "Left", "HiFi Playback"},
+	{"PCMB Swap Mux", "LR 2", "HiFi Playback"},
+	{"PCMB Swap Mux", "Right", "HiFi Playback"},
+
+	{"PCMA Swap Mux", "Left", "HiFi Playback"},
+	{"PCMA Swap Mux", "LR 2", "HiFi Playback"},
+	{"PCMA Swap Mux", "Right", "HiFi Playback"},
 
 };
 
@@ -927,7 +905,7 @@ static int cs42l56_set_bias_level(struct snd_soc_codec *codec,
 				    CS42L56_PDN_ALL_MASK, 0);
 		break;
 	case SND_SOC_BIAS_STANDBY:
-		if (codec->dapm.bias_level == SND_SOC_BIAS_OFF) {
+		if (snd_soc_codec_get_bias_level(codec) == SND_SOC_BIAS_OFF) {
 			regcache_cache_only(cs42l56->regmap, false);
 			regcache_sync(cs42l56->regmap);
 			ret = regulator_bulk_enable(ARRAY_SIZE(cs42l56->supplies),
@@ -952,7 +930,6 @@ static int cs42l56_set_bias_level(struct snd_soc_codec *codec,
 						    cs42l56->supplies);
 		break;
 	}
-	codec->dapm.bias_level = level;
 
 	return 0;
 }
@@ -964,7 +941,7 @@ static int cs42l56_set_bias_level(struct snd_soc_codec *codec,
 			SNDRV_PCM_FMTBIT_S32_LE)
 
 
-static struct snd_soc_dai_ops cs42l56_ops = {
+static const struct snd_soc_dai_ops cs42l56_ops = {
 	.hw_params	= cs42l56_pcm_hw_params,
 	.digital_mute	= cs42l56_digital_mute,
 	.set_fmt	= cs42l56_set_dai_fmt,
@@ -990,20 +967,6 @@ static struct snd_soc_dai_driver cs42l56_dai = {
 		.ops = &cs42l56_ops,
 };
 
-static int cs42l56_suspend(struct snd_soc_codec *codec)
-{
-	cs42l56_set_bias_level(codec, SND_SOC_BIAS_OFF);
-
-	return 0;
-}
-
-static int cs42l56_resume(struct snd_soc_codec *codec)
-{
-	cs42l56_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
-
-	return 0;
-}
-
 static int beep_freq[] = {
 	261, 522, 585, 667, 706, 774, 889, 1000,
 	1043, 1200, 1333, 1412, 1600, 1714, 2000, 2182
@@ -1014,7 +977,7 @@ static void cs42l56_beep_work(struct work_struct *work)
 	struct cs42l56_private *cs42l56 =
 		container_of(work, struct cs42l56_private, beep_work);
 	struct snd_soc_codec *codec = cs42l56->codec;
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
+	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
 	int i;
 	int val = 0;
 	int best = 0;
@@ -1142,28 +1105,21 @@ static int cs42l56_probe(struct snd_soc_codec *codec)
 {
 	cs42l56_init_beep(codec);
 
-	cs42l56_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
-
 	return 0;
 }
 
 static int cs42l56_remove(struct snd_soc_codec *codec)
 {
-	struct cs42l56_private *cs42l56 = snd_soc_codec_get_drvdata(codec);
-
 	cs42l56_free_beep(codec);
-	cs42l56_set_bias_level(codec, SND_SOC_BIAS_OFF);
-	regulator_bulk_free(ARRAY_SIZE(cs42l56->supplies), cs42l56->supplies);
 
 	return 0;
 }
 
-static struct snd_soc_codec_driver soc_codec_dev_cs42l56 = {
+static const struct snd_soc_codec_driver soc_codec_dev_cs42l56 = {
 	.probe = cs42l56_probe,
 	.remove = cs42l56_remove,
-	.suspend = cs42l56_suspend,
-	.resume = cs42l56_resume,
 	.set_bias_level = cs42l56_set_bias_level,
+	.suspend_bias_off = true,
 
 	.dapm_widgets = cs42l56_dapm_widgets,
 	.num_dapm_widgets = ARRAY_SIZE(cs42l56_dapm_widgets),
@@ -1174,7 +1130,7 @@ static struct snd_soc_codec_driver soc_codec_dev_cs42l56 = {
 	.num_controls = ARRAY_SIZE(cs42l56_snd_controls),
 };
 
-static struct regmap_config cs42l56_regmap = {
+static const struct regmap_config cs42l56_regmap = {
 	.reg_bits = 8,
 	.val_bits = 8,
 
@@ -1404,7 +1360,6 @@ MODULE_DEVICE_TABLE(i2c, cs42l56_id);
 static struct i2c_driver cs42l56_i2c_driver = {
 	.driver = {
 		.name = "cs42l56",
-		.owner = THIS_MODULE,
 		.of_match_table = cs42l56_of_match,
 	},
 	.id_table = cs42l56_id,

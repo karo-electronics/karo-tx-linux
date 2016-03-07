@@ -31,7 +31,6 @@
 struct m25p {
 	struct spi_device	*spi;
 	struct spi_nor		spi_nor;
-	struct mtd_info		mtd;
 	u8			command[MAX_CMD_SIZE];
 };
 
@@ -62,8 +61,7 @@ static int m25p_cmdsz(struct spi_nor *nor)
 	return 1 + nor->addr_width;
 }
 
-static int m25p80_write_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len,
-			int wr_en)
+static int m25p80_write_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len)
 {
 	struct m25p *flash = nor->priv;
 	struct spi_device *spi = flash->spi;
@@ -128,13 +126,10 @@ static int m25p80_read(struct spi_nor *nor, loff_t from, size_t len,
 	struct spi_device *spi = flash->spi;
 	struct spi_transfer t[2];
 	struct spi_message m;
-	int dummy = nor->read_dummy;
-	int ret;
+	unsigned int dummy = nor->read_dummy;
 
-	/* Wait till previous write/erase is done. */
-	ret = nor->wait_till_ready(nor);
-	if (ret)
-		return ret;
+	/* convert the dummy cycles to the number of bytes */
+	dummy /= 8;
 
 	spi_message_init(&m);
 	memset(t, 0, (sizeof t));
@@ -160,20 +155,9 @@ static int m25p80_read(struct spi_nor *nor, loff_t from, size_t len,
 static int m25p80_erase(struct spi_nor *nor, loff_t offset)
 {
 	struct m25p *flash = nor->priv;
-	int ret;
 
 	dev_dbg(nor->dev, "%dKiB at 0x%08x\n",
-		flash->mtd.erasesize / 1024, (u32)offset);
-
-	/* Wait until finished previous write command. */
-	ret = nor->wait_till_ready(nor);
-	if (ret)
-		return ret;
-
-	/* Send write enable, then erase commands. */
-	ret = nor->write_reg(nor, SPINOR_OP_WREN, NULL, 0, 0);
-	if (ret)
-		return ret;
+		flash->spi_nor.mtd.erasesize / 1024, (u32)offset);
 
 	/* Set up command buffer. */
 	flash->command[0] = nor->erase_opcode;
@@ -196,7 +180,10 @@ static int m25p_probe(struct spi_device *spi)
 	struct m25p *flash;
 	struct spi_nor *nor;
 	enum read_mode mode = SPI_NOR_NORMAL;
+	char *flash_name = NULL;
 	int ret;
+
+	data = dev_get_platdata(&spi->dev);
 
 	flash = devm_kzalloc(&spi->dev, sizeof(*flash), GFP_KERNEL);
 	if (!flash)
@@ -212,25 +199,37 @@ static int m25p_probe(struct spi_device *spi)
 	nor->read_reg = m25p80_read_reg;
 
 	nor->dev = &spi->dev;
-	nor->mtd = &flash->mtd;
+	nor->flash_node = spi->dev.of_node;
 	nor->priv = flash;
 
 	spi_set_drvdata(spi, flash);
-	flash->mtd.priv = nor;
 	flash->spi = spi;
 
 	if (spi->mode & SPI_RX_QUAD)
 		mode = SPI_NOR_QUAD;
 	else if (spi->mode & SPI_RX_DUAL)
 		mode = SPI_NOR_DUAL;
-	ret = spi_nor_scan(nor, spi_get_device_id(spi), mode);
+
+	if (data && data->name)
+		nor->mtd.name = data->name;
+
+	/* For some (historical?) reason many platforms provide two different
+	 * names in flash_platform_data: "name" and "type". Quite often name is
+	 * set to "m25p80" and then "type" provides a real chip name.
+	 * If that's the case, respect "type" and ignore a "name".
+	 */
+	if (data && data->type)
+		flash_name = data->type;
+	else
+		flash_name = spi->modalias;
+
+	ret = spi_nor_scan(nor, flash_name, mode);
 	if (ret)
 		return ret;
 
-	data = dev_get_platdata(&spi->dev);
 	ppdata.of_node = spi->dev.of_node;
 
-	return mtd_device_parse_register(&flash->mtd, NULL, &ppdata,
+	return mtd_device_parse_register(&nor->mtd, NULL, &ppdata,
 			data ? data->parts : NULL,
 			data ? data->nr_parts : 0);
 }
@@ -241,16 +240,70 @@ static int m25p_remove(struct spi_device *spi)
 	struct m25p	*flash = spi_get_drvdata(spi);
 
 	/* Clean up MTD stuff. */
-	return mtd_device_unregister(&flash->mtd);
+	return mtd_device_unregister(&flash->spi_nor.mtd);
 }
 
+/*
+ * Do NOT add to this array without reading the following:
+ *
+ * Historically, many flash devices are bound to this driver by their name. But
+ * since most of these flash are compatible to some extent, and their
+ * differences can often be differentiated by the JEDEC read-ID command, we
+ * encourage new users to add support to the spi-nor library, and simply bind
+ * against a generic string here (e.g., "jedec,spi-nor").
+ *
+ * Many flash names are kept here in this list (as well as in spi-nor.c) to
+ * keep them available as module aliases for existing platforms.
+ */
+static const struct spi_device_id m25p_ids[] = {
+	/*
+	 * Entries not used in DTs that should be safe to drop after replacing
+	 * them with "nor-jedec" in platform data.
+	 */
+	{"s25sl064a"},	{"w25x16"},	{"m25p10"},	{"m25px64"},
+
+	/*
+	 * Entries that were used in DTs without "nor-jedec" fallback and should
+	 * be kept for backward compatibility.
+	 */
+	{"at25df321a"},	{"at25df641"},	{"at26df081a"},
+	{"mr25h256"},
+	{"mx25l4005a"},	{"mx25l1606e"},	{"mx25l6405d"},	{"mx25l12805d"},
+	{"mx25l25635e"},{"mx66l51235l"},
+	{"n25q064"},	{"n25q128a11"},	{"n25q128a13"},	{"n25q512a"},
+	{"s25fl256s1"},	{"s25fl512s"},	{"s25sl12801"},	{"s25fl008k"},
+	{"s25fl064k"},
+	{"sst25vf040b"},{"sst25vf016b"},{"sst25vf032b"},{"sst25wf040"},
+	{"m25p40"},	{"m25p80"},	{"m25p16"},	{"m25p32"},
+	{"m25p64"},	{"m25p128"},
+	{"w25x80"},	{"w25x32"},	{"w25q32"},	{"w25q32dw"},
+	{"w25q80bl"},	{"w25q128"},	{"w25q256"},
+
+	/* Flashes that can't be detected using JEDEC */
+	{"m25p05-nonjedec"},	{"m25p10-nonjedec"},	{"m25p20-nonjedec"},
+	{"m25p40-nonjedec"},	{"m25p80-nonjedec"},	{"m25p16-nonjedec"},
+	{"m25p32-nonjedec"},	{"m25p64-nonjedec"},	{"m25p128-nonjedec"},
+
+	{ },
+};
+MODULE_DEVICE_TABLE(spi, m25p_ids);
+
+static const struct of_device_id m25p_of_table[] = {
+	/*
+	 * Generic compatibility for SPI NOR that can be identified by the
+	 * JEDEC READ ID opcode (0x9F). Use this, if possible.
+	 */
+	{ .compatible = "jedec,spi-nor" },
+	{}
+};
+MODULE_DEVICE_TABLE(of, m25p_of_table);
 
 static struct spi_driver m25p80_driver = {
 	.driver = {
 		.name	= "m25p80",
-		.owner	= THIS_MODULE,
+		.of_match_table = m25p_of_table,
 	},
-	.id_table	= spi_nor_ids,
+	.id_table	= m25p_ids,
 	.probe	= m25p_probe,
 	.remove	= m25p_remove,
 

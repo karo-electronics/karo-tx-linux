@@ -72,7 +72,7 @@ static void usb_port_device_release(struct device *dev)
 	kfree(port_dev);
 }
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 static int usb_port_runtime_resume(struct device *dev)
 {
 	struct usb_port *port_dev = to_usb_port(dev);
@@ -103,16 +103,19 @@ static int usb_port_runtime_resume(struct device *dev)
 	msleep(hub_power_on_good_delay(hub));
 	if (udev && !retval) {
 		/*
-		 * Attempt to wait for usb hub port to be reconnected in order
-		 * to make the resume procedure successful.  The device may have
-		 * disconnected while the port was powered off, so ignore the
-		 * return status.
+		 * Our preference is to simply wait for the port to reconnect,
+		 * as that is the lowest latency method to restart the port.
+		 * However, there are cases where toggling port power results in
+		 * the host port and the device port getting out of sync causing
+		 * a link training live lock.  Upon timeout, flag the port as
+		 * needing warm reset recovery (to be performed later by
+		 * usb_port_resume() as requested via usb_wakeup_notification())
 		 */
-		retval = hub_port_debounce_be_connected(hub, port1);
-		if (retval < 0)
-			dev_dbg(&port_dev->dev, "can't get reconnection after setting port  power on, status %d\n",
-					retval);
-		retval = 0;
+		if (hub_port_debounce_be_connected(hub, port1) < 0) {
+			dev_dbg(&port_dev->dev, "reconnect timeout\n");
+			if (hub_is_superspeed(hdev))
+				set_bit(port1, hub->warm_reset_bits);
+		}
 
 		/* Force the child awake to revalidate after the power loss. */
 		if (!test_and_set_bit(port1, hub->child_usage_bits)) {
@@ -168,7 +171,7 @@ static int usb_port_runtime_suspend(struct device *dev)
 #endif
 
 static const struct dev_pm_ops usb_port_pm_ops = {
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 	.runtime_suspend =	usb_port_runtime_suspend,
 	.runtime_resume =	usb_port_runtime_resume,
 #endif
@@ -203,7 +206,7 @@ static int link_peers(struct usb_port *left, struct usb_port *right)
 		else
 			method = "default";
 
-		pr_warn("usb: failed to peer %s and %s by %s (%s:%s) (%s:%s)\n",
+		pr_debug("usb: failed to peer %s and %s by %s (%s:%s) (%s:%s)\n",
 			dev_name(&left->dev), dev_name(&right->dev), method,
 			dev_name(&left->dev),
 			lpeer ? dev_name(&lpeer->dev) : "none",
@@ -262,7 +265,7 @@ static void link_peers_report(struct usb_port *left, struct usb_port *right)
 	if (rc == 0) {
 		dev_dbg(&left->dev, "peered to %s\n", dev_name(&right->dev));
 	} else {
-		dev_warn(&left->dev, "failed to peer to %s (%d)\n",
+		dev_dbg(&left->dev, "failed to peer to %s (%d)\n",
 				dev_name(&right->dev), rc);
 		pr_warn_once("usb: port power management may be unreliable\n");
 		usb_port_block_power_off = 1;

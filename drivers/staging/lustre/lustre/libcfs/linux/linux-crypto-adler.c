@@ -32,11 +32,10 @@
 #include <linux/module.h>
 #include <linux/zutil.h>
 #include <crypto/internal/hash.h>
-
+#include "linux-crypto.h"
 
 #define CHKSUM_BLOCK_SIZE	1
 #define CHKSUM_DIGEST_SIZE	4
-
 
 static u32 __adler32(u32 cksum, unsigned char const *p, size_t len)
 {
@@ -83,6 +82,7 @@ static int adler32_update(struct shash_desc *desc, const u8 *data,
 	*cksump = __adler32(*cksump, data, len);
 	return 0;
 }
+
 static int __adler32_finup(u32 *cksump, const u8 *data, unsigned int len,
 			   u8 *out)
 {
@@ -110,6 +110,7 @@ static int adler32_digest(struct shash_desc *desc, const u8 *data,
 	return __adler32_finup(crypto_shash_ctx(desc->tfm), data, len,
 				    out);
 }
+
 static struct shash_alg alg = {
 	.setkey		= adler32_setkey,
 	.init		= adler32_init,
@@ -130,15 +131,12 @@ static struct shash_alg alg = {
 	}
 };
 
-
 int cfs_crypto_adler32_register(void)
 {
 	return crypto_register_shash(&alg);
 }
-EXPORT_SYMBOL(cfs_crypto_adler32_register);
 
 void cfs_crypto_adler32_unregister(void)
 {
 	crypto_unregister_shash(&alg);
 }
-EXPORT_SYMBOL(cfs_crypto_adler32_unregister);

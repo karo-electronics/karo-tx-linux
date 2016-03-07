@@ -375,12 +375,13 @@ static bool ltc3589_volatile_reg(struct device *dev, unsigned int reg)
 	switch (reg) {
 	case LTC3589_IRQSTAT:
 	case LTC3589_PGSTAT:
+	case LTC3589_VCCR:
 		return true;
 	}
 	return false;
 }
 
-struct reg_default ltc3589_reg_defaults[] = {
+static const struct reg_default ltc3589_reg_defaults[] = {
 	{ LTC3589_SCR1,   0x00 },
 	{ LTC3589_OVEN,   0x00 },
 	{ LTC3589_SCR2,   0x00 },
@@ -581,7 +582,6 @@ MODULE_DEVICE_TABLE(i2c, ltc3589_i2c_id);
 static struct i2c_driver ltc3589_driver = {
 	.driver = {
 		.name = DRIVER_NAME,
-		.owner = THIS_MODULE,
 	},
 	.probe = ltc3589_probe,
 	.remove = ltc3589_remove,
@@ -592,4 +592,3 @@ module_i2c_driver(ltc3589_driver);
 MODULE_AUTHOR("Philipp Zabel <p.zabel@pengutronix.de>");
 MODULE_DESCRIPTION("Regulator driver for Linear Technology LTC3589(-1,2)");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("i2c:ltc3589");

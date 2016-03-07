@@ -4,7 +4,7 @@
 # check the build and console output for errors.  Given a directory
 # containing results directories, this recursively checks them all.
 #
-# Usage: sh kvm-recheck.sh resdir ...
+# Usage: kvm-recheck.sh resdir ...
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -43,6 +43,10 @@ do
 		if test -f "$i/console.log"
 		then
 			configcheck.sh $i/.config $i/ConfigFragment
+			if test -r $i/Make.oldconfig.err
+			then
+				cat $i/Make.oldconfig.err
+			fi
 			parse-build.sh $i/Make.out $configfile
 			parse-torture.sh $i/console.log $configfile
 			parse-console.sh $i/console.log $configfile
@@ -54,10 +58,16 @@ do
 			if test -f "$i/qemu-cmd"
 			then
 				print_bug qemu failed
+				echo "   $i"
+			elif test -f "$i/buildonly"
+			then
+				echo Build-only run, no boot/test
+				configcheck.sh $i/.config $i/ConfigFragment
+				parse-build.sh $i/Make.out $configfile
 			else
 				print_bug Build failed
+				echo "   $i"
 			fi
-			echo "   $i"
 		fi
 	done
 done

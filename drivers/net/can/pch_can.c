@@ -194,7 +194,7 @@ static const struct can_bittiming_const pch_can_bittiming_const = {
 	.brp_inc = 1,
 };
 
-static DEFINE_PCI_DEVICE_TABLE(pch_pci_tbl) = {
+static const struct pci_device_id pch_pci_tbl[] = {
 	{PCI_VENDOR_ID_INTEL, 0x8818, PCI_ANY_ID, PCI_ANY_ID,},
 	{0,}
 };
@@ -505,6 +505,7 @@ static void pch_can_error(struct net_device *ndev, u32 status)
 		pch_can_set_rx_all(priv, 0);
 		state = CAN_STATE_BUS_OFF;
 		cf->can_id |= CAN_ERR_BUSOFF;
+		priv->can.can_stats.bus_off++;
 		can_bus_off(ndev);
 	}
 
@@ -558,8 +559,7 @@ static void pch_can_error(struct net_device *ndev, u32 status)
 		stats->rx_errors++;
 		break;
 	case PCH_CRC_ERR:
-		cf->data[3] |= CAN_ERR_PROT_LOC_CRC_SEQ |
-			       CAN_ERR_PROT_LOC_CRC_DEL;
+		cf->data[3] = CAN_ERR_PROT_LOC_CRC_SEQ;
 		priv->can.can_stats.bus_error++;
 		stats->rx_errors++;
 		break;

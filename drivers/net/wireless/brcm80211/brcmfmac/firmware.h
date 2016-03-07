@@ -21,12 +21,23 @@
 #define BRCMF_FW_REQ_FLAGS		0x00F0
 #define  BRCMF_FW_REQ_NV_OPTIONAL	0x0010
 
+#define	BRCMF_FW_PATH_LEN	256
+#define	BRCMF_FW_NAME_LEN	32
+
+extern char brcmf_firmware_path[];
+
 void brcmf_fw_nvram_free(void *nvram);
 /*
  * Request firmware(s) asynchronously. When the asynchronous request
  * fails it will not use the callback, but call device_release_driver()
  * instead which will call the driver .remove() callback.
  */
+int brcmf_fw_get_firmwares_pcie(struct device *dev, u16 flags,
+				const char *code, const char *nvram,
+				void (*fw_cb)(struct device *dev,
+					      const struct firmware *fw,
+					      void *nvram_image, u32 nvram_len),
+				u16 domain_nr, u16 bus_nr);
 int brcmf_fw_get_firmwares(struct device *dev, u16 flags,
 			   const char *code, const char *nvram,
 			   void (*fw_cb)(struct device *dev,

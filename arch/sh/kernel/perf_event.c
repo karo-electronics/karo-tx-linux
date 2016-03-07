@@ -10,7 +10,7 @@
  *  Copyright (C) 2008-2009 Red Hat, Inc., Ingo Molnar
  *  Copyright (C) 2009 Jaswinder Singh Rajput
  *  Copyright (C) 2009 Advanced Micro Devices, Inc., Robert Richter
- *  Copyright (C) 2008-2009 Red Hat, Inc., Peter Zijlstra <pzijlstr@redhat.com>
+ *  Copyright (C) 2008-2009 Red Hat, Inc., Peter Zijlstra
  *  Copyright (C) 2009 Intel Corporation, <markus.t.metzger@intel.com>
  *
  * ppc:
@@ -127,14 +127,6 @@ static int __hw_perf_event_init(struct perf_event *event)
 
 	if (!sh_pmu_initialized())
 		return -ENODEV;
-
-	/*
-	 * All of the on-chip counters are "limited", in that they have
-	 * no interrupts, and are therefore unable to do sampling without
-	 * further work and timer assistance.
-	 */
-	if (hwc->sample_period)
-		return -EINVAL;
 
 	/*
 	 * See if we need to reserve the counter.
@@ -391,6 +383,13 @@ int register_sh_pmu(struct sh_pmu *_pmu)
 	sh_pmu = _pmu;
 
 	pr_info("Performance Events: %s support registered\n", _pmu->name);
+
+	/*
+	 * All of the on-chip counters are "limited", in that they have
+	 * no interrupts, and are therefore unable to do sampling without
+	 * further work and timer assistance.
+	 */
+	pmu.capabilities |= PERF_PMU_CAP_NO_INTERRUPT;
 
 	WARN_ON(_pmu->num_events > MAX_HWEVENTS);
 

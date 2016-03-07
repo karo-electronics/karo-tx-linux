@@ -34,14 +34,13 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#include <obd_support.h>
-#include <obd_class.h>
-#include <lustre_lib.h>
-#include <lustre_ha.h>
-#include <lustre_import.h>
+#include "../include/obd_support.h"
+#include "../include/obd_class.h"
+#include "../include/lustre_lib.h"
+#include "../include/lustre_ha.h"
+#include "../include/lustre_import.h"
 
 #include "ptlrpc_internal.h"
-
 
 void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc,
 			 int mdidx)

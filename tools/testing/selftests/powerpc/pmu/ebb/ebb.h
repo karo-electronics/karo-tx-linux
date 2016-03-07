@@ -52,6 +52,7 @@ void standard_ebb_callee(void);
 int ebb_event_enable(struct event *e);
 void ebb_global_enable(void);
 void ebb_global_disable(void);
+bool ebb_is_supported(void);
 void ebb_freeze_pmcs(void);
 void ebb_unfreeze_pmcs(void);
 void event_ebb_init(struct event *e);
@@ -70,7 +71,6 @@ int ebb_check_mmcr0(void);
 extern u64 sample_period;
 
 int core_busy_loop(void);
-int core_busy_loop_with_freeze(void);
 int ebb_child(union pipe read_pipe, union pipe write_pipe);
 int catch_sigill(void (*func)(void));
 void write_pmc1(void);

@@ -35,7 +35,7 @@
 #include <linux/highuid.h>
 
 /* get readq/writeq support for 32 bit kernels, use the low-first version */
-#include <asm-generic/io-64-nonatomic-lo-hi.h>
+#include <linux/io-64-nonatomic-lo-hi.h>
 
 /* File to be the magic between shared code and
  * actual OS primitives
@@ -78,4 +78,7 @@ do {                                                            \
 } while (0)
 
 typedef enum i40e_status_code i40e_status;
+#ifdef CONFIG_I40E_FCOE
+#define I40E_FCOE
+#endif
 #endif /* _I40E_OSDEP_H_ */

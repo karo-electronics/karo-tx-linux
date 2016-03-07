@@ -4,6 +4,7 @@
  * Real Time Clock
  *
  * Author : Raghavendra Chandra Ganiga <ravi23ganiga@gmail.com>
+ *	    Ankur Srivastava <sankurece@gmail.com> : DS1343 Nvram Support
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -20,6 +21,7 @@
 #include <linux/rtc.h>
 #include <linux/bcd.h>
 #include <linux/pm.h>
+#include <linux/pm_wakeirq.h>
 #include <linux/slab.h>
 
 #define DS1343_DRV_VERSION	"01.00"
@@ -45,6 +47,9 @@
 #define DS1343_CONTROL_REG	0x0F
 #define DS1343_STATUS_REG	0x10
 #define DS1343_TRICKLE_REG	0x11
+#define DS1343_NVRAM		0x20
+
+#define DS1343_NVRAM_LEN	96
 
 /* DS1343 Control Registers bits */
 #define DS1343_EOSC		0x80
@@ -148,6 +153,52 @@ static ssize_t ds1343_store_glitchfilter(struct device *dev,
 
 static DEVICE_ATTR(glitch_filter, S_IRUGO | S_IWUSR, ds1343_show_glitchfilter,
 			ds1343_store_glitchfilter);
+
+static ssize_t ds1343_nvram_write(struct file *filp, struct kobject *kobj,
+			struct bin_attribute *attr,
+			char *buf, loff_t off, size_t count)
+{
+	int ret;
+	unsigned char address;
+	struct device *dev = kobj_to_dev(kobj);
+	struct ds1343_priv *priv = dev_get_drvdata(dev);
+
+	address = DS1343_NVRAM + off;
+
+	ret = regmap_bulk_write(priv->map, address, buf, count);
+	if (ret < 0)
+		dev_err(&priv->spi->dev, "Error in nvram write %d", ret);
+
+	return (ret < 0) ? ret : count;
+}
+
+
+static ssize_t ds1343_nvram_read(struct file *filp, struct kobject *kobj,
+				struct bin_attribute *attr,
+				char *buf, loff_t off, size_t count)
+{
+	int ret;
+	unsigned char address;
+	struct device *dev = kobj_to_dev(kobj);
+	struct ds1343_priv *priv = dev_get_drvdata(dev);
+
+	address = DS1343_NVRAM + off;
+
+	ret = regmap_bulk_read(priv->map, address, buf, count);
+	if (ret < 0)
+		dev_err(&priv->spi->dev, "Error in nvram read %d\n", ret);
+
+	return (ret < 0) ? ret : count;
+}
+
+
+static struct bin_attribute nvram_attr = {
+	.attr.name	= "nvram",
+	.attr.mode	= S_IRUGO | S_IWUSR,
+	.read		= ds1343_nvram_read,
+	.write		= ds1343_nvram_write,
+	.size		= DS1343_NVRAM_LEN,
+};
 
 static ssize_t ds1343_show_alarmstatus(struct device *dev,
 				struct device_attribute *attr, char *buf)
@@ -274,18 +325,25 @@ static int ds1343_sysfs_register(struct device *dev)
 	if (err)
 		goto error1;
 
+	err = device_create_bin_file(dev, &nvram_attr);
+	if (err)
+		goto error2;
+
 	if (priv->irq <= 0)
 		return err;
 
 	err = device_create_file(dev, &dev_attr_alarm_mode);
 	if (err)
-		goto error2;
+		goto error3;
 
 	err = device_create_file(dev, &dev_attr_alarm_status);
 	if (!err)
 		return err;
 
 	device_remove_file(dev, &dev_attr_alarm_mode);
+
+error3:
+	device_remove_bin_file(dev, &nvram_attr);
 
 error2:
 	device_remove_file(dev, &dev_attr_trickle_charger);
@@ -302,6 +360,7 @@ static void ds1343_sysfs_unregister(struct device *dev)
 
 	device_remove_file(dev, &dev_attr_glitch_filter);
 	device_remove_file(dev, &dev_attr_trickle_charger);
+	device_remove_bin_file(dev, &nvram_attr);
 
 	if (priv->irq <= 0)
 		return;
@@ -605,15 +664,15 @@ static int ds1343_probe(struct spi_device *spi)
 
 	if (priv->irq >= 0) {
 		res = devm_request_threaded_irq(&spi->dev, spi->irq, NULL,
-						ds1343_thread,
-						IRQF_NO_SUSPEND | IRQF_ONESHOT,
+						ds1343_thread, IRQF_ONESHOT,
 						"ds1343", priv);
 		if (res) {
 			priv->irq = -1;
 			dev_err(&spi->dev,
 				"unable to request irq for rtc ds1343\n");
 		} else {
-			device_set_wakeup_capable(&spi->dev, 1);
+			device_init_wakeup(&spi->dev, true);
+			dev_pm_set_wake_irq(&spi->dev, spi->irq);
 		}
 	}
 
@@ -634,6 +693,8 @@ static int ds1343_remove(struct spi_device *spi)
 		priv->irqen &= ~RTC_AF;
 		mutex_unlock(&priv->mutex);
 
+		dev_pm_clear_wake_irq(&spi->dev);
+		device_init_wakeup(&spi->dev, false);
 		devm_free_irq(&spi->dev, spi->irq, priv);
 	}
 
@@ -673,7 +734,6 @@ static SIMPLE_DEV_PM_OPS(ds1343_pm, ds1343_suspend, ds1343_resume);
 static struct spi_driver ds1343_driver = {
 	.driver = {
 		.name = "ds1343",
-		.owner = THIS_MODULE,
 		.pm = &ds1343_pm,
 	},
 	.probe = ds1343_probe,
@@ -684,6 +744,7 @@ static struct spi_driver ds1343_driver = {
 module_spi_driver(ds1343_driver);
 
 MODULE_DESCRIPTION("DS1343 RTC SPI Driver");
-MODULE_AUTHOR("Raghavendra Chandra Ganiga <ravi23ganiga@gmail.com>");
+MODULE_AUTHOR("Raghavendra Chandra Ganiga <ravi23ganiga@gmail.com>,"
+		"Ankur Srivastava <sankurece@gmail.com>");
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION(DS1343_DRV_VERSION);

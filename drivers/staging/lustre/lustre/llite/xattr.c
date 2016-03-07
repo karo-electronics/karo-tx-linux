@@ -41,11 +41,11 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <obd_support.h>
-#include <lustre_lite.h>
-#include <lustre_dlm.h>
-#include <lustre_ver.h>
-#include <lustre_eacl.h>
+#include "../include/obd_support.h"
+#include "../include/lustre_lite.h"
+#include "../include/lustre_dlm.h"
+#include "../include/lustre_ver.h"
+#include "../include/lustre_eacl.h"
 
 #include "llite_internal.h"
 
@@ -111,7 +111,6 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ptlrpc_request *req = NULL;
 	int xattr_type, rc;
-	struct obd_capa *oc;
 #ifdef CONFIG_FS_POSIX_ACL
 	struct rmtacl_ctl_entry *rce = NULL;
 	posix_acl_xattr_header *new_value = NULL;
@@ -175,11 +174,12 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 			}
 			ee_free(ee);
 		} else if (rce->rce_ops == RMT_RSETFACL) {
-			size = lustre_posix_acl_xattr_filter(
+			rc = lustre_posix_acl_xattr_filter(
 						(posix_acl_xattr_header *)value,
 						size, &new_value);
-			if (unlikely(size < 0))
-				return size;
+			if (unlikely(rc < 0))
+				return rc;
+			size = rc;
 
 			pv = (const char *)new_value;
 		} else
@@ -188,11 +188,9 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 		valid |= rce_ops2valid(rce->rce_ops);
 	}
 #endif
-		oc = ll_mdscapa_get(inode);
-		rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
-				valid, name, pv, size, 0, flags,
-				ll_i2suppgid(inode), &req);
-		capa_put(oc);
+	rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode),
+			 valid, name, pv, size, 0, flags,
+			 ll_i2suppgid(inode), &req);
 #ifdef CONFIG_FS_POSIX_ACL
 	if (new_value != NULL)
 		lustre_posix_acl_xattr_free(new_value, size);
@@ -201,8 +199,7 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 #endif
 	if (rc) {
 		if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
-			LCONSOLE_INFO("Disabling user_xattr feature because "
-				      "it is not supported on the server\n");
+			LCONSOLE_INFO("Disabling user_xattr feature because it is not supported on the server\n");
 			sbi->ll_flags &= ~LL_SBI_USER_XATTR;
 		}
 		return rc;
@@ -215,7 +212,7 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 int ll_setxattr(struct dentry *dentry, const char *name,
 		const void *value, size_t size, int flags)
 {
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 
 	LASSERT(inode);
 	LASSERT(name);
@@ -234,6 +231,9 @@ int ll_setxattr(struct dentry *dentry, const char *name,
 		struct lov_user_md *lump = (struct lov_user_md *)value;
 		int rc = 0;
 
+		if (size != 0 && size < sizeof(struct lov_user_md))
+			return -EINVAL;
+
 		/* Attributes that are saved via getxattr will always have
 		 * the stripe_offset as 0.  Instead, the MDS should be
 		 * allowed to pick the starting OST index.   b=17846 */
@@ -241,13 +241,11 @@ int ll_setxattr(struct dentry *dentry, const char *name,
 			lump->lmm_stripe_offset = -1;
 
 		if (lump != NULL && S_ISREG(inode->i_mode)) {
-			struct file f;
 			int flags = FMODE_WRITE;
 			int lum_size = (lump->lmm_magic == LOV_USER_MAGIC_V1) ?
 				sizeof(*lump) : sizeof(struct lov_user_md_v3);
 
-			f.f_dentry = dentry;
-			rc = ll_lov_setstripe_ea_info(inode, &f, flags, lump,
+			rc = ll_lov_setstripe_ea_info(inode, dentry, flags, lump,
 						      lum_size);
 			/* b10667: rc always be 0 here for now */
 			rc = 0;
@@ -267,7 +265,7 @@ int ll_setxattr(struct dentry *dentry, const char *name,
 
 int ll_removexattr(struct dentry *dentry, const char *name)
 {
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 
 	LASSERT(inode);
 	LASSERT(name);
@@ -289,7 +287,6 @@ int ll_getxattr_common(struct inode *inode, const char *name,
 	struct mdt_body *body;
 	int xattr_type, rc;
 	void *xdata;
-	struct obd_capa *oc;
 	struct rmtacl_ctl_entry *rce = NULL;
 	struct ll_inode_info *lli = ll_i2info(inode);
 
@@ -363,7 +360,7 @@ do_getxattr:
 		if (rc == -EAGAIN)
 			goto getxattr_nocache;
 		if (rc < 0)
-			GOTO(out_xattr, rc);
+			goto out_xattr;
 
 		/* Add "system.posix_acl_access" to the list */
 		if (lli->lli_posix_acl != NULL && valid & OBD_MD_FLXATTRLS) {
@@ -374,41 +371,47 @@ do_getxattr:
 				       sizeof(XATTR_NAME_ACL_ACCESS));
 				rc += sizeof(XATTR_NAME_ACL_ACCESS);
 			} else {
-				GOTO(out_xattr, rc = -ERANGE);
+				rc = -ERANGE;
+				goto out_xattr;
 			}
 		}
 	} else {
 getxattr_nocache:
-		oc = ll_mdscapa_get(inode);
-		rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
+		rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode),
 				valid | (rce ? rce_ops2valid(rce->rce_ops) : 0),
 				name, NULL, 0, size, 0, &req);
-		capa_put(oc);
 
 		if (rc < 0)
-			GOTO(out_xattr, rc);
+			goto out_xattr;
 
 		body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 		LASSERT(body);
 
 		/* only detect the xattr size */
-		if (size == 0)
-			GOTO(out, rc = body->eadatasize);
+		if (size == 0) {
+			rc = body->eadatasize;
+			goto out;
+		}
 
 		if (size < body->eadatasize) {
 			CERROR("server bug: replied size %u > %u\n",
 				body->eadatasize, (int)size);
-			GOTO(out, rc = -ERANGE);
+			rc = -ERANGE;
+			goto out;
 		}
 
-		if (body->eadatasize == 0)
-			GOTO(out, rc = -ENODATA);
+		if (body->eadatasize == 0) {
+			rc = -ENODATA;
+			goto out;
+		}
 
 		/* do not need swab xattr data */
 		xdata = req_capsule_server_sized_get(&req->rq_pill, &RMF_EADATA,
 							body->eadatasize);
-		if (!xdata)
-			GOTO(out, rc = -EFAULT);
+		if (!xdata) {
+			rc = -EFAULT;
+			goto out;
+		}
 
 		memcpy(buffer, xdata, body->eadatasize);
 		rc = body->eadatasize;
@@ -420,14 +423,16 @@ getxattr_nocache:
 
 		acl = lustre_posix_acl_xattr_2ext(
 					(posix_acl_xattr_header *)buffer, rc);
-		if (IS_ERR(acl))
-			GOTO(out, rc = PTR_ERR(acl));
+		if (IS_ERR(acl)) {
+			rc = PTR_ERR(acl);
+			goto out;
+		}
 
 		rc = ee_add(&sbi->ll_et, current_pid(), ll_inode2fid(inode),
 			    xattr_type, acl);
 		if (unlikely(rc < 0)) {
 			lustre_ext_acl_xattr_free(acl);
-			GOTO(out, rc);
+			goto out;
 		}
 	}
 #endif
@@ -447,7 +452,7 @@ out:
 ssize_t ll_getxattr(struct dentry *dentry, const char *name,
 		    void *buffer, size_t size)
 {
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 
 	LASSERT(inode);
 	LASSERT(name);
@@ -475,7 +480,8 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
 		if (size == 0 && S_ISDIR(inode->i_mode)) {
 			/* XXX directory EA is fix for now, optimize to save
 			 * RPC transfer */
-			GOTO(out, rc = sizeof(struct lov_user_md));
+			rc = sizeof(struct lov_user_md);
+			goto out;
 		}
 
 		lsm = ccc_inode_lsm_get(inode);
@@ -495,7 +501,7 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
 		ccc_inode_lsm_put(inode, lsm);
 
 		if (rc < 0)
-		       GOTO(out, rc);
+			goto out;
 
 		if (size == 0) {
 			/* used to call ll_get_max_mdsize() forward to get
@@ -503,16 +509,17 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
 			 * rsync 3.0.x) care much about the exact xattr value
 			 * size */
 			rc = lmmsize;
-			GOTO(out, rc);
+			goto out;
 		}
 
 		if (size < lmmsize) {
-			CERROR("server bug: replied size %d > %d for %s (%s)\n",
-			       lmmsize, (int)size, dentry->d_name.name, name);
-			GOTO(out, rc = -ERANGE);
+			CERROR("server bug: replied size %d > %d for %pd (%s)\n",
+			       lmmsize, (int)size, dentry, name);
+			rc = -ERANGE;
+			goto out;
 		}
 
-		lump = (struct lov_user_md *)buffer;
+		lump = buffer;
 		memcpy(lump, lmm, lmmsize);
 		/* do not return layout gen for getxattr otherwise it would
 		 * confuse tar --xattr by recognizing layout gen as stripe
@@ -525,7 +532,7 @@ out:
 			ptlrpc_req_finished(request);
 		else if (lmm)
 			obd_free_diskmd(ll_i2dtexp(inode), &lmm);
-		return(rc);
+		return rc;
 	}
 
 	return ll_getxattr_common(inode, name, buffer, size, OBD_MD_FLXATTR);
@@ -533,7 +540,7 @@ out:
 
 ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 {
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 	int rc = 0, rc2 = 0;
 	struct lov_mds_md *lmm = NULL;
 	struct ptlrpc_request *request = NULL;
@@ -548,7 +555,7 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 
 	rc = ll_getxattr_common(inode, NULL, buffer, size, OBD_MD_FLXATTRLS);
 	if (rc < 0)
-		GOTO(out, rc);
+		goto out;
 
 	if (buffer != NULL) {
 		struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -581,7 +588,8 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 	}
 
 	if (rc2 < 0) {
-		GOTO(out, rc2 = 0);
+		rc2 = 0;
+		goto out;
 	} else if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) {
 		const int prefix_len = sizeof(XATTR_LUSTRE_PREFIX) - 1;
 		const size_t name_len   = sizeof("lov") - 1;

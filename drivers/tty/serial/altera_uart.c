@@ -163,10 +163,6 @@ static void altera_uart_break_ctl(struct uart_port *port, int break_state)
 	spin_unlock_irqrestore(&port->lock, flags);
 }
 
-static void altera_uart_enable_ms(struct uart_port *port)
-{
-}
-
 static void altera_uart_set_termios(struct uart_port *port,
 				    struct ktermios *termios,
 				    struct ktermios *old)
@@ -415,7 +411,6 @@ static struct uart_ops altera_uart_ops = {
 	.start_tx	= altera_uart_start_tx,
 	.stop_tx	= altera_uart_stop_tx,
 	.stop_rx	= altera_uart_stop_rx,
-	.enable_ms	= altera_uart_enable_ms,
 	.break_ctl	= altera_uart_break_ctl,
 	.startup	= altera_uart_startup,
 	.shutdown	= altera_uart_shutdown,
@@ -435,7 +430,7 @@ static struct altera_uart altera_uart_ports[CONFIG_SERIAL_ALTERA_UART_MAXPORTS];
 
 #if defined(CONFIG_SERIAL_ALTERA_UART_CONSOLE)
 
-static void altera_uart_console_putc(struct uart_port *port, const char c)
+static void altera_uart_console_putc(struct uart_port *port, int c)
 {
 	while (!(altera_uart_readl(port, ALTERA_UART_STATUS_REG) &
 		 ALTERA_UART_STATUS_TRDY_MSK))
@@ -449,11 +444,7 @@ static void altera_uart_console_write(struct console *co, const char *s,
 {
 	struct uart_port *port = &(altera_uart_ports + co->index)->port;
 
-	for (; count; count--, s++) {
-		altera_uart_console_putc(port, *s);
-		if (*s == '\n')
-			altera_uart_console_putc(port, '\r');
-	}
+	uart_console_write(port, s, count, altera_uart_console_putc);
 }
 
 static int __init altera_uart_console_setup(struct console *co, char *options)
@@ -502,7 +493,7 @@ console_initcall(altera_uart_console_init);
 
 #define	ALTERA_UART_CONSOLE	NULL
 
-#endif /* CONFIG_ALTERA_UART_CONSOLE */
+#endif /* CONFIG_SERIAL_ALTERA_UART_CONSOLE */
 
 /*
  *	Define the altera_uart UART driver structure.
@@ -516,29 +507,6 @@ static struct uart_driver altera_uart_driver = {
 	.nr		= CONFIG_SERIAL_ALTERA_UART_MAXPORTS,
 	.cons		= ALTERA_UART_CONSOLE,
 };
-
-#ifdef CONFIG_OF
-static int altera_uart_get_of_uartclk(struct platform_device *pdev,
-				      struct uart_port *port)
-{
-	int len;
-	const __be32 *clk;
-
-	clk = of_get_property(pdev->dev.of_node, "clock-frequency", &len);
-	if (!clk || len < sizeof(__be32))
-		return -ENODEV;
-
-	port->uartclk = be32_to_cpup(clk);
-
-	return 0;
-}
-#else
-static int altera_uart_get_of_uartclk(struct platform_device *pdev,
-				      struct uart_port *port)
-{
-	return -ENODEV;
-}
-#endif /* CONFIG_OF */
 
 static int altera_uart_probe(struct platform_device *pdev)
 {
@@ -579,7 +547,8 @@ static int altera_uart_probe(struct platform_device *pdev)
 	if (platp)
 		port->uartclk = platp->uartclk;
 	else {
-		ret = altera_uart_get_of_uartclk(pdev, port);
+		ret = of_property_read_u32(pdev->dev.of_node, "clock-frequency",
+					   &port->uartclk);
 		if (ret)
 			return ret;
 	}
@@ -598,6 +567,7 @@ static int altera_uart_probe(struct platform_device *pdev)
 	port->iotype = SERIAL_IO_MEM;
 	port->ops = &altera_uart_ops;
 	port->flags = UPF_BOOT_AUTOCONF;
+	port->dev = &pdev->dev;
 
 	platform_set_drvdata(pdev, port);
 
@@ -619,7 +589,7 @@ static int altera_uart_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_OF
-static struct of_device_id altera_uart_match[] = {
+static const struct of_device_id altera_uart_match[] = {
 	{ .compatible = "ALTR,uart-1.0", },
 	{ .compatible = "altr,uart-1.0", },
 	{},
@@ -632,7 +602,6 @@ static struct platform_driver altera_uart_platform_driver = {
 	.remove	= altera_uart_remove,
 	.driver	= {
 		.name		= DRV_NAME,
-		.owner		= THIS_MODULE,
 		.of_match_table	= of_match_ptr(altera_uart_match),
 	},
 };

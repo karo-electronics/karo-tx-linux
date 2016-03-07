@@ -13,6 +13,7 @@
 /dts-v1/;
 #include "imx28.dtsi"
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 
 / {
 	model = "Ka-Ro electronics TX28 module";
@@ -21,7 +22,7 @@
 	aliases {
 		can0 = &can0;
 		can1 = &can1;
-		display = &display;
+		display = &display0;
 		ds1339 = &ds1339;
 		gpio5 = &gpio5;
 		lcdif = &lcdif;
@@ -324,7 +325,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&tx28_edt_ft5x06_pins>;
 		interrupt-parent = <&gpio2>;
-		interrupts = <5 0>;
+		interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
 		reset-gpios = <&gpio2 6 GPIO_ACTIVE_LOW>;
 		wake-gpios = <&gpio4 9 GPIO_ACTIVE_HIGH>;
 	};
@@ -350,10 +351,10 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&lcdif_24bit_pins_a &lcdif_sync_pins_a &tx28_lcdif_ctrl_pins>;
 	lcd-supply = <&reg_lcd>;
-	display = <&display>;
+	display = <&display0>;
 	status = "okay";
 
-	display: display@0 {
+	display0: display0 {
 		bits-per-pixel = <32>;
 		bus-width = <24>;
 		display-timings {

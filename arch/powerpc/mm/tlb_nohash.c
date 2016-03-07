@@ -42,6 +42,7 @@
 #include <asm/tlbflush.h>
 #include <asm/tlb.h>
 #include <asm/code-patching.h>
+#include <asm/cputhreads.h>
 #include <asm/hugetlb.h>
 #include <asm/paca.h>
 
@@ -217,7 +218,7 @@ static DEFINE_RAW_SPINLOCK(tlbivax_lock);
 static int mm_is_core_local(struct mm_struct *mm)
 {
 	return cpumask_subset(mm_cpumask(mm),
-			      topology_thread_cpumask(smp_processor_id()));
+			      topology_sibling_cpumask(smp_processor_id()));
 }
 
 struct tlb_flush_param {
@@ -284,8 +285,15 @@ void __flush_tlb_page(struct mm_struct *mm, unsigned long vmaddr,
 	struct cpumask *cpu_mask;
 	unsigned int pid;
 
+	/*
+	 * This function as well as __local_flush_tlb_page() must only be called
+	 * for user contexts.
+	 */
+	if (unlikely(WARN_ON(!mm)))
+		return;
+
 	preempt_disable();
-	pid = mm ? mm->context.id : 0;
+	pid = mm->context.id;
 	if (unlikely(pid == MMU_NO_CONTEXT))
 		goto bail;
 	cpu_mask = mm_cpumask(mm);
@@ -581,41 +589,9 @@ static void setup_mmu_htw(void)
 /*
  * Early initialization of the MMU TLB code
  */
-static void __early_init_mmu(int boot_cpu)
+static void early_init_this_mmu(void)
 {
 	unsigned int mas4;
-
-	/* XXX This will have to be decided at runtime, but right
-	 * now our boot and TLB miss code hard wires it. Ideally
-	 * we should find out a suitable page size and patch the
-	 * TLB miss code (either that or use the PACA to store
-	 * the value we want)
-	 */
-	mmu_linear_psize = MMU_PAGE_1G;
-
-	/* XXX This should be decided at runtime based on supported
-	 * page sizes in the TLB, but for now let's assume 16M is
-	 * always there and a good fit (which it probably is)
-	 *
-	 * Freescale booke only supports 4K pages in TLB0, so use that.
-	 */
-	if (mmu_has_feature(MMU_FTR_TYPE_FSL_E))
-		mmu_vmemmap_psize = MMU_PAGE_4K;
-	else
-		mmu_vmemmap_psize = MMU_PAGE_16M;
-
-	/* XXX This code only checks for TLB 0 capabilities and doesn't
-	 *     check what page size combos are supported by the HW. It
-	 *     also doesn't handle the case where a separate array holds
-	 *     the IND entries from the array loaded by the PT.
-	 */
-	if (boot_cpu) {
-		/* Look for supported page sizes */
-		setup_page_sizes();
-
-		/* Look for HW tablewalk support */
-		setup_mmu_htw();
-	}
 
 	/* Set MAS4 based on page table setting */
 
@@ -650,22 +626,72 @@ static void __early_init_mmu(int boot_cpu)
 	}
 	mtspr(SPRN_MAS4, mas4);
 
-	/* Set the global containing the top of the linear mapping
-	 * for use by the TLB miss code
-	 */
-	linear_map_top = memblock_end_of_DRAM();
-
 #ifdef CONFIG_PPC_FSL_BOOK3E
 	if (mmu_has_feature(MMU_FTR_TYPE_FSL_E)) {
 		unsigned int num_cams;
+		int __maybe_unused cpu = smp_processor_id();
+		bool map = true;
 
 		/* use a quarter of the TLBCAM for bolted linear map */
 		num_cams = (mfspr(SPRN_TLB1CFG) & TLBnCFG_N_ENTRY) / 4;
-		linear_map_top = map_mem_in_cams(linear_map_top, num_cams);
 
-		/* limit memory so we dont have linear faults */
-		memblock_enforce_memory_limit(linear_map_top);
+		/*
+		 * Only do the mapping once per core, or else the
+		 * transient mapping would cause problems.
+		 */
+#ifdef CONFIG_SMP
+		if (cpu != boot_cpuid &&
+		    (cpu != cpu_first_thread_sibling(cpu) ||
+		     cpu == cpu_first_thread_sibling(boot_cpuid)))
+			map = false;
+#endif
 
+		if (map)
+			linear_map_top = map_mem_in_cams(linear_map_top,
+							 num_cams, false);
+	}
+#endif
+
+	/* A sync won't hurt us after mucking around with
+	 * the MMU configuration
+	 */
+	mb();
+}
+
+static void __init early_init_mmu_global(void)
+{
+	/* XXX This will have to be decided at runtime, but right
+	 * now our boot and TLB miss code hard wires it. Ideally
+	 * we should find out a suitable page size and patch the
+	 * TLB miss code (either that or use the PACA to store
+	 * the value we want)
+	 */
+	mmu_linear_psize = MMU_PAGE_1G;
+
+	/* XXX This should be decided at runtime based on supported
+	 * page sizes in the TLB, but for now let's assume 16M is
+	 * always there and a good fit (which it probably is)
+	 *
+	 * Freescale booke only supports 4K pages in TLB0, so use that.
+	 */
+	if (mmu_has_feature(MMU_FTR_TYPE_FSL_E))
+		mmu_vmemmap_psize = MMU_PAGE_4K;
+	else
+		mmu_vmemmap_psize = MMU_PAGE_16M;
+
+	/* XXX This code only checks for TLB 0 capabilities and doesn't
+	 *     check what page size combos are supported by the HW. It
+	 *     also doesn't handle the case where a separate array holds
+	 *     the IND entries from the array loaded by the PT.
+	 */
+	/* Look for supported page sizes */
+	setup_page_sizes();
+
+	/* Look for HW tablewalk support */
+	setup_mmu_htw();
+
+#ifdef CONFIG_PPC_FSL_BOOK3E
+	if (mmu_has_feature(MMU_FTR_TYPE_FSL_E)) {
 		if (book3e_htw_mode == PPC_HTW_NONE) {
 			extlb_level_exc = EX_TLB_SIZE;
 			patch_exception(0x1c0, exc_data_tlb_miss_bolted_book3e);
@@ -675,22 +701,41 @@ static void __early_init_mmu(int boot_cpu)
 	}
 #endif
 
-	/* A sync won't hurt us after mucking around with
-	 * the MMU configuration
+	/* Set the global containing the top of the linear mapping
+	 * for use by the TLB miss code
 	 */
-	mb();
+	linear_map_top = memblock_end_of_DRAM();
+}
+
+static void __init early_mmu_set_memory_limit(void)
+{
+#ifdef CONFIG_PPC_FSL_BOOK3E
+	if (mmu_has_feature(MMU_FTR_TYPE_FSL_E)) {
+		/*
+		 * Limit memory so we dont have linear faults.
+		 * Unlike memblock_set_current_limit, which limits
+		 * memory available during early boot, this permanently
+		 * reduces the memory available to Linux.  We need to
+		 * do this because highmem is not supported on 64-bit.
+		 */
+		memblock_enforce_memory_limit(linear_map_top);
+	}
+#endif
 
 	memblock_set_current_limit(linear_map_top);
 }
 
+/* boot cpu only */
 void __init early_init_mmu(void)
 {
-	__early_init_mmu(1);
+	early_init_mmu_global();
+	early_init_this_mmu();
+	early_mmu_set_memory_limit();
 }
 
 void early_init_mmu_secondary(void)
 {
-	__early_init_mmu(0);
+	early_init_this_mmu();
 }
 
 void setup_initial_memory_limit(phys_addr_t first_memblock_base,
@@ -701,10 +746,14 @@ void setup_initial_memory_limit(phys_addr_t first_memblock_base,
 	 * entries are supported though that may eventually
 	 * change.
 	 *
-	 * on FSL Embedded 64-bit, we adjust the RMA size to match the
-	 * first bolted TLB entry size.  We still limit max to 1G even if
-	 * the TLB could cover more.  This is due to what the early init
-	 * code is setup to do.
+	 * on FSL Embedded 64-bit, usually all RAM is bolted, but with
+	 * unusual memory sizes it's possible for some RAM to not be mapped
+	 * (such RAM is not used at all by Linux, since we don't support
+	 * highmem on 64-bit).  We limit ppc64_rma_size to what would be
+	 * mappable if this memblock is the only one.  Additional memblocks
+	 * can only increase, not decrease, the amount that ends up getting
+	 * mapped.  We still limit max to 1G even if we'll eventually map
+	 * more.  This is due to what the early init code is set up to do.
 	 *
 	 * We crop it to the size of the first MEMBLOCK to
 	 * avoid going over total available memory just in case...
@@ -712,8 +761,14 @@ void setup_initial_memory_limit(phys_addr_t first_memblock_base,
 #ifdef CONFIG_PPC_FSL_BOOK3E
 	if (mmu_has_feature(MMU_FTR_TYPE_FSL_E)) {
 		unsigned long linear_sz;
-		linear_sz = calc_cam_sz(first_memblock_size, PAGE_OFFSET,
-					first_memblock_base);
+		unsigned int num_cams;
+
+		/* use a quarter of the TLBCAM for bolted linear map */
+		num_cams = (mfspr(SPRN_TLB1CFG) & TLBnCFG_N_ENTRY) / 4;
+
+		linear_sz = map_mem_in_cams(first_memblock_size, num_cams,
+					    true);
+
 		ppc64_rma_size = min_t(u64, linear_sz, 0x40000000);
 	} else
 #endif

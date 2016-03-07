@@ -110,58 +110,7 @@ static const struct reg_default cs42l52_reg_defaults[] = {
 static bool cs42l52_readable_register(struct device *dev, unsigned int reg)
 {
 	switch (reg) {
-	case CS42L52_CHIP:
-	case CS42L52_PWRCTL1:
-	case CS42L52_PWRCTL2:
-	case CS42L52_PWRCTL3:
-	case CS42L52_CLK_CTL:
-	case CS42L52_IFACE_CTL1:
-	case CS42L52_IFACE_CTL2:
-	case CS42L52_ADC_PGA_A:
-	case CS42L52_ADC_PGA_B:
-	case CS42L52_ANALOG_HPF_CTL:
-	case CS42L52_ADC_HPF_FREQ:
-	case CS42L52_ADC_MISC_CTL:
-	case CS42L52_PB_CTL1:
-	case CS42L52_MISC_CTL:
-	case CS42L52_PB_CTL2:
-	case CS42L52_MICA_CTL:
-	case CS42L52_MICB_CTL:
-	case CS42L52_PGAA_CTL:
-	case CS42L52_PGAB_CTL:
-	case CS42L52_PASSTHRUA_VOL:
-	case CS42L52_PASSTHRUB_VOL:
-	case CS42L52_ADCA_VOL:
-	case CS42L52_ADCB_VOL:
-	case CS42L52_ADCA_MIXER_VOL:
-	case CS42L52_ADCB_MIXER_VOL:
-	case CS42L52_PCMA_MIXER_VOL:
-	case CS42L52_PCMB_MIXER_VOL:
-	case CS42L52_BEEP_FREQ:
-	case CS42L52_BEEP_VOL:
-	case CS42L52_BEEP_TONE_CTL:
-	case CS42L52_TONE_CTL:
-	case CS42L52_MASTERA_VOL:
-	case CS42L52_MASTERB_VOL:
-	case CS42L52_HPA_VOL:
-	case CS42L52_HPB_VOL:
-	case CS42L52_SPKA_VOL:
-	case CS42L52_SPKB_VOL:
-	case CS42L52_ADC_PCM_MIXER:
-	case CS42L52_LIMITER_CTL1:
-	case CS42L52_LIMITER_CTL2:
-	case CS42L52_LIMITER_AT_RATE:
-	case CS42L52_ALC_CTL:
-	case CS42L52_ALC_RATE:
-	case CS42L52_ALC_THRESHOLD:
-	case CS42L52_NOISE_GATE_CTL:
-	case CS42L52_CLK_STATUS:
-	case CS42L52_BATT_COMPEN:
-	case CS42L52_BATT_LEVEL:
-	case CS42L52_SPK_STATUS:
-	case CS42L52_TEM_CTL:
-	case CS42L52_THE_FOLDBACK:
-	case CS42L52_CHARGE_PUMP:
+	case CS42L52_CHIP ... CS42L52_CHARGE_PUMP:
 		return true;
 	default:
 		return false;
@@ -176,9 +125,9 @@ static bool cs42l52_volatile_register(struct device *dev, unsigned int reg)
 	case CS42L52_BATT_LEVEL:
 	case CS42L52_SPK_STATUS:
 	case CS42L52_CHARGE_PUMP:
-		return 1;
+		return true;
 	default:
-		return 0;
+		return false;
 	}
 }
 
@@ -196,11 +145,10 @@ static DECLARE_TLV_DB_SCALE(mix_tlv, -50, 50, 0);
 
 static DECLARE_TLV_DB_SCALE(beep_tlv, -56, 200, 0);
 
-static const unsigned int limiter_tlv[] = {
-	TLV_DB_RANGE_HEAD(2),
+static const DECLARE_TLV_DB_RANGE(limiter_tlv,
 	0, 2, TLV_DB_SCALE_ITEM(-3000, 600, 0),
-	3, 7, TLV_DB_SCALE_ITEM(-1200, 300, 0),
-};
+	3, 7, TLV_DB_SCALE_ITEM(-1200, 300, 0)
+);
 
 static const char * const cs42l52_adca_text[] = {
 	"Input1A", "Input2A", "Input3A", "Input4A", "PGA Input Left"};
@@ -399,15 +347,15 @@ static const struct snd_kcontrol_new cs42l52_snd_controls[] = {
 			      CS42L52_MASTERB_VOL, 0, 0x34, 0xE4, hl_tlv),
 
 	SOC_DOUBLE_R_SX_TLV("Headphone Volume", CS42L52_HPA_VOL,
-			      CS42L52_HPB_VOL, 0, 0x34, 0xCC, hpd_tlv),
+			      CS42L52_HPB_VOL, 0, 0x34, 0xC0, hpd_tlv),
 
 	SOC_ENUM("Headphone Analog Gain", hp_gain_enum),
 
 	SOC_DOUBLE_R_SX_TLV("Speaker Volume", CS42L52_SPKA_VOL,
-			      CS42L52_SPKB_VOL, 0, 0x1, 0xff, hl_tlv),
+			      CS42L52_SPKB_VOL, 0, 0x40, 0xC0, hl_tlv),
 
 	SOC_DOUBLE_R_SX_TLV("Bypass Volume", CS42L52_PASSTHRUA_VOL,
-			      CS42L52_PASSTHRUB_VOL, 6, 0x18, 0x90, pga_tlv),
+			      CS42L52_PASSTHRUB_VOL, 0, 0x88, 0x90, pga_tlv),
 
 	SOC_DOUBLE("Bypass Mute", CS42L52_MISC_CTL, 4, 5, 1, 0),
 
@@ -417,10 +365,10 @@ static const struct snd_kcontrol_new cs42l52_snd_controls[] = {
 	SOC_ENUM("MIC Bias Level", mic_bias_level_enum),
 
 	SOC_DOUBLE_R_SX_TLV("ADC Volume", CS42L52_ADCA_VOL,
-			      CS42L52_ADCB_VOL, 7, 0x80, 0xA0, ipd_tlv),
+			      CS42L52_ADCB_VOL, 0, 0xA0, 0x78, ipd_tlv),
 	SOC_DOUBLE_R_SX_TLV("ADC Mixer Volume",
 			     CS42L52_ADCA_MIXER_VOL, CS42L52_ADCB_MIXER_VOL,
-				6, 0x7f, 0x19, ipd_tlv),
+				0, 0x19, 0x7F, ipd_tlv),
 
 	SOC_DOUBLE("ADC Switch", CS42L52_ADC_MISC_CTL, 0, 1, 1, 0),
 
@@ -428,11 +376,11 @@ static const struct snd_kcontrol_new cs42l52_snd_controls[] = {
 		     CS42L52_ADCB_MIXER_VOL, 7, 1, 1),
 
 	SOC_DOUBLE_R_SX_TLV("PGA Volume", CS42L52_PGAA_CTL,
-			    CS42L52_PGAB_CTL, 0, 0x28, 0x30, pga_tlv),
+			    CS42L52_PGAB_CTL, 0, 0x28, 0x24, pga_tlv),
 
 	SOC_DOUBLE_R_SX_TLV("PCM Mixer Volume",
 			    CS42L52_PCMA_MIXER_VOL, CS42L52_PCMB_MIXER_VOL,
-				0, 0x7f, 0x19, mix_tlv),
+				0, 0x19, 0x7f, mix_tlv),
 	SOC_DOUBLE_R("PCM Mixer Switch",
 		     CS42L52_PCMA_MIXER_VOL, CS42L52_PCMB_MIXER_VOL, 7, 1, 1),
 
@@ -897,7 +845,7 @@ static int cs42l52_set_bias_level(struct snd_soc_codec *codec,
 				    CS42L52_PWRCTL1_PDN_CODEC, 0);
 		break;
 	case SND_SOC_BIAS_STANDBY:
-		if (codec->dapm.bias_level == SND_SOC_BIAS_OFF) {
+		if (snd_soc_codec_get_bias_level(codec) == SND_SOC_BIAS_OFF) {
 			regcache_cache_only(cs42l52->regmap, false);
 			regcache_sync(cs42l52->regmap);
 		}
@@ -908,7 +856,6 @@ static int cs42l52_set_bias_level(struct snd_soc_codec *codec,
 		regcache_cache_only(cs42l52->regmap, true);
 		break;
 	}
-	codec->dapm.bias_level = level;
 
 	return 0;
 }
@@ -920,7 +867,7 @@ static int cs42l52_set_bias_level(struct snd_soc_codec *codec,
 			SNDRV_PCM_FMTBIT_S20_3LE | SNDRV_PCM_FMTBIT_U20_3LE | \
 			SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_U24_LE)
 
-static struct snd_soc_dai_ops cs42l52_ops = {
+static const struct snd_soc_dai_ops cs42l52_ops = {
 	.hw_params	= cs42l52_pcm_hw_params,
 	.digital_mute	= cs42l52_digital_mute,
 	.set_fmt	= cs42l52_set_fmt,
@@ -946,20 +893,6 @@ static struct snd_soc_dai_driver cs42l52_dai = {
 		.ops = &cs42l52_ops,
 };
 
-static int cs42l52_suspend(struct snd_soc_codec *codec)
-{
-	cs42l52_set_bias_level(codec, SND_SOC_BIAS_OFF);
-
-	return 0;
-}
-
-static int cs42l52_resume(struct snd_soc_codec *codec)
-{
-	cs42l52_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
-
-	return 0;
-}
-
 static int beep_rates[] = {
 	261, 522, 585, 667, 706, 774, 889, 1000,
 	1043, 1200, 1333, 1412, 1600, 1714, 2000, 2182
@@ -970,7 +903,7 @@ static void cs42l52_beep_work(struct work_struct *work)
 	struct cs42l52_private *cs42l52 =
 		container_of(work, struct cs42l52_private, beep_work);
 	struct snd_soc_codec *codec = cs42l52->codec;
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
+	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
 	int i;
 	int val = 0;
 	int best = 0;
@@ -1104,8 +1037,6 @@ static int cs42l52_probe(struct snd_soc_codec *codec)
 
 	cs42l52_init_beep(codec);
 
-	cs42l52_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
-
 	cs42l52->sysclk = CS42L52_DEFAULT_CLK;
 	cs42l52->config.format = CS42L52_DEFAULT_FORMAT;
 
@@ -1115,17 +1046,15 @@ static int cs42l52_probe(struct snd_soc_codec *codec)
 static int cs42l52_remove(struct snd_soc_codec *codec)
 {
 	cs42l52_free_beep(codec);
-	cs42l52_set_bias_level(codec, SND_SOC_BIAS_OFF);
 
 	return 0;
 }
 
-static struct snd_soc_codec_driver soc_codec_dev_cs42l52 = {
+static const struct snd_soc_codec_driver soc_codec_dev_cs42l52 = {
 	.probe = cs42l52_probe,
 	.remove = cs42l52_remove,
-	.suspend = cs42l52_suspend,
-	.resume = cs42l52_resume,
 	.set_bias_level = cs42l52_set_bias_level,
+	.suspend_bias_off = true,
 
 	.dapm_widgets = cs42l52_dapm_widgets,
 	.num_dapm_widgets = ARRAY_SIZE(cs42l52_dapm_widgets),
@@ -1137,7 +1066,7 @@ static struct snd_soc_codec_driver soc_codec_dev_cs42l52 = {
 };
 
 /* Current and threshold powerup sequence Pg37 */
-static const struct reg_default cs42l52_threshold_patch[] = {
+static const struct reg_sequence cs42l52_threshold_patch[] = {
 
 	{ 0x00, 0x99 },
 	{ 0x3E, 0xBA },
@@ -1148,7 +1077,7 @@ static const struct reg_default cs42l52_threshold_patch[] = {
 
 };
 
-static struct regmap_config cs42l52_regmap = {
+static const struct regmap_config cs42l52_regmap = {
 	.reg_bits = 8,
 	.val_bits = 8,
 
@@ -1304,7 +1233,6 @@ MODULE_DEVICE_TABLE(i2c, cs42l52_id);
 static struct i2c_driver cs42l52_i2c_driver = {
 	.driver = {
 		.name = "cs42l52",
-		.owner = THIS_MODULE,
 		.of_match_table = cs42l52_of_match,
 	},
 	.id_table = cs42l52_id,

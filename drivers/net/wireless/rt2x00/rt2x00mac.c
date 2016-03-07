@@ -119,7 +119,7 @@ void rt2x00mac_tx(struct ieee80211_hw *hw,
 	 * Use the ATIM queue if appropriate and present.
 	 */
 	if (tx_info->flags & IEEE80211_TX_CTL_SEND_AFTER_DTIM &&
-	    test_bit(REQUIRE_ATIM_QUEUE, &rt2x00dev->cap_flags))
+	    rt2x00_has_cap_flag(rt2x00dev, REQUIRE_ATIM_QUEUE))
 		qid = QID_ATIM;
 
 	queue = rt2x00queue_get_tx_queue(rt2x00dev, qid);
@@ -359,8 +359,7 @@ void rt2x00mac_configure_filter(struct ieee80211_hw *hw,
 	    FIF_PLCPFAIL |
 	    FIF_CONTROL |
 	    FIF_PSPOLL |
-	    FIF_OTHER_BSS |
-	    FIF_PROMISC_IN_BSS;
+	    FIF_OTHER_BSS;
 
 	/*
 	 * Apply some rules to the filters:
@@ -369,9 +368,6 @@ void rt2x00mac_configure_filter(struct ieee80211_hw *hw,
 	 * - Multicast filter seems to kill broadcast traffic so never use it.
 	 */
 	*total_flags |= FIF_ALLMULTI;
-	if (*total_flags & FIF_OTHER_BSS ||
-	    *total_flags & FIF_PROMISC_IN_BSS)
-		*total_flags |= FIF_PROMISC_IN_BSS | FIF_OTHER_BSS;
 
 	/*
 	 * If the device has a single filter for all control frames,
@@ -539,16 +535,8 @@ int rt2x00mac_sta_add(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		      struct ieee80211_sta *sta)
 {
 	struct rt2x00_dev *rt2x00dev = hw->priv;
-	struct rt2x00_sta *sta_priv = sta_to_rt2x00_sta(sta);
 
-	/*
-	 * If there's no space left in the device table store
-	 * -1 as wcid but tell mac80211 everything went ok.
-	 */
-	if (rt2x00dev->ops->lib->sta_add(rt2x00dev, vif, sta))
-		sta_priv->wcid = -1;
-
-	return 0;
+	return rt2x00dev->ops->lib->sta_add(rt2x00dev, vif, sta);
 }
 EXPORT_SYMBOL_GPL(rt2x00mac_sta_add);
 
@@ -558,17 +546,13 @@ int rt2x00mac_sta_remove(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	struct rt2x00_dev *rt2x00dev = hw->priv;
 	struct rt2x00_sta *sta_priv = sta_to_rt2x00_sta(sta);
 
-	/*
-	 * If we never sent the STA to the device no need to clean it up.
-	 */
-	if (sta_priv->wcid < 0)
-		return 0;
-
 	return rt2x00dev->ops->lib->sta_remove(rt2x00dev, sta_priv->wcid);
 }
 EXPORT_SYMBOL_GPL(rt2x00mac_sta_remove);
 
-void rt2x00mac_sw_scan_start(struct ieee80211_hw *hw)
+void rt2x00mac_sw_scan_start(struct ieee80211_hw *hw,
+			     struct ieee80211_vif *vif,
+			     const u8 *mac_addr)
 {
 	struct rt2x00_dev *rt2x00dev = hw->priv;
 	set_bit(DEVICE_STATE_SCANNING, &rt2x00dev->flags);
@@ -576,7 +560,8 @@ void rt2x00mac_sw_scan_start(struct ieee80211_hw *hw)
 }
 EXPORT_SYMBOL_GPL(rt2x00mac_sw_scan_start);
 
-void rt2x00mac_sw_scan_complete(struct ieee80211_hw *hw)
+void rt2x00mac_sw_scan_complete(struct ieee80211_hw *hw,
+				struct ieee80211_vif *vif)
 {
 	struct rt2x00_dev *rt2x00dev = hw->priv;
 	clear_bit(DEVICE_STATE_SCANNING, &rt2x00dev->flags);
@@ -626,25 +611,24 @@ void rt2x00mac_bss_info_changed(struct ieee80211_hw *hw,
 	 * Start/stop beaconing.
 	 */
 	if (changes & BSS_CHANGED_BEACON_ENABLED) {
+		mutex_lock(&intf->beacon_skb_mutex);
 		if (!bss_conf->enable_beacon && intf->enable_beacon) {
 			rt2x00dev->intf_beaconing--;
 			intf->enable_beacon = false;
-			/*
-			 * Clear beacon in the H/W for this vif. This is needed
-			 * to disable beaconing on this particular interface
-			 * and keep it running on other interfaces.
-			 */
-			rt2x00queue_clear_beacon(rt2x00dev, vif);
 
 			if (rt2x00dev->intf_beaconing == 0) {
 				/*
 				 * Last beaconing interface disabled
 				 * -> stop beacon queue.
 				 */
-				mutex_lock(&intf->beacon_skb_mutex);
 				rt2x00queue_stop_queue(rt2x00dev->bcn);
-				mutex_unlock(&intf->beacon_skb_mutex);
 			}
+			/*
+			 * Clear beacon in the H/W for this vif. This is needed
+			 * to disable beaconing on this particular interface
+			 * and keep it running on other interfaces.
+			 */
+			rt2x00queue_clear_beacon(rt2x00dev, vif);
 		} else if (bss_conf->enable_beacon && !intf->enable_beacon) {
 			rt2x00dev->intf_beaconing++;
 			intf->enable_beacon = true;
@@ -660,11 +644,10 @@ void rt2x00mac_bss_info_changed(struct ieee80211_hw *hw,
 				 * First beaconing interface enabled
 				 * -> start beacon queue.
 				 */
-				mutex_lock(&intf->beacon_skb_mutex);
 				rt2x00queue_start_queue(rt2x00dev->bcn);
-				mutex_unlock(&intf->beacon_skb_mutex);
 			}
 		}
+		mutex_unlock(&intf->beacon_skb_mutex);
 	}
 
 	/*
@@ -801,6 +784,8 @@ int rt2x00mac_set_antenna(struct ieee80211_hw *hw, u32 tx_ant, u32 rx_ant)
 
 	setup.tx = tx_ant;
 	setup.rx = rx_ant;
+	setup.rx_chain_num = 0;
+	setup.tx_chain_num = 0;
 
 	rt2x00lib_config_antenna(rt2x00dev, setup);
 

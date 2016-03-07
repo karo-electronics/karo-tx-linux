@@ -50,14 +50,14 @@
 
 #include <linux/fs.h>
 #include <linux/dcache.h>
-#include <linux/lustre_intent.h>
-#include <lustre_handles.h>
-#include <linux/libcfs/libcfs.h>
-#include <obd_class.h>
-#include <lustre/lustre_idl.h>
-#include <lustre_lib.h>
-#include <lustre_dlm.h>
-#include <lustre_export.h>
+#include "lustre_intent.h"
+#include "lustre_handles.h"
+#include "../../include/linux/libcfs/libcfs.h"
+#include "obd_class.h"
+#include "lustre/lustre_idl.h"
+#include "lustre_lib.h"
+#include "lustre_dlm.h"
+#include "lustre_export.h"
 
 struct ptlrpc_client;
 struct obd_export;
@@ -162,7 +162,6 @@ static inline void mdc_update_max_ea_from_body(struct obd_export *exp,
 		}
 	}
 }
-
 
 struct mdc_cache_waiter {
 	struct list_head	      mcw_entry;

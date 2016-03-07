@@ -667,11 +667,8 @@ static int tca6507_probe_gpios(struct i2c_client *client,
 
 static void tca6507_remove_gpio(struct tca6507_chip *tca)
 {
-	if (tca->gpio.ngpio) {
-		int err = gpiochip_remove(&tca->gpio);
-		dev_err(&tca->client->dev, "%s failed, %d\n",
-			"gpiochip_remove()", err);
-	}
+	if (tca->gpio.ngpio)
+		gpiochip_remove(&tca->gpio);
 }
 #else /* CONFIG_GPIOLIB */
 static int tca6507_probe_gpios(struct i2c_client *client,
@@ -738,6 +735,7 @@ static const struct of_device_id of_tca6507_leds_match[] = {
 	{ .compatible = "ti,tca6507", },
 	{},
 };
+MODULE_DEVICE_TABLE(of, of_tca6507_leds_match);
 
 #else
 static struct tca6507_platform_data *
@@ -833,7 +831,6 @@ static int tca6507_remove(struct i2c_client *client)
 static struct i2c_driver tca6507_driver = {
 	.driver   = {
 		.name    = "leds-tca6507",
-		.owner   = THIS_MODULE,
 		.of_match_table = of_match_ptr(of_tca6507_leds_match),
 	},
 	.probe    = tca6507_probe,

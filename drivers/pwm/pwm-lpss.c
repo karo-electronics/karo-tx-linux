@@ -13,16 +13,12 @@
  * published by the Free Software Foundation.
  */
 
-#include <linux/acpi.h>
-#include <linux/clk.h>
-#include <linux/device.h>
+#include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/pwm.h>
-#include <linux/platform_device.h>
-#include <linux/pci.h>
+#include <linux/pm_runtime.h>
 
-static int pci_drv, plat_drv;	/* So we know which drivers registered */
+#include "pwm-lpss.h"
 
 #define PWM				0x00000000
 #define PWM_ENABLE			BIT(31)
@@ -34,25 +30,53 @@ static int pci_drv, plat_drv;	/* So we know which drivers registered */
 #define PWM_LIMIT			(0x8000 + PWM_DIVISION_CORRECTION)
 #define NSECS_PER_SEC			1000000000UL
 
+/* Size of each PWM register space if multiple */
+#define PWM_SIZE			0x400
+
 struct pwm_lpss_chip {
 	struct pwm_chip chip;
 	void __iomem *regs;
-	struct clk *clk;
-	unsigned long clk_rate;
-};
-
-struct pwm_lpss_boardinfo {
 	unsigned long clk_rate;
 };
 
 /* BayTrail */
-static const struct pwm_lpss_boardinfo byt_info = {
-	25000000
+const struct pwm_lpss_boardinfo pwm_lpss_byt_info = {
+	.clk_rate = 25000000,
+	.npwm = 1,
 };
+EXPORT_SYMBOL_GPL(pwm_lpss_byt_info);
+
+/* Braswell */
+const struct pwm_lpss_boardinfo pwm_lpss_bsw_info = {
+	.clk_rate = 19200000,
+	.npwm = 1,
+};
+EXPORT_SYMBOL_GPL(pwm_lpss_bsw_info);
+
+/* Broxton */
+const struct pwm_lpss_boardinfo pwm_lpss_bxt_info = {
+	.clk_rate = 19200000,
+	.npwm = 4,
+};
+EXPORT_SYMBOL_GPL(pwm_lpss_bxt_info);
 
 static inline struct pwm_lpss_chip *to_lpwm(struct pwm_chip *chip)
 {
 	return container_of(chip, struct pwm_lpss_chip, chip);
+}
+
+static inline u32 pwm_lpss_read(const struct pwm_device *pwm)
+{
+	struct pwm_lpss_chip *lpwm = to_lpwm(pwm->chip);
+
+	return readl(lpwm->regs + pwm->hwpwm * PWM_SIZE + PWM);
+}
+
+static inline void pwm_lpss_write(const struct pwm_device *pwm, u32 value)
+{
+	struct pwm_lpss_chip *lpwm = to_lpwm(pwm->chip);
+
+	writel(value, lpwm->regs + pwm->hwpwm * PWM_SIZE + PWM);
 }
 
 static int pwm_lpss_config(struct pwm_chip *chip, struct pwm_device *pwm,
@@ -82,54 +106,44 @@ static int pwm_lpss_config(struct pwm_chip *chip, struct pwm_device *pwm,
 		duty_ns = 1;
 	on_time_div = 255 - (255 * duty_ns / period_ns);
 
-	ctrl = readl(lpwm->regs + PWM);
+	pm_runtime_get_sync(chip->dev);
+
+	ctrl = pwm_lpss_read(pwm);
 	ctrl &= ~(PWM_BASE_UNIT_MASK | PWM_ON_TIME_DIV_MASK);
 	ctrl |= (u16) base_unit << PWM_BASE_UNIT_SHIFT;
 	ctrl |= on_time_div;
 	/* request PWM to update on next cycle */
 	ctrl |= PWM_SW_UPDATE;
-	writel(ctrl, lpwm->regs + PWM);
+	pwm_lpss_write(pwm, ctrl);
+
+	pm_runtime_put(chip->dev);
 
 	return 0;
 }
 
 static int pwm_lpss_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-	struct pwm_lpss_chip *lpwm = to_lpwm(chip);
-	u32 ctrl;
-	int ret;
-
-	ret = clk_prepare_enable(lpwm->clk);
-	if (ret)
-		return ret;
-
-	ctrl = readl(lpwm->regs + PWM);
-	writel(ctrl | PWM_ENABLE, lpwm->regs + PWM);
-
+	pm_runtime_get_sync(chip->dev);
+	pwm_lpss_write(pwm, pwm_lpss_read(pwm) | PWM_ENABLE);
 	return 0;
 }
 
 static void pwm_lpss_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-	struct pwm_lpss_chip *lpwm = to_lpwm(chip);
-	u32 ctrl;
-
-	ctrl = readl(lpwm->regs + PWM);
-	writel(ctrl & ~PWM_ENABLE, lpwm->regs + PWM);
-
-	clk_disable_unprepare(lpwm->clk);
+	pwm_lpss_write(pwm, pwm_lpss_read(pwm) & ~PWM_ENABLE);
+	pm_runtime_put(chip->dev);
 }
 
 static const struct pwm_ops pwm_lpss_ops = {
+	.free = pwm_lpss_disable,
 	.config = pwm_lpss_config,
 	.enable = pwm_lpss_enable,
 	.disable = pwm_lpss_disable,
 	.owner = THIS_MODULE,
 };
 
-static struct pwm_lpss_chip *pwm_lpss_probe(struct device *dev,
-					    struct resource *r,
-					    const struct pwm_lpss_boardinfo *info)
+struct pwm_lpss_chip *pwm_lpss_probe(struct device *dev, struct resource *r,
+				     const struct pwm_lpss_boardinfo *info)
 {
 	struct pwm_lpss_chip *lpwm;
 	int ret;
@@ -142,21 +156,11 @@ static struct pwm_lpss_chip *pwm_lpss_probe(struct device *dev,
 	if (IS_ERR(lpwm->regs))
 		return ERR_CAST(lpwm->regs);
 
-	if (info) {
-		lpwm->clk_rate = info->clk_rate;
-	} else {
-		lpwm->clk = devm_clk_get(dev, NULL);
-		if (IS_ERR(lpwm->clk)) {
-			dev_err(dev, "failed to get PWM clock\n");
-			return ERR_CAST(lpwm->clk);
-		}
-		lpwm->clk_rate = clk_get_rate(lpwm->clk);
-	}
-
+	lpwm->clk_rate = info->clk_rate;
 	lpwm->chip.dev = dev;
 	lpwm->chip.ops = &pwm_lpss_ops;
 	lpwm->chip.base = -1;
-	lpwm->chip.npwm = 1;
+	lpwm->chip.npwm = info->npwm;
 
 	ret = pwmchip_add(&lpwm->chip);
 	if (ret) {
@@ -166,117 +170,14 @@ static struct pwm_lpss_chip *pwm_lpss_probe(struct device *dev,
 
 	return lpwm;
 }
+EXPORT_SYMBOL_GPL(pwm_lpss_probe);
 
-static int pwm_lpss_remove(struct pwm_lpss_chip *lpwm)
+int pwm_lpss_remove(struct pwm_lpss_chip *lpwm)
 {
-	u32 ctrl;
-
-	ctrl = readl(lpwm->regs + PWM);
-	writel(ctrl & ~PWM_ENABLE, lpwm->regs + PWM);
-
 	return pwmchip_remove(&lpwm->chip);
 }
-
-static int pwm_lpss_probe_pci(struct pci_dev *pdev,
-			      const struct pci_device_id *id)
-{
-	const struct pwm_lpss_boardinfo *info;
-	struct pwm_lpss_chip *lpwm;
-	int err;
-
-	err = pci_enable_device(pdev);
-	if (err < 0)
-		return err;
-
-	info = (struct pwm_lpss_boardinfo *)id->driver_data;
-	lpwm = pwm_lpss_probe(&pdev->dev, &pdev->resource[0], info);
-	if (IS_ERR(lpwm))
-		return PTR_ERR(lpwm);
-
-	pci_set_drvdata(pdev, lpwm);
-	return 0;
-}
-
-static void pwm_lpss_remove_pci(struct pci_dev *pdev)
-{
-	struct pwm_lpss_chip *lpwm = pci_get_drvdata(pdev);
-
-	pwm_lpss_remove(lpwm);
-	pci_disable_device(pdev);
-}
-
-static struct pci_device_id pwm_lpss_pci_ids[] = {
-	{ PCI_VDEVICE(INTEL, 0x0f08), (unsigned long)&byt_info},
-	{ PCI_VDEVICE(INTEL, 0x0f09), (unsigned long)&byt_info},
-	{ },
-};
-MODULE_DEVICE_TABLE(pci, pwm_lpss_pci_ids);
-
-static struct pci_driver pwm_lpss_driver_pci = {
-	.name = "pwm-lpss",
-	.id_table = pwm_lpss_pci_ids,
-	.probe = pwm_lpss_probe_pci,
-	.remove = pwm_lpss_remove_pci,
-};
-
-static int pwm_lpss_probe_platform(struct platform_device *pdev)
-{
-	struct pwm_lpss_chip *lpwm;
-	struct resource *r;
-
-	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-
-	lpwm = pwm_lpss_probe(&pdev->dev, r, NULL);
-	if (IS_ERR(lpwm))
-		return PTR_ERR(lpwm);
-
-	platform_set_drvdata(pdev, lpwm);
-	return 0;
-}
-
-static int pwm_lpss_remove_platform(struct platform_device *pdev)
-{
-	struct pwm_lpss_chip *lpwm = platform_get_drvdata(pdev);
-
-	return pwm_lpss_remove(lpwm);
-}
-
-static const struct acpi_device_id pwm_lpss_acpi_match[] = {
-	{ "80860F09", 0 },
-	{ },
-};
-MODULE_DEVICE_TABLE(acpi, pwm_lpss_acpi_match);
-
-static struct platform_driver pwm_lpss_driver_platform = {
-	.driver = {
-		.name = "pwm-lpss",
-		.acpi_match_table = pwm_lpss_acpi_match,
-	},
-	.probe = pwm_lpss_probe_platform,
-	.remove = pwm_lpss_remove_platform,
-};
-
-static int __init pwm_init(void)
-{
-	pci_drv = pci_register_driver(&pwm_lpss_driver_pci);
-	plat_drv = platform_driver_register(&pwm_lpss_driver_platform);
-	if (pci_drv && plat_drv)
-		return pci_drv;
-
-	return 0;
-}
-module_init(pwm_init);
-
-static void __exit pwm_exit(void)
-{
-	if (!pci_drv)
-		pci_unregister_driver(&pwm_lpss_driver_pci);
-	if (!plat_drv)
-		platform_driver_unregister(&pwm_lpss_driver_platform);
-}
-module_exit(pwm_exit);
+EXPORT_SYMBOL_GPL(pwm_lpss_remove);
 
 MODULE_DESCRIPTION("PWM driver for Intel LPSS");
 MODULE_AUTHOR("Mika Westerberg <mika.westerberg@linux.intel.com>");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:pwm-lpss");

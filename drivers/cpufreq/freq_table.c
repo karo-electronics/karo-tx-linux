@@ -18,6 +18,21 @@
  *                     FREQUENCY TABLE HELPERS                       *
  *********************************************************************/
 
+bool policy_has_boost_freq(struct cpufreq_policy *policy)
+{
+	struct cpufreq_frequency_table *pos, *table = policy->freq_table;
+
+	if (!table)
+		return false;
+
+	cpufreq_for_each_valid_entry(pos, table)
+		if (pos->flags & CPUFREQ_BOOST_FREQ)
+			return true;
+
+	return false;
+}
+EXPORT_SYMBOL_GPL(policy_has_boost_freq);
+
 int cpufreq_frequency_table_cpuinfo(struct cpufreq_policy *policy,
 				    struct cpufreq_frequency_table *table)
 {
@@ -117,7 +132,7 @@ int cpufreq_frequency_table_target(struct cpufreq_policy *policy,
 		.frequency = 0,
 	};
 	struct cpufreq_frequency_table *pos;
-	unsigned int freq, i = 0;
+	unsigned int freq, diff, i = 0;
 
 	pr_debug("request for target %u kHz (relation: %u) for cpu %u\n",
 					target_freq, relation, policy->cpu);
@@ -127,6 +142,7 @@ int cpufreq_frequency_table_target(struct cpufreq_policy *policy,
 		suboptimal.frequency = ~0;
 		break;
 	case CPUFREQ_RELATION_L:
+	case CPUFREQ_RELATION_C:
 		optimal.frequency = ~0;
 		break;
 	}
@@ -166,6 +182,15 @@ int cpufreq_frequency_table_target(struct cpufreq_policy *policy,
 					suboptimal.frequency = freq;
 					suboptimal.driver_data = i;
 				}
+			}
+			break;
+		case CPUFREQ_RELATION_C:
+			diff = abs(freq - target_freq);
+			if (diff < optimal.frequency ||
+			    (diff == optimal.frequency &&
+			     freq > table[optimal.driver_data].frequency)) {
+				optimal.frequency = diff;
+				optimal.driver_data = i;
 			}
 			break;
 		}
@@ -286,15 +311,6 @@ int cpufreq_table_validate_and_show(struct cpufreq_policy *policy,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(cpufreq_table_validate_and_show);
-
-struct cpufreq_policy *cpufreq_cpu_get_raw(unsigned int cpu);
-
-struct cpufreq_frequency_table *cpufreq_frequency_get_table(unsigned int cpu)
-{
-	struct cpufreq_policy *policy = cpufreq_cpu_get_raw(cpu);
-	return policy ? policy->freq_table : NULL;
-}
-EXPORT_SYMBOL_GPL(cpufreq_frequency_get_table);
 
 MODULE_AUTHOR("Dominik Brodowski <linux@brodo.de>");
 MODULE_DESCRIPTION("CPUfreq frequency table helpers");

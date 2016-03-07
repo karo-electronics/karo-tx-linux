@@ -11,14 +11,13 @@
 
 #include <linux/io.h>
 #include <linux/irq.h>
+#include <linux/irqchip.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 
 #include <asm/mach/irq.h>
 #include <asm/exception.h>
-
-#include "irqchip.h"
 
 #define IO_STATUS	0x000
 #define IO_RAW_STATUS	0x004
@@ -56,8 +55,7 @@ static void __exception_irq_entry zevio_handle_irq(struct pt_regs *regs)
 
 	while (readl(zevio_irq_io + IO_STATUS)) {
 		irqnr = readl(zevio_irq_io + IO_CURRENT);
-		irqnr = irq_find_mapping(zevio_irq_domain, irqnr);
-		handle_IRQ(irqnr, regs);
+		handle_domain_irq(zevio_irq_domain, irqnr, regs);
 	};
 }
 

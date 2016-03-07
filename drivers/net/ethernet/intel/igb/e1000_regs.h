@@ -104,6 +104,8 @@
 #define E1000_TRGTTIMH0  0x0B648 /* Target Time Register 0 High - RW */
 #define E1000_TRGTTIML1  0x0B64C /* Target Time Register 1 Low  - RW */
 #define E1000_TRGTTIMH1  0x0B650 /* Target Time Register 1 High - RW */
+#define E1000_FREQOUT0   0x0B654 /* Frequency Out 0 Control Register - RW */
+#define E1000_FREQOUT1   0x0B658 /* Frequency Out 1 Control Register - RW */
 #define E1000_AUXSTMPL0  0x0B65C /* Auxiliary Time Stamp 0 Register Low  - RO */
 #define E1000_AUXSTMPH0  0x0B660 /* Auxiliary Time Stamp 0 Register High - RO */
 #define E1000_AUXSTMPL1  0x0B664 /* Auxiliary Time Stamp 1 Register Low  - RO */
@@ -355,6 +357,7 @@
 #define E1000_UTA       0x0A000 /* Unicast Table Array - RW */
 #define E1000_IOVTCL    0x05BBC /* IOV Control Register */
 #define E1000_TXSWC     0x05ACC /* Tx Switch Control */
+#define E1000_LVMMC	0x03548 /* Last VM Misbehavior cause */
 /* These act per VF so an array friendly macro is used */
 #define E1000_P2VMAILBOX(_n)   (0x00C00 + (4 * (_n)))
 #define E1000_VMBMEM(_n)       (0x00800 + (64 * (_n)))

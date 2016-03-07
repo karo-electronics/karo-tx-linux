@@ -102,7 +102,7 @@ static int sdv_xlate(struct irq_domain *h, struct device_node *node,
 {
 	u32 line, type;
 
-	if (node != h->of_node)
+	if (node != irq_domain_get_of_node(h))
 		return -EINVAL;
 
 	if (intsize < 2)
@@ -125,7 +125,7 @@ static int sdv_xlate(struct irq_domain *h, struct device_node *node,
 	return 0;
 }
 
-static struct irq_domain_ops irq_domain_sdv_ops = {
+static const struct irq_domain_ops irq_domain_sdv_ops = {
 	.xlate = sdv_xlate,
 };
 
@@ -265,9 +265,7 @@ static void sdv_gpio_remove(struct pci_dev *pdev)
 	free_irq(pdev->irq, sd);
 	irq_free_descs(sd->irq_base, SDV_NUM_PUB_GPIOS);
 
-	if (gpiochip_remove(&sd->bgpio.gc))
-		dev_err(&pdev->dev, "gpiochip_remove() failed.\n");
-
+	gpiochip_remove(&sd->bgpio.gc);
 	pci_release_region(pdev, GPIO_BAR);
 	iounmap(sd->gpio_pub_base);
 	pci_disable_device(pdev);

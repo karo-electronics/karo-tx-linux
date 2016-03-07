@@ -427,12 +427,6 @@ static void serial_lpc32xx_stop_rx(struct uart_port *port)
 		LPC32XX_HSU_FE_INT), LPC32XX_HSUART_IIR(port->membase));
 }
 
-/* port->lock held by caller.  */
-static void serial_lpc32xx_enable_ms(struct uart_port *port)
-{
-	/* Modem status is not supported */
-}
-
 /* port->lock is not held.  */
 static void serial_lpc32xx_break_ctl(struct uart_port *port,
 				     int break_state)
@@ -658,7 +652,6 @@ static struct uart_ops serial_lpc32xx_pops = {
 	.stop_tx	= serial_lpc32xx_stop_tx,
 	.start_tx	= serial_lpc32xx_start_tx,
 	.stop_rx	= serial_lpc32xx_stop_rx,
-	.enable_ms	= serial_lpc32xx_enable_ms,
 	.break_ctl	= serial_lpc32xx_break_ctl,
 	.startup	= serial_lpc32xx_startup,
 	.shutdown	= serial_lpc32xx_shutdown,
@@ -698,12 +691,13 @@ static int serial_hs_lpc32xx_probe(struct platform_device *pdev)
 	p->port.mapbase = res->start;
 	p->port.membase = NULL;
 
-	p->port.irq = platform_get_irq(pdev, 0);
-	if (p->port.irq < 0) {
+	ret = platform_get_irq(pdev, 0);
+	if (ret < 0) {
 		dev_err(&pdev->dev, "Error getting irq for HS UART port %d\n",
 			uarts_registered);
-		return p->port.irq;
+		return ret;
 	}
+	p->port.irq = ret;
 
 	p->port.iotype = UPIO_MEM32;
 	p->port.uartclk = LPC32XX_MAIN_OSC_FREQ;
@@ -775,7 +769,6 @@ static struct platform_driver serial_hs_lpc32xx_driver = {
 	.resume		= serial_hs_lpc32xx_resume,
 	.driver		= {
 		.name	= MODNAME,
-		.owner	= THIS_MODULE,
 		.of_match_table	= serial_hs_lpc32xx_dt_ids,
 	},
 };

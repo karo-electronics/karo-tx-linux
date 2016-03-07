@@ -41,7 +41,7 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-# include <linux/libcfs/libcfs.h>
+#include "../../include/linux/libcfs/libcfs.h"
 # include <linux/fs.h>
 # include <linux/sched.h>
 # include <linux/mm.h>
@@ -50,16 +50,16 @@
 # include <linux/pagemap.h>
 # include <linux/rbtree.h>
 
-#include <obd.h>
-#include <obd_support.h>
-#include <lustre_fid.h>
-#include <lustre_lite.h>
-#include <lustre_dlm.h>
-#include <lustre_ver.h>
-#include <lustre_mdc.h>
-#include <cl_object.h>
+#include "../include/obd.h"
+#include "../include/obd_support.h"
+#include "../include/lustre_fid.h"
+#include "../include/lustre_lite.h"
+#include "../include/lustre_dlm.h"
+#include "../include/lustre_ver.h"
+#include "../include/lustre_mdc.h"
+#include "../include/cl_object.h"
 
-#include <lclient.h>
+#include "../include/lclient.h"
 
 #include "../llite/llite_internal.h"
 
@@ -116,7 +116,7 @@ void *ccc_key_init(const struct lu_context *ctx, struct lu_context_key *key)
 {
 	struct ccc_thread_info *info;
 
-	OBD_SLAB_ALLOC_PTR_GFP(info, ccc_thread_kmem, GFP_NOFS);
+	info = kmem_cache_alloc(ccc_thread_kmem, GFP_NOFS | __GFP_ZERO);
 	if (info == NULL)
 		info = ERR_PTR(-ENOMEM);
 	return info;
@@ -126,7 +126,8 @@ void ccc_key_fini(const struct lu_context *ctx,
 			 struct lu_context_key *key, void *data)
 {
 	struct ccc_thread_info *info = data;
-	OBD_SLAB_FREE_PTR(info, ccc_thread_kmem);
+
+	kmem_cache_free(ccc_thread_kmem, info);
 }
 
 void *ccc_session_key_init(const struct lu_context *ctx,
@@ -134,7 +135,7 @@ void *ccc_session_key_init(const struct lu_context *ctx,
 {
 	struct ccc_session *session;
 
-	OBD_SLAB_ALLOC_PTR_GFP(session, ccc_session_kmem, GFP_NOFS);
+	session = kmem_cache_alloc(ccc_session_kmem, GFP_NOFS | __GFP_ZERO);
 	if (session == NULL)
 		session = ERR_PTR(-ENOMEM);
 	return session;
@@ -144,7 +145,8 @@ void ccc_session_key_fini(const struct lu_context *ctx,
 				 struct lu_context_key *key, void *data)
 {
 	struct ccc_session *session = data;
-	OBD_SLAB_FREE_PTR(session, ccc_session_kmem);
+
+	kmem_cache_free(ccc_session_kmem, session);
 }
 
 struct lu_context_key ccc_key = {
@@ -158,7 +160,6 @@ struct lu_context_key ccc_session_key = {
 	.lct_init = ccc_session_key_init,
 	.lct_fini = ccc_session_key_fini
 };
-
 
 /* type constructor/destructor: ccc_type_{init,fini,start,stop}(). */
 /* LU_TYPE_INIT_FINI(ccc, &ccc_key, &ccc_session_key); */
@@ -200,8 +201,8 @@ struct lu_device *ccc_device_alloc(const struct lu_env *env,
 	struct cl_site    *site;
 	int rc;
 
-	OBD_ALLOC_PTR(vdv);
-	if (vdv == NULL)
+	vdv = kzalloc(sizeof(*vdv), GFP_NOFS);
+	if (!vdv)
 		return ERR_PTR(-ENOMEM);
 
 	lud = &vdv->cdv_cl.cd_lu_dev;
@@ -209,7 +210,7 @@ struct lu_device *ccc_device_alloc(const struct lu_env *env,
 	ccc2lu_dev(vdv)->ld_ops = luops;
 	vdv->cdv_cl.cd_ops = clops;
 
-	OBD_ALLOC_PTR(site);
+	site = kzalloc(sizeof(*site), GFP_NOFS);
 	if (site != NULL) {
 		rc = cl_site_init(site, &vdv->cdv_cl);
 		if (rc == 0)
@@ -217,7 +218,7 @@ struct lu_device *ccc_device_alloc(const struct lu_env *env,
 		else {
 			LASSERT(lud->ld_site == NULL);
 			CERROR("Cannot init lu_site, rc %d.\n", rc);
-			OBD_FREE_PTR(site);
+			kfree(site);
 		}
 	} else
 		rc = -ENOMEM;
@@ -237,10 +238,10 @@ struct lu_device *ccc_device_free(const struct lu_env *env,
 
 	if (d->ld_site != NULL) {
 		cl_site_fini(site);
-		OBD_FREE_PTR(site);
+		kfree(site);
 	}
 	cl_device_fini(lu2cl_dev(d));
-	OBD_FREE_PTR(vdv);
+	kfree(vdv);
 	return next;
 }
 
@@ -250,7 +251,7 @@ int ccc_req_init(const struct lu_env *env, struct cl_device *dev,
 	struct ccc_req *vrq;
 	int result;
 
-	OBD_SLAB_ALLOC_PTR_GFP(vrq, ccc_req_kmem, GFP_NOFS);
+	vrq = kmem_cache_alloc(ccc_req_kmem, GFP_NOFS | __GFP_ZERO);
 	if (vrq != NULL) {
 		cl_req_slice_add(req, &vrq->crq_cl, dev, &ccc_req_ops);
 		result = 0;
@@ -264,7 +265,7 @@ int ccc_req_init(const struct lu_env *env, struct cl_device *dev,
  * fails. Access to this environment is serialized by ccc_inode_fini_guard
  * mutex.
  */
-static struct lu_env *ccc_inode_fini_env = NULL;
+static struct lu_env *ccc_inode_fini_env;
 
 /**
  * A mutex serializing calls to slp_inode_fini() under extreme memory
@@ -326,7 +327,7 @@ struct lu_object *ccc_object_alloc(const struct lu_env *env,
 	struct ccc_object *vob;
 	struct lu_object  *obj;
 
-	OBD_SLAB_ALLOC_PTR_GFP(vob, ccc_object_kmem, GFP_NOFS);
+	vob = kmem_cache_alloc(ccc_object_kmem, GFP_NOFS | __GFP_ZERO);
 	if (vob != NULL) {
 		struct cl_object_header *hdr;
 
@@ -382,7 +383,7 @@ void ccc_object_free(const struct lu_env *env, struct lu_object *obj)
 
 	lu_object_fini(obj);
 	lu_object_header_fini(obj->lo_header);
-	OBD_SLAB_FREE_PTR(vob, ccc_object_kmem);
+	kmem_cache_free(ccc_object_kmem, vob);
 }
 
 int ccc_lock_init(const struct lu_env *env,
@@ -395,19 +396,13 @@ int ccc_lock_init(const struct lu_env *env,
 
 	CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-	OBD_SLAB_ALLOC_PTR_GFP(clk, ccc_lock_kmem, GFP_NOFS);
+	clk = kmem_cache_alloc(ccc_lock_kmem, GFP_NOFS | __GFP_ZERO);
 	if (clk != NULL) {
 		cl_lock_slice_add(lock, &clk->clk_cl, obj, lkops);
 		result = 0;
 	} else
 		result = -ENOMEM;
 	return result;
-}
-
-int ccc_attr_set(const struct lu_env *env, struct cl_object *obj,
-		 const struct cl_attr *attr, unsigned valid)
-{
-	return 0;
 }
 
 int ccc_object_glimpse(const struct lu_env *env,
@@ -425,15 +420,6 @@ int ccc_object_glimpse(const struct lu_env *env,
 	 */
 	if (lvb->lvb_size > 0 && lvb->lvb_blocks == 0)
 		lvb->lvb_blocks = dirty_cnt(inode);
-	return 0;
-}
-
-
-
-int ccc_conf_set(const struct lu_env *env, struct cl_object *obj,
-			const struct cl_object_conf *conf)
-{
-	/* TODO: destroy all pages attached to this object. */
 	return 0;
 }
 
@@ -501,54 +487,6 @@ int ccc_fail(const struct lu_env *env, const struct cl_page_slice *slice)
 	return 0;
 }
 
-void ccc_transient_page_verify(const struct cl_page *page)
-{
-}
-
-int ccc_transient_page_own(const struct lu_env *env,
-				   const struct cl_page_slice *slice,
-				   struct cl_io *unused,
-				   int nonblock)
-{
-	ccc_transient_page_verify(slice->cpl_page);
-	return 0;
-}
-
-void ccc_transient_page_assume(const struct lu_env *env,
-				      const struct cl_page_slice *slice,
-				      struct cl_io *unused)
-{
-	ccc_transient_page_verify(slice->cpl_page);
-}
-
-void ccc_transient_page_unassume(const struct lu_env *env,
-					const struct cl_page_slice *slice,
-					struct cl_io *unused)
-{
-	ccc_transient_page_verify(slice->cpl_page);
-}
-
-void ccc_transient_page_disown(const struct lu_env *env,
-				      const struct cl_page_slice *slice,
-				      struct cl_io *unused)
-{
-	ccc_transient_page_verify(slice->cpl_page);
-}
-
-void ccc_transient_page_discard(const struct lu_env *env,
-				       const struct cl_page_slice *slice,
-				       struct cl_io *unused)
-{
-	struct cl_page *page = slice->cpl_page;
-
-	ccc_transient_page_verify(slice->cpl_page);
-
-	/*
-	 * For transient pages, remove it from the radix tree.
-	 */
-	cl_page_delete(env, page);
-}
-
 int ccc_transient_page_prep(const struct lu_env *env,
 				   const struct cl_page_slice *slice,
 				   struct cl_io *unused)
@@ -572,12 +510,19 @@ void ccc_lock_delete(const struct lu_env *env,
 void ccc_lock_fini(const struct lu_env *env, struct cl_lock_slice *slice)
 {
 	struct ccc_lock *clk = cl2ccc_lock(slice);
-	OBD_SLAB_FREE_PTR(clk, ccc_lock_kmem);
+
+	kmem_cache_free(ccc_lock_kmem, clk);
 }
 
 int ccc_lock_enqueue(const struct lu_env *env,
 		     const struct cl_lock_slice *slice,
 		     struct cl_io *unused, __u32 enqflags)
+{
+	CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
+	return 0;
+}
+
+int ccc_lock_use(const struct lu_env *env, const struct cl_lock_slice *slice)
 {
 	CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
 	return 0;
@@ -681,13 +626,6 @@ void ccc_lock_state(const struct lu_env *env,
  *
  */
 
-void ccc_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
-{
-	struct cl_io *io = ios->cis_io;
-
-	CLOBINVRNT(env, io->ci_obj, ccc_object_invariant(io->ci_obj));
-}
-
 int ccc_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
 			  __u32 enqflags, enum cl_lock_mode mode,
 			  pgoff_t start, pgoff_t end)
@@ -733,6 +671,7 @@ int ccc_io_one_lock(const struct lu_env *env, struct cl_io *io,
 		    loff_t start, loff_t end)
 {
 	struct cl_object *obj = io->ci_obj;
+
 	return ccc_io_one_lock_index(env, io, enqflags, mode,
 				     cl_index(obj, start), cl_index(obj, end));
 }
@@ -817,32 +756,33 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
 				 * linux-2.6.18-128.1.1 miss to do that.
 				 * --bug 17336 */
 				loff_t size = cl_isize_read(inode);
-				unsigned long cur_index = start >> PAGE_CACHE_SHIFT;
+				loff_t cur_index = start >> PAGE_CACHE_SHIFT;
+				loff_t size_index = (size - 1) >>
+						    PAGE_CACHE_SHIFT;
 
 				if ((size == 0 && cur_index != 0) ||
-				    (((size - 1) >> PAGE_CACHE_SHIFT) < cur_index))
-				*exceed = 1;
+				    size_index < cur_index)
+					*exceed = 1;
 			}
 			return result;
-		} else {
-			/*
-			 * region is within kms and, hence, within real file
-			 * size (A). We need to increase i_size to cover the
-			 * read region so that generic_file_read() will do its
-			 * job, but that doesn't mean the kms size is
-			 * _correct_, it is only the _minimum_ size. If
-			 * someone does a stat they will get the correct size
-			 * which will always be >= the kms value here.
-			 * b=11081
-			 */
-			if (cl_isize_read(inode) < kms) {
-				cl_isize_write_nolock(inode, kms);
-				CDEBUG(D_VFSTRACE,
-				       DFID" updating i_size "LPU64"\n",
-				       PFID(lu_object_fid(&obj->co_lu)),
-				       (__u64)cl_isize_read(inode));
+		}
+		/*
+		 * region is within kms and, hence, within real file
+		 * size (A). We need to increase i_size to cover the
+		 * read region so that generic_file_read() will do its
+		 * job, but that doesn't mean the kms size is
+		 * _correct_, it is only the _minimum_ size. If
+		 * someone does a stat they will get the correct size
+		 * which will always be >= the kms value here.
+		 * b=11081
+		 */
+		if (cl_isize_read(inode) < kms) {
+			cl_isize_write_nolock(inode, kms);
+			CDEBUG(D_VFSTRACE,
+					DFID" updating i_size %llu\n",
+					PFID(lu_object_fid(&obj->co_lu)),
+					(__u64)cl_isize_read(inode));
 
-			}
 		}
 	}
 	ccc_object_size_unlock(obj);
@@ -864,7 +804,7 @@ void ccc_req_completion(const struct lu_env *env,
 		cl_stats_tally(slice->crs_dev, slice->crs_req->crq_type, ioret);
 
 	vrq = cl2ccc_req(slice);
-	OBD_SLAB_FREE_PTR(vrq, ccc_req_kmem);
+	kmem_cache_free(ccc_req_kmem, vrq);
 }
 
 /**
@@ -885,26 +825,19 @@ void ccc_req_completion(const struct lu_env *env,
  *
  *    - o_ioepoch,
  *
- *  and capability.
  */
 void ccc_req_attr_set(const struct lu_env *env,
 		      const struct cl_req_slice *slice,
 		      const struct cl_object *obj,
-		      struct cl_req_attr *attr, obd_valid flags)
+		      struct cl_req_attr *attr, u64 flags)
 {
 	struct inode *inode;
 	struct obdo  *oa;
-	obd_flag      valid_flags;
+	u32	      valid_flags;
 
 	oa = attr->cra_oa;
 	inode = ccc_object_inode(obj);
 	valid_flags = OBD_MD_FLTYPE;
-
-	if ((flags & OBD_MD_FLOSSCAPA) != 0) {
-		LASSERT(attr->cra_capa == NULL);
-		attr->cra_capa = cl_capa_lookup(inode,
-						slice->crs_req->crq_type);
-	}
 
 	if (slice->crs_req->crq_type == CRT_WRITE) {
 		if (flags & OBD_MD_FLEPOCH) {
@@ -925,8 +858,7 @@ static const struct cl_req_operations ccc_req_ops = {
 	.cro_completion = ccc_req_completion
 };
 
-int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
-		   struct obd_capa *capa)
+int cl_setattr_ost(struct inode *inode, const struct iattr *attr)
 {
 	struct lu_env *env;
 	struct cl_io  *io;
@@ -945,7 +877,6 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
 	io->u.ci_setattr.sa_attr.lvb_ctime = LTIME_S(attr->ia_ctime);
 	io->u.ci_setattr.sa_attr.lvb_size = attr->ia_size;
 	io->u.ci_setattr.sa_valid = attr->ia_valid;
-	io->u.ci_setattr.sa_capa = capa;
 
 again:
 	if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0) {
@@ -1252,7 +1183,7 @@ __u32 cl_fid_build_gen(const struct lu_fid *fid)
 		return gen;
 	}
 
-	gen = (fid_flatten(fid) >> 32);
+	gen = fid_flatten(fid) >> 32;
 	return gen;
 }
 
@@ -1269,7 +1200,7 @@ struct lov_stripe_md *ccc_inode_lsm_get(struct inode *inode)
 	return lov_lsm_get(cl_i2info(inode)->lli_clob);
 }
 
-void inline ccc_inode_lsm_put(struct inode *inode, struct lov_stripe_md *lsm)
+inline void ccc_inode_lsm_put(struct inode *inode, struct lov_stripe_md *lsm)
 {
 	lov_lsm_put(cl_i2info(inode)->lli_clob, lsm);
 }

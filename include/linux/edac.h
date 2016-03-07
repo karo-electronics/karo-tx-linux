@@ -194,6 +194,10 @@ static inline char *mc_event_error_type(const unsigned int err_type)
  * @MEM_DDR3:		DDR3 RAM
  * @MEM_RDDR3:		Registered DDR3 RAM
  *			This is a variant of the DDR3 memories.
+ * @MEM_LRDDR3		Load-Reduced DDR3 memory.
+ * @MEM_DDR4:		Unbuffered DDR4 RAM
+ * @MEM_RDDR4:		Registered DDR4 RAM
+ *			This is a variant of the DDR4 memories.
  */
 enum mem_type {
 	MEM_EMPTY = 0,
@@ -213,6 +217,9 @@ enum mem_type {
 	MEM_XDR,
 	MEM_DDR3,
 	MEM_RDDR3,
+	MEM_LRDDR3,
+	MEM_DDR4,
+	MEM_RDDR4,
 };
 
 #define MEM_FLAG_EMPTY		BIT(MEM_EMPTY)
@@ -762,12 +769,10 @@ struct mem_ctl_info {
 	/* the internal state of this controller instance */
 	int op_state;
 
-#ifdef CONFIG_EDAC_DEBUG
 	struct dentry *debugfs;
 	u8 fake_inject_layer[EDAC_MAX_LAYERS];
-	u32 fake_inject_ue;
+	bool fake_inject_ue;
 	u16 fake_inject_count;
-#endif
 };
 
 /*

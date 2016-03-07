@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2014, Intel Corp.
+ * Copyright (C) 2000 - 2015, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -76,6 +76,9 @@ osl_map_table(acpi_size address,
 	      char *signature, struct acpi_table_header **table);
 
 static void osl_unmap_table(struct acpi_table_header *table);
+
+static acpi_physical_address
+osl_find_rsdp_via_efi_by_keyword(FILE * file, const char *keyword);
 
 static acpi_physical_address osl_find_rsdp_via_efi(void);
 
@@ -219,7 +222,7 @@ acpi_os_get_table_by_address(acpi_physical_address address,
 		goto exit;
 	}
 
-	ACPI_MEMCPY(local_table, mapped_table, table_length);
+	memcpy(local_table, mapped_table, table_length);
 
 exit:
 	osl_unmap_table(mapped_table);
@@ -417,6 +420,38 @@ acpi_os_get_table_by_index(u32 index,
 
 /******************************************************************************
  *
+ * FUNCTION:    osl_find_rsdp_via_efi_by_keyword
+ *
+ * PARAMETERS:  keyword         - Character string indicating ACPI GUID version
+ *                                in the EFI table
+ *
+ * RETURN:      RSDP address if found
+ *
+ * DESCRIPTION: Find RSDP address via EFI using keyword indicating the ACPI
+ *              GUID version.
+ *
+ *****************************************************************************/
+
+static acpi_physical_address
+osl_find_rsdp_via_efi_by_keyword(FILE * file, const char *keyword)
+{
+	char buffer[80];
+	unsigned long long address = 0;
+	char format[32];
+
+	snprintf(format, 32, "%s=%s", keyword, "%llx");
+	fseek(file, 0, SEEK_SET);
+	while (fgets(buffer, 80, file)) {
+		if (sscanf(buffer, format, &address) == 1) {
+			break;
+		}
+	}
+
+	return ((acpi_physical_address) (address));
+}
+
+/******************************************************************************
+ *
  * FUNCTION:    osl_find_rsdp_via_efi
  *
  * PARAMETERS:  None
@@ -430,20 +465,19 @@ acpi_os_get_table_by_index(u32 index,
 static acpi_physical_address osl_find_rsdp_via_efi(void)
 {
 	FILE *file;
-	char buffer[80];
-	unsigned long address = 0;
+	acpi_physical_address address = 0;
 
 	file = fopen(EFI_SYSTAB, "r");
 	if (file) {
-		while (fgets(buffer, 80, file)) {
-			if (sscanf(buffer, "ACPI20=0x%lx", &address) == 1) {
-				break;
-			}
+		address = osl_find_rsdp_via_efi_by_keyword(file, "ACPI20");
+		if (!address) {
+			address =
+			    osl_find_rsdp_via_efi_by_keyword(file, "ACPI");
 		}
 		fclose(file);
 	}
 
-	return ((acpi_physical_address) (address));
+	return (address);
 }
 
 /******************************************************************************
@@ -497,7 +531,7 @@ static acpi_status osl_load_rsdp(void)
 	gbl_rsdp_address =
 	    rsdp_base + (ACPI_CAST8(mapped_table) - rsdp_address);
 
-	ACPI_MEMCPY(&gbl_rsdp, mapped_table, sizeof(struct acpi_table_rsdp));
+	memcpy(&gbl_rsdp, mapped_table, sizeof(struct acpi_table_rsdp));
 	acpi_os_unmap_memory(rsdp_address, rsdp_size);
 
 	return (AE_OK);
@@ -548,64 +582,67 @@ static acpi_status osl_table_initialize(void)
 		return (AE_OK);
 	}
 
-	/* Get RSDP from memory */
-
-	status = osl_load_rsdp();
-	if (ACPI_FAILURE(status)) {
-		return (status);
-	}
-
-	/* Get XSDT from memory */
-
-	if (gbl_rsdp.revision && !gbl_do_not_dump_xsdt) {
-		if (gbl_xsdt) {
-			free(gbl_xsdt);
-			gbl_xsdt = NULL;
-		}
-
-		gbl_revision = 2;
-		status = osl_get_bios_table(ACPI_SIG_XSDT, 0,
-					    ACPI_CAST_PTR(struct
-							  acpi_table_header *,
-							  &gbl_xsdt), &address);
-		if (ACPI_FAILURE(status)) {
-			return (status);
-		}
-	}
-
-	/* Get RSDT from memory */
-
-	if (gbl_rsdp.rsdt_physical_address) {
-		if (gbl_rsdt) {
-			free(gbl_rsdt);
-			gbl_rsdt = NULL;
-		}
-
-		status = osl_get_bios_table(ACPI_SIG_RSDT, 0,
-					    ACPI_CAST_PTR(struct
-							  acpi_table_header *,
-							  &gbl_rsdt), &address);
-		if (ACPI_FAILURE(status)) {
-			return (status);
-		}
-	}
-
-	/* Get FADT from memory */
-
-	if (gbl_fadt) {
-		free(gbl_fadt);
-		gbl_fadt = NULL;
-	}
-
-	status = osl_get_bios_table(ACPI_SIG_FADT, 0,
-				    ACPI_CAST_PTR(struct acpi_table_header *,
-						  &gbl_fadt),
-				    &gbl_fadt_address);
-	if (ACPI_FAILURE(status)) {
-		return (status);
-	}
-
 	if (!gbl_dump_customized_tables) {
+
+		/* Get RSDP from memory */
+
+		status = osl_load_rsdp();
+		if (ACPI_FAILURE(status)) {
+			return (status);
+		}
+
+		/* Get XSDT from memory */
+
+		if (gbl_rsdp.revision && !gbl_do_not_dump_xsdt) {
+			if (gbl_xsdt) {
+				free(gbl_xsdt);
+				gbl_xsdt = NULL;
+			}
+
+			gbl_revision = 2;
+			status = osl_get_bios_table(ACPI_SIG_XSDT, 0,
+						    ACPI_CAST_PTR(struct
+								  acpi_table_header
+								  *, &gbl_xsdt),
+						    &address);
+			if (ACPI_FAILURE(status)) {
+				return (status);
+			}
+		}
+
+		/* Get RSDT from memory */
+
+		if (gbl_rsdp.rsdt_physical_address) {
+			if (gbl_rsdt) {
+				free(gbl_rsdt);
+				gbl_rsdt = NULL;
+			}
+
+			status = osl_get_bios_table(ACPI_SIG_RSDT, 0,
+						    ACPI_CAST_PTR(struct
+								  acpi_table_header
+								  *, &gbl_rsdt),
+						    &address);
+			if (ACPI_FAILURE(status)) {
+				return (status);
+			}
+		}
+
+		/* Get FADT from memory */
+
+		if (gbl_fadt) {
+			free(gbl_fadt);
+			gbl_fadt = NULL;
+		}
+
+		status = osl_get_bios_table(ACPI_SIG_FADT, 0,
+					    ACPI_CAST_PTR(struct
+							  acpi_table_header *,
+							  &gbl_fadt),
+					    &gbl_fadt_address);
+		if (ACPI_FAILURE(status)) {
+			return (status);
+		}
 
 		/* Add mandatory tables to global table list first */
 
@@ -927,7 +964,7 @@ osl_get_bios_table(char *signature,
 		goto exit;
 	}
 
-	ACPI_MEMCPY(local_table, mapped_table, table_length);
+	memcpy(local_table, mapped_table, table_length);
 	*address = table_address;
 	*table = local_table;
 
@@ -1122,7 +1159,7 @@ osl_table_name_from_file(char *filename, char *signature, u32 *instance)
 	/* Extract instance number */
 
 	if (isdigit((int)filename[ACPI_NAME_SIZE])) {
-		sscanf(&filename[ACPI_NAME_SIZE], "%d", instance);
+		sscanf(&filename[ACPI_NAME_SIZE], "%u", instance);
 	} else if (strlen(filename) != ACPI_NAME_SIZE) {
 		return (AE_BAD_SIGNATURE);
 	} else {

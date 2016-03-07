@@ -37,7 +37,7 @@ static inline int max8925_read_device(struct i2c_client *i2c,
 static inline int max8925_write_device(struct i2c_client *i2c,
 				       int reg, int bytes, void *src)
 {
-	unsigned char buf[bytes + 1];
+	unsigned char buf[9];
 	int ret;
 
 	buf[0] = (unsigned char)reg;
@@ -245,7 +245,6 @@ MODULE_DEVICE_TABLE(of, max8925_dt_ids);
 static struct i2c_driver max8925_driver = {
 	.driver	= {
 		.name	= "max8925",
-		.owner	= THIS_MODULE,
 		.pm     = &max8925_pm_ops,
 		.of_match_table = max8925_dt_ids,
 	},
@@ -257,9 +256,11 @@ static struct i2c_driver max8925_driver = {
 static int __init max8925_i2c_init(void)
 {
 	int ret;
+
 	ret = i2c_add_driver(&max8925_driver);
 	if (ret != 0)
 		pr_err("Failed to register MAX8925 I2C driver: %d\n", ret);
+
 	return ret;
 }
 subsys_initcall(max8925_i2c_init);

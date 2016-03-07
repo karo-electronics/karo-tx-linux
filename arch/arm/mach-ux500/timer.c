@@ -16,7 +16,7 @@
 #include "db8500-regs.h"
 #include "id.h"
 
-const static struct of_device_id prcmu_timer_of_match[] __initconst = {
+static const struct of_device_id prcmu_timer_of_match[] __initconst = {
 	{ .compatible = "stericsson,db8500-prcmu-timer-4", },
 	{ },
 };
@@ -44,5 +44,5 @@ void __init ux500_timer_init(void)
 
 dt_fail:
 	clksrc_dbx500_prcmu_init(prcmu_timer_base);
-	clocksource_of_init();
+	clocksource_probe();
 }

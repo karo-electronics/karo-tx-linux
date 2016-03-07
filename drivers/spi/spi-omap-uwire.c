@@ -28,10 +28,6 @@
  * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -41,14 +37,14 @@
 #include <linux/err.h>
 #include <linux/clk.h>
 #include <linux/slab.h>
+#include <linux/device.h>
 
 #include <linux/spi/spi.h>
 #include <linux/spi/spi_bitbang.h>
 #include <linux/module.h>
+#include <linux/io.h>
 
-#include <asm/irq.h>
 #include <mach/hardware.h>
-#include <asm/io.h>
 #include <asm/mach-types.h>
 
 #include <mach/mux.h>
@@ -209,7 +205,7 @@ static void uwire_chipselect(struct spi_device *spi, int value)
 static int uwire_txrx(struct spi_device *spi, struct spi_transfer *t)
 {
 	unsigned	len = t->len;
-	unsigned	bits = t->bits_per_word ? : spi->bits_per_word;
+	unsigned	bits = t->bits_per_word;
 	unsigned	bytes;
 	u16		val, w;
 	int		status = 0;
@@ -348,9 +344,10 @@ static int uwire_setup_transfer(struct spi_device *spi, struct spi_transfer *t)
 	/* assume it's already enabled */
 	rate = clk_get_rate(uwire->ck);
 
-	hz = spi->max_speed_hz;
-	if (t != NULL && t->speed_hz)
+	if (t != NULL)
 		hz = t->speed_hz;
+	else
+		hz = spi->max_speed_hz;
 
 	if (!hz) {
 		pr_debug("%s: zero speed?\n", dev_name(&spi->dev));
@@ -447,7 +444,6 @@ static void uwire_off(struct uwire_spi *uwire)
 {
 	uwire_write_reg(UWIRE_SR3, 0);
 	clk_disable(uwire->ck);
-	clk_put(uwire->ck);
 	spi_master_put(uwire->bitbang.master);
 }
 
@@ -463,7 +459,7 @@ static int uwire_probe(struct platform_device *pdev)
 
 	uwire = spi_master_get_devdata(master);
 
-	uwire_base = ioremap(UWIRE_BASE_PHYS, UWIRE_IO_SIZE);
+	uwire_base = devm_ioremap(&pdev->dev, UWIRE_BASE_PHYS, UWIRE_IO_SIZE);
 	if (!uwire_base) {
 		dev_dbg(&pdev->dev, "can't ioremap UWIRE\n");
 		spi_master_put(master);
@@ -472,12 +468,11 @@ static int uwire_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, uwire);
 
-	uwire->ck = clk_get(&pdev->dev, "fck");
+	uwire->ck = devm_clk_get(&pdev->dev, "fck");
 	if (IS_ERR(uwire->ck)) {
 		status = PTR_ERR(uwire->ck);
 		dev_dbg(&pdev->dev, "no functional clock?\n");
 		spi_master_put(master);
-		iounmap(uwire_base);
 		return status;
 	}
 	clk_enable(uwire->ck);
@@ -507,7 +502,6 @@ static int uwire_probe(struct platform_device *pdev)
 	status = spi_bitbang_start(&uwire->bitbang);
 	if (status < 0) {
 		uwire_off(uwire);
-		iounmap(uwire_base);
 	}
 	return status;
 }
@@ -520,7 +514,6 @@ static int uwire_remove(struct platform_device *pdev)
 
 	spi_bitbang_stop(&uwire->bitbang);
 	uwire_off(uwire);
-	iounmap(uwire_base);
 	return 0;
 }
 
@@ -530,7 +523,6 @@ MODULE_ALIAS("platform:omap_uwire");
 static struct platform_driver uwire_driver = {
 	.driver = {
 		.name		= "omap_uwire",
-		.owner		= THIS_MODULE,
 	},
 	.probe = uwire_probe,
 	.remove = uwire_remove,

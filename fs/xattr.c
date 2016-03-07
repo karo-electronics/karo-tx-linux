@@ -298,18 +298,18 @@ vfs_removexattr(struct dentry *dentry, const char *name)
 
 	mutex_lock(&inode->i_mutex);
 	error = security_inode_removexattr(dentry, name);
-	if (error) {
-		mutex_unlock(&inode->i_mutex);
-		return error;
-	}
+	if (error)
+		goto out;
 
 	error = inode->i_op->removexattr(dentry, name);
-	mutex_unlock(&inode->i_mutex);
 
 	if (!error) {
 		fsnotify_xattr(dentry);
 		evm_inode_post_removexattr(dentry, name);
 	}
+
+out:
+	mutex_unlock(&inode->i_mutex);
 	return error;
 }
 EXPORT_SYMBOL_GPL(vfs_removexattr);
@@ -364,13 +364,12 @@ out:
 	return error;
 }
 
-SYSCALL_DEFINE5(setxattr, const char __user *, pathname,
-		const char __user *, name, const void __user *, value,
-		size_t, size, int, flags)
+static int path_setxattr(const char __user *pathname,
+			 const char __user *name, const void __user *value,
+			 size_t size, int flags, unsigned int lookup_flags)
 {
 	struct path path;
 	int error;
-	unsigned int lookup_flags = LOOKUP_FOLLOW;
 retry:
 	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
 	if (error)
@@ -386,46 +385,34 @@ retry:
 		goto retry;
 	}
 	return error;
+}
+
+SYSCALL_DEFINE5(setxattr, const char __user *, pathname,
+		const char __user *, name, const void __user *, value,
+		size_t, size, int, flags)
+{
+	return path_setxattr(pathname, name, value, size, flags, LOOKUP_FOLLOW);
 }
 
 SYSCALL_DEFINE5(lsetxattr, const char __user *, pathname,
 		const char __user *, name, const void __user *, value,
 		size_t, size, int, flags)
 {
-	struct path path;
-	int error;
-	unsigned int lookup_flags = 0;
-retry:
-	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
-	if (error)
-		return error;
-	error = mnt_want_write(path.mnt);
-	if (!error) {
-		error = setxattr(path.dentry, name, value, size, flags);
-		mnt_drop_write(path.mnt);
-	}
-	path_put(&path);
-	if (retry_estale(error, lookup_flags)) {
-		lookup_flags |= LOOKUP_REVAL;
-		goto retry;
-	}
-	return error;
+	return path_setxattr(pathname, name, value, size, flags, 0);
 }
 
 SYSCALL_DEFINE5(fsetxattr, int, fd, const char __user *, name,
 		const void __user *,value, size_t, size, int, flags)
 {
 	struct fd f = fdget(fd);
-	struct dentry *dentry;
 	int error = -EBADF;
 
 	if (!f.file)
 		return error;
-	dentry = f.file->f_path.dentry;
-	audit_inode(NULL, dentry, 0);
+	audit_file(f.file);
 	error = mnt_want_write_file(f.file);
 	if (!error) {
-		error = setxattr(dentry, name, value, size, flags);
+		error = setxattr(f.file->f_path.dentry, name, value, size, flags);
 		mnt_drop_write_file(f.file);
 	}
 	fdput(f);
@@ -481,12 +468,12 @@ getxattr(struct dentry *d, const char __user *name, void __user *value,
 	return error;
 }
 
-SYSCALL_DEFINE4(getxattr, const char __user *, pathname,
-		const char __user *, name, void __user *, value, size_t, size)
+static ssize_t path_getxattr(const char __user *pathname,
+			     const char __user *name, void __user *value,
+			     size_t size, unsigned int lookup_flags)
 {
 	struct path path;
 	ssize_t error;
-	unsigned int lookup_flags = LOOKUP_FOLLOW;
 retry:
 	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
 	if (error)
@@ -500,23 +487,16 @@ retry:
 	return error;
 }
 
+SYSCALL_DEFINE4(getxattr, const char __user *, pathname,
+		const char __user *, name, void __user *, value, size_t, size)
+{
+	return path_getxattr(pathname, name, value, size, LOOKUP_FOLLOW);
+}
+
 SYSCALL_DEFINE4(lgetxattr, const char __user *, pathname,
 		const char __user *, name, void __user *, value, size_t, size)
 {
-	struct path path;
-	ssize_t error;
-	unsigned int lookup_flags = 0;
-retry:
-	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
-	if (error)
-		return error;
-	error = getxattr(path.dentry, name, value, size);
-	path_put(&path);
-	if (retry_estale(error, lookup_flags)) {
-		lookup_flags |= LOOKUP_REVAL;
-		goto retry;
-	}
-	return error;
+	return path_getxattr(pathname, name, value, size, 0);
 }
 
 SYSCALL_DEFINE4(fgetxattr, int, fd, const char __user *, name,
@@ -527,7 +507,7 @@ SYSCALL_DEFINE4(fgetxattr, int, fd, const char __user *, name,
 
 	if (!f.file)
 		return error;
-	audit_inode(NULL, f.file->f_path.dentry, 0);
+	audit_file(f.file);
 	error = getxattr(f.file->f_path.dentry, name, value, size);
 	fdput(f);
 	return error;
@@ -571,12 +551,11 @@ listxattr(struct dentry *d, char __user *list, size_t size)
 	return error;
 }
 
-SYSCALL_DEFINE3(listxattr, const char __user *, pathname, char __user *, list,
-		size_t, size)
+static ssize_t path_listxattr(const char __user *pathname, char __user *list,
+			      size_t size, unsigned int lookup_flags)
 {
 	struct path path;
 	ssize_t error;
-	unsigned int lookup_flags = LOOKUP_FOLLOW;
 retry:
 	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
 	if (error)
@@ -590,23 +569,16 @@ retry:
 	return error;
 }
 
+SYSCALL_DEFINE3(listxattr, const char __user *, pathname, char __user *, list,
+		size_t, size)
+{
+	return path_listxattr(pathname, list, size, LOOKUP_FOLLOW);
+}
+
 SYSCALL_DEFINE3(llistxattr, const char __user *, pathname, char __user *, list,
 		size_t, size)
 {
-	struct path path;
-	ssize_t error;
-	unsigned int lookup_flags = 0;
-retry:
-	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
-	if (error)
-		return error;
-	error = listxattr(path.dentry, list, size);
-	path_put(&path);
-	if (retry_estale(error, lookup_flags)) {
-		lookup_flags |= LOOKUP_REVAL;
-		goto retry;
-	}
-	return error;
+	return path_listxattr(pathname, list, size, 0);
 }
 
 SYSCALL_DEFINE3(flistxattr, int, fd, char __user *, list, size_t, size)
@@ -616,7 +588,7 @@ SYSCALL_DEFINE3(flistxattr, int, fd, char __user *, list, size_t, size)
 
 	if (!f.file)
 		return error;
-	audit_inode(NULL, f.file->f_path.dentry, 0);
+	audit_file(f.file);
 	error = listxattr(f.file->f_path.dentry, list, size);
 	fdput(f);
 	return error;
@@ -640,12 +612,11 @@ removexattr(struct dentry *d, const char __user *name)
 	return vfs_removexattr(d, kname);
 }
 
-SYSCALL_DEFINE2(removexattr, const char __user *, pathname,
-		const char __user *, name)
+static int path_removexattr(const char __user *pathname,
+			    const char __user *name, unsigned int lookup_flags)
 {
 	struct path path;
 	int error;
-	unsigned int lookup_flags = LOOKUP_FOLLOW;
 retry:
 	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
 	if (error)
@@ -661,44 +632,31 @@ retry:
 		goto retry;
 	}
 	return error;
+}
+
+SYSCALL_DEFINE2(removexattr, const char __user *, pathname,
+		const char __user *, name)
+{
+	return path_removexattr(pathname, name, LOOKUP_FOLLOW);
 }
 
 SYSCALL_DEFINE2(lremovexattr, const char __user *, pathname,
 		const char __user *, name)
 {
-	struct path path;
-	int error;
-	unsigned int lookup_flags = 0;
-retry:
-	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
-	if (error)
-		return error;
-	error = mnt_want_write(path.mnt);
-	if (!error) {
-		error = removexattr(path.dentry, name);
-		mnt_drop_write(path.mnt);
-	}
-	path_put(&path);
-	if (retry_estale(error, lookup_flags)) {
-		lookup_flags |= LOOKUP_REVAL;
-		goto retry;
-	}
-	return error;
+	return path_removexattr(pathname, name, 0);
 }
 
 SYSCALL_DEFINE2(fremovexattr, int, fd, const char __user *, name)
 {
 	struct fd f = fdget(fd);
-	struct dentry *dentry;
 	int error = -EBADF;
 
 	if (!f.file)
 		return error;
-	dentry = f.file->f_path.dentry;
-	audit_inode(NULL, dentry, 0);
+	audit_file(f.file);
 	error = mnt_want_write_file(f.file);
 	if (!error) {
-		error = removexattr(dentry, name);
+		error = removexattr(f.file->f_path.dentry, name);
 		mnt_drop_write_file(f.file);
 	}
 	fdput(f);
@@ -762,7 +720,7 @@ generic_getxattr(struct dentry *dentry, const char *name, void *buffer, size_t s
 	handler = xattr_resolve_name(dentry->d_sb->s_xattr, &name);
 	if (!handler)
 		return -EOPNOTSUPP;
-	return handler->get(dentry, name, buffer, size, handler->flags);
+	return handler->get(handler, dentry, name, buffer, size);
 }
 
 /*
@@ -777,15 +735,15 @@ generic_listxattr(struct dentry *dentry, char *buffer, size_t buffer_size)
 
 	if (!buffer) {
 		for_each_xattr_handler(handlers, handler) {
-			size += handler->list(dentry, NULL, 0, NULL, 0,
-					      handler->flags);
+			size += handler->list(handler, dentry, NULL, 0,
+					      NULL, 0);
 		}
 	} else {
 		char *buf = buffer;
 
 		for_each_xattr_handler(handlers, handler) {
-			size = handler->list(dentry, buf, buffer_size,
-					     NULL, 0, handler->flags);
+			size = handler->list(handler, dentry, buf, buffer_size,
+					     NULL, 0);
 			if (size > buffer_size)
 				return -ERANGE;
 			buf += size;
@@ -809,7 +767,7 @@ generic_setxattr(struct dentry *dentry, const char *name, const void *value, siz
 	handler = xattr_resolve_name(dentry->d_sb->s_xattr, &name);
 	if (!handler)
 		return -EOPNOTSUPP;
-	return handler->set(dentry, name, value, size, flags, handler->flags);
+	return handler->set(handler, dentry, name, value, size, flags);
 }
 
 /*
@@ -824,14 +782,37 @@ generic_removexattr(struct dentry *dentry, const char *name)
 	handler = xattr_resolve_name(dentry->d_sb->s_xattr, &name);
 	if (!handler)
 		return -EOPNOTSUPP;
-	return handler->set(dentry, name, NULL, 0,
-			    XATTR_REPLACE, handler->flags);
+	return handler->set(handler, dentry, name, NULL, 0, XATTR_REPLACE);
 }
 
 EXPORT_SYMBOL(generic_getxattr);
 EXPORT_SYMBOL(generic_listxattr);
 EXPORT_SYMBOL(generic_setxattr);
 EXPORT_SYMBOL(generic_removexattr);
+
+/**
+ * xattr_full_name  -  Compute full attribute name from suffix
+ *
+ * @handler:	handler of the xattr_handler operation
+ * @name:	name passed to the xattr_handler operation
+ *
+ * The get and set xattr handler operations are called with the remainder of
+ * the attribute name after skipping the handler's prefix: for example, "foo"
+ * is passed to the get operation of a handler with prefix "user." to get
+ * attribute "user.foo".  The full name is still "there" in the name though.
+ *
+ * Note: the list xattr handler operation when called from the vfs is passed a
+ * NULL name; some file systems use this operation internally, with varying
+ * semantics.
+ */
+const char *xattr_full_name(const struct xattr_handler *handler,
+			    const char *name)
+{
+	size_t prefix_len = strlen(handler->prefix);
+
+	return name - prefix_len;
+}
+EXPORT_SYMBOL(xattr_full_name);
 
 /*
  * Allocate new xattr and copy in the value; but leave the name to callers.

@@ -5,12 +5,12 @@
  * See LICENSE.qlcnic for copyright and licensing details.
  */
 
+#include <net/ip.h>
+
 #include "qlcnic.h"
 #include "qlcnic_hdr.h"
 #include "qlcnic_83xx_hw.h"
 #include "qlcnic_hw.h"
-
-#include <net/ip.h>
 
 #define QLC_83XX_MINIDUMP_FLASH		0x520000
 #define QLC_83XX_OCM_INDEX			3
@@ -47,15 +47,26 @@ struct qlcnic_common_entry_hdr {
 	u32     type;
 	u32     offset;
 	u32     cap_size;
+#if defined(__LITTLE_ENDIAN)
 	u8      mask;
 	u8      rsvd[2];
 	u8      flags;
+#else
+	u8      flags;
+	u8      rsvd[2];
+	u8      mask;
+#endif
 } __packed;
 
 struct __crb {
 	u32	addr;
+#if defined(__LITTLE_ENDIAN)
 	u8	stride;
 	u8	rsvd1[3];
+#else
+	u8	rsvd1[3];
+	u8	stride;
+#endif
 	u32	data_size;
 	u32	no_ops;
 	u32	rsvd2[4];
@@ -63,15 +74,28 @@ struct __crb {
 
 struct __ctrl {
 	u32	addr;
+#if defined(__LITTLE_ENDIAN)
 	u8	stride;
 	u8	index_a;
 	u16	timeout;
+#else
+	u16	timeout;
+	u8	index_a;
+	u8	stride;
+#endif
 	u32	data_size;
 	u32	no_ops;
+#if defined(__LITTLE_ENDIAN)
 	u8	opcode;
 	u8	index_v;
 	u8	shl_val;
 	u8	shr_val;
+#else
+	u8	shr_val;
+	u8	shl_val;
+	u8	index_v;
+	u8	opcode;
+#endif
 	u32	val1;
 	u32	val2;
 	u32	val3;
@@ -79,16 +103,27 @@ struct __ctrl {
 
 struct __cache {
 	u32	addr;
+#if defined(__LITTLE_ENDIAN)
 	u16	stride;
 	u16	init_tag_val;
+#else
+	u16	init_tag_val;
+	u16	stride;
+#endif
 	u32	size;
 	u32	no_ops;
 	u32	ctrl_addr;
 	u32	ctrl_val;
 	u32	read_addr;
+#if defined(__LITTLE_ENDIAN)
 	u8	read_addr_stride;
 	u8	read_addr_num;
 	u8	rsvd1[2];
+#else
+	u8	rsvd1[2];
+	u8	read_addr_num;
+	u8	read_addr_stride;
+#endif
 } __packed;
 
 struct __ocm {
@@ -122,23 +157,39 @@ struct __mux {
 
 struct __queue {
 	u32	sel_addr;
+#if defined(__LITTLE_ENDIAN)
 	u16	stride;
 	u8	rsvd[2];
+#else
+	u8	rsvd[2];
+	u16	stride;
+#endif
 	u32	size;
 	u32	no_ops;
 	u8	rsvd2[8];
 	u32	read_addr;
+#if defined(__LITTLE_ENDIAN)
 	u8	read_addr_stride;
 	u8	read_addr_cnt;
 	u8	rsvd3[2];
+#else
+	u8	rsvd3[2];
+	u8	read_addr_cnt;
+	u8	read_addr_stride;
+#endif
 } __packed;
 
 struct __pollrd {
 	u32	sel_addr;
 	u32	read_addr;
 	u32	sel_val;
+#if defined(__LITTLE_ENDIAN)
 	u16	sel_val_stride;
 	u16	no_ops;
+#else
+	u16	no_ops;
+	u16	sel_val_stride;
+#endif
 	u32	poll_wait;
 	u32	poll_mask;
 	u32	data_size;
@@ -153,9 +204,15 @@ struct __mux2 {
 	u32	no_ops;
 	u32	sel_val_mask;
 	u32	read_addr;
+#if defined(__LITTLE_ENDIAN)
 	u8	sel_val_stride;
 	u8	data_size;
 	u8	rsvd[2];
+#else
+	u8	rsvd[2];
+	u8	data_size;
+	u8	sel_val_stride;
+#endif
 } __packed;
 
 struct __pollrdmwr {
@@ -1331,12 +1388,26 @@ int qlcnic_dump_fw(struct qlcnic_adapter *adapter)
 	fw_dump->clr = 1;
 	snprintf(mesg, sizeof(mesg), "FW_DUMP=%s", adapter->netdev->name);
 	netdev_info(adapter->netdev,
-		    "Dump data %d bytes captured, template header size %d bytes\n",
-		    fw_dump->size, fw_dump->tmpl_hdr_size);
+		    "Dump data %d bytes captured, dump data address = %p, template header size %d bytes, template address = %p\n",
+		    fw_dump->size, fw_dump->data, fw_dump->tmpl_hdr_size,
+		    fw_dump->tmpl_hdr);
 	/* Send a udev event to notify availability of FW dump */
 	kobject_uevent_env(&dev->kobj, KOBJ_CHANGE, msg);
 
 	return 0;
+}
+
+static inline bool
+qlcnic_83xx_md_check_extended_dump_capability(struct qlcnic_adapter *adapter)
+{
+	/* For special adapters (with 0x8830 device ID), where iSCSI firmware
+	 * dump needs to be captured as part of regular firmware dump
+	 * collection process, firmware exports it's capability through
+	 * capability registers
+	 */
+	return ((adapter->pdev->device == PCI_DEVICE_ID_QLOGIC_QLE8830) &&
+		(adapter->ahw->extra_capability[0] &
+		 QLCNIC_FW_CAPABILITY_2_EXT_ISCSI_DUMP));
 }
 
 void qlcnic_83xx_get_minidump_template(struct qlcnic_adapter *adapter)
@@ -1345,14 +1416,32 @@ void qlcnic_83xx_get_minidump_template(struct qlcnic_adapter *adapter)
 	struct qlcnic_hardware_context *ahw = adapter->ahw;
 	struct qlcnic_fw_dump *fw_dump = &ahw->fw_dump;
 	struct pci_dev *pdev = adapter->pdev;
+	bool extended = false;
 
 	prev_version = adapter->fw_version;
 	current_version = qlcnic_83xx_get_fw_version(adapter);
 
 	if (fw_dump->tmpl_hdr == NULL || current_version > prev_version) {
-		if (fw_dump->tmpl_hdr)
-			vfree(fw_dump->tmpl_hdr);
+		vfree(fw_dump->tmpl_hdr);
+
+		if (qlcnic_83xx_md_check_extended_dump_capability(adapter))
+			extended = !qlcnic_83xx_extend_md_capab(adapter);
+
 		if (!qlcnic_fw_cmd_get_minidump_temp(adapter))
 			dev_info(&pdev->dev, "Supports FW dump capability\n");
+
+		/* Once we have minidump template with extended iSCSI dump
+		 * capability, update the minidump capture mask to 0x1f as
+		 * per FW requirement
+		 */
+		if (extended) {
+			struct qlcnic_83xx_dump_template_hdr *hdr;
+
+			hdr = fw_dump->tmpl_hdr;
+			hdr->drv_cap_mask = 0x1f;
+			fw_dump->cap_mask = 0x1f;
+			dev_info(&pdev->dev,
+				 "Extended iSCSI dump capability and updated capture mask to 0x1f\n");
+		}
 	}
 }

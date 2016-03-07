@@ -1166,7 +1166,7 @@ static int at76_start_monitor(struct at76_priv *priv)
 	int ret;
 
 	memset(&scan, 0, sizeof(struct at76_req_scan));
-	memset(scan.bssid, 0xff, ETH_ALEN);
+	eth_broadcast_addr(scan.bssid);
 
 	scan.channel = priv->channel;
 	scan.scan_type = SCAN_TYPE_PASSIVE;
@@ -1427,7 +1427,7 @@ static int at76_startup_device(struct at76_priv *priv)
 	at76_wait_completion(priv, CMD_STARTUP);
 
 	/* remove BSSID from previous run */
-	memset(priv->bssid, 0, ETH_ALEN);
+	eth_zero_addr(priv->bssid);
 
 	priv->scanning = false;
 
@@ -1955,8 +1955,9 @@ static void at76_dwork_hw_scan(struct work_struct *work)
 
 static int at76_hw_scan(struct ieee80211_hw *hw,
 			struct ieee80211_vif *vif,
-			struct cfg80211_scan_request *req)
+			struct ieee80211_scan_request *hw_req)
 {
+	struct cfg80211_scan_request *req = &hw_req->req;
 	struct at76_priv *priv = hw->priv;
 	struct at76_req_scan scan;
 	u8 *ssid = NULL;
@@ -1972,7 +1973,7 @@ static int at76_hw_scan(struct ieee80211_hw *hw,
 	ieee80211_stop_queues(hw);
 
 	memset(&scan, 0, sizeof(struct at76_req_scan));
-	memset(scan.bssid, 0xFF, ETH_ALEN);
+	eth_broadcast_addr(scan.bssid);
 
 	if (req->n_ssids) {
 		scan.scan_type = SCAN_TYPE_ACTIVE;
@@ -2359,8 +2360,8 @@ static int at76_init_new_device(struct at76_priv *priv,
 	priv->hw->wiphy->max_scan_ie_len = 0;
 	priv->hw->wiphy->interface_modes = BIT(NL80211_IFTYPE_STATION);
 	priv->hw->wiphy->bands[IEEE80211_BAND_2GHZ] = &at76_supported_band;
-	priv->hw->flags = IEEE80211_HW_RX_INCLUDES_FCS |
-			  IEEE80211_HW_SIGNAL_UNSPEC;
+	ieee80211_hw_set(priv->hw, RX_INCLUDES_FCS);
+	ieee80211_hw_set(priv->hw, SIGNAL_UNSPEC);
 	priv->hw->max_signal = 100;
 
 	SET_IEEE80211_DEV(priv->hw, &interface->dev);
@@ -2421,8 +2422,6 @@ static void at76_delete_device(struct at76_priv *priv)
 	del_timer_sync(&ledtrig_tx_timer);
 
 	kfree_skb(priv->rx_skb);
-
-	usb_put_dev(priv->udev);
 
 	at76_dbg(DBG_PROC_ENTRY, "%s: before freeing priv/ieee80211_hw",
 		 __func__);
@@ -2557,6 +2556,7 @@ static void at76_disconnect(struct usb_interface *interface)
 
 	wiphy_info(priv->hw->wiphy, "disconnecting\n");
 	at76_delete_device(priv);
+	usb_put_dev(priv->udev);
 	dev_info(&interface->dev, "disconnected\n");
 }
 

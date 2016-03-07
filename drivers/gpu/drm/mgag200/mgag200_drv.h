@@ -22,6 +22,8 @@
 #include <drm/ttm/ttm_memory.h>
 #include <drm/ttm/ttm_module.h>
 
+#include <drm/drm_gem.h>
+
 #include <linux/i2c.h>
 #include <linux/i2c-algo-bit.h>
 
@@ -178,6 +180,7 @@ enum mga_type {
 	G200_EV,
 	G200_EH,
 	G200_ER,
+	G200_EW3,
 };
 
 #define IS_G200_SE(mdev) (mdev->type == G200_SE_A || mdev->type == G200_SE_B)
@@ -189,8 +192,6 @@ struct mga_device {
 	resource_size_t			rmmio_base;
 	resource_size_t			rmmio_size;
 	void __iomem			*rmmio;
-
-	drm_local_map_t			*framebuffer;
 
 	struct mga_mc			mc;
 	struct mga_mode_info		mode_info;
@@ -224,7 +225,7 @@ struct mgag200_bo {
 	struct ttm_placement placement;
 	struct ttm_bo_kmap_obj kmap;
 	struct drm_gem_object gem;
-	u32 placements[3];
+	struct ttm_place placements[3];
 	int pin_count;
 };
 #define gem_to_mga_bo(gobj) container_of((gobj), struct mgag200_bo, gem)
@@ -280,7 +281,7 @@ static inline int mgag200_bo_reserve(struct mgag200_bo *bo, bool no_wait)
 {
 	int ret;
 
-	ret = ttm_bo_reserve(&bo->bo, true, no_wait, false, 0);
+	ret = ttm_bo_reserve(&bo->bo, true, no_wait, false, NULL);
 	if (ret) {
 		if (ret != -ERESTARTSYS && ret != -EBUSY)
 			DRM_ERROR("reserve failed %p\n", bo);

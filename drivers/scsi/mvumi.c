@@ -31,6 +31,7 @@
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
+#include <linux/ktime.h>
 #include <linux/blkdev.h>
 #include <linux/io.h>
 #include <scsi/scsi.h>
@@ -48,7 +49,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("jyli@marvell.com");
 MODULE_DESCRIPTION("Marvell UMI Driver");
 
-static DEFINE_PCI_DEVICE_TABLE(mvumi_pci_table) = {
+static const struct pci_device_id mvumi_pci_table[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_MARVELL_EXT, PCI_DEVICE_ID_MARVELL_MV9143) },
 	{ PCI_DEVICE(PCI_VENDOR_ID_MARVELL_EXT, PCI_DEVICE_ID_MARVELL_MV9580) },
 	{ 0 }
@@ -142,8 +143,8 @@ static struct mvumi_res *mvumi_alloc_mem_resource(struct mvumi_hba *mhba,
 
 	case RESOURCE_UNCACHED_MEMORY:
 		size = round_up(size, 8);
-		res->virt_addr = pci_alloc_consistent(mhba->pdev, size,
-							&res->bus_addr);
+		res->virt_addr = pci_zalloc_consistent(mhba->pdev, size,
+						       &res->bus_addr);
 		if (!res->virt_addr) {
 			dev_err(&mhba->pdev->dev,
 					"unable to allocate consistent mem,"
@@ -151,7 +152,6 @@ static struct mvumi_res *mvumi_alloc_mem_resource(struct mvumi_hba *mhba,
 			kfree(res);
 			return NULL;
 		}
-		memset(res->virt_addr, 0, size);
 		break;
 
 	default:
@@ -258,11 +258,9 @@ static int mvumi_internal_cmd_sgl(struct mvumi_hba *mhba, struct mvumi_cmd *cmd,
 	if (size == 0)
 		return 0;
 
-	virt_addr = pci_alloc_consistent(mhba->pdev, size, &phy_addr);
+	virt_addr = pci_zalloc_consistent(mhba->pdev, size, &phy_addr);
 	if (!virt_addr)
 		return -1;
-
-	memset(virt_addr, 0, size);
 
 	m_sg = (struct mvumi_sgl *) &cmd->frame->payload[0];
 	cmd->frame->sg_counts = 1;
@@ -861,8 +859,8 @@ static void mvumi_hs_build_page(struct mvumi_hba *mhba,
 	struct mvumi_hs_page2 *hs_page2;
 	struct mvumi_hs_page4 *hs_page4;
 	struct mvumi_hs_page3 *hs_page3;
-	struct timeval time;
-	unsigned int local_time;
+	u64 time;
+	u64 local_time;
 
 	switch (hs_header->page_code) {
 	case HS_PAGE_HOST_INFO:
@@ -880,9 +878,8 @@ static void mvumi_hs_build_page(struct mvumi_hba *mhba,
 		hs_page2->slot_number = 0;
 		hs_page2->intr_level = 0;
 		hs_page2->intr_vector = 0;
-		do_gettimeofday(&time);
-		local_time = (unsigned int) (time.tv_sec -
-						(sys_tz.tz_minuteswest * 60));
+		time = ktime_get_real_seconds();
+		local_time = (time - (sys_tz.tz_minuteswest * 60));
 		hs_page2->seconds_since1970 = local_time;
 		hs_header->checksum = mvumi_calculate_checksum(hs_header,
 						hs_header->frame_length);

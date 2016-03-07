@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2014, Intel Corp.
+ * Copyright (C) 2000 - 2015, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -85,33 +85,6 @@ const u8 acpi_gbl_ns_properties[ACPI_NUM_NS_TYPES] = {
 	ACPI_NS_NORMAL,		/* 29 Data             */
 	ACPI_NS_NORMAL		/* 30 Invalid          */
 };
-
-/*******************************************************************************
- *
- * FUNCTION:    acpi_ut_hex_to_ascii_char
- *
- * PARAMETERS:  integer             - Contains the hex digit
- *              position            - bit position of the digit within the
- *                                    integer (multiple of 4)
- *
- * RETURN:      The converted Ascii character
- *
- * DESCRIPTION: Convert a hex digit to an Ascii character
- *
- ******************************************************************************/
-
-/* Hex to ASCII conversion table */
-
-static const char acpi_gbl_hex_to_ascii[] = {
-	'0', '1', '2', '3', '4', '5', '6', '7',
-	'8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
-};
-
-char acpi_ut_hex_to_ascii_char(u64 integer, u32 position)
-{
-
-	return (acpi_gbl_hex_to_ascii[(integer >> position) & 0xF]);
-}
 
 /*******************************************************************************
  *
@@ -259,12 +232,27 @@ char *acpi_ut_get_type_name(acpi_object_type type)
 
 char *acpi_ut_get_object_type_name(union acpi_operand_object *obj_desc)
 {
+	ACPI_FUNCTION_TRACE(ut_get_object_type_name);
 
 	if (!obj_desc) {
-		return ("[NULL Object Descriptor]");
+		ACPI_DEBUG_PRINT((ACPI_DB_EXEC, "Null Object Descriptor\n"));
+		return_PTR("[NULL Object Descriptor]");
 	}
 
-	return (acpi_ut_get_type_name(obj_desc->common.type));
+	/* These descriptor types share a common area */
+
+	if ((ACPI_GET_DESCRIPTOR_TYPE(obj_desc) != ACPI_DESC_TYPE_OPERAND) &&
+	    (ACPI_GET_DESCRIPTOR_TYPE(obj_desc) != ACPI_DESC_TYPE_NAMED)) {
+		ACPI_DEBUG_PRINT((ACPI_DB_EXEC,
+				  "Invalid object descriptor type: 0x%2.2X [%s] (%p)\n",
+				  ACPI_GET_DESCRIPTOR_TYPE(obj_desc),
+				  acpi_ut_get_descriptor_name(obj_desc),
+				  obj_desc));
+
+		return_PTR("Invalid object");
+	}
+
+	return_PTR(acpi_ut_get_type_name(obj_desc->common.type));
 }
 
 /*******************************************************************************
@@ -434,8 +422,6 @@ static char *acpi_gbl_mutex_names[ACPI_NUM_MUTEX] = {
 	"ACPI_MTX_Events",
 	"ACPI_MTX_Caches",
 	"ACPI_MTX_Memory",
-	"ACPI_MTX_CommandComplete",
-	"ACPI_MTX_CommandReady"
 };
 
 char *acpi_ut_get_mutex_name(u32 mutex_id)
@@ -475,7 +461,8 @@ static const char *acpi_gbl_generic_notify[ACPI_NOTIFY_MAX + 1] = {
 	/* 09 */ "Device PLD Check",
 	/* 0A */ "Reserved",
 	/* 0B */ "System Locality Update",
-	/* 0C */ "Shutdown Request"
+	/* 0C */ "Shutdown Request",
+	/* 0D */ "System Resource Affinity Update"
 };
 
 static const char *acpi_gbl_device_notify[4] = {
@@ -502,7 +489,7 @@ static const char *acpi_gbl_thermal_notify[4] = {
 const char *acpi_ut_get_notify_name(u32 notify_value, acpi_object_type type)
 {
 
-	/* 00 - 0C are common to all object types */
+	/* 00 - 0D are common to all object types */
 
 	if (notify_value <= ACPI_NOTIFY_MAX) {
 		return (acpi_gbl_generic_notify[notify_value]);

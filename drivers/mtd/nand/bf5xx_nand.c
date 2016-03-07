@@ -566,7 +566,8 @@ static int bf5xx_nand_read_page_raw(struct mtd_info *mtd, struct nand_chip *chip
 }
 
 static int bf5xx_nand_write_page_raw(struct mtd_info *mtd,
-		struct nand_chip *chip,	const uint8_t *buf, int oob_required)
+		struct nand_chip *chip,	const uint8_t *buf, int oob_required,
+		int page)
 {
 	bf5xx_nand_write_buf(mtd, buf, mtd->writesize);
 	bf5xx_nand_write_buf(mtd, chip->oob_poi, mtd->oobsize);
@@ -782,7 +783,7 @@ static int bf5xx_nand_probe(struct platform_device *pdev)
 	/* initialise mtd info data struct */
 	mtd 		= &info->mtd;
 	mtd->priv	= chip;
-	mtd->owner	= THIS_MODULE;
+	mtd->dev.parent = &pdev->dev;
 
 	/* initialise the hardware */
 	err = bf5xx_nand_hw_init(info);
@@ -830,37 +831,12 @@ out_err:
 	return err;
 }
 
-/* PM Support */
-#ifdef CONFIG_PM
-
-static int bf5xx_nand_suspend(struct platform_device *dev, pm_message_t pm)
-{
-	struct bf5xx_nand_info *info = platform_get_drvdata(dev);
-
-	return 0;
-}
-
-static int bf5xx_nand_resume(struct platform_device *dev)
-{
-	struct bf5xx_nand_info *info = platform_get_drvdata(dev);
-
-	return 0;
-}
-
-#else
-#define bf5xx_nand_suspend NULL
-#define bf5xx_nand_resume NULL
-#endif
-
 /* driver device registration */
 static struct platform_driver bf5xx_nand_driver = {
 	.probe		= bf5xx_nand_probe,
 	.remove		= bf5xx_nand_remove,
-	.suspend	= bf5xx_nand_suspend,
-	.resume		= bf5xx_nand_resume,
 	.driver		= {
 		.name	= DRV_NAME,
-		.owner	= THIS_MODULE,
 	},
 };
 

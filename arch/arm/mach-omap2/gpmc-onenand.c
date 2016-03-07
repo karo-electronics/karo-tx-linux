@@ -15,14 +15,13 @@
 #include <linux/platform_device.h>
 #include <linux/mtd/onenand_regs.h>
 #include <linux/io.h>
+#include <linux/omap-gpmc.h>
 #include <linux/platform_data/mtd-onenand-omap2.h>
 #include <linux/err.h>
 
 #include <asm/mach/flash.h>
 
-#include "gpmc.h"
 #include "soc.h"
-#include "gpmc-onenand.h"
 
 #define	ONENAND_IO_SIZE	SZ_128K
 
@@ -150,8 +149,8 @@ static int omap2_onenand_get_freq(struct omap_onenand_platform_data *cfg,
 		freq = 104;
 		break;
 	default:
-		freq = 54;
-		break;
+		pr_err("onenand rate not detected, bad GPMC async timings?\n");
+		freq = 0;
 	}
 
 	return freq;
@@ -217,11 +216,11 @@ static void omap2_onenand_calc_sync_timings(struct gpmc_timings *t,
 
 	div = gpmc_calc_divider(min_gpmc_clk_period);
 	gpmc_clk_ns = gpmc_ticks_to_ns(div);
-	if (gpmc_clk_ns < 15) /* >66Mhz */
+	if (gpmc_clk_ns < 15) /* >66MHz */
 		onenand_flags |= ONENAND_FLAG_HF;
 	else
 		onenand_flags &= ~ONENAND_FLAG_HF;
-	if (gpmc_clk_ns < 12) /* >83Mhz */
+	if (gpmc_clk_ns < 12) /* >83MHz */
 		onenand_flags |= ONENAND_FLAG_VHF;
 	else
 		onenand_flags &= ~ONENAND_FLAG_VHF;
@@ -272,6 +271,11 @@ static int omap2_onenand_setup_async(void __iomem *onenand_base)
 	struct gpmc_timings t;
 	int ret;
 
+	/*
+	 * Note that we need to keep sync_write set for the call to
+	 * omap2_onenand_set_async_mode() to work to detect the onenand
+	 * supported clock rate for the sync timings.
+	 */
 	if (gpmc_onenand_data->of_node) {
 		gpmc_read_settings_dt(gpmc_onenand_data->of_node,
 				      &onenand_async);
@@ -282,11 +286,8 @@ static int omap2_onenand_setup_async(void __iomem *onenand_base)
 			else
 				gpmc_onenand_data->flags |= ONENAND_SYNC_READ;
 			onenand_async.sync_read = false;
-			onenand_async.sync_write = false;
 		}
 	}
-
-	omap2_onenand_set_async_mode(onenand_base);
 
 	omap2_onenand_calc_async_timings(&t);
 
@@ -294,7 +295,7 @@ static int omap2_onenand_setup_async(void __iomem *onenand_base)
 	if (ret < 0)
 		return ret;
 
-	ret = gpmc_cs_set_timings(gpmc_onenand_data->cs, &t);
+	ret = gpmc_cs_set_timings(gpmc_onenand_data->cs, &t, &onenand_async);
 	if (ret < 0)
 		return ret;
 
@@ -311,6 +312,8 @@ static int omap2_onenand_setup_sync(void __iomem *onenand_base, int *freq_ptr)
 	if (!freq) {
 		/* Very first call freq is not known */
 		freq = omap2_onenand_get_freq(gpmc_onenand_data, onenand_base);
+		if (!freq)
+			return -ENODEV;
 		set_onenand_cfg(onenand_base);
 	}
 
@@ -332,7 +335,7 @@ static int omap2_onenand_setup_sync(void __iomem *onenand_base, int *freq_ptr)
 	if (ret < 0)
 		return ret;
 
-	ret = gpmc_cs_set_timings(gpmc_onenand_data->cs, &t);
+	ret = gpmc_cs_set_timings(gpmc_onenand_data->cs, &t, &onenand_sync);
 	if (ret < 0)
 		return ret;
 

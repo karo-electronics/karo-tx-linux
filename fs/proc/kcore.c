@@ -92,7 +92,7 @@ static size_t get_kcore_size(int *nphdr, size_t *elf_buflen)
 			     roundup(sizeof(CORE_STR), 4)) +
 			roundup(sizeof(struct elf_prstatus), 4) +
 			roundup(sizeof(struct elf_prpsinfo), 4) +
-			roundup(sizeof(struct task_struct), 4);
+			roundup(arch_task_struct_size, 4);
 	*elf_buflen = PAGE_ALIGN(*elf_buflen);
 	return size + *elf_buflen;
 }
@@ -172,7 +172,7 @@ get_sparsemem_vmemmap_info(struct kcore_list *ent, struct list_head *head)
 
 	start = ((unsigned long)pfn_to_page(pfn)) & PAGE_MASK;
 	end = ((unsigned long)pfn_to_page(pfn + nr_pages)) - 1;
-	end = ALIGN(end, PAGE_SIZE);
+	end = PAGE_ALIGN(end);
 	/* overlap check (because we have to align page */
 	list_for_each_entry(tmp, head, list) {
 		if (tmp->type != KCORE_VMEMMAP)
@@ -415,7 +415,7 @@ static void elf_kcore_store_hdr(char *bufp, int nphdr, int dataoff)
 	/* set up the task structure */
 	notes[2].name	= CORE_STR;
 	notes[2].type	= NT_TASKSTRUCT;
-	notes[2].datasz	= sizeof(struct task_struct);
+	notes[2].datasz	= arch_task_struct_size;
 	notes[2].data	= current;
 
 	nhdr->p_filesz	+= notesize(&notes[2]);
@@ -610,8 +610,10 @@ static void __init proc_kcore_text_init(void)
 struct kcore_list kcore_modules;
 static void __init add_modules_range(void)
 {
-	kclist_add(&kcore_modules, (void *)MODULES_VADDR,
+	if (MODULES_VADDR != VMALLOC_START && MODULES_END != VMALLOC_END) {
+		kclist_add(&kcore_modules, (void *)MODULES_VADDR,
 			MODULES_END - MODULES_VADDR, KCORE_VMALLOC);
+	}
 }
 #else
 static void __init add_modules_range(void)

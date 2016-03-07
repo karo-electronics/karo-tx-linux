@@ -28,14 +28,14 @@
  * Code originally extracted from quota directory
  */
 
-#include <obd_ost.h>
+#include "../include/obd_class.h"
 #include "osc_internal.h"
 
-static inline struct osc_quota_info *osc_oqi_alloc(obd_uid id)
+static inline struct osc_quota_info *osc_oqi_alloc(u32 id)
 {
 	struct osc_quota_info *oqi;
 
-	OBD_SLAB_ALLOC_PTR(oqi, osc_quota_kmem);
+	oqi = kmem_cache_alloc(osc_quota_kmem, GFP_NOFS | __GFP_ZERO);
 	if (oqi != NULL)
 		oqi->oqi_id = id;
 
@@ -71,7 +71,7 @@ int osc_quota_chkdq(struct client_obd *cli, const unsigned int qid[])
 						: OBD_FL_NO_GRPQUOTA)
 
 int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
-		    obd_flag valid, obd_flag flags)
+		    u32 valid, u32 flags)
 {
 	int type;
 	int rc = 0;
@@ -104,7 +104,7 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 			/* race with others? */
 			if (rc == -EALREADY) {
 				rc = 0;
-				OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
+				kmem_cache_free(osc_quota_kmem, oqi);
 			}
 
 			CDEBUG(D_QUOTA, "%s: setdq to insert for %s %d (%d)\n",
@@ -120,7 +120,7 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 			oqi = cfs_hash_del_key(cli->cl_quota_hash[type],
 					       &qid[type]);
 			if (oqi)
-				OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
+				kmem_cache_free(osc_quota_kmem, oqi);
 
 			CDEBUG(D_QUOTA, "%s: setdq to remove for %s %d (%p)\n",
 			       cli->cl_import->imp_obd->obd_name,
@@ -138,17 +138,17 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 static unsigned
 oqi_hashfn(struct cfs_hash *hs, const void *key, unsigned mask)
 {
-	return cfs_hash_u32_hash(*((__u32*)key), mask);
+	return cfs_hash_u32_hash(*((__u32 *)key), mask);
 }
 
 static int
 oqi_keycmp(const void *key, struct hlist_node *hnode)
 {
 	struct osc_quota_info *oqi;
-	obd_uid uid;
+	u32 uid;
 
 	LASSERT(key != NULL);
-	uid = *((obd_uid*)key);
+	uid = *((u32 *)key);
 	oqi = hlist_entry(hnode, struct osc_quota_info, oqi_hash);
 
 	return uid == oqi->oqi_id;
@@ -158,6 +158,7 @@ static void *
 oqi_key(struct hlist_node *hnode)
 {
 	struct osc_quota_info *oqi;
+
 	oqi = hlist_entry(hnode, struct osc_quota_info, oqi_hash);
 	return &oqi->oqi_id;
 }
@@ -185,14 +186,14 @@ oqi_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 
 	oqi = hlist_entry(hnode, struct osc_quota_info, oqi_hash);
 
-	OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
+	kmem_cache_free(osc_quota_kmem, oqi);
 }
 
 #define HASH_QUOTA_BKT_BITS 5
 #define HASH_QUOTA_CUR_BITS 5
 #define HASH_QUOTA_MAX_BITS 15
 
-static cfs_hash_ops_t quota_hash_ops = {
+static struct cfs_hash_ops quota_hash_ops = {
 	.hs_hash	= oqi_hashfn,
 	.hs_keycmp	= oqi_keycmp,
 	.hs_key		= oqi_key,
@@ -232,7 +233,7 @@ int osc_quota_setup(struct obd_device *obd)
 
 int osc_quota_cleanup(struct obd_device *obd)
 {
-	struct client_obd     *cli = &obd->u.cli;
+	struct client_obd *cli = &obd->u.cli;
 	int type;
 
 	for (type = 0; type < MAXQUOTAS; type++)
@@ -245,8 +246,8 @@ int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
 		 struct obd_quotactl *oqctl)
 {
 	struct ptlrpc_request *req;
-	struct obd_quotactl   *oqc;
-	int		    rc;
+	struct obd_quotactl *oqc;
+	int rc;
 
 	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
 					&RQF_OST_QUOTACTL, LUSTRE_OST_VERSION,
@@ -285,10 +286,10 @@ int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
 int osc_quotacheck(struct obd_device *unused, struct obd_export *exp,
 		   struct obd_quotactl *oqctl)
 {
-	struct client_obd       *cli = &exp->exp_obd->u.cli;
-	struct ptlrpc_request   *req;
-	struct obd_quotactl     *body;
-	int		      rc;
+	struct client_obd *cli = &exp->exp_obd->u.cli;
+	struct ptlrpc_request *req;
+	struct obd_quotactl *body;
+	int rc;
 
 	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
 					&RQF_OST_QUOTACHECK, LUSTRE_OST_VERSION,

@@ -41,11 +41,11 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <linux/libcfs/libcfs.h>
+#include "../../include/linux/libcfs/libcfs.h"
 
 #define CFS_WS_NAME_LEN	 16
 
-typedef struct cfs_wi_sched {
+struct cfs_wi_sched {
 	struct list_head		ws_list;	/* chain on global list */
 	/** serialised workitems */
 	spinlock_t		ws_lock;
@@ -73,7 +73,7 @@ typedef struct cfs_wi_sched {
 	unsigned int		ws_starting:1;
 	/** scheduler name */
 	char			ws_name[CFS_WS_NAME_LEN];
-} cfs_wi_sched_t;
+};
 
 static struct cfs_workitem_data {
 	/** serialize */
@@ -87,19 +87,19 @@ static struct cfs_workitem_data {
 } cfs_wi_data;
 
 static inline void
-cfs_wi_sched_lock(cfs_wi_sched_t *sched)
+cfs_wi_sched_lock(struct cfs_wi_sched *sched)
 {
 	spin_lock(&sched->ws_lock);
 }
 
 static inline void
-cfs_wi_sched_unlock(cfs_wi_sched_t *sched)
+cfs_wi_sched_unlock(struct cfs_wi_sched *sched)
 {
 	spin_unlock(&sched->ws_lock);
 }
 
 static inline int
-cfs_wi_sched_cansleep(cfs_wi_sched_t *sched)
+cfs_wi_sched_cansleep(struct cfs_wi_sched *sched)
 {
 	cfs_wi_sched_lock(sched);
 	if (sched->ws_stopping) {
@@ -114,7 +114,6 @@ cfs_wi_sched_cansleep(cfs_wi_sched_t *sched)
 	cfs_wi_sched_unlock(sched);
 	return 1;
 }
-
 
 /* XXX:
  * 0. it only works when called from wi->wi_action.
@@ -217,11 +216,10 @@ cfs_wi_schedule(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
 }
 EXPORT_SYMBOL(cfs_wi_schedule);
 
-
 static int
 cfs_wi_scheduler (void *arg)
 {
-	struct cfs_wi_sched	*sched = (cfs_wi_sched_t *)arg;
+	struct cfs_wi_sched	*sched = (struct cfs_wi_sched *)arg;
 
 	cfs_block_allsigs();
 
@@ -258,7 +256,6 @@ cfs_wi_scheduler (void *arg)
 			wi->wi_running   = 1;
 			wi->wi_scheduled = 0;
 
-
 			cfs_wi_sched_unlock(sched);
 			nloops++;
 
@@ -288,8 +285,8 @@ cfs_wi_scheduler (void *arg)
 		}
 
 		cfs_wi_sched_unlock(sched);
-		cfs_wait_event_interruptible_exclusive(sched->ws_waitq,
-				!cfs_wi_sched_cansleep(sched), rc);
+		rc = wait_event_interruptible_exclusive(sched->ws_waitq,
+						!cfs_wi_sched_cansleep(sched));
 		cfs_wi_sched_lock(sched);
 	}
 
@@ -301,7 +298,6 @@ cfs_wi_scheduler (void *arg)
 
 	return 0;
 }
-
 
 void
 cfs_wi_sched_destroy(struct cfs_wi_sched *sched)
@@ -365,6 +361,7 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 		return -ENOMEM;
 
 	strncpy(sched->ws_name, name, CFS_WS_NAME_LEN);
+	sched->ws_name[CFS_WS_NAME_LEN - 1] = '\0';
 	sched->ws_cptab = cptab;
 	sched->ws_cpt = cpt;
 
@@ -441,7 +438,7 @@ cfs_wi_startup(void)
 }
 
 void
-cfs_wi_shutdown (void)
+cfs_wi_shutdown(void)
 {
 	struct cfs_wi_sched	*sched;
 

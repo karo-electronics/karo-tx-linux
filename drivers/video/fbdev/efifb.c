@@ -19,8 +19,6 @@
 
 static bool request_mem_succeeded = false;
 
-static struct pci_dev *default_vga;
-
 static struct fb_var_screeninfo efifb_defined = {
 	.activate		= FB_ACTIVATE_NOW,
 	.height			= -1,
@@ -84,23 +82,10 @@ static struct fb_ops efifb_ops = {
 	.fb_imageblit	= cfb_imageblit,
 };
 
-struct pci_dev *vga_default_device(void)
-{
-	return default_vga;
-}
-
-EXPORT_SYMBOL_GPL(vga_default_device);
-
-void vga_set_default_device(struct pci_dev *pdev)
-{
-	default_vga = pdev;
-}
-
 static int efifb_setup(char *options)
 {
 	char *this_opt;
 	int i;
-	struct pci_dev *dev = NULL;
 
 	if (options && *options) {
 		while ((this_opt = strsep(&options, ",")) != NULL) {
@@ -126,31 +111,21 @@ static int efifb_setup(char *options)
 		}
 	}
 
-	for_each_pci_dev(dev) {
-		int i;
-
-		if ((dev->class >> 8) != PCI_CLASS_DISPLAY_VGA)
-			continue;
-
-		for (i=0; i < DEVICE_COUNT_RESOURCE; i++) {
-			resource_size_t start, end;
-
-			if (!(pci_resource_flags(dev, i) & IORESOURCE_MEM))
-				continue;
-
-			start = pci_resource_start(dev, i);
-			end  = pci_resource_end(dev, i);
-
-			if (!start || !end)
-				continue;
-
-			if (screen_info.lfb_base >= start &&
-			    (screen_info.lfb_base + screen_info.lfb_size) < end)
-				default_vga = dev;
-		}
-	}
-
 	return 0;
+}
+
+static inline bool fb_base_is_valid(void)
+{
+	if (screen_info.lfb_base)
+		return true;
+
+	if (!(screen_info.capabilities & VIDEO_CAPABILITY_64BIT_BASE))
+		return false;
+
+	if (screen_info.ext_lfb_base)
+		return true;
+
+	return false;
 }
 
 static int efifb_probe(struct platform_device *dev)
@@ -180,7 +155,7 @@ static int efifb_probe(struct platform_device *dev)
 		screen_info.lfb_depth = 32;
 	if (!screen_info.pages)
 		screen_info.pages = 1;
-	if (!screen_info.lfb_base) {
+	if (!fb_base_is_valid()) {
 		printk(KERN_DEBUG "efifb: invalid framebuffer address\n");
 		return -ENODEV;
 	}
@@ -199,6 +174,14 @@ static int efifb_probe(struct platform_device *dev)
 	}
 
 	efifb_fix.smem_start = screen_info.lfb_base;
+
+	if (screen_info.capabilities & VIDEO_CAPABILITY_64BIT_BASE) {
+		u64 ext_lfb_base;
+
+		ext_lfb_base = (u64)(unsigned long)screen_info.ext_lfb_base << 32;
+		efifb_fix.smem_start |= ext_lfb_base;
+	}
+
 	efifb_defined.bits_per_pixel = screen_info.lfb_depth;
 	efifb_defined.xres = screen_info.lfb_width;
 	efifb_defined.yres = screen_info.lfb_height;
@@ -350,7 +333,6 @@ static int efifb_remove(struct platform_device *pdev)
 static struct platform_driver efifb_driver = {
 	.driver = {
 		.name = "efi-framebuffer",
-		.owner = THIS_MODULE,
 	},
 	.probe = efifb_probe,
 	.remove = efifb_remove,

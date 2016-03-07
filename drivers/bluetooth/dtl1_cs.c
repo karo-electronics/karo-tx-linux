@@ -62,7 +62,7 @@ MODULE_LICENSE("GPL");
 /* ======================== Local structures ======================== */
 
 
-typedef struct dtl1_info_t {
+struct dtl1_info {
 	struct pcmcia_device *p_dev;
 
 	struct hci_dev *hdev;
@@ -78,7 +78,7 @@ typedef struct dtl1_info_t {
 	unsigned long rx_state;
 	unsigned long rx_count;
 	struct sk_buff *rx_skb;
-} dtl1_info_t;
+};
 
 
 static int dtl1_config(struct pcmcia_device *link);
@@ -94,11 +94,11 @@ static int dtl1_config(struct pcmcia_device *link);
 #define RECV_WAIT_DATA  1
 
 
-typedef struct {
+struct nsh {
 	u8 type;
 	u8 zero;
 	u16 len;
-} __packed nsh_t;	/* Nokia Specific Header */
+} __packed;	/* Nokia Specific Header */
 
 #define NSHL  4				/* Nokia Specific Header Length */
 
@@ -126,7 +126,7 @@ static int dtl1_write(unsigned int iobase, int fifo_size, __u8 *buf, int len)
 }
 
 
-static void dtl1_write_wakeup(dtl1_info_t *info)
+static void dtl1_write_wakeup(struct dtl1_info *info)
 {
 	if (!info) {
 		BT_ERR("Unknown device");
@@ -176,15 +176,15 @@ static void dtl1_write_wakeup(dtl1_info_t *info)
 }
 
 
-static void dtl1_control(dtl1_info_t *info, struct sk_buff *skb)
+static void dtl1_control(struct dtl1_info *info, struct sk_buff *skb)
 {
 	u8 flowmask = *(u8 *)skb->data;
 	int i;
 
 	printk(KERN_INFO "Bluetooth: Nokia control data =");
-	for (i = 0; i < skb->len; i++) {
+	for (i = 0; i < skb->len; i++)
 		printk(" %02x", skb->data[i]);
-	}
+
 	printk("\n");
 
 	/* transition to active state */
@@ -199,10 +199,10 @@ static void dtl1_control(dtl1_info_t *info, struct sk_buff *skb)
 }
 
 
-static void dtl1_receive(dtl1_info_t *info)
+static void dtl1_receive(struct dtl1_info *info)
 {
 	unsigned int iobase;
-	nsh_t *nsh;
+	struct nsh *nsh;
 	int boguscount = 0;
 
 	if (!info) {
@@ -227,7 +227,7 @@ static void dtl1_receive(dtl1_info_t *info)
 		}
 
 		*skb_put(info->rx_skb, 1) = inb(iobase + UART_RX);
-		nsh = (nsh_t *)info->rx_skb->data;
+		nsh = (struct nsh *)info->rx_skb->data;
 
 		info->rx_count--;
 
@@ -287,7 +287,7 @@ static void dtl1_receive(dtl1_info_t *info)
 
 static irqreturn_t dtl1_interrupt(int irq, void *dev_inst)
 {
-	dtl1_info_t *info = dev_inst;
+	struct dtl1_info *info = dev_inst;
 	unsigned int iobase;
 	unsigned char msr;
 	int boguscount = 0;
@@ -357,15 +357,13 @@ static irqreturn_t dtl1_interrupt(int irq, void *dev_inst)
 
 static int dtl1_hci_open(struct hci_dev *hdev)
 {
-	set_bit(HCI_RUNNING, &(hdev->flags));
-
 	return 0;
 }
 
 
 static int dtl1_hci_flush(struct hci_dev *hdev)
 {
-	dtl1_info_t *info = hci_get_drvdata(hdev);
+	struct dtl1_info *info = hci_get_drvdata(hdev);
 
 	/* Drop TX queue */
 	skb_queue_purge(&(info->txq));
@@ -376,9 +374,6 @@ static int dtl1_hci_flush(struct hci_dev *hdev)
 
 static int dtl1_hci_close(struct hci_dev *hdev)
 {
-	if (!test_and_clear_bit(HCI_RUNNING, &(hdev->flags)))
-		return 0;
-
 	dtl1_hci_flush(hdev);
 
 	return 0;
@@ -387,9 +382,9 @@ static int dtl1_hci_close(struct hci_dev *hdev)
 
 static int dtl1_hci_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 {
-	dtl1_info_t *info = hci_get_drvdata(hdev);
+	struct dtl1_info *info = hci_get_drvdata(hdev);
 	struct sk_buff *s;
-	nsh_t nsh;
+	struct nsh nsh;
 
 	switch (bt_cb(skb)->pkt_type) {
 	case HCI_COMMAND_PKT:
@@ -406,7 +401,7 @@ static int dtl1_hci_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		break;
 	default:
 		return -EILSEQ;
-	};
+	}
 
 	nsh.zero = 0;
 	nsh.len = skb->len;
@@ -436,7 +431,7 @@ static int dtl1_hci_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 /* ======================== Card services HCI interaction ======================== */
 
 
-static int dtl1_open(dtl1_info_t *info)
+static int dtl1_open(struct dtl1_info *info)
 {
 	unsigned long flags;
 	unsigned int iobase = info->p_dev->resource[0]->start;
@@ -505,7 +500,7 @@ static int dtl1_open(dtl1_info_t *info)
 }
 
 
-static int dtl1_close(dtl1_info_t *info)
+static int dtl1_close(struct dtl1_info *info)
 {
 	unsigned long flags;
 	unsigned int iobase = info->p_dev->resource[0]->start;
@@ -534,7 +529,7 @@ static int dtl1_close(dtl1_info_t *info)
 
 static int dtl1_probe(struct pcmcia_device *link)
 {
-	dtl1_info_t *info;
+	struct dtl1_info *info;
 
 	/* Create new info device */
 	info = devm_kzalloc(&link->dev, sizeof(*info), GFP_KERNEL);
@@ -552,7 +547,7 @@ static int dtl1_probe(struct pcmcia_device *link)
 
 static void dtl1_detach(struct pcmcia_device *link)
 {
-	dtl1_info_t *info = link->priv;
+	struct dtl1_info *info = link->priv;
 
 	dtl1_close(info);
 	pcmcia_disable_device(link);
@@ -571,7 +566,7 @@ static int dtl1_confcheck(struct pcmcia_device *p_dev, void *priv_data)
 
 static int dtl1_config(struct pcmcia_device *link)
 {
-	dtl1_info_t *info = link->priv;
+	struct dtl1_info *info = link->priv;
 	int ret;
 
 	/* Look for a generic full-sized window */

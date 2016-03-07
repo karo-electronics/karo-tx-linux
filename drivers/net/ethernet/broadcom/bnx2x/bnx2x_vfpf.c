@@ -1,15 +1,17 @@
-/* bnx2x_vfpf.c: Broadcom Everest network driver.
+/* bnx2x_vfpf.c: QLogic Everest network driver.
  *
  * Copyright 2009-2013 Broadcom Corporation
+ * Copyright 2014 QLogic Corporation
+ * All rights reserved
  *
- * Unless you and Broadcom execute a separate written software license
+ * Unless you and QLogic execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
  * under the terms of the GNU General Public License version 2, available
  * at http://www.gnu.org/licenses/old-licenses/gpl-2.0.html (the "GPL").
  *
  * Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a
- * license other than the GPL, without Broadcom's express prior written
+ * software in any way with any other QLogic software provided under a
+ * license other than the GPL, without QLogic's express prior written
  * consent.
  *
  * Maintained by: Ariel Elior <ariel.elior@qlogic.com>
@@ -224,6 +226,7 @@ int bnx2x_vfpf_acquire(struct bnx2x *bp, u8 tx_count, u8 rx_count)
 	struct vfpf_acquire_tlv *req = &bp->vf2pf_mbox->req.acquire;
 	struct pfvf_acquire_resp_tlv *resp = &bp->vf2pf_mbox->resp.acquire_resp;
 	struct vfpf_port_phys_id_resp_tlv *phys_port_resp;
+	struct vfpf_fp_hsi_resp_tlv *fp_hsi_resp;
 	u32 vf_id;
 	bool resources_acquired = false;
 
@@ -237,12 +240,14 @@ int bnx2x_vfpf_acquire(struct bnx2x *bp, u8 tx_count, u8 rx_count)
 
 	req->vfdev_info.vf_id = vf_id;
 	req->vfdev_info.vf_os = 0;
+	req->vfdev_info.fp_hsi_ver = ETH_FP_HSI_VERSION;
 
 	req->resc_request.num_rxqs = rx_count;
 	req->resc_request.num_txqs = tx_count;
 	req->resc_request.num_sbs = bp->igu_sb_cnt;
 	req->resc_request.num_mac_filters = VF_ACQUIRE_MAC_FILTERS;
 	req->resc_request.num_mc_filters = VF_ACQUIRE_MC_FILTERS;
+	req->resc_request.num_vlan_filters = VF_ACQUIRE_VLAN_FILTERS;
 
 	/* pf 2 vf bulletin board address */
 	req->bulletin_addr = bp->pf2vf_bulletin_mapping;
@@ -250,6 +255,11 @@ int bnx2x_vfpf_acquire(struct bnx2x *bp, u8 tx_count, u8 rx_count)
 	/* Request physical port identifier */
 	bnx2x_add_tlv(bp, req, req->first_tlv.tl.length,
 		      CHANNEL_TLV_PHYS_PORT_ID, sizeof(struct channel_tlv));
+
+	/* Bulletin support for bulletin board with length > legacy length */
+	req->vfdev_info.caps |= VF_CAP_SUPPORT_EXT_BULLETIN;
+	/* vlan filtering is supported */
+	req->vfdev_info.caps |= VF_CAP_SUPPORT_VLAN_FILTER;
 
 	/* add list termination tlv */
 	bnx2x_add_tlv(bp, req,
@@ -313,9 +323,14 @@ int bnx2x_vfpf_acquire(struct bnx2x *bp, u8 tx_count, u8 rx_count)
 			memset(&bp->vf2pf_mbox->resp, 0,
 			       sizeof(union pfvf_tlvs));
 		} else {
-			/* PF reports error */
-			BNX2X_ERR("Failed to get the requested amount of resources: %d. Breaking...\n",
-				  bp->acquire_resp.hdr.status);
+			/* Determine reason of PF failure of acquire process */
+			fp_hsi_resp = bnx2x_search_tlv_list(bp, resp,
+							    CHANNEL_TLV_FP_HSI_SUPPORT);
+			if (fp_hsi_resp && !fp_hsi_resp->is_supported)
+				BNX2X_ERR("Old hypervisor - doesn't support current fastpath HSI version; Need to downgrade VF driver [or upgrade hypervisor]\n");
+			else
+				BNX2X_ERR("Failed to get the requested amount of resources: %d. Breaking...\n",
+					  bp->acquire_resp.hdr.status);
 			rc = -EAGAIN;
 			goto out;
 		}
@@ -328,6 +343,25 @@ int bnx2x_vfpf_acquire(struct bnx2x *bp, u8 tx_count, u8 rx_count)
 	if (phys_port_resp) {
 		memcpy(bp->phys_port_id, phys_port_resp->id, ETH_ALEN);
 		bp->flags |= HAS_PHYS_PORT_ID;
+	}
+
+	/* Old Hypevisors might not even support the FP_HSI_SUPPORT TLV.
+	 * If that's the case, we need to make certain required FW was
+	 * supported by such a hypervisor [i.e., v0-v2].
+	 */
+	fp_hsi_resp = bnx2x_search_tlv_list(bp, resp,
+					    CHANNEL_TLV_FP_HSI_SUPPORT);
+	if (!fp_hsi_resp && (ETH_FP_HSI_VERSION > ETH_FP_HSI_VER_2)) {
+		BNX2X_ERR("Old hypervisor - need to downgrade VF's driver\n");
+
+		/* Since acquire succeeded on the PF side, we need to send a
+		 * release message in order to allow future probes.
+		 */
+		bnx2x_vfpf_finalize(bp, &req->first_tlv);
+		bnx2x_vfpf_release(bp);
+
+		rc = -EINVAL;
+		goto out;
 	}
 
 	/* get HW info */
@@ -344,6 +378,8 @@ int bnx2x_vfpf_acquire(struct bnx2x *bp, u8 tx_count, u8 rx_count)
 		NO_WOL_FLAG | NO_ISCSI_OOO_FLAG | NO_ISCSI_FLAG | NO_FCOE_FLAG;
 	bp->igu_sb_cnt = bp->acquire_resp.resc.num_sbs;
 	bp->igu_base_sb = bp->acquire_resp.resc.hw_sbs[0].hw_sb_id;
+	bp->vlan_credit = bp->acquire_resp.resc.num_vlan_filters;
+
 	strlcpy(bp->fw_ver, bp->acquire_resp.pfdev_info.fw_ver,
 		sizeof(bp->fw_ver));
 
@@ -517,7 +553,7 @@ static void bnx2x_leading_vfq_init(struct bnx2x *bp, struct bnx2x_virtf *vf,
 			   BNX2X_FILTER_MAC_PENDING,
 			   &vf->filter_state,
 			   BNX2X_OBJ_TYPE_RX_TX,
-			   &bp->macs_pool);
+			   &vf->vf_macs_pool);
 	/* vlan */
 	bnx2x_init_vlan_obj(bp, &q->vlan_obj,
 			    cl_id, q->cid, func_id,
@@ -526,8 +562,17 @@ static void bnx2x_leading_vfq_init(struct bnx2x *bp, struct bnx2x_virtf *vf,
 			    BNX2X_FILTER_VLAN_PENDING,
 			    &vf->filter_state,
 			    BNX2X_OBJ_TYPE_RX_TX,
-			    &bp->vlans_pool);
-
+			    &vf->vf_vlans_pool);
+	/* vlan-mac */
+	bnx2x_init_vlan_mac_obj(bp, &q->vlan_mac_obj,
+				cl_id, q->cid, func_id,
+				bnx2x_vf_sp(bp, vf, vlan_mac_rdata),
+				bnx2x_vf_sp_map(bp, vf, vlan_mac_rdata),
+				BNX2X_FILTER_VLAN_MAC_PENDING,
+				&vf->filter_state,
+				BNX2X_OBJ_TYPE_RX_TX,
+				&vf->vf_macs_pool,
+				&vf->vf_vlans_pool);
 	/* mcast */
 	bnx2x_init_mcast_obj(bp, &vf->mcast_obj, cl_id,
 			     q->cid, func_id, func_id,
@@ -565,7 +610,7 @@ int bnx2x_vfpf_setup_q(struct bnx2x *bp, struct bnx2x_fastpath *fp,
 	bnx2x_vfpf_prep(bp, &req->first_tlv, CHANNEL_TLV_SETUP_Q, sizeof(*req));
 
 	/* select tpa mode to request */
-	if (!fp->disable_tpa) {
+	if (fp->mode != TPA_MODE_DISABLED) {
 		flags |= VFPF_QUEUE_FLG_TPA;
 		flags |= VFPF_QUEUE_FLG_TPA_IPV6;
 		if (fp->mode == TPA_MODE_GRO)
@@ -580,7 +625,6 @@ int bnx2x_vfpf_setup_q(struct bnx2x *bp, struct bnx2x_fastpath *fp,
 	flags |= VFPF_QUEUE_FLG_STATS;
 	flags |= VFPF_QUEUE_FLG_CACHE_ALIGN;
 	flags |= VFPF_QUEUE_FLG_VLAN;
-	DP(NETIF_MSG_IFUP, "vlan removal enabled\n");
 
 	/* Common */
 	req->vf_qid = fp_idx;
@@ -695,7 +739,7 @@ int bnx2x_vfpf_config_mac(struct bnx2x *bp, u8 *addr, u8 vf_qid, bool set)
 
 	req->filters[0].flags = VFPF_Q_FILTER_DEST_MAC_VALID;
 	if (set)
-		req->filters[0].flags |= VFPF_Q_FILTER_SET_MAC;
+		req->filters[0].flags |= VFPF_Q_FILTER_SET;
 
 	/* sample bulletin board for new mac */
 	bnx2x_sample_bulletin(bp);
@@ -772,7 +816,7 @@ int bnx2x_vfpf_config_rss(struct bnx2x *bp,
 	req->rss_key_size = T_ETH_RSS_KEY;
 	req->rss_result_mask = params->rss_result_mask;
 
-	/* flags handled individually for backward/forward compatability */
+	/* flags handled individually for backward/forward compatibility */
 	if (params->rss_flags & (1 << BNX2X_RSS_MODE_DISABLED))
 		req->rss_flags |= VFPF_RSS_MODE_DISABLED;
 	if (params->rss_flags & (1 << BNX2X_RSS_MODE_REGULAR))
@@ -883,6 +927,67 @@ out:
 	return 0;
 }
 
+/* request pf to add a vlan for the vf */
+int bnx2x_vfpf_update_vlan(struct bnx2x *bp, u16 vid, u8 vf_qid, bool add)
+{
+	struct vfpf_set_q_filters_tlv *req = &bp->vf2pf_mbox->req.set_q_filters;
+	struct pfvf_general_resp_tlv *resp = &bp->vf2pf_mbox->resp.general_resp;
+	int rc = 0;
+
+	if (!(bp->acquire_resp.pfdev_info.pf_cap & PFVF_CAP_VLAN_FILTER)) {
+		DP(BNX2X_MSG_IOV, "HV does not support vlan filtering\n");
+		return 0;
+	}
+
+	/* clear mailbox and prep first tlv */
+	bnx2x_vfpf_prep(bp, &req->first_tlv, CHANNEL_TLV_SET_Q_FILTERS,
+			sizeof(*req));
+
+	req->flags = VFPF_SET_Q_FILTERS_MAC_VLAN_CHANGED;
+	req->vf_qid = vf_qid;
+	req->n_mac_vlan_filters = 1;
+
+	req->filters[0].flags = VFPF_Q_FILTER_VLAN_TAG_VALID;
+
+	if (add)
+		req->filters[0].flags |= VFPF_Q_FILTER_SET;
+
+	/* sample bulletin board for hypervisor vlan */
+	bnx2x_sample_bulletin(bp);
+
+	if (bp->shadow_bulletin.content.valid_bitmap & 1 << VLAN_VALID) {
+		BNX2X_ERR("Hypervisor will dicline the request, avoiding\n");
+		rc = -EINVAL;
+		goto out;
+	}
+
+	req->filters[0].vlan_tag = vid;
+
+	/* add list termination tlv */
+	bnx2x_add_tlv(bp, req, req->first_tlv.tl.length, CHANNEL_TLV_LIST_END,
+		      sizeof(struct channel_list_end_tlv));
+
+	/* output tlvs list */
+	bnx2x_dp_tlv_list(bp, req);
+
+	/* send message to pf */
+	rc = bnx2x_send_msg2pf(bp, &resp->hdr.status, bp->vf2pf_mbox_mapping);
+	if (rc) {
+		BNX2X_ERR("failed to send message to pf. rc was %d\n", rc);
+		goto out;
+	}
+
+	if (resp->hdr.status != PFVF_STATUS_SUCCESS) {
+		BNX2X_ERR("vfpf %s VLAN %d failed\n", add ? "add" : "del",
+			  vid);
+		rc = -EINVAL;
+	}
+out:
+	bnx2x_vfpf_finalize(bp, &req->first_tlv);
+
+	return rc;
+}
+
 int bnx2x_vfpf_storm_rx_mode(struct bnx2x *bp)
 {
 	int mode = bp->rx_mode;
@@ -906,7 +1011,12 @@ int bnx2x_vfpf_storm_rx_mode(struct bnx2x *bp)
 		req->rx_mask = VFPF_RX_MASK_ACCEPT_MATCHED_MULTICAST;
 		req->rx_mask |= VFPF_RX_MASK_ACCEPT_MATCHED_UNICAST;
 		req->rx_mask |= VFPF_RX_MASK_ACCEPT_BROADCAST;
+		if (mode == BNX2X_RX_MODE_PROMISC)
+			req->rx_mask |= VFPF_RX_MASK_ACCEPT_ANY_VLAN;
 	}
+
+	if (bp->accept_any_vlan)
+		req->rx_mask |= VFPF_RX_MASK_ACCEPT_ANY_VLAN;
 
 	req->flags |= VFPF_SET_Q_FILTERS_RX_MASK_CHANGED;
 	req->vf_qid = 0;
@@ -947,14 +1057,6 @@ static void storm_memset_vf_mbx_valid(struct bnx2x *bp, u16 abs_fid)
 		   CSTORM_VF_PF_CHANNEL_VALID_OFFSET(abs_fid);
 
 	REG_WR8(bp, addr, 1);
-}
-
-static inline void bnx2x_set_vf_mbxs_valid(struct bnx2x *bp)
-{
-	int i;
-
-	for_each_vf(bp, i)
-		storm_memset_vf_mbx_valid(bp, bnx2x_vf(bp, i, abs_vfid));
 }
 
 /* enable vf_pf mailbox (aka vf-pf-channel) */
@@ -1131,6 +1233,26 @@ static void bnx2x_vf_mbx_resp_phys_port(struct bnx2x *bp,
 	*offset += sizeof(struct vfpf_port_phys_id_resp_tlv);
 }
 
+static void bnx2x_vf_mbx_resp_fp_hsi_ver(struct bnx2x *bp,
+					 struct bnx2x_virtf *vf,
+					 void *buffer,
+					 u16 *offset)
+{
+	struct vfpf_fp_hsi_resp_tlv *fp_hsi;
+
+	bnx2x_add_tlv(bp, buffer, *offset, CHANNEL_TLV_FP_HSI_SUPPORT,
+		      sizeof(struct vfpf_fp_hsi_resp_tlv));
+
+	fp_hsi = (struct vfpf_fp_hsi_resp_tlv *)
+		 (((u8 *)buffer) + *offset);
+	fp_hsi->is_supported = (vf->fp_hsi > ETH_FP_HSI_VERSION) ? 0 : 1;
+
+	/* Offset should continue representing the offset to the tail
+	 * of TLV data (outside this function scope)
+	 */
+	*offset += sizeof(struct vfpf_fp_hsi_resp_tlv);
+}
+
 static void bnx2x_vf_mbx_acquire_resp(struct bnx2x *bp, struct bnx2x_virtf *vf,
 				      struct bnx2x_vf_mbx *mbx, int vfop_status)
 {
@@ -1148,7 +1270,8 @@ static void bnx2x_vf_mbx_acquire_resp(struct bnx2x *bp, struct bnx2x_virtf *vf,
 	resp->pfdev_info.indices_per_sb = HC_SB_MAX_INDICES_E2;
 	resp->pfdev_info.pf_cap = (PFVF_CAP_RSS |
 				   PFVF_CAP_TPA |
-				   PFVF_CAP_TPA_UPDATE);
+				   PFVF_CAP_TPA_UPDATE |
+				   PFVF_CAP_VLAN_FILTER);
 	bnx2x_fill_fw_str(bp, resp->pfdev_info.fw_ver,
 			  sizeof(resp->pfdev_info.fw_ver));
 
@@ -1163,7 +1286,7 @@ static void bnx2x_vf_mbx_acquire_resp(struct bnx2x *bp, struct bnx2x_virtf *vf,
 			bnx2x_vf_max_queue_cnt(bp, vf);
 		resc->num_sbs = vf_sb_count(vf);
 		resc->num_mac_filters = vf_mac_rules_cnt(vf);
-		resc->num_vlan_filters = vf_vlan_rules_visible_cnt(vf);
+		resc->num_vlan_filters = vf_vlan_rules_cnt(vf);
 		resc->num_mc_filters = 0;
 
 		if (status == PFVF_STATUS_SUCCESS) {
@@ -1225,11 +1348,52 @@ static void bnx2x_vf_mbx_acquire_resp(struct bnx2x *bp, struct bnx2x_virtf *vf,
 				  CHANNEL_TLV_PHYS_PORT_ID))
 		bnx2x_vf_mbx_resp_phys_port(bp, vf, &mbx->msg->resp, &length);
 
+	/* `New' vfs will want to know if fastpath HSI is supported, since
+	 * if that's not the case they could print into system log the fact
+	 * the driver version must be updated.
+	 */
+	bnx2x_vf_mbx_resp_fp_hsi_ver(bp, vf, &mbx->msg->resp, &length);
+
 	bnx2x_add_tlv(bp, &mbx->msg->resp, length, CHANNEL_TLV_LIST_END,
 		      sizeof(struct channel_list_end_tlv));
 
 	/* send the response */
 	bnx2x_vf_mbx_resp_send_msg(bp, vf, vfop_status);
+}
+
+static bool bnx2x_vf_mbx_is_windows_vm(struct bnx2x *bp,
+				       struct vfpf_acquire_tlv *acquire)
+{
+	/* Windows driver does one of three things:
+	 * 1. Old driver doesn't have bulletin board address set.
+	 * 2. 'Middle' driver sends mc_num == 32.
+	 * 3. New driver sets the OS field.
+	 */
+	if (!acquire->bulletin_addr ||
+	    acquire->resc_request.num_mc_filters == 32 ||
+	    ((acquire->vfdev_info.vf_os & VF_OS_MASK) ==
+	     VF_OS_WINDOWS))
+		return true;
+
+	return false;
+}
+
+static int bnx2x_vf_mbx_acquire_chk_dorq(struct bnx2x *bp,
+					 struct bnx2x_virtf *vf,
+					 struct bnx2x_vf_mbx *mbx)
+{
+	/* Linux drivers which correctly set the doorbell size also
+	 * send a physical port request
+	 */
+	if (bnx2x_search_tlv_list(bp, &mbx->msg->req,
+				  CHANNEL_TLV_PHYS_PORT_ID))
+		return 0;
+
+	/* Issue does not exist in windows VMs */
+	if (bnx2x_vf_mbx_is_windows_vm(bp, &mbx->msg->req.acquire))
+		return 0;
+
+	return -EOPNOTSUPP;
 }
 
 static void bnx2x_vf_mbx_acquire(struct bnx2x *bp, struct bnx2x_virtf *vf,
@@ -1247,12 +1411,57 @@ static void bnx2x_vf_mbx_acquire(struct bnx2x *bp, struct bnx2x_virtf *vf,
 	   acquire->resc_request.num_vlan_filters,
 	   acquire->resc_request.num_mc_filters);
 
+	/* Prevent VFs with old drivers from loading, since they calculate
+	 * CIDs incorrectly requiring a VF-flr [VM reboot] in order to recover
+	 * while being upgraded.
+	 */
+	rc = bnx2x_vf_mbx_acquire_chk_dorq(bp, vf, mbx);
+	if (rc) {
+		DP(BNX2X_MSG_IOV,
+		   "VF [%d] - Can't support acquire request due to doorbell mismatch. Please update VM driver\n",
+		   vf->abs_vfid);
+		goto out;
+	}
+
+	/* Verify the VF fastpath HSI can be supported by the loaded FW.
+	 * Linux vfs should be oblivious to changes between v0 and v2.
+	 */
+	if (bnx2x_vf_mbx_is_windows_vm(bp, &mbx->msg->req.acquire))
+		vf->fp_hsi = acquire->vfdev_info.fp_hsi_ver;
+	else
+		vf->fp_hsi = max_t(u8, acquire->vfdev_info.fp_hsi_ver,
+				   ETH_FP_HSI_VER_2);
+	if (vf->fp_hsi > ETH_FP_HSI_VERSION) {
+		DP(BNX2X_MSG_IOV,
+		   "VF [%d] - Can't support acquire request since VF requests a FW version which is too new [%02x > %02x]\n",
+		   vf->abs_vfid, acquire->vfdev_info.fp_hsi_ver,
+		   ETH_FP_HSI_VERSION);
+		rc = -EINVAL;
+		goto out;
+	}
+
 	/* acquire the resources */
 	rc = bnx2x_vf_acquire(bp, vf, &acquire->resc_request);
 
 	/* store address of vf's bulletin board */
 	vf->bulletin_map = acquire->bulletin_addr;
+	if (acquire->vfdev_info.caps & VF_CAP_SUPPORT_EXT_BULLETIN) {
+		DP(BNX2X_MSG_IOV, "VF[%d] supports long bulletin boards\n",
+		   vf->abs_vfid);
+		vf->cfg_flags |= VF_CFG_EXT_BULLETIN;
+	} else {
+		vf->cfg_flags &= ~VF_CFG_EXT_BULLETIN;
+	}
 
+	if (acquire->vfdev_info.caps & VF_CAP_SUPPORT_VLAN_FILTER) {
+		DP(BNX2X_MSG_IOV, "VF[%d] supports vlan filtering\n",
+		   vf->abs_vfid);
+		vf->cfg_flags |= VF_CFG_VLAN_FILTER;
+	} else {
+		vf->cfg_flags &= ~VF_CFG_VLAN_FILTER;
+	}
+
+out:
 	/* response */
 	bnx2x_vf_mbx_acquire_resp(bp, vf, mbx, rc);
 }
@@ -1264,7 +1473,6 @@ static void bnx2x_vf_mbx_init_vf(struct bnx2x *bp, struct bnx2x_virtf *vf,
 	int rc;
 
 	/* record ghost addresses from vf message */
-	vf->spq_map = init->spq_addr;
 	vf->fw_stat_map = init->stats_addr;
 	vf->stats_stride = init->stats_stride;
 	rc = bnx2x_vf_init(bp, vf, (dma_addr_t *)init->sb_addr);
@@ -1272,6 +1480,10 @@ static void bnx2x_vf_mbx_init_vf(struct bnx2x *bp, struct bnx2x_virtf *vf,
 	/* set VF multiqueue statistics collection mode */
 	if (init->flags & VFPF_INIT_FLG_STATS_COALESCE)
 		vf->cfg_flags |= VF_CFG_STATS_COALESCE;
+
+	/* Update VF's view of link state */
+	if (vf->cfg_flags & VF_CFG_EXT_BULLETIN)
+		bnx2x_iov_link_update_vf(bp, vf->index);
 
 	/* response */
 	bnx2x_vf_mbx_resp(bp, vf, rc);
@@ -1456,17 +1668,18 @@ static int bnx2x_vf_mbx_macvlan_list(struct bnx2x *bp,
 
 		if ((msg_filter->flags & type_flag) != type_flag)
 			continue;
-		if (type_flag == VFPF_Q_FILTER_DEST_MAC_VALID) {
+		memset(&fl->filters[j], 0, sizeof(fl->filters[j]));
+		if (type_flag & VFPF_Q_FILTER_DEST_MAC_VALID) {
 			fl->filters[j].mac = msg_filter->mac;
-			fl->filters[j].type = BNX2X_VF_FILTER_MAC;
-		} else {
-			fl->filters[j].vid = msg_filter->vlan_tag;
-			fl->filters[j].type = BNX2X_VF_FILTER_VLAN;
+			fl->filters[j].type |= BNX2X_VF_FILTER_MAC;
 		}
-		fl->filters[j].add =
-			(msg_filter->flags & VFPF_Q_FILTER_SET_MAC) ?
-			true : false;
+		if (type_flag & VFPF_Q_FILTER_VLAN_TAG_VALID) {
+			fl->filters[j].vid = msg_filter->vlan_tag;
+			fl->filters[j].type |= BNX2X_VF_FILTER_VLAN;
+		}
+		fl->filters[j].add = !!(msg_filter->flags & VFPF_Q_FILTER_SET);
 		fl->count++;
+		j++;
 	}
 	if (!fl->count)
 		kfree(fl);
@@ -1474,6 +1687,18 @@ static int bnx2x_vf_mbx_macvlan_list(struct bnx2x *bp,
 		*pfl = fl;
 
 	return 0;
+}
+
+static int bnx2x_vf_filters_contain(struct vfpf_set_q_filters_tlv *filters,
+				    u32 flags)
+{
+	int i, cnt = 0;
+
+	for (i = 0; i < filters->n_mac_vlan_filters; i++)
+		if  ((filters->filters[i].flags & flags) == flags)
+			cnt++;
+
+	return cnt;
 }
 
 static void bnx2x_vf_mbx_dp_q_filter(struct bnx2x *bp, int msglvl, int idx,
@@ -1507,6 +1732,7 @@ static void bnx2x_vf_mbx_dp_q_filters(struct bnx2x *bp, int msglvl,
 
 #define VFPF_MAC_FILTER		VFPF_Q_FILTER_DEST_MAC_VALID
 #define VFPF_VLAN_FILTER	VFPF_Q_FILTER_VLAN_TAG_VALID
+#define VFPF_VLAN_MAC_FILTER	(VFPF_VLAN_FILTER | VFPF_MAC_FILTER)
 
 static int bnx2x_vf_mbx_qfilters(struct bnx2x *bp, struct bnx2x_virtf *vf)
 {
@@ -1517,8 +1743,26 @@ static int bnx2x_vf_mbx_qfilters(struct bnx2x *bp, struct bnx2x_virtf *vf)
 
 	/* check for any mac/vlan changes */
 	if (msg->flags & VFPF_SET_Q_FILTERS_MAC_VLAN_CHANGED) {
-		/* build mac list */
 		struct bnx2x_vf_mac_vlan_filters *fl = NULL;
+
+		/* build vlan-mac list */
+		rc = bnx2x_vf_mbx_macvlan_list(bp, vf, msg, &fl,
+					       VFPF_VLAN_MAC_FILTER);
+		if (rc)
+			goto op_err;
+
+		if (fl) {
+
+			/* set vlan-mac list */
+			rc = bnx2x_vf_mac_vlan_config_list(bp, vf, fl,
+							   msg->vf_qid,
+							   false);
+			if (rc)
+				goto op_err;
+		}
+
+		/* build mac list */
+		fl = NULL;
 
 		rc = bnx2x_vf_mbx_macvlan_list(bp, vf, msg, &fl,
 					       VFPF_MAC_FILTER);
@@ -1526,7 +1770,6 @@ static int bnx2x_vf_mbx_qfilters(struct bnx2x *bp, struct bnx2x_virtf *vf)
 			goto op_err;
 
 		if (fl) {
-
 			/* set mac list */
 			rc = bnx2x_vf_mac_vlan_config_list(bp, vf, fl,
 							   msg->vf_qid,
@@ -1535,22 +1778,6 @@ static int bnx2x_vf_mbx_qfilters(struct bnx2x *bp, struct bnx2x_virtf *vf)
 				goto op_err;
 		}
 
-		/* build vlan list */
-		fl = NULL;
-
-		rc = bnx2x_vf_mbx_macvlan_list(bp, vf, msg, &fl,
-					       VFPF_VLAN_FILTER);
-		if (rc)
-			goto op_err;
-
-		if (fl) {
-			/* set vlan list */
-			rc = bnx2x_vf_mac_vlan_config_list(bp, vf, fl,
-							   msg->vf_qid,
-							   false);
-			if (rc)
-				goto op_err;
-		}
 	}
 
 	if (msg->flags & VFPF_SET_Q_FILTERS_RX_MASK_CHANGED) {
@@ -1565,11 +1792,15 @@ static int bnx2x_vf_mbx_qfilters(struct bnx2x *bp, struct bnx2x_virtf *vf)
 			__set_bit(BNX2X_ACCEPT_BROADCAST, &accept);
 		}
 
-		/* A packet arriving the vf's mac should be accepted
-		 * with any vlan, unless a vlan has already been
-		 * configured.
+		/* any_vlan is not configured if HV is forcing VLAN
+		 * any_vlan is configured if
+		 *   1. VF does not support vlan filtering
+		 *   OR
+		 *   2. VF supports vlan filtering and explicitly requested it
 		 */
-		if (!(bulletin->valid_bitmap & (1 << VLAN_VALID)))
+		if (!(bulletin->valid_bitmap & (1 << VLAN_VALID)) &&
+		    (!(vf->cfg_flags & VF_CFG_VLAN_FILTER) ||
+		     msg->rx_mask & VFPF_RX_MASK_ACCEPT_ANY_VLAN))
 			__set_bit(BNX2X_ACCEPT_ANY_VLAN, &accept);
 
 		/* set rx-mode */
@@ -1605,17 +1836,31 @@ static int bnx2x_filters_validate_mac(struct bnx2x *bp,
 	 * since queue was not set up.
 	 */
 	if (bulletin->valid_bitmap & 1 << MAC_ADDR_VALID) {
-		/* once a mac was set by ndo can only accept a single mac... */
-		if (filters->n_mac_vlan_filters > 1) {
-			BNX2X_ERR("VF[%d] requested the addition of multiple macs after set_vf_mac ndo was called\n",
-				  vf->abs_vfid);
-			rc = -EPERM;
-			goto response;
+		struct vfpf_q_mac_vlan_filter *filter = NULL;
+		int i;
+
+		for (i = 0; i < filters->n_mac_vlan_filters; i++) {
+			if (!(filters->filters[i].flags &
+			      VFPF_Q_FILTER_DEST_MAC_VALID))
+				continue;
+
+			/* once a mac was set by ndo can only accept
+			 * a single mac...
+			 */
+			if (filter) {
+				BNX2X_ERR("VF[%d] requested the addition of multiple macs after set_vf_mac ndo was called [%d filters]\n",
+					  vf->abs_vfid,
+					  filters->n_mac_vlan_filters);
+				rc = -EPERM;
+				goto response;
+			}
+
+			filter = &filters->filters[i];
 		}
 
 		/* ...and only the mac set by the ndo */
-		if (filters->n_mac_vlan_filters == 1 &&
-		    !ether_addr_equal(filters->filters->mac, bulletin->mac)) {
+		if (filter &&
+		    !ether_addr_equal(filter->mac, bulletin->mac)) {
 			BNX2X_ERR("VF[%d] requested the addition of a mac address not matching the one configured by set_vf_mac ndo\n",
 				  vf->abs_vfid);
 
@@ -1637,17 +1882,14 @@ static int bnx2x_filters_validate_vlan(struct bnx2x *bp,
 
 	/* if vlan was set by hypervisor we don't allow guest to config vlan */
 	if (bulletin->valid_bitmap & 1 << VLAN_VALID) {
-		int i;
-
 		/* search for vlan filters */
-		for (i = 0; i < filters->n_mac_vlan_filters; i++) {
-			if (filters->filters[i].flags &
-			    VFPF_Q_FILTER_VLAN_TAG_VALID) {
-				BNX2X_ERR("VF[%d] attempted to configure vlan but one was already set by Hypervisor. Aborting request\n",
-					  vf->abs_vfid);
-				rc = -EPERM;
-				goto response;
-			}
+
+		if (bnx2x_vf_filters_contain(filters,
+					     VFPF_Q_FILTER_VLAN_TAG_VALID)) {
+			BNX2X_ERR("VF[%d] attempted to configure vlan but one was already set by Hypervisor. Aborting request\n",
+				  vf->abs_vfid);
+			rc = -EPERM;
+			goto response;
 		}
 	}
 
@@ -1747,7 +1989,7 @@ static void bnx2x_vf_mbx_update_rss(struct bnx2x *bp, struct bnx2x_virtf *vf,
 	rss.rss_obj = &vf->rss_conf_obj;
 	rss.rss_result_mask = rss_tlv->rss_result_mask;
 
-	/* flags handled individually for backward/forward compatability */
+	/* flags handled individually for backward/forward compatibility */
 	rss.rss_flags = 0;
 	rss.ramrod_flags = 0;
 
@@ -2007,6 +2249,17 @@ void bnx2x_vf_mbx(struct bnx2x *bp)
 	}
 }
 
+void bnx2x_vf_bulletin_finalize(struct pf_vf_bulletin_content *bulletin,
+				bool support_long)
+{
+	/* Older VFs contain a bug where they can't check CRC for bulletin
+	 * boards of length greater than legacy size.
+	 */
+	bulletin->length = support_long ? BULLETIN_CONTENT_SIZE :
+					  BULLETIN_CONTENT_LEGACY_SIZE;
+	bulletin->crc = bnx2x_crc_vf_bulletin(bulletin);
+}
+
 /* propagate local bulletin board to vf */
 int bnx2x_post_vf_bulletin(struct bnx2x *bp, int vf)
 {
@@ -2023,8 +2276,9 @@ int bnx2x_post_vf_bulletin(struct bnx2x *bp, int vf)
 
 	/* increment bulletin board version and compute crc */
 	bulletin->version++;
-	bulletin->length = BULLETIN_CONTENT_SIZE;
-	bulletin->crc = bnx2x_crc_vf_bulletin(bp, bulletin);
+	bnx2x_vf_bulletin_finalize(bulletin,
+				   (bnx2x_vf(bp, vf, cfg_flags) &
+				    VF_CFG_EXT_BULLETIN) ? true : false);
 
 	/* propagate bulletin board via dmae to vm memory */
 	rc = bnx2x_copy32_vf_dmae(bp, false, pf_addr,

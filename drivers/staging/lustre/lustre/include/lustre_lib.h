@@ -46,27 +46,36 @@
  * @{
  */
 
-#include <linux/libcfs/libcfs.h>
-#include <lustre/lustre_idl.h>
-#include <lustre_ver.h>
-#include <lustre_cfg.h>
-#include <linux/lustre_lib.h>
+#include <linux/sched.h>
+#include <linux/signal.h>
+#include <linux/types.h>
+#include "../../include/linux/libcfs/libcfs.h"
+#include "lustre/lustre_idl.h"
+#include "lustre_ver.h"
+#include "lustre_cfg.h"
 
 /* target.c */
+struct kstatfs;
 struct ptlrpc_request;
 struct obd_export;
 struct lu_target;
 struct l_wait_info;
-#include <lustre_ha.h>
-#include <lustre_net.h>
-#include <lvfs.h>
+#include "lustre_ha.h"
+#include "lustre_net.h"
 
+#define LI_POISON 0x5a5a5a5a
+#if BITS_PER_LONG > 32
+# define LL_POISON 0x5a5a5a5a5a5a5a5aL
+#else
+# define LL_POISON 0x5a5a5a5aL
+#endif
+#define LP_POISON ((void *)LL_POISON)
 
 int target_pack_pool_reply(struct ptlrpc_request *req);
 int do_set_info_async(struct obd_import *imp,
 		      int opcode, int version,
-		      obd_count keylen, void *key,
-		      obd_count vallen, void *val,
+		      u32 keylen, void *key,
+		      u32 vallen, void *val,
 		      struct ptlrpc_request_set *set);
 
 #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
@@ -76,7 +85,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 
 /* client.c */
 
-int client_sanobd_setup(struct obd_device *obddev, struct lustre_cfg* lcfg);
+int client_sanobd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg);
 struct client_obd *client_conn2cli(struct lustre_handle *conn);
 
 struct md_open_data;
@@ -88,10 +97,10 @@ struct obd_client_handle {
 	__u32			 och_magic;
 	fmode_t			 och_flags;
 };
+
 #define OBD_CLIENT_HANDLE_MAGIC 0xd15ea5ed
 
 /* statfs_pack.c */
-void statfs_pack(struct obd_statfs *osfs, struct kstatfs *sfs);
 void statfs_unpack(struct kstatfs *sfs, struct obd_statfs *osfs);
 
 /*
@@ -133,8 +142,8 @@ struct obd_ioctl_data {
 	struct obdo ioc_obdo1;
 	struct obdo ioc_obdo2;
 
-	obd_size ioc_count;
-	obd_off  ioc_offset;
+	u64	 ioc_count;
+	u64	 ioc_offset;
 	__u32    ioc_dev;
 	__u32    ioc_command;
 
@@ -169,13 +178,13 @@ struct obd_ioctl_hdr {
 static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
 {
 	int len = cfs_size_round(sizeof(struct obd_ioctl_data));
+
 	len += cfs_size_round(data->ioc_inllen1);
 	len += cfs_size_round(data->ioc_inllen2);
 	len += cfs_size_round(data->ioc_inllen3);
 	len += cfs_size_round(data->ioc_inllen4);
 	return len;
 }
-
 
 static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 {
@@ -240,8 +249,7 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 	return 0;
 }
 
-
-#include <obd_support.h>
+#include "obd_support.h"
 
 /* function defined in lustre/obdclass/<platform>/<platform>-module.c */
 int obd_ioctl_getdata(char **buf, int *len, void *arg);
@@ -249,7 +257,7 @@ int obd_ioctl_popdata(void *arg, void *data, int len);
 
 static inline void obd_ioctl_freedata(char *buf, int len)
 {
-	OBD_FREE_LARGE(buf, len);
+	kvfree(buf);
 	return;
 }
 
@@ -269,6 +277,8 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  * we change _IOR to _IOWR so BSD will copyin obd_ioctl_data
  * for us. Does this change affect Linux?  (XXX Liang)
  */
+#define OBD_IOC_DATA_TYPE long
+
 #define OBD_IOC_CREATE		 _IOWR('f', 101, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_DESTROY		_IOW ('f', 104, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_PREALLOCATE	    _IOWR('f', 105, OBD_IOC_DATA_TYPE)
@@ -277,7 +287,6 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_GETATTR		_IOWR ('f', 108, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_READ		   _IOWR('f', 109, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_WRITE		  _IOWR('f', 110, OBD_IOC_DATA_TYPE)
-
 
 #define OBD_IOC_STATFS		 _IOWR('f', 113, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_SYNC		   _IOW ('f', 114, OBD_IOC_DATA_TYPE)
@@ -302,7 +311,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_CLIENT_RECOVER	 _IOW ('f', 133, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_PING_TARGET	    _IOW ('f', 136, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
+#define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139)
 #define OBD_IOC_NO_TRANSNO	     _IOW ('f', 140, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_SET_READONLY	   _IOW ('f', 141, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_ABORT_RECOVERY	 _IOR ('f', 142, OBD_IOC_DATA_TYPE)
@@ -442,7 +451,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  *					 __wake_up_common(q, ...);     (2.2)
  *					 spin_unlock(&q->lock, flags); (2.3)
  *
- *   OBD_FREE_PTR(obj);						  (3)
+ *   kfree(obj);						  (3)
  *
  * As l_wait_event() may "short-cut" execution and return without taking
  * wait-queue spin-lock, some additional synchronization is necessary to
@@ -459,8 +468,8 @@ static inline int back_to_sleep(void *arg)
 #define LWI_ON_SIGNAL_NOOP ((void (*)(void *))(-1))
 
 struct l_wait_info {
-	cfs_duration_t lwi_timeout;
-	cfs_duration_t lwi_interval;
+	long lwi_timeout;
+	long lwi_interval;
 	int	    lwi_allow_intr;
 	int  (*lwi_on_timeout)(void *);
 	void (*lwi_on_signal)(void *);
@@ -508,6 +517,9 @@ struct l_wait_info {
 
 #define LWI_INTR(cb, data)  LWI_TIMEOUT_INTR(0, NULL, cb, data)
 
+#define LUSTRE_FATAL_SIGS (sigmask(SIGKILL) | sigmask(SIGINT) |		\
+			   sigmask(SIGTERM) | sigmask(SIGQUIT) |	\
+			   sigmask(SIGALRM))
 
 /*
  * wait for @condition to become true, but no longer than timeout, specified
@@ -516,7 +528,7 @@ struct l_wait_info {
 #define __l_wait_event(wq, condition, info, ret, l_add_wait)		   \
 do {									   \
 	wait_queue_t __wait;						 \
-	cfs_duration_t __timeout = info->lwi_timeout;			  \
+	long __timeout = info->lwi_timeout;			  \
 	sigset_t   __blocked;					      \
 	int   __allow_intr = info->lwi_allow_intr;			     \
 									       \
@@ -534,25 +546,19 @@ do {									   \
 		__blocked = cfs_block_sigsinv(0);			      \
 									       \
 	for (;;) {							     \
-		unsigned       __wstate;				       \
-									       \
-		__wstate = info->lwi_on_signal != NULL &&		      \
-			   (__timeout == 0 || __allow_intr) ?		  \
-			TASK_INTERRUPTIBLE : TASK_UNINTERRUPTIBLE;	       \
-									       \
-		set_current_state(TASK_INTERRUPTIBLE);		 \
-									       \
 		if (condition)						 \
 			break;						 \
 									       \
+		set_current_state(TASK_INTERRUPTIBLE);			       \
+									       \
 		if (__timeout == 0) {					  \
-			schedule();						\
+			schedule();					       \
 		} else {						       \
-			cfs_duration_t interval = info->lwi_interval?	  \
-					     min_t(cfs_duration_t,	     \
-						 info->lwi_interval,__timeout):\
+			long interval = info->lwi_interval ?	  \
+					     min_t(long,	     \
+						 info->lwi_interval, __timeout) : \
 					     __timeout;			\
-			cfs_duration_t remaining = schedule_timeout(interval);\
+			long remaining = schedule_timeout(interval);\
 			__timeout = cfs_time_sub(__timeout,		    \
 					    cfs_time_sub(interval, remaining));\
 			if (__timeout == 0) {				  \
@@ -566,6 +572,8 @@ do {									   \
 				    (void)cfs_block_sigsinv(LUSTRE_FATAL_SIGS);\
 			}						      \
 		}							      \
+									       \
+		set_current_state(TASK_RUNNING);			       \
 									       \
 		if (condition)						 \
 			break;						 \
@@ -590,11 +598,8 @@ do {									   \
 									       \
 	cfs_restore_sigs(__blocked);					   \
 									       \
-	set_current_state(TASK_RUNNING);			       \
 	remove_wait_queue(&wq, &__wait);					   \
 } while (0)
-
-
 
 #define l_wait_event(wq, condition, info)		       \
 ({							      \

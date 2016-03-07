@@ -117,7 +117,6 @@ static void omap2_show_dma_caps(void)
 	u8 revision = dma_read(REVISION, 0) & 0xff;
 	printk(KERN_INFO "OMAP DMA hardware revision %d.%d\n",
 				revision >> 4, revision & 0xf);
-	return;
 }
 
 static unsigned configure_dma_errata(void)
@@ -258,6 +257,9 @@ static int __init omap2_system_dma_init_dev(struct omap_hwmod *oh, void *unused)
 
 	if (cpu_is_omap34xx() && (omap_type() != OMAP2_DEVICE_TYPE_GP))
 		d->dev_caps |= HS_CHANNELS_RESERVED;
+
+	if (platform_get_irq_byname(pdev, "0") < 0)
+		d->dev_caps |= DMA_ENGINE_HANDLE_IRQ;
 
 	/* Check the capabilities register for descriptor loading feature */
 	if (dma_read(CAPS_0, 0) & DMA_HAS_DESCRIPTOR_CAPS)

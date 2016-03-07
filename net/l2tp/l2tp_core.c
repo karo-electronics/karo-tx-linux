@@ -52,6 +52,7 @@
 #include <net/dst.h>
 #include <net/ip.h>
 #include <net/udp.h>
+#include <net/udp_tunnel.h>
 #include <net/inet_common.h>
 #include <net/xfrm.h>
 #include <net/protocol.h>
@@ -147,7 +148,7 @@ do {									\
 		 atomic_read(&_t->ref_count));				\
 	l2tp_tunnel_inc_refcount_1(_t);					\
 } while (0)
-#define l2tp_tunnel_dec_refcount(_t)
+#define l2tp_tunnel_dec_refcount(_t)					\
 do {									\
 	pr_debug("l2tp_tunnel_dec_refcount: %s:%d %s: cnt=%d\n",	\
 		 __func__, __LINE__, (_t)->name,			\
@@ -1318,7 +1319,7 @@ static void l2tp_tunnel_del_work(struct work_struct *work)
 	tunnel = container_of(work, struct l2tp_tunnel, del_work);
 	sk = l2tp_tunnel_sock_lookup(tunnel);
 	if (!sk)
-		return;
+		goto out;
 
 	sock = sk->sk_socket;
 
@@ -1333,12 +1334,15 @@ static void l2tp_tunnel_del_work(struct work_struct *work)
 		if (sock)
 			inet_shutdown(sock, 2);
 	} else {
-		if (sock)
+		if (sock) {
 			kernel_sock_shutdown(sock, SHUT_RDWR);
-		sk_release_kernel(sk);
+			sock_release(sock);
+		}
 	}
 
 	l2tp_tunnel_sock_put(sk);
+out:
+	l2tp_tunnel_dec_refcount(tunnel);
 }
 
 /* Create a socket for the tunnel, if one isn't set up by
@@ -1358,87 +1362,50 @@ static int l2tp_tunnel_sock_create(struct net *net,
 {
 	int err = -EINVAL;
 	struct socket *sock = NULL;
-	struct sockaddr_in udp_addr = {0};
-	struct sockaddr_l2tpip ip_addr = {0};
-#if IS_ENABLED(CONFIG_IPV6)
-	struct sockaddr_in6 udp6_addr = {0};
-	struct sockaddr_l2tpip6 ip6_addr = {0};
-#endif
+	struct udp_port_cfg udp_conf;
 
 	switch (cfg->encap) {
 	case L2TP_ENCAPTYPE_UDP:
+		memset(&udp_conf, 0, sizeof(udp_conf));
+
 #if IS_ENABLED(CONFIG_IPV6)
 		if (cfg->local_ip6 && cfg->peer_ip6) {
-			err = sock_create_kern(AF_INET6, SOCK_DGRAM, 0, &sock);
-			if (err < 0)
-				goto out;
-
-			sk_change_net(sock->sk, net);
-
-			udp6_addr.sin6_family = AF_INET6;
-			memcpy(&udp6_addr.sin6_addr, cfg->local_ip6,
-			       sizeof(udp6_addr.sin6_addr));
-			udp6_addr.sin6_port = htons(cfg->local_udp_port);
-			err = kernel_bind(sock, (struct sockaddr *) &udp6_addr,
-					  sizeof(udp6_addr));
-			if (err < 0)
-				goto out;
-
-			udp6_addr.sin6_family = AF_INET6;
-			memcpy(&udp6_addr.sin6_addr, cfg->peer_ip6,
-			       sizeof(udp6_addr.sin6_addr));
-			udp6_addr.sin6_port = htons(cfg->peer_udp_port);
-			err = kernel_connect(sock,
-					     (struct sockaddr *) &udp6_addr,
-					     sizeof(udp6_addr), 0);
-			if (err < 0)
-				goto out;
-
-			if (cfg->udp6_zero_tx_checksums)
-				udp_set_no_check6_tx(sock->sk, true);
-			if (cfg->udp6_zero_rx_checksums)
-				udp_set_no_check6_rx(sock->sk, true);
+			udp_conf.family = AF_INET6;
+			memcpy(&udp_conf.local_ip6, cfg->local_ip6,
+			       sizeof(udp_conf.local_ip6));
+			memcpy(&udp_conf.peer_ip6, cfg->peer_ip6,
+			       sizeof(udp_conf.peer_ip6));
+			udp_conf.use_udp6_tx_checksums =
+			    cfg->udp6_zero_tx_checksums;
+			udp_conf.use_udp6_rx_checksums =
+			    cfg->udp6_zero_rx_checksums;
 		} else
 #endif
 		{
-			err = sock_create_kern(AF_INET, SOCK_DGRAM, 0, &sock);
-			if (err < 0)
-				goto out;
-
-			sk_change_net(sock->sk, net);
-
-			udp_addr.sin_family = AF_INET;
-			udp_addr.sin_addr = cfg->local_ip;
-			udp_addr.sin_port = htons(cfg->local_udp_port);
-			err = kernel_bind(sock, (struct sockaddr *) &udp_addr,
-					  sizeof(udp_addr));
-			if (err < 0)
-				goto out;
-
-			udp_addr.sin_family = AF_INET;
-			udp_addr.sin_addr = cfg->peer_ip;
-			udp_addr.sin_port = htons(cfg->peer_udp_port);
-			err = kernel_connect(sock,
-					     (struct sockaddr *) &udp_addr,
-					     sizeof(udp_addr), 0);
-			if (err < 0)
-				goto out;
+			udp_conf.family = AF_INET;
+			udp_conf.local_ip = cfg->local_ip;
+			udp_conf.peer_ip = cfg->peer_ip;
+			udp_conf.use_udp_checksums = cfg->use_udp_checksums;
 		}
 
-		if (!cfg->use_udp_checksums)
-			sock->sk->sk_no_check_tx = 1;
+		udp_conf.local_udp_port = htons(cfg->local_udp_port);
+		udp_conf.peer_udp_port = htons(cfg->peer_udp_port);
+
+		err = udp_sock_create(net, &udp_conf, &sock);
+		if (err < 0)
+			goto out;
 
 		break;
 
 	case L2TP_ENCAPTYPE_IP:
 #if IS_ENABLED(CONFIG_IPV6)
 		if (cfg->local_ip6 && cfg->peer_ip6) {
-			err = sock_create_kern(AF_INET6, SOCK_DGRAM,
+			struct sockaddr_l2tpip6 ip6_addr = {0};
+
+			err = sock_create_kern(net, AF_INET6, SOCK_DGRAM,
 					  IPPROTO_L2TP, &sock);
 			if (err < 0)
 				goto out;
-
-			sk_change_net(sock->sk, net);
 
 			ip6_addr.l2tp_family = AF_INET6;
 			memcpy(&ip6_addr.l2tp_addr, cfg->local_ip6,
@@ -1461,12 +1428,12 @@ static int l2tp_tunnel_sock_create(struct net *net,
 		} else
 #endif
 		{
-			err = sock_create_kern(AF_INET, SOCK_DGRAM,
+			struct sockaddr_l2tpip ip_addr = {0};
+
+			err = sock_create_kern(net, AF_INET, SOCK_DGRAM,
 					  IPPROTO_L2TP, &sock);
 			if (err < 0)
 				goto out;
-
-			sk_change_net(sock->sk, net);
 
 			ip_addr.l2tp_family = AF_INET;
 			ip_addr.l2tp_addr = cfg->local_ip;
@@ -1494,7 +1461,7 @@ out:
 	*sockp = sock;
 	if ((err < 0) && sock) {
 		kernel_sock_shutdown(sock, SHUT_RDWR);
-		sk_release_kernel(sock->sk);
+		sock_release(sock);
 		*sockp = NULL;
 	}
 
@@ -1614,19 +1581,17 @@ int l2tp_tunnel_create(struct net *net, int fd, int version, u32 tunnel_id, u32 
 	/* Mark socket as an encapsulation socket. See net/ipv4/udp.c */
 	tunnel->encap = encap;
 	if (encap == L2TP_ENCAPTYPE_UDP) {
-		/* Mark socket as an encapsulation socket. See net/ipv4/udp.c */
-		udp_sk(sk)->encap_type = UDP_ENCAP_L2TPINUDP;
-		udp_sk(sk)->encap_rcv = l2tp_udp_encap_recv;
-		udp_sk(sk)->encap_destroy = l2tp_udp_encap_destroy;
-#if IS_ENABLED(CONFIG_IPV6)
-		if (sk->sk_family == PF_INET6 && !tunnel->v4mapped)
-			udpv6_encap_enable();
-		else
-#endif
-		udp_encap_enable();
-	}
+		struct udp_tunnel_sock_cfg udp_cfg;
 
-	sk->sk_user_data = tunnel;
+		udp_cfg.sk_user_data = tunnel;
+		udp_cfg.encap_type = UDP_ENCAP_L2TPINUDP;
+		udp_cfg.encap_rcv = l2tp_udp_encap_recv;
+		udp_cfg.encap_destroy = l2tp_udp_encap_destroy;
+
+		setup_udp_tunnel_sock(net, sock, &udp_cfg);
+	} else {
+		sk->sk_user_data = tunnel;
+	}
 
 	/* Hook on the tunnel socket destructor so that we can cleanup
 	 * if the tunnel socket goes away.
@@ -1673,8 +1638,13 @@ EXPORT_SYMBOL_GPL(l2tp_tunnel_create);
  */
 int l2tp_tunnel_delete(struct l2tp_tunnel *tunnel)
 {
+	l2tp_tunnel_inc_refcount(tunnel);
 	l2tp_tunnel_closeall(tunnel);
-	return (false == queue_work(l2tp_wq, &tunnel->del_work));
+	if (false == queue_work(l2tp_wq, &tunnel->del_work)) {
+		l2tp_tunnel_dec_refcount(tunnel);
+		return 1;
+	}
+	return 0;
 }
 EXPORT_SYMBOL_GPL(l2tp_tunnel_delete);
 
@@ -1905,6 +1875,7 @@ static int __init l2tp_init(void)
 	l2tp_wq = alloc_workqueue("l2tp", WQ_UNBOUND, 0);
 	if (!l2tp_wq) {
 		pr_err("alloc_workqueue failed\n");
+		unregister_pernet_device(&l2tp_net_ops);
 		rc = -ENOMEM;
 		goto out;
 	}

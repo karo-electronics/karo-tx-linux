@@ -118,7 +118,7 @@ static int
 nfs_proc_setattr(struct dentry *dentry, struct nfs_fattr *fattr,
 		 struct iattr *sattr)
 {
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 	struct nfs_sattrargs	arg = { 
 		.fh	= NFS_FH(inode),
 		.sattr	= sattr
@@ -139,7 +139,7 @@ nfs_proc_setattr(struct dentry *dentry, struct nfs_fattr *fattr,
 	nfs_fattr_init(fattr);
 	status = rpc_call_sync(NFS_CLIENT(inode), &msg, 0);
 	if (status == 0)
-		nfs_setattr_update_inode(inode, sattr);
+		nfs_setattr_update_inode(inode, sattr, fattr);
 	dprintk("NFS reply setattr: %d\n", status);
 	return status;
 }
@@ -487,7 +487,7 @@ static int
 nfs_proc_readdir(struct dentry *dentry, struct rpc_cred *cred,
 		 u64 cookie, struct page **pages, unsigned int count, int plus)
 {
-	struct inode		*dir = dentry->d_inode;
+	struct inode		*dir = d_inode(dentry);
 	struct nfs_readdirargs	arg = {
 		.fh		= NFS_FH(dir),
 		.cookie		= cookie,
@@ -578,46 +578,47 @@ nfs_proc_pathconf(struct nfs_server *server, struct nfs_fh *fhandle,
 	return 0;
 }
 
-static int nfs_read_done(struct rpc_task *task, struct nfs_pgio_data *data)
+static int nfs_read_done(struct rpc_task *task, struct nfs_pgio_header *hdr)
 {
-	struct inode *inode = data->header->inode;
+	struct inode *inode = hdr->inode;
 
 	nfs_invalidate_atime(inode);
 	if (task->tk_status >= 0) {
-		nfs_refresh_inode(inode, data->res.fattr);
+		nfs_refresh_inode(inode, hdr->res.fattr);
 		/* Emulate the eof flag, which isn't normally needed in NFSv2
 		 * as it is guaranteed to always return the file attributes
 		 */
-		if (data->args.offset + data->res.count >= data->res.fattr->size)
-			data->res.eof = 1;
+		if (hdr->args.offset + hdr->res.count >= hdr->res.fattr->size)
+			hdr->res.eof = 1;
 	}
 	return 0;
 }
 
-static void nfs_proc_read_setup(struct nfs_pgio_data *data, struct rpc_message *msg)
+static void nfs_proc_read_setup(struct nfs_pgio_header *hdr,
+				struct rpc_message *msg)
 {
 	msg->rpc_proc = &nfs_procedures[NFSPROC_READ];
 }
 
-static int nfs_proc_pgio_rpc_prepare(struct rpc_task *task, struct nfs_pgio_data *data)
+static int nfs_proc_pgio_rpc_prepare(struct rpc_task *task,
+				     struct nfs_pgio_header *hdr)
 {
 	rpc_call_start(task);
 	return 0;
 }
 
-static int nfs_write_done(struct rpc_task *task, struct nfs_pgio_data *data)
+static int nfs_write_done(struct rpc_task *task, struct nfs_pgio_header *hdr)
 {
-	struct inode *inode = data->header->inode;
-
 	if (task->tk_status >= 0)
-		nfs_post_op_update_inode_force_wcc(inode, data->res.fattr);
+		nfs_writeback_update_inode(hdr);
 	return 0;
 }
 
-static void nfs_proc_write_setup(struct nfs_pgio_data *data, struct rpc_message *msg)
+static void nfs_proc_write_setup(struct nfs_pgio_header *hdr,
+				 struct rpc_message *msg)
 {
 	/* Note: NFSv2 ignores @stable and always uses NFS_FILE_SYNC */
-	data->args.stable = NFS_FILE_SYNC;
+	hdr->args.stable = NFS_FILE_SYNC;
 	msg->rpc_proc = &nfs_procedures[NFSPROC_WRITE];
 }
 
