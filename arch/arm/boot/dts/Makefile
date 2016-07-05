@@ -303,8 +303,12 @@ dtb-$(CONFIG_SOC_IMX6Q) += \
 	imx6dl-sabrelite.dtb \
 	imx6dl-sabresd.dtb \
 	imx6dl-tx6dl-comtft.dtb \
+	imx6dl-tx6s-8034.dtb \
+	imx6dl-tx6s-8035.dtb \
+	imx6dl-tx6u-8033.dtb \
 	imx6dl-tx6u-801x.dtb \
 	imx6dl-tx6u-811x.dtb \
+	imx6dl-tx6u-81xx-mb7.dtb \
 	imx6dl-udoo.dtb \
 	imx6dl-wandboard.dtb \
 	imx6dl-wandboard-revb1.dtb \
@@ -336,7 +340,9 @@ dtb-$(CONFIG_SOC_IMX6Q) += \
 	imx6q-tx6q-1010-comtft.dtb \
 	imx6q-tx6q-1020.dtb \
 	imx6q-tx6q-1020-comtft.dtb \
+	imx6q-tx6q-1036.dtb \
 	imx6q-tx6q-1110.dtb \
+	imx6q-tx6q-11x0-mb7.dtb \
 	imx6q-udoo.dtb \
 	imx6q-wandboard.dtb \
 	imx6q-wandboard-revb1.dtb
@@ -348,7 +354,10 @@ dtb-$(CONFIG_SOC_IMX6SX) += \
 	imx6sx-sdb-reva.dtb \
 	imx6sx-sdb.dtb
 dtb-$(CONFIG_SOC_IMX6UL) += \
-	imx6ul-14x14-evk.dtb
+	imx6ul-14x14-evk.dtb \
+	imx6ul-tx6ul-0010.dtb \
+	imx6ul-tx6ul-0011.dtb \
+	imx6ul-tx6ul-mainboard.dtb
 dtb-$(CONFIG_SOC_IMX7D) += \
 	imx7d-sdb.dtb
 dtb-$(CONFIG_SOC_LS1021A) += \
@@ -459,13 +468,14 @@ dtb-$(CONFIG_SOC_AM33XX) += \
 	am335x-bone.dtb \
 	am335x-boneblack.dtb \
 	am335x-bonegreen.dtb \
-	am335x-sl50.dtb \
+	am335x-chiliboard.dtb \
 	am335x-evm.dtb \
 	am335x-evmsk.dtb \
+	am335x-lxm.dtb \
 	am335x-nano.dtb \
 	am335x-pepper.dtb \
-	am335x-lxm.dtb \
-	am335x-chiliboard.dtb \
+	am335x-sl50.dtb \
+	am335x-tx48.dtb \
 	am335x-wega-rdk.dtb
 dtb-$(CONFIG_ARCH_OMAP4) += \
 	omap4-duovero-parlor.dtb \

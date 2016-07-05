@@ -140,8 +140,8 @@ static	int ti_tscadc_probe(struct platform_device *pdev)
 	struct clk		*clk;
 	struct device_node	*node = pdev->dev.of_node;
 	struct mfd_cell		*cell;
-	struct property         *prop;
-	const __be32            *cur;
+	struct property		*prop;
+	const __be32		*cur;
 	u32			val;
 	int			err, ctrl;
 	int			clock_rate;
@@ -282,8 +282,11 @@ static	int ti_tscadc_probe(struct platform_device *pdev)
 
 	err = mfd_add_devices(&pdev->dev, pdev->id, tscadc->cells,
 			tscadc->used_cells, NULL, 0, NULL);
-	if (err < 0)
+	if (err < 0) {
+		dev_err(&pdev->dev, "Failed to add MFD devices\n");
 		goto err_disable_clk;
+	}
+	dev_info(&pdev->dev, "TI Touchscreen/ADC driver initialized\n");
 
 	device_init_wakeup(&pdev->dev, true);
 	platform_set_drvdata(pdev, tscadc);

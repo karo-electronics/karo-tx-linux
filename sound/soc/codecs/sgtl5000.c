@@ -824,6 +824,9 @@ static int ldo_regulator_disable(struct regulator_dev *dev)
 	struct ldo_regulator *ldo = rdev_get_drvdata(dev);
 	struct snd_soc_codec *codec = (struct snd_soc_codec *)ldo->codec_data;
 
+	if (ldo_regulator_is_enabled(dev))
+		return 0;
+
 	snd_soc_update_bits(codec, SGTL5000_CHIP_ANA_POWER,
 				SGTL5000_LINEREG_D_POWERUP,
 				0);
@@ -859,17 +862,14 @@ static int ldo_regulator_register(struct snd_soc_codec *codec,
 	struct sgtl5000_priv *sgtl5000 = snd_soc_codec_get_drvdata(codec);
 	struct regulator_config config = { };
 
-	ldo = kzalloc(sizeof(struct ldo_regulator), GFP_KERNEL);
-
+	ldo = devm_kzalloc(codec->dev, sizeof(*ldo), GFP_KERNEL);
 	if (!ldo)
 		return -ENOMEM;
 
-	ldo->desc.name = kstrdup(dev_name(codec->dev), GFP_KERNEL);
-	if (!ldo->desc.name) {
-		kfree(ldo);
-		dev_err(codec->dev, "failed to allocate decs name memory\n");
+	ldo->desc.name = devm_kstrdup(codec->dev, dev_name(codec->dev),
+				GFP_KERNEL);
+	if (!ldo->desc.name)
 		return -ENOMEM;
-	}
 
 	ldo->desc.type  = REGULATOR_VOLTAGE;
 	ldo->desc.owner = THIS_MODULE;
@@ -885,13 +885,8 @@ static int ldo_regulator_register(struct snd_soc_codec *codec,
 
 	ldo->dev = regulator_register(&ldo->desc, &config);
 	if (IS_ERR(ldo->dev)) {
-		int ret = PTR_ERR(ldo->dev);
-
 		dev_err(codec->dev, "failed to register regulator\n");
-		kfree(ldo->desc.name);
-		kfree(ldo);
-
-		return ret;
+		return PTR_ERR(ldo->dev);
 	}
 	sgtl5000->ldo = ldo;
 
@@ -907,8 +902,7 @@ static int ldo_regulator_remove(struct snd_soc_codec *codec)
 		return 0;
 
 	regulator_unregister(ldo->dev);
-	kfree(ldo->desc.name);
-	kfree(ldo);
+	sgtl5000->ldo = NULL;
 
 	return 0;
 }
@@ -1327,7 +1321,6 @@ err_ldo_remove:
 	if (!external_vddd)
 		ldo_regulator_remove(codec);
 	return ret;
-
 }
 
 static int sgtl5000_probe(struct snd_soc_codec *codec)
@@ -1586,8 +1579,8 @@ static int sgtl5000_i2c_remove(struct i2c_client *client)
 }
 
 static const struct i2c_device_id sgtl5000_id[] = {
-	{"sgtl5000", 0},
-	{},
+	{ "sgtl5000", 0 },
+	{}
 };
 
 MODULE_DEVICE_TABLE(i2c, sgtl5000_id);

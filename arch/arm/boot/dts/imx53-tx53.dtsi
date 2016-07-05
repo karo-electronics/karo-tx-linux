@@ -254,8 +254,8 @@
 				/* Module Specific Signal */
 				/* MX53_PAD_NANDF_CS2__GPIO6_15 0x1f4 maybe used by EDT-FT5x06 */
 				/* MX53_PAD_EIM_A16__GPIO2_22 0x1f4 maybe used by EDT-FT5x06 */
-				MX53_PAD_EIM_D29__GPIO3_29 0x1f4
-				MX53_PAD_EIM_EB3__GPIO2_31 0x1f4
+				/* MX53_PAD_EIM_D29__GPIO3_29 0x1f4 used as LCD RESET by default */
+				/* MX53_PAD_EIM_EB3__GPIO2_31 0x1f4 used as LCD ENABLE by default */
 				/* MX53_PAD_EIM_A17__GPIO2_21 0x1f4 maybe used by EDT-FT5x06 */
 				/* MX53_PAD_EIM_A18__GPIO2_20 0x1f4 used by LED */
 				MX53_PAD_EIM_A19__GPIO2_19 0x1f4
@@ -546,4 +546,8 @@
 	disable-over-current;
 	vbus-supply = <&reg_usbotg_vbus>;
 	status = "okay";
+};
+
+&vpu {
+	status = "disabled";
 };

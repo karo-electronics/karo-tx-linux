@@ -64,26 +64,28 @@
 	};
 
 	regulators {
-		reg_lcd_pwr0: regulator@5 {
+		regulator@5 {
 			compatible = "regulator-fixed";
 			reg = <5>;
-			regulator-name = "LVDS0 POWER";
+			regulator-name = "LVDS0 CABC";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio3 29 GPIO_ACTIVE_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_lvds0_cabc>;
 			enable-active-high;
-			regulator-boot-on;
 		};
 
-		reg_lcd_pwr1: regulator@6 {
+		regulator@6 {
 			compatible = "regulator-fixed";
 			reg = <6>;
-			regulator-name = "LVDS1 POWER";
+			regulator-name = "LVDS1 CABC";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio2 31 GPIO_ACTIVE_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_lvds1_cabc>;
 			enable-active-high;
-			regulator-boot-on;
 		};
 	};
 };
@@ -149,6 +151,12 @@
 			>;
 		};
 
+		pinctrl_lvds0_cabc: lvds0-cabcgrp {
+			fsl,pins = <
+				MX53_PAD_EIM_D29__GPIO3_29 0x1f0 /* LCD reset */
+			>;
+		};
+
 		pinctrl_lvds1: lvds1grp {
 			fsl,pins = <
 				MX53_PAD_LVDS1_TX3_P__LDB_LVDS1_TX3 0x80000000
@@ -156,6 +164,12 @@
 				MX53_PAD_LVDS1_CLK_P__LDB_LVDS1_CLK 0x80000000
 				MX53_PAD_LVDS1_TX1_P__LDB_LVDS1_TX1 0x80000000
 				MX53_PAD_LVDS1_TX0_P__LDB_LVDS1_TX0 0x80000000
+			>;
+		};
+
+		pinctrl_lvds1_cabc: lvds1-cabcgrp {
+			fsl,pins = <
+				MX53_PAD_EIM_EB3__GPIO2_31 0x1f0 /* LCD enable */
 			>;
 		};
 
@@ -178,13 +192,13 @@
 };
 
 &ldb {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lvds0 &pinctrl_lvds1>;
 	status = "okay";
 
 	lvds0: lvds-channel@0 {
-		fsl,data-mapping = "jeida";
-		fsl,data-width = <24>;
+		fsl,data-mapping = "spwg";
+		fsl,data-width = <18>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lvds0>;
 		status = "okay";
 
 		display-timings {
@@ -208,8 +222,10 @@
 	};
 
 	lvds1: lvds-channel@1 {
-		fsl,data-mapping = "jeida";
-		fsl,data-width = <24>;
+		fsl,data-mapping = "spwg";
+		fsl,data-width = <18>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lvds1>;
 		status = "okay";
 
 		display-timings {

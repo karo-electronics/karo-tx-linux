@@ -1,13 +1,13 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
-#include <linux/usb/otg.h>
-#include <linux/usb/usb_phy_generic.h>
 #include <linux/slab.h>
 #include <linux/clk.h>
-#include <linux/regulator/consumer.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/regulator/consumer.h>
+#include <linux/usb/otg.h>
+#include <linux/usb/usb_phy_generic.h>
 
 #include "am35x-phy-control.h"
 #include "phy-generic.h"
@@ -22,6 +22,7 @@ static int am335x_init(struct usb_phy *phy)
 {
 	struct am335x_phy *am_phy = dev_get_drvdata(phy->dev);
 
+	usb_gen_phy_init(phy);
 	phy_ctrl_power(am_phy->phy_ctrl, am_phy->id, true);
 	return 0;
 }
@@ -31,6 +32,7 @@ static void am335x_shutdown(struct usb_phy *phy)
 	struct am335x_phy *am_phy = dev_get_drvdata(phy->dev);
 
 	phy_ctrl_power(am_phy->phy_ctrl, am_phy->id, false);
+	usb_gen_phy_shutdown(phy);
 }
 
 static int am335x_phy_probe(struct platform_device *pdev)
@@ -56,11 +58,12 @@ static int am335x_phy_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	am_phy->usb_phy_gen.phy.init = am335x_init;
+	am_phy->usb_phy_gen.phy.shutdown = am335x_shutdown;
+
 	ret = usb_add_phy_dev(&am_phy->usb_phy_gen.phy);
 	if (ret)
 		return ret;
-	am_phy->usb_phy_gen.phy.init = am335x_init;
-	am_phy->usb_phy_gen.phy.shutdown = am335x_shutdown;
 
 	platform_set_drvdata(pdev, am_phy);
 	device_init_wakeup(dev, true);

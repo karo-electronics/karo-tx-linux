@@ -161,10 +161,10 @@ static ssize_t gpio_trig_gpio_store(struct device *dev,
 		return n;
 	}
 
-	ret = request_irq(gpio_to_irq(gpio), gpio_trig_irq,
+	ret = request_any_context_irq(gpio_to_irq(gpio), gpio_trig_irq,
 			IRQF_SHARED | IRQF_TRIGGER_RISING
 			| IRQF_TRIGGER_FALLING, "ledtrig-gpio", led);
-	if (ret) {
+	if (ret < 0) {
 		dev_err(dev, "request_irq failed with error %d\n", ret);
 	} else {
 		if (gpio_data->gpio != 0)
@@ -172,7 +172,7 @@ static ssize_t gpio_trig_gpio_store(struct device *dev,
 		gpio_data->gpio = gpio;
 	}
 
-	return ret ? ret : n;
+	return ret < 0 ? ret : n;
 }
 static DEVICE_ATTR(gpio, 0644, gpio_trig_gpio_show, gpio_trig_gpio_store);
 

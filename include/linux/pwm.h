@@ -184,18 +184,17 @@ struct pwm_ops {
  *             operations may sleep
  */
 struct pwm_chip {
-	struct device *dev;
-	struct list_head list;
-	const struct pwm_ops *ops;
-	int base;
-	unsigned int npwm;
+	struct device		*dev;
+	struct list_head	list;
+	const struct pwm_ops	*ops;
+	int			base;
+	unsigned int		npwm;
 
-	struct pwm_device *pwms;
+	struct pwm_device	*pwms;
 
-	struct pwm_device * (*of_xlate)(struct pwm_chip *pc,
-					const struct of_phandle_args *args);
-	unsigned int of_pwm_n_cells;
-	bool can_sleep;
+	struct pwm_device *	(*of_xlate)(struct pwm_chip *pc,
+					    const struct of_phandle_args *args);
+	bool			can_sleep;
 };
 
 #if IS_ENABLED(CONFIG_PWM)

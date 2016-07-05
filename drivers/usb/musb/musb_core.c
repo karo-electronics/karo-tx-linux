@@ -765,7 +765,6 @@ static irqreturn_t musb_stage0_irq(struct musb *musb, u8 int_usb,
 		default:
 			/* "should not happen" */
 			musb->is_active = 0;
-			break;
 		}
 	}
 
@@ -818,7 +817,6 @@ b_host:
 				if (hcd)
 					hcd->self.is_b_host = 0;
 			}
-			break;
 		}
 
 		musb_host_poke_root_hub(musb);
@@ -868,7 +866,6 @@ b_host:
 		default:
 			WARNING("unhandled DISCONNECT transition (%s)\n",
 				usb_otg_state_string(musb->xceiv->otg->state));
-			break;
 		}
 	}
 
@@ -1984,7 +1981,7 @@ musb_init_controller(struct device *dev, int nIrq, void __iomem *ctrl)
 	 * Fail when the board needs a feature that's not enabled.
 	 */
 	if (!plat) {
-		dev_dbg(dev, "no platform_data?\n");
+		dev_err(dev, "no platform_data?\n");
 		status = -ENODEV;
 		goto fail0;
 	}
@@ -2178,18 +2175,21 @@ musb_init_controller(struct device *dev, int nIrq, void __iomem *ctrl)
 
 	switch (musb->port_mode) {
 	case MUSB_PORT_MODE_HOST:
-		status = musb_host_setup(musb, plat->power);
+		status = musb_platform_set_mode(musb, MUSB_HOST);
 		if (status < 0)
 			goto fail3;
-		status = musb_platform_set_mode(musb, MUSB_HOST);
+		status = musb_host_setup(musb, plat->power);
 		break;
 	case MUSB_PORT_MODE_GADGET:
-		status = musb_gadget_setup(musb);
+		status = musb_platform_set_mode(musb, MUSB_PERIPHERAL);
 		if (status < 0)
 			goto fail3;
-		status = musb_platform_set_mode(musb, MUSB_PERIPHERAL);
+		status = musb_gadget_setup(musb);
 		break;
 	case MUSB_PORT_MODE_DUAL_ROLE:
+		status = musb_platform_set_mode(musb, MUSB_OTG);
+		if (status < 0)
+			goto fail3;
 		status = musb_host_setup(musb, plat->power);
 		if (status < 0)
 			goto fail3;
@@ -2198,11 +2198,9 @@ musb_init_controller(struct device *dev, int nIrq, void __iomem *ctrl)
 			musb_host_cleanup(musb);
 			goto fail3;
 		}
-		status = musb_platform_set_mode(musb, MUSB_OTG);
 		break;
 	default:
 		dev_err(dev, "unsupported port mode %d\n", musb->port_mode);
-		break;
 	}
 
 	if (status < 0)

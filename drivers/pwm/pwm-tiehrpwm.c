@@ -377,10 +377,12 @@ static void ehrpwm_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 
 	/* Action Qualifier puts PWM output low forcefully */
 	if (pwm->hwpwm) {
-		aqcsfrc_val = AQCSFRC_CSFB_FRCLOW;
+		aqcsfrc_val = pc->polarity[pwm->hwpwm] == PWM_POLARITY_INVERSED ?
+			AQCSFRC_CSFB_FRCHIGH : AQCSFRC_CSFB_FRCLOW;
 		aqcsfrc_mask = AQCSFRC_CSFB_MASK;
 	} else {
-		aqcsfrc_val = AQCSFRC_CSFA_FRCLOW;
+		aqcsfrc_val = pc->polarity[pwm->hwpwm] == PWM_POLARITY_INVERSED ?
+			AQCSFRC_CSFA_FRCHIGH : AQCSFRC_CSFA_FRCLOW;
 		aqcsfrc_mask = AQCSFRC_CSFA_MASK;
 	}
 
@@ -458,7 +460,6 @@ static int ehrpwm_pwm_probe(struct platform_device *pdev)
 	pc->chip.dev = &pdev->dev;
 	pc->chip.ops = &ehrpwm_pwm_ops;
 	pc->chip.of_xlate = of_pwm_xlate_with_flags;
-	pc->chip.of_pwm_n_cells = 3;
 	pc->chip.base = -1;
 	pc->chip.npwm = NUM_PWM_CHANNEL;
 
