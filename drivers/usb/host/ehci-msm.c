@@ -72,7 +72,7 @@ static int ehci_msm_probe(struct platform_device *pdev)
 	struct usb_phy *phy;
 	int ret;
 
-	dev_dbg(&pdev->dev, "ehci_msm proble\n");
+	dev_dbg(&pdev->dev, "ehci_msm probe\n");
 
 	hcd = usb_create_hcd(&msm_hc_driver, &pdev->dev, dev_name(&pdev->dev));
 	if (!hcd) {
@@ -119,14 +119,26 @@ static int ehci_msm_probe(struct platform_device *pdev)
 		goto put_hcd;
 	}
 
-	ret = otg_set_host(phy->otg, &hcd->self);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "unable to register with transceiver\n");
-		goto put_hcd;
-	}
-
 	hcd->usb_phy = phy;
 	device_init_wakeup(&pdev->dev, 1);
+
+	if (phy && phy->otg) {
+		/*
+		 * MSM OTG driver takes care of adding the HCD and
+		 * placing hardware into low power mode via runtime PM.
+		 */
+		ret = otg_set_host(phy->otg, &hcd->self);
+		printk(KERN_ERR "%s@%d: otg=%p\n", __func__, __LINE__, phy->otg);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "unable to register with transceiver\n");
+			goto put_hcd;
+		}
+	} else {
+		ret = usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
+		if (ret)
+			goto put_hcd;
+	}
+
 	/*
 	 * OTG device parent of HCD takes care of putting
 	 * hardware into low power mode.
