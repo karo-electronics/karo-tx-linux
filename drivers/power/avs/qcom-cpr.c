@@ -40,7 +40,7 @@
 #define RBCPR_VER_2			0x02
 
 /* RBCPR Gate Count and Target Registers */
-#define REG_RBCPR_GCNT_TARGET(n)	(0x60 + 4 * n)
+#define REG_RBCPR_GCNT_TARGET(n)	(0x60 + 4 * (n))
 
 #define RBCPR_GCNT_TARGET_TARGET_SHIFT	0
 #define RBCPR_GCNT_TARGET_TARGET_MASK	GENMASK(11, 0)
@@ -106,7 +106,7 @@
 #define RBCPR_RESULT0_STEP_UP_SHIFT	1
 
 /* RBCPR Interrupt Control Register */
-#define REG_RBIF_IRQ_EN(n)		(0x100 + 4 * n)
+#define REG_RBIF_IRQ_EN(n)		(0x100 + 4 * (n))
 #define REG_RBIF_IRQ_CLEAR		0x110
 #define REG_RBIF_IRQ_STATUS		0x114
 
