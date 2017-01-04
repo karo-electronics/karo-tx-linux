@@ -2,6 +2,7 @@
 #define __QCOM_SMEM_STATE__
 
 struct qcom_smem_state;
+struct device_node;
 
 struct qcom_smem_state_ops {
 	int (*update_bits)(void *, u32, u32);
