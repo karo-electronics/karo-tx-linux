@@ -1,0 +1,935 @@
+/*
+ * Copyright (C) 2016, Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ * This file is dual-licensed: you can use it either under the terms
+ * of the GPL or the X11 license, at your option. Note that this dual
+ * licensing only applies to this file, and not this project as a
+ * whole.
+ *
+ *  a) This file is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU General Public License
+ *     version 2 as published by the Free Software Foundation.
+ *
+ *     This file is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ *
+ * Or, alternatively,
+ *
+ *  b) Permission is hereby granted, free of charge, to any person
+ *     obtaining a copy of this software and associated documentation
+ *     files (the "Software"), to deal in the Software without
+ *     restriction, including without limitation the rights to use,
+ *     copy, modify, merge, publish, distribute, sublicense, and/or
+ *     sell copies of the Software, and to permit persons to whom the
+ *     Software is furnished to do so, subject to the following
+ *     conditions:
+ *
+ *     The above copyright notice and this permission notice shall be
+ *     included in all copies or substantial portions of the Software.
+ *
+ *     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ *     EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ *     OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ *     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ *     HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ *     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ *     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ *     OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/dts-v1/;
+
+#define USE_I2C_GPIO
+
+#include "msm8916.dtsi"
+#include "pm8916.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
+#include <dt-bindings/sound/apq8016-lpass.h>
+#include "msm8916-mdss.dtsi"
+
+/ {
+	model = "Ka-Ro electronics GmbH TXSD-410E (Qualcomm Technologies, Inc. APQ 8016)";
+	compatible = "karo,txsd-410e", "qcom,apq8016-sbc", "qcom,apq8016", "qcom,sbc";
+
+	aliases {
+		backlight = &lvds_backlight;
+		display = &dsi83;
+		i2c0 = &i2c_gpio0;
+#ifdef USE_I2C_GPIO
+		i2c1 = &i2c_gpio1;
+#else
+		i2c1 = &blsp_i2c5;
+#endif
+		serial0 = &blsp1_uart2;
+		serial1 = &blsp1_uart1;
+		spi0 = &blsp_spi3;
+		touchpanel = &polytouch;
+		usbdev = &usb_dev;
+		usbhost = &usb_host;
+		usbphy = &usb_otg;
+		usid0 = &pm8916_0;
+	};
+
+	chosen {
+		stdout-path = "serial0";
+	};
+
+	clocks {
+		mclk: mclk {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			//clock-frequency = <26000000>;
+			clock-frequency = <18432000>;
+		};
+	};
+
+	lvds_backlight: lvds-backlight {
+		compatible = "gpio-backlight";
+		pinctrl-names = "default";
+		pinctrl-0 = <&backlight_pins>;
+		gpios = <&msmgpio 98 GPIO_ACTIVE_LOW>;
+		default-on;
+	};
+
+	lvds_display: lvds-panel {
+		compatible = "hannstar,hsd100pxn1", "panel-simple";
+		power-supply = <&pm8916_l6>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&msmgpio_lvds_panel>;
+		enable-gpios = <&msmgpio 25 GPIO_ACTIVE_LOW>;
+		backlight = <&lvds_backlight>;
+	};
+
+	regulator_3v3: regulator-3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "3V3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
+
+	regulator_vbat: regulator-vbat {
+		compatible = "regulator-fixed";
+		regulator-name = "VBAT";
+		regulator-min-microvolt = <4200000>;
+		regulator-max-microvolt = <4200000>;
+		regulator-always-on;
+	};
+
+	soc {
+#ifndef USE_I2C_GPIO
+		blsp_i2c5: i2c@78b9000 {
+			compatible = "qcom,i2c-qup-v2.2.1";
+			reg = <0x078b9000 0x1000>;
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&i2c5_default_pins>;
+			pinctrl-1 = <&i2c5_sleep_pins>;
+			interrupts = <GIC_SPI 99 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&gcc GCC_BLSP1_QUP5_I2C_APPS_CLK>,
+				 <&gcc GCC_BLSP1_AHB_CLK>;
+			clock-names = "core", "iface";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			clock-frequency = <400000>;
+			status = "okay";
+		};
+#endif
+		i2c_gpio0: i2c-gpio0 {
+			compatible = "i2c-gpio";
+			pinctrl-names = "default";
+			pinctrl-0 = <&i2c0_pins>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			gpios = <&msmgpio 53 GPIO_ACTIVE_HIGH>, /* SDA */
+				<&msmgpio 54 GPIO_ACTIVE_HIGH>; /* CLK */
+			i2c-gpio,delay-us = <1>;
+		};
+#ifdef USE_I2C_GPIO
+		i2c_gpio1: i2c-gpio1 {
+			compatible = "i2c-gpio";
+			pinctrl-names = "default";
+			pinctrl-0 = <&i2c1_pins>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			gpios = <&msmgpio 18 GPIO_ACTIVE_HIGH>, /* SDA */
+				<&msmgpio 19 GPIO_ACTIVE_HIGH>; /* CLK */
+			i2c-gpio,delay-us = <0>;
+		};
+#endif
+#if 0
+		restart@4ab000 {
+			status = "disabled";
+		};
+#endif
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&msmgpio_leds>;
+
+		led {
+			label = "txsd-410e:green:user1";
+			gpios = <&msmgpio 71 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "heartbeat";
+			default-state = "off";
+		};
+	};
+
+	sound {
+		compatible = "karo,txsd-410e-sgtl5000",
+			     "simple-audio-card";
+		pinctrl-names = "default";
+#ifndef USE_PRIMARY_I2S
+		pinctrl-0 = <&ext_sec_tlmm_lines_act>;
+#else
+		pinctrl-0 = <&ext_pri_tlmm_lines_act &ext_pri_ws_act &ext_mclk_tlmm_lines_act>;
+#endif
+		simple-audio-card,name = "apq8016-txsd-410e-sgtl5000-audio";
+		simple-audio-card,format = "dsp_b";
+		simple-audio-card,bitclock-master = <&cpu_dai>;
+		simple-audio-card,frame-master = <&cpu_dai>;
+		simple-audio-card,widgets =
+			"Microphone", "Mic Jack",
+			"Line", "Line In",
+			"Line", "Line Out",
+			"Headphone", "Headphone Jack";
+		simple-audio-card,routing =
+			"MIC_IN", "Mic Jack",
+			"Mic Jack", "Mic Bias",
+			"Headphone Jack", "HP_OUT";
+
+		cpu_dai: simple-audio-card,cpu {
+#ifndef USE_PRIMARY_I2S
+			sound-dai = <&lpass MI2S_QUATERNARY>;
+#else
+			sound-dai = <&lpass MI2S_PRIMARY>;
+#endif
+		};
+
+		codec_dai: simple-audio-card,codec {
+			sound-dai = <&sgtl5000>;
+		};
+	};
+
+	lvds: lvds-out {
+		port {
+			lvds_con: endpoint {
+				remote-endpoint = <&dsi83_out>;
+			};
+		};
+	};
+
+	usb_id: usb-id {
+		compatible = "linux,extcon-usb-gpio";
+		interrupt-parent = <&msmgpio>;
+		id-gpio = <&msmgpio 61 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&usb_id_pins>;
+	};
+};
+
+&blsp_dma {
+	/* BAM-DMA hangs the system, so keep it disabled for now */
+	status = "disabled";
+};
+
+&blsp_spi3 {
+	num-cs = <3>;
+	cs-gpios = <&msmgpio 10 GPIO_ACTIVE_LOW>,
+		   <&msmgpio 120 GPIO_ACTIVE_LOW>,
+		   <&msmgpio 69 GPIO_ACTIVE_LOW>;
+	status = "disabled";
+
+	/* due to disabled BAM DMA the driver would always return EPROBE_DEFER otherwise */
+	/delete-property/ dmas;
+	/delete-property/ dma-names;
+
+	spidev0: spi@0 {
+		compatible = "spidev";
+		reg = <0>;
+		spi-max-frequency = <54000000>;
+	};
+
+	spidev1: spi@1 {
+		compatible = "spidev";
+		reg = <1>;
+		spi-max-frequency = <54000000>;
+	};
+
+	spidev2: spi@2 {
+		compatible = "spidev";
+		reg = <2>;
+		spi-max-frequency = <54000000>;
+	};
+};
+
+&blsp1_uart1 {
+	label = "LS-UART0";
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&blsp1_uart1_default>;
+	pinctrl-1 = <&blsp1_uart1_sleep>;
+	status = "okay";
+};
+
+&blsp1_uart2 {
+	label = "LS-UART1";
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&blsp1_uart2_default>;
+	pinctrl-1 = <&blsp1_uart2_sleep>;
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&i2c_gpio0 {
+	dsi83: sn65dsi83@2c {
+		compatible = "ti,sn65dsi83";
+		reg = <0x2c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&msmgpio_dsi83 &dsi83_pins>;
+		vcc-supply = <&pm8916_l6>;
+		enable-gpios = <&msmgpio 55 GPIO_ACTIVE_HIGH>;
+		interrupts-extended = <&msmgpio 111 IRQ_TYPE_LEVEL_HIGH>;
+		data-equalization = <0>;
+		clock-equalization = <0>;
+		lvds-data-mapping = "spwg"; /* default for LVDS->LCD converter on MB7 */
+		lvds-data-width = <18>; /* default for LVDS->LCD converter on MB7 */
+		panel = <&lvds_display>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+
+				dsi83_in: endpoint {
+					remote-endpoint = <&mdss_dsi0_out>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+
+				dsi83_out: endpoint {
+					remote-endpoint = <&lvds_con>;
+				};
+			};
+		};
+
+		display-timings {
+			native-mode = <&lcd_timing5>;
+
+			lvds_timing0: hsd100pxn1 {
+				lvds-data-mapping = "spwg";
+				lvds-data-width = <18>;
+				clock-frequency = <65000000>;
+				hactive = <1024>;
+				vactive = <768>;
+				hback-porch = <220>;
+				hfront-porch = <40>;
+				vback-porch = <21>;
+				vfront-porch = <7>;
+				hsync-len = <60>;
+				vsync-len = <10>;
+				de-active = <1>;
+				pixelclk-active = <1>;
+			};
+
+			lvds_timing1: nl12880bc20 {
+				lvds-data-mapping = "jeida";
+				lvds-data-width = <24>;
+				clock-frequency = <71000000>;
+				hactive = <1280>;
+				vactive = <800>;
+				hback-porch = <50>;
+				hsync-len = <60>;
+				hfront-porch = <50>;
+				vback-porch = <5>;
+				vsync-len = <13>;
+				vfront-porch = <5>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <1>;
+			};
+
+			lvds_timing2: ETML101001DKA {
+				lvds-data-mapping = "jeida";
+				lvds-data-width = <24>;
+				/* same as nl12880bc20 */
+				clock-frequency = <71000000>;
+				hactive = <1280>;
+				vactive = <800>;
+				hback-porch = <50>;
+				hsync-len = <60>;
+				hfront-porch = <50>;
+				vback-porch = <5>;
+				vsync-len = <13>;
+				vfront-porch = <5>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <1>;
+			};
+
+			lcd_timing0: VGA {
+				clock-frequency = <25200000>;
+				hactive = <640>;
+				vactive = <480>;
+				hback-porch = <48>;
+				hsync-len = <96>;
+				hfront-porch = <16>;
+				vback-porch = <31>;
+				vsync-len = <2>;
+				vfront-porch = <12>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+
+			lcd_timing1: ETV570 {
+				clock-frequency = <25200000>;
+				hactive = <640>;
+				vactive = <480>;
+				hback-porch = <114>;
+				hsync-len = <30>;
+				hfront-porch = <16>;
+				vback-porch = <32>;
+				vsync-len = <3>;
+				vfront-porch = <10>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+
+			lcd_timing2: ET0350 {
+				clock-frequency = <6413760>;
+				hactive = <320>;
+				vactive = <240>;
+				hback-porch = <34>;
+				hsync-len = <34>;
+				hfront-porch = <20>;
+				vback-porch = <15>;
+				vsync-len = <3>;
+				vfront-porch = <4>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+
+			lcd_timing3: ET0430 {
+				clock-frequency = <9009000>;
+				hactive = <480>;
+				vactive = <272>;
+				hback-porch = <2>;
+				hsync-len = <41>;
+				hfront-porch = <2>;
+				vback-porch = <2>;
+				vsync-len = <10>;
+				vfront-porch = <2>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <1>;
+			};
+
+			lcd_timing4: ET0500 {
+				clock-frequency = <33264000>;
+				hactive = <800>;
+				vactive = <480>;
+				hback-porch = <88>;
+				hsync-len = <128>;
+				hfront-porch = <40>;
+				vback-porch = <33>;
+				vsync-len = <2>;
+				vfront-porch = <10>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+
+			lcd_timing5: ET0700 { /* same as ET0500 */
+				clock-frequency = <33264000>;
+				hactive = <800>;
+				vactive = <480>;
+				hback-porch = <88>;
+				hsync-len = <128>;
+				hfront-porch = <40>;
+				vback-porch = <33>;
+				vsync-len = <2>;
+				vfront-porch = <10>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+
+			lcd_timing6: ETQ570 {
+				clock-frequency = <6596040>;
+				hactive = <320>;
+				vactive = <240>;
+				hback-porch = <38>;
+				hsync-len = <30>;
+				hfront-porch = <30>;
+				vback-porch = <16>;
+				vsync-len = <3>;
+				vfront-porch = <4>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+		};
+	};
+};
+
+#ifdef USE_I2C_GPIO
+&i2c_gpio1 {
+#else
+&blsp_i2c5 {
+#endif
+	sgtl5000: codec@0a {
+		compatible = "fsl,sgtl5000";
+		reg = <0x0a>;
+		#sound-dai-cells = <0>;
+		VDDA-supply = <&regulator_3v3>;
+		VDDIO-supply = <&pm8916_l16>;
+		clocks = <&mclk>;
+		status = "okay";
+	};
+
+	polytouch: polytouch@38 {
+		compatible = "edt,edt-ft5x06";
+		reg = <0x38>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&edt_ft5x06_pins>;
+		interrupts-extended = <&msmgpio 13 IRQ_TYPE_EDGE_FALLING>;
+		reset-gpios = <&msmgpio 12 GPIO_ACTIVE_LOW>;
+		wake-gpios = <&msmgpio 77 GPIO_ACTIVE_HIGH>;
+		wakeup-source;
+		status = "okay";
+	};
+
+	mcp7940x: rtc@0x6f {
+		compatible = "mcp7940x";
+		reg = <0x6f>;
+	};
+};
+
+&lpass {
+	status = "okay";
+};
+
+&mdss_dsi0 {
+	vdda-supply = <&pm8916_l2>;
+	vddio-supply = <&pm8916_l6>;
+	status = "okay";
+
+	port {
+		mdss_dsi0_out: endpoint {
+			remote-endpoint = <&dsi83_in>;
+			data-lanes = <0 1 2 3>;
+		};
+	};
+};
+
+&msmgpio {
+	msmgpio_dsi83: msmgpio-dsi83 {
+		pinmux {
+			pins = "gpio111";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio111";
+			function = "gpio";
+			input-enable;
+			bias-pull-down;
+		};
+	};
+
+	msmgpio_leds: msmgpio-leds {
+		pinmux {
+			pins = "gpio71";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio71";
+			function = "gpio";
+			output-low;
+		};
+	};
+
+	msmgpio_lvds_panel: msmgpio-lvds-panel {
+		pinmux {
+			pins = "gpio25";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio25";
+			function = "gpio";
+			output-high;
+		};
+	};
+
+	backlight_pins: backlight-pins {
+		pinmux {
+			pins = "gpio98";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio98";
+			function = "gpio";
+			output-high;
+		};
+	};
+
+	dsi83_pins: dsi83-pins {
+		pinmux {
+			pins = "gpio55";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio55";
+			output-high;
+		};
+	};
+
+	edt_ft5x06_pins: polytouch-pins {
+		pinmux {
+			pins = "gpio12", "gpio13", "gpio77";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio12", "gpio13", "gpio77";
+			drive-strength = <8>;
+			bias-pull-up;
+		};
+	};
+
+	i2c0_pins: i2c0-pins {
+		pinmux {
+			pins = "gpio53", "gpio54";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio53", "gpio54";
+			drive-strength = <16>;
+			bias-pull-up;
+		};
+	};
+
+#ifndef USE_I2C_GPIO
+	i2c5_default_pins: i2c5-default-pins {
+		pinmux {
+			pins = "gpio18", "gpio19";
+			function = "blsp_i2c5";
+		};
+
+		pinconf {
+			pins = "gpio18", "gpio19";
+			drive-strength = <16>;
+			bias-disable;
+		};
+	};
+#else
+	i2c1_pins: i2c1-pins {
+		pinmux {
+			pins = "gpio18", "gpio19";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio18", "gpio19";
+			drive-strength = <16>;
+			bias-pull-up;
+		};
+	};
+#endif
+	i2c5_sleep_pins: i2c5-sleep-pins {
+		pinmux {
+			pins = "gpio18", "gpio19";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio18", "gpio19";
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+
+	usb_id_pins: usb-id-pins {
+		pinmux {
+			pins = "gpio61";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio61";
+			drive-strength = <8>;
+			input-enable;
+			bias-pull-up;
+		};
+	};
+
+	usb_vbus_pins: usb-vbus-pins {
+		pinmux {
+			pins = "gpio56";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio56";
+			drive-strength = <8>;
+			input-enable;
+			bias-pull-up;
+		};
+	};
+};
+
+&pm8916_0 {
+	spmi_reset: reset@0800 {
+		compatible = "qcom,spmi-reset";
+		reg = <0x800 0x100>;
+		status = "disabled";
+	};
+};
+
+&pm8916_mpps {
+	pm8916_mpp_leds: pm8916-mpp-leds {
+		pinconf {
+			pins = "mpp2", "mpp3";
+			function = "digital";
+			power-source = <PM8916_GPIO_VPH>;
+			output-low;
+		};
+	};
+};
+
+&pm8916_spmi_s2 {
+	regulator-always-on;
+};
+
+&sdhc_1 {
+	/* eMMC */
+	vmmc-supply = <&pm8916_l8>;
+	vqmmc-supply = <&pm8916_l5>;
+
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&sdc1_clk_on &sdc1_cmd_on &sdc1_data_on>;
+	pinctrl-1 = <&sdc1_clk_off &sdc1_cmd_off &sdc1_data_off>;
+	non-removable;
+	status = "okay";
+};
+
+&sdhc_2 {
+	/* SD card slot on baseboard */
+	vmmc-supply = <&pm8916_l16>;
+	/* alternatively, depending on ST16 setting:
+	vmmc-supply = <&pm8916_l11>;
+	*/
+
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&sdc2_clk_on &sdc2_cmd_on &sdc2_data_on &sdc2_cd_on>;
+	pinctrl-1 = <&sdc2_clk_off &sdc2_cmd_off &sdc2_data_off &sdc2_cd_off>;
+	cd-gpios = <&msmgpio 38 GPIO_ACTIVE_LOW>;
+	status = "okay";
+};
+
+&smd_rpm_regulators {
+	vdd_l1_l2_l3-supply = <&pm8916_s3>;
+	vdd_l5-supply = <&pm8916_s3>;
+	vdd_l4_l5_l6-supply = <&pm8916_s4>;
+	vdd_l7-supply = <&pm8916_s4>;
+	vdd_l8-l18-supply = <&regulator_vbat>;
+
+	s1 {
+		regulator-min-microvolt = <375000>;
+		regulator-max-microvolt = <1562000>;
+	};
+
+	s3 {
+		regulator-min-microvolt = <375000>;
+		regulator-max-microvolt = <1562000>;
+	};
+
+	s4 {
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+
+		regulator-always-on;
+		regulator-boot-on;
+	};
+
+	l1 {
+		regulator-min-microvolt = <375000>;
+		regulator-max-microvolt = <1525000>;
+	};
+
+	l2 {
+		regulator-min-microvolt = <375000>;
+		regulator-max-microvolt = <1525000>;
+	};
+
+	l3 {
+		regulator-min-microvolt = <375000>;
+		regulator-max-microvolt = <1525000>;
+	};
+
+	l4 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l5 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l6 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l7 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l8 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l9 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l10 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l11 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l12 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l13 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l14 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l15 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+		regulator-always-on;
+	};
+
+	l16 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l17 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+
+	l18 {
+		regulator-min-microvolt = <1750000>;
+		regulator-max-microvolt = <3337000>;
+	};
+};
+
+&spi3_default {
+	pinmux {
+		function = "blsp_spi3";
+		pins = "gpio8", "gpio9", "gpio11";
+	};
+
+	pinmux_cs {
+		function = "gpio";
+		pins = "gpio10", "gpio120", "gpio69";
+	};
+
+	pinconf {
+		pins = "gpio8", "gpio9", "gpio11";
+		drive-strength = <12>;
+		bias-disable;
+	};
+
+	pinconf_cs {
+		pins = "gpio10", "gpio120", "gpio69";
+		drive-strength = <2>;
+		bias-disable;
+		output-high;
+	};
+};
+
+&spi3_sleep {
+	pinmux {
+		function = "gpio";
+		pins = "gpio8", "gpio9", "gpio10", "gpio11", "gpio120", "gpio69";
+	};
+
+	pinconf {
+		pins = "gpio8", "gpio9", "gpio10", "gpio11", "gpio120", "gpio69";
+		drive-strength = <2>;
+		bias-pull-down;
+	};
+};
+
+&usb_dev {
+	extcon = <&usb_id>, <&usb_id>;
+	status = "disabled";
+};
+
+&usb_host {
+	pinctrl-names = "default";
+	pinctrl-0 = <&usb_vbus_pins>;
+	switch-gpio = <&msmgpio 56 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+};
+
+&usb_otg {
+	compatible = "qcom,usb-8x16-phy";
+	//vddcx-supply = <&pm8916_s1>;
+	extcon = <&usb_id>, <&usb_id>;
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&vidc {
+	status = "okay";
+};
+
+&vidc_rproc {
+	status = "okay";
+};
