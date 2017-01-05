@@ -25,6 +25,13 @@ config DRM_I2C_SIL164
 	  when used in pairs) TMDS transmitters, used in some nVidia
 	  video cards.
 
+config DRM_I2C_SN65DSI83
+	tristate "SN65DSI83 DSI -> LVDS converter"
+	depends on OF && DRM_MIPI_DSI
+	select REGMAP_I2C
+	help
+	  Support for the Texas Instruments SN65DSI83 DSI to LVDS converter.
+
 config DRM_I2C_NXP_TDA998X
 	tristate "NXP Semiconductors TDA998X HDMI encoder"
 	default m if DRM_TILCDC

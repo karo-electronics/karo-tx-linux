@@ -1,0 +1,100 @@
+/*
+ * Texas Instruments SN65DSI83 DSI to LVDS converter driver
+ *
+ * Copyright (C) 2016 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ */
+
+#ifndef __DRM_I2C_SN65DSI83_H__
+#define __DRM_I2C_SN65DSI83_H__
+
+#include <linux/i2c.h>
+#include <linux/regmap.h>
+
+#include <drm/drm_crtc_helper.h>
+#include <drm/drm_mipi_dsi.h>
+
+#define SN65DSI83_REG_CHIPREV(n)	(0x00 + (n))
+
+#define SN65DSI83_REG_RSTCTRL		0x09
+#define RSTCTRL_SOFT_RESET		BIT(0)
+
+#define SN65DSI83_REG_LVDSCTRL		0x0a
+#define LVDSCTRL_PLL_EN_STAT		BIT(7)
+#define LVDSCTRL_LVDS_CLK_RANGE_SHIFT	1
+#define LVDSCTRL_LVDS_CLK_RANGE_MASK	(0x7 << LVDSCTRL_LVDS_CLK_RANGE_SHIFT)
+#define LVDSCTRL_LVDS_CLK_RANGE(n)	(((n) << LVDSCTRL_LVDS_CLK_RANGE_SHIFT) & \
+					LVDSCTRL_LVDS_CLK_RANGE_MASK)
+#define LVDSCTRL_HS_CLK_SRC		BIT(0)
+
+#define SN65DSI83_REG_DSICTRL		0x0b
+#define DSICTRL_DSI_CLK_DIVIDER_SHIFT	3
+#define DSICTRL_DSI_CLK_DIVIDER_MASK	(0x1f << DSICTRL_DSI_CLK_DIVIDER_SHIFT)
+#define DSICTRL_DSI_CLK_DIVIDER(n)	(((n) << DSICTRL_DSI_CLK_DIVIDER_SHIFT) & \
+					DSICTRL_DSI_CLK_DIVIDER_MASK)
+#define DSICTRL_REFCLK_MULTIPLIER_SHIFT	0
+#define DSICTRL_REFCLK_MULTIPLIER_MASK	(0x3 << DSICTRL_REFCLK_MULTIPLIER_SHIFT)
+#define DSICTRL_REFCLK_MULTIPLIER(n)	(((n) << DSICTRL_REFCLK_MULTIPLIER_SHIFT) & \
+					DSICTRL_REFCLK_MULTIPLIER_MASK)
+
+#define SN65DSI83_REG_PLLCTRL		0x0d
+#define PLLCTRL_PLL_EN			BIT(0)
+
+#define SN65DSI83_REG_LVDSCFG0		0x10
+#define SN65DSI83_REG_LVDSCFG1		0x11
+#define SN65DSI83_REG_LVDSCFG2		0x12
+#define SN65DSI83_REG_LVDSCFG3		0x13
+#define SN65DSI83_REG_LVDSCFG4		0x18
+#define SN65DSI83_REG_LVDSCFG5		0x19
+#define SN65DSI83_REG_LVDSCFG6		0x1a
+#define SN65DSI83_REG_LVDSCFG7		0x1b
+
+#define SN65DSI83_REG_LINE_LENGTH_LSB	0x20
+#define SN65DSI83_REG_LINE_LENGTH_MSB	0x21
+#define SN65DSI83_REG_VERT_SIZE_LSB	0x24
+#define SN65DSI83_REG_VERT_SIZE_MSB	0x25
+#define SN65DSI83_REG_SYNC_DELAY_LSB	0x28
+#define SN65DSI83_REG_SYNC_DELAY_MSB	0x29
+#define SN65DSI83_REG_HSYNC_WIDTH_LSB	0x2c
+#define SN65DSI83_REG_HSYNC_WIDTH_MSB	0x2d
+#define SN65DSI83_REG_VSYNC_WIDTH_LSB	0x30
+#define SN65DSI83_REG_VSYNC_WIDTH_MSB	0x31
+#define SN65DSI83_REG_H_BACK_PORCH	0x34
+#define SN65DSI83_REG_V_BACK_PORCH	0x36
+#define SN65DSI83_REG_H_FRONT_PORCH	0x38
+#define SN65DSI83_REG_V_FRONT_PORCH	0x3a
+
+#define SN65DSI83_REG_TEST_PATTERN	0x3c
+#define TEST_PATTERN_ENABLE		BIT(4)
+
+#define SN65DSI83_REG_IRQCTRL		0xe0
+#define IRQCTRL_IRQ_EN			BIT(0)
+
+#define SN65DSI83_REG_IRQEN		0xe1
+#define IRQEN_SYNCH_ERR			BIT(7)
+#define IRQEN_CRC_ERR			BIT(6)
+#define IRQEN_UNC_ECC_ERR		BIT(5)
+#define IRQEN_COR_ECC_ERR		BIT(4)
+#define IRQEN_LLP_ERR			BIT(3)
+#define IRQEN_SOT_BIT_ERR		BIT(2)
+#define IRQEN_PLL_UNLOCK		BIT(0)
+
+#define SN65DSI83_REG_ERRSTAT		0xe5
+#define ERRSTAT_SYNCH_ERR		BIT(7)
+#define ERRSTAT_CRC_ERR			BIT(6)
+#define ERRSTAT_UNC_ECC_ERR		BIT(5)
+#define ERRSTAT_COR_ECC_ERR		BIT(4)
+#define ERRSTAT_LLP_ERR			BIT(3)
+#define ERRSTAT_SOT_BIT_ERR		BIT(2)
+#define ERRSTAT_PLL_UNLOCK		BIT(0)
+
+#endif /* __DRM_I2C_SN65DSI83_H__ */
