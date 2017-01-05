@@ -89,20 +89,17 @@ int mmc_pwrseq_simple_alloc(struct mmc_host *host)
 {
 	struct mmc_pwrseq_simple *pwrseq = to_pwrseq_simple(host->pwrseq);
 	struct device *dev = host->pwrseq->dev;
-	int i, ret = 0;
 
 	pwrseq->ext_clk = clk_get(dev, "ext_clock");
 	if (IS_ERR(pwrseq->ext_clk) &&
 	    PTR_ERR(pwrseq->ext_clk) != -ENOENT) {
 		return PTR_ERR(pwrseq->ext_clk);
-	
 	}
 
 	pwrseq->reset_gpios = gpiod_get_array(dev, "reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(pwrseq->reset_gpios)) {
-		ret = PTR_ERR(pwrseq->reset_gpios);
 		clk_put(pwrseq->ext_clk);
-		return ret;
+		return  PTR_ERR(pwrseq->reset_gpios);
 	}
 
 	return 0;
