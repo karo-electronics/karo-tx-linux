@@ -1307,12 +1307,12 @@ static int dsi_host_detach(struct mipi_dsi_host *host,
 {
 	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
 
-	msm_host->device_node = NULL;
-
 	DBG("id=%d", msm_host->id);
 	if (msm_host->dev && of_drm_find_panel(msm_host->device_node))
 		drm_helper_hpd_irq_event(msm_host->dev);
 
+	of_node_put(msm_host->device_node);
+	msm_host->device_node = NULL;
 	return 0;
 }
 
@@ -1402,7 +1402,6 @@ static int dsi_host_parse_dt(struct msm_dsi_host *msm_host)
 	}
 
 	of_node_put(endpoint);
-	of_node_put(device_node);
 
 	msm_host->device_node = device_node;
 
