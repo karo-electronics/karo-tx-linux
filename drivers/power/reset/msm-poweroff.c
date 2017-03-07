@@ -21,6 +21,7 @@
 #include <linux/module.h>
 #include <linux/reboot.h>
 #include <linux/pm.h>
+#include <asm/system_misc.h>
 
 static void __iomem *msm_ps_hold;
 static int do_msm_restart(struct notifier_block *nb, unsigned long action,
@@ -36,6 +37,11 @@ static struct notifier_block restart_nb = {
 	.notifier_call = do_msm_restart,
 	.priority = 128,
 };
+
+static inline void __do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
+{
+	do_msm_restart(&restart_nb, 0, NULL);
+}
 
 static void do_msm_poweroff(void)
 {
@@ -55,6 +61,7 @@ static int msm_restart_probe(struct platform_device *pdev)
 
 	register_restart_handler(&restart_nb);
 
+	arm_pm_restart = __do_msm_restart;
 	pm_power_off = do_msm_poweroff;
 
 	return 0;
@@ -62,7 +69,7 @@ static int msm_restart_probe(struct platform_device *pdev)
 
 static const struct of_device_id of_msm_restart_match[] = {
 	{ .compatible = "qcom,pshold", },
-	{},
+	{}
 };
 MODULE_DEVICE_TABLE(of, of_msm_restart_match);
 
