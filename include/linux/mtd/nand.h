@@ -1246,6 +1246,8 @@ int onfi_init_data_interface(struct nand_chip *chip,
  */
 static inline bool nand_is_slc(struct nand_chip *chip)
 {
+	WARN(chip->bits_per_cell == 0,
+	     "chip->bits_per_cell is used uninitialized\n");
 	return chip->bits_per_cell == 1;
 }
 
