@@ -89,6 +89,12 @@ struct panel_simple {
 	struct gpio_desc *enable_gpio;
 
 	u32 bus_fmt_override;
+	u32 quirks;
+};
+
+enum {
+	PANEL_QUIRK_PIXDATA_NEGEDGE = BIT(0),
+	PANEL_QUIRK_PIXDATA_POSEDGE = BIT(1),
 };
 
 #define SP_DISPLAY_MODE(freq, ha, hfp, hs, hbp, va, vfp, vs, vbp, vr, flgs) { \
@@ -108,6 +114,15 @@ struct panel_simple {
 static inline struct panel_simple *to_panel_simple(struct drm_panel *panel)
 {
 	return container_of(panel, struct panel_simple, base);
+}
+
+static inline void panel_simple_apply_quirks(struct panel_simple *panel,
+					     struct drm_display_info *info)
+{
+	if (panel->quirks & PANEL_QUIRK_PIXDATA_NEGEDGE)
+		info->bus_flags |= DRM_BUS_FLAG_PIXDATA_NEGEDGE;
+	if (panel->quirks & PANEL_QUIRK_PIXDATA_POSEDGE)
+		info->bus_flags |= DRM_BUS_FLAG_PIXDATA_POSEDGE;
 }
 
 static int panel_simple_get_fixed_modes(struct panel_simple *panel)
@@ -175,6 +190,8 @@ static int panel_simple_get_fixed_modes(struct panel_simple *panel)
 		drm_display_info_set_bus_formats(&connector->display_info,
 						 &panel->desc->bus_format, 1);
 	connector->display_info.bus_flags = panel->desc->bus_flags;
+	if (panel->quirks)
+		panel_simple_apply_quirks(panel, &connector->display_info);
 
 	return num;
 }
@@ -308,6 +325,7 @@ static inline int panel_simple_check_quirks(struct device *dev,
 					    struct panel_simple *p)
 {
 	const char *bus_fmt;
+	u32 clkpol;
 
 	if (of_property_read_string(dev->of_node, "bus-format-override",
 				    &bus_fmt) == 0) {
@@ -328,6 +346,18 @@ static inline int panel_simple_check_quirks(struct device *dev,
 				"Unsupported bus-format-override value: '%s'\n",
 				bus_fmt);
 		return p->bus_fmt_override ? 0 : -EINVAL;
+	}
+
+	if (of_property_read_u32(dev->of_node, "pixelclk-active",
+				 &clkpol) == 0) {
+		if (clkpol & ~1) {
+			dev_err(dev,
+				"Invalid value for pixelclk-active: '%u' (should be <0> or <1>)\n",
+				clkpol);
+			return -EINVAL;
+		}
+		p->quirks |= clkpol ? PANEL_QUIRK_PIXDATA_POSEDGE :
+			PANEL_QUIRK_PIXDATA_NEGEDGE;
 	}
 	return 0;
 }
