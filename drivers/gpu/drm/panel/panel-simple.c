@@ -779,6 +779,22 @@ static const struct panel_desc edt_et0350g0dh6 = {
 	.bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_NEGEDGE,
 };
 
+static const struct drm_display_mode edt_et0430g0dh6_mode =
+	SP_DISPLAY_MODE(9000, 480, 2, 41, 2, 272, 2, 10, 2, 60,
+			DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC);
+
+static const struct panel_desc edt_et0430g0dh6 = {
+	.modes = &edt_et0430g0dh6_mode,
+	.num_modes = 1,
+	.bpc = 6,
+	.size = {
+		.width = 95,
+		.height = 54,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
+	.bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_POSEDGE,
+};
+
 static const struct drm_display_mode edt_et057090dhu_mode =
 	SP_DISPLAY_MODE(25175, 640, 16, 30, 114, 480, 10, 3, 32, 60,
 			DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC);
@@ -1609,6 +1625,9 @@ static const struct of_device_id platform_of_match[] = {
 	}, {
 		.compatible = "edt,et0350g0dh6",
 		.data = &edt_et0350g0dh6,
+	}, {
+		.compatible = "edt,et0430g0dh6",
+		.data = &edt_et0430g0dh6,
 	}, {
 		.compatible = "edt,et057090dhu",
 		.data = &edt_et057090dhu,
