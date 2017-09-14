@@ -411,6 +411,20 @@ static const struct panel_desc ampire_am_480272h3tmqw_t01h = {
 	.bus_format = MEDIA_BUS_FMT_RGB888_1X24,
 };
 
+#define SP_DISPLAY_MODE(freq, ha, hfp, hs, hbp, va, vfp, vs, vbp, vr, flgs) { \
+	.clock = freq,							\
+	.hdisplay = ha,							\
+	.hsync_start = (ha) + (hfp),					\
+	.hsync_end = (ha) + (hfp) + (hs),				\
+	.htotal = (ha) + (hfp) + (hs) + (hbp),				\
+	.vdisplay = (va),						\
+	.vsync_start = (va) + (vfp),					\
+	.vsync_end = (va) + (vfp) + (vs),				\
+	.vtotal = (va) + (vfp) + (vs) + (vbp),				\
+	.vrefresh = vr,							\
+	.flags = flgs,							\
+	}
+
 static const struct drm_display_mode ampire_am800480r3tmqwa1h_mode = {
 	.clock = 33333,
 	.hdisplay = 800,
