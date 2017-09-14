@@ -1234,6 +1234,42 @@ static const struct panel_desc nlt_nl192108ac18_02d = {
 	.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
 };
 
+static const struct drm_display_mode nlt_nl12880bc20_mode =
+	SP_DISPLAY_MODE(71000, 1280, 50, 60, 50, 800, 5, 13, 5, 0, 0);
+
+static const struct panel_desc nlt_nl12880bc20_jeida = {
+	.modes = &nlt_nl12880bc20_mode,
+	.num_modes = 1,
+	.bpc = 8,
+	.size = {
+		.width = 261,
+		.height = 163,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+};
+
+static const struct panel_desc nlt_nl12880bc20_spwg_18 = {
+	.modes = &nlt_nl12880bc20_mode,
+	.num_modes = 1,
+	.bpc = 6,
+	.size = {
+		.width = 261,
+		.height = 163,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
+};
+
+static const struct panel_desc nlt_nl12880bc20_spwg_24 = {
+	.modes = &nlt_nl12880bc20_mode,
+	.num_modes = 1,
+	.bpc = 8,
+	.size = {
+		.width = 261,
+		.height = 163,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+};
+
 static const struct drm_display_mode nvd_9128_mode =
 	SP_DISPLAY_MODE(29500, 800, 130, 98, 0, 480, 10, 50, 0, 0, 0);
 
@@ -1706,6 +1742,15 @@ static const struct of_device_id platform_of_match[] = {
 	}, {
 		.compatible = "nlt,nl192108ac18-02d",
 		.data = &nlt_nl192108ac18_02d,
+	}, {
+		.compatible = "nlt,nl12880bc20-jeida",
+		.data = &nlt_nl12880bc20_jeida,
+	}, {
+		.compatible = "nlt,nl12880bc20-spwg-18",
+		.data = &nlt_nl12880bc20_spwg_18,
+	}, {
+		.compatible = "nlt,nl12880bc20-spwg-24",
+		.data = &nlt_nl12880bc20_spwg_24,
 	}, {
 		.compatible = "nvd,9128",
 		.data = &nvd_9128,
