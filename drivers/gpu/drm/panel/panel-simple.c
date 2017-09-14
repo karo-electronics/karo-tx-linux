@@ -87,6 +87,8 @@ struct panel_simple {
 	struct i2c_adapter *ddc;
 
 	struct gpio_desc *enable_gpio;
+
+	u32 bus_fmt_override;
 };
 
 #define SP_DISPLAY_MODE(freq, ha, hfp, hs, hbp, va, vfp, vs, vbp, vr, flgs) { \
@@ -165,7 +167,11 @@ static int panel_simple_get_fixed_modes(struct panel_simple *panel)
 	connector->display_info.bpc = panel->desc->bpc;
 	connector->display_info.width_mm = panel->desc->size.width;
 	connector->display_info.height_mm = panel->desc->size.height;
-	if (panel->desc->bus_format)
+
+	if (panel->bus_fmt_override)
+		drm_display_info_set_bus_formats(&connector->display_info,
+						 &panel->bus_fmt_override, 1);
+	else if (panel->desc->bus_format)
 		drm_display_info_set_bus_formats(&connector->display_info,
 						 &panel->desc->bus_format, 1);
 	connector->display_info.bus_flags = panel->desc->bus_flags;
@@ -298,6 +304,34 @@ static int panel_simple_get_timings(struct drm_panel *panel,
 	return p->desc->num_timings;
 }
 
+static inline int panel_simple_check_quirks(struct device *dev,
+					    struct panel_simple *p)
+{
+	const char *bus_fmt;
+
+	if (of_property_read_string(dev->of_node, "bus-format-override",
+				    &bus_fmt) == 0) {
+		if (strcmp(bus_fmt, "rgb24") == 0)
+			p->bus_fmt_override = MEDIA_BUS_FMT_RGB888_1X24;
+		else if (strcmp(bus_fmt, "rgb666") == 0)
+			p->bus_fmt_override = MEDIA_BUS_FMT_RGB666_1X18;
+		else if (strcmp(bus_fmt, "rgb565") == 0)
+			p->bus_fmt_override = MEDIA_BUS_FMT_RGB565_1X16;
+		else if (strcmp(bus_fmt, "spwg-18") == 0)
+			p->bus_fmt_override = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG;
+		else if (strcmp(bus_fmt, "spwg-24") == 0)
+			p->bus_fmt_override = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG;
+		else if (strcmp(bus_fmt, "jeida-24") == 0)
+			p->bus_fmt_override = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA;
+		else
+			dev_err(dev,
+				"Unsupported bus-format-override value: '%s'\n",
+				bus_fmt);
+		return p->bus_fmt_override ? 0 : -EINVAL;
+	}
+	return 0;
+}
+
 static const struct drm_panel_funcs panel_simple_funcs = {
 	.disable = panel_simple_disable,
 	.unprepare = panel_simple_unprepare,
@@ -352,6 +386,10 @@ static int panel_simple_probe(struct device *dev, const struct panel_desc *desc)
 			goto free_backlight;
 		}
 	}
+
+	err = panel_simple_check_quirks(dev, panel);
+	if (err)
+		goto free_ddc;
 
 	drm_panel_init(&panel->base);
 	panel->base.dev = dev;

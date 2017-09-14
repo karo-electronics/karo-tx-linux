@@ -7,6 +7,8 @@ Optional properties:
 - ddc-i2c-bus: phandle of an I2C controller used for DDC EDID probing
 - enable-gpios: GPIO pin to enable or disable the panel
 - backlight: phandle of the backlight device attached to the panel
+- bus-format-override: override the bus_format setting of the panel's
+  display_mode settings
 
 Example:
 
