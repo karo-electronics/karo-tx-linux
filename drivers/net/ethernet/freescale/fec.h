@@ -523,6 +523,11 @@ struct fec_enet_private {
 
 	int	dev_id;
 
+	int	reset_gpio;
+	int	phy_reset_duration;
+	int	phy_post_delay;
+	int	reset_active_high;
+
 	/* Phylib and MDIO interface */
 	struct	mii_bus *mii_bus;
 	int	mii_timeout;
