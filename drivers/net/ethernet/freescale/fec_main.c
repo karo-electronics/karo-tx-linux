@@ -3294,19 +3294,16 @@ fec_enet_get_queue_num(struct platform_device *pdev, int *num_tx, int *num_rx)
 	of_property_read_u32(np, "fsl,num-rx-queues", num_rx);
 
 	if (*num_tx < 1 || *num_tx > FEC_ENET_MAX_TX_QS) {
-		dev_warn(&pdev->dev, "Invalid num_tx(=%d), fall back to 1\n",
+		dev_warn(&pdev->dev, "Invalid fsl,num-tx-queues value %d; fall back to 1\n",
 			 *num_tx);
 		*num_tx = 1;
-		return;
 	}
 
 	if (*num_rx < 1 || *num_rx > FEC_ENET_MAX_RX_QS) {
-		dev_warn(&pdev->dev, "Invalid num_rx(=%d), fall back to 1\n",
+		dev_warn(&pdev->dev, "Invalid fsl,num-rx-queues value %d; fall back to 1\n",
 			 *num_rx);
 		*num_rx = 1;
-		return;
 	}
-
 }
 
 static int
