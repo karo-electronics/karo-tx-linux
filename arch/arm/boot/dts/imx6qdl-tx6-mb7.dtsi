@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Lothar Waßmann <LW@KARO-electronics.de>
+ * Copyright 2017 Lothar Waßmann <LW@KARO-electronics.de>
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -39,48 +39,67 @@
  *     OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/dts-v1/;
-#include "imx6q.dtsi"
-#include "imx6qdl-tx6.dtsi"
-#include "imx6qdl-tx6-lcd.dtsi"
-
 / {
-	model = "Ka-Ro electronics TX6Q-1020 Module";
-	compatible = "karo,imx6q-tx6q", "fsl,imx6q";
+	backlight0 {
+		pwms = <&pwm1 0 500000 PWM_POLARITY_INVERTED>;
+		turn-on-delay-ms = <35>;
+		power-supply = <&reg_lcd1_pwr>;
+	};
+
+	backlight1 {
+		pwms = <&pwm2 0 500000 PWM_POLARITY_INVERTED>;
+		turn-on-delay-ms = <35>;
+		power-supply = <&reg_lcd1_pwr>;
+	};
+
+	lcd-panel {
+		compatible = "edt,et057090dhu";
+		bus-format-override = "rgb24";
+		pixelclk-active = <0>;
+	};
+
+	lvds0-panel {
+		compatible = "edt,etml1010g0dka";
+		bus-format-override = "spwg-18";
+		pixelclk-active = <0>;
+	};
+
+	lvds1-panel {
+		compatible = "edt,etml1010g0dka";
+		bus-format-override = "spwg-18";
+		pixelclk-active = <0>;
+	};
+
+	/delete-node/ sound;
+};
+
+&can1 {
+	status = "disabled";
+};
+
+&can2 {
+	xceiver-supply = <&reg_3v3>;
 };
 
 &ds1339 {
+	/*
+	 * The backup voltage of the module internal RTC is not wired
+	 * by default on the MB7, so disable that RTC chip.
+	 */
 	status = "disabled";
 };
 
-&gpmi {
-	status = "disabled";
-};
-
-&ipu2 {
-	status = "disabled";
-};
-
-&usdhc4 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usdhc4>;
-	bus-width = <4>;
-	non-removable;
-	no-1-8-v;
-	fsl,wp-controller;
-	status = "okay";
-};
-
-&iomuxc {
-	pinctrl_usdhc4: usdhc4grp {
-		fsl,pins = <
-			MX6QDL_PAD_SD4_CMD__SD4_CMD		0x070b1
-			MX6QDL_PAD_SD4_CLK__SD4_CLK		0x070b1
-			MX6QDL_PAD_SD4_DAT0__SD4_DATA0		0x070b1
-			MX6QDL_PAD_SD4_DAT1__SD4_DATA1		0x070b1
-			MX6QDL_PAD_SD4_DAT2__SD4_DATA2		0x070b1
-			MX6QDL_PAD_SD4_DAT3__SD4_DATA3		0x070b1
-			MX6QDL_PAD_NANDF_ALE__SD4_RESET		0x0b0b1
-		>;
+&i2c3 {
+	rtc: mcp7940x@6f {
+		compatible = "microchip,mcp7940x";
+		reg = <0x6f>;
 	};
+};
+
+&sgtl5000 {
+	status = "disabled";
+};
+
+&reg_lcd0_pwr {
+	status = "disabled";
 };

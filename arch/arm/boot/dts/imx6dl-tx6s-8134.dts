@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017 Lothar Waßmann <LW@KARO-electronics.de>
+ * Copyright 2016-2017 Lothar Waßmann <LW@KARO-electronics.de>
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -40,47 +40,31 @@
  */
 
 /dts-v1/;
-#include "imx6q.dtsi"
+#include "imx6dl.dtsi"
 #include "imx6qdl-tx6.dtsi"
-#include "imx6qdl-tx6-lcd.dtsi"
+#include "imx6qdl-tx6-lvds.dtsi"
 
 / {
-	model = "Ka-Ro electronics TX6Q-1020 Module";
-	compatible = "karo,imx6q-tx6q", "fsl,imx6q";
+	model = "Ka-Ro electronics TX6S-8134 Module";
+	compatible = "karo,imx6dl-tx6dl", "fsl,imx6dl";
+
+	cpus {
+		/delete-node/ cpu@1;
+	};
 };
 
 &ds1339 {
 	status = "disabled";
 };
 
-&gpmi {
-	status = "disabled";
-};
-
-&ipu2 {
-	status = "disabled";
-};
-
-&usdhc4 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usdhc4>;
-	bus-width = <4>;
-	non-removable;
-	no-1-8-v;
-	fsl,wp-controller;
-	status = "okay";
-};
-
-&iomuxc {
-	pinctrl_usdhc4: usdhc4grp {
-		fsl,pins = <
-			MX6QDL_PAD_SD4_CMD__SD4_CMD		0x070b1
-			MX6QDL_PAD_SD4_CLK__SD4_CLK		0x070b1
-			MX6QDL_PAD_SD4_DAT0__SD4_DATA0		0x070b1
-			MX6QDL_PAD_SD4_DAT1__SD4_DATA1		0x070b1
-			MX6QDL_PAD_SD4_DAT2__SD4_DATA2		0x070b1
-			MX6QDL_PAD_SD4_DAT3__SD4_DATA3		0x070b1
-			MX6QDL_PAD_NANDF_ALE__SD4_RESET		0x0b0b1
-		>;
-	};
+&pinctrl_usdhc1 {
+	fsl,pins = <
+		MX6QDL_PAD_SD1_CMD__SD1_CMD		0x070b1
+		MX6QDL_PAD_SD1_CLK__SD1_CLK		0x070b1
+		MX6QDL_PAD_SD1_DAT0__SD1_DATA0		0x070b1
+		MX6QDL_PAD_SD1_DAT1__SD1_DATA1		0x070b1
+		MX6QDL_PAD_SD1_DAT2__SD1_DATA2		0x070b1
+		MX6QDL_PAD_SD1_DAT3__SD1_DATA3		0x070b1
+		MX6QDL_PAD_SD3_CMD__GPIO7_IO02		0x170b0 /* SD1 CD */
+	>;
 };
