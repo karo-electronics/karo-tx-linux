@@ -488,8 +488,14 @@ dtb-$(CONFIG_SOC_IMX6UL) += \
 	imx6ul-pico-hobbit.dtb \
 	imx6ul-tx6ul-0010.dtb \
 	imx6ul-tx6ul-0011.dtb \
-	imx6ul-tx6ul-mainboard.dtb \
-	imx6ull-14x14-evk.dtb
+	imx6ul-txul-5010-mainboard.dtb \
+	imx6ul-txul-5010-mb7.dtb \
+	imx6ul-txul-5011-mainboard.dtb \
+	imx6ul-txul-5011-mb7.dtb \
+	imx6ull-14x14-evk.dtb \
+	imx6ull-txul-8013.dtb \
+	imx6ull-txul-8013-mainboard.dtb \
+	imx6ull-txul-8013-mb7.dtb
 dtb-$(CONFIG_SOC_IMX7D) += \
 	imx7d-cl-som-imx7.dtb \
 	imx7d-colibri-eval-v3.dtb \
