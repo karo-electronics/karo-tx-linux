@@ -23,6 +23,7 @@
 #include <linux/pwm_backlight.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
+#include <linux/delay.h>
 
 struct pwm_bl_data {
 	struct pwm_device	*pwm;
@@ -35,6 +36,7 @@ struct pwm_bl_data {
 	struct gpio_desc	*enable_gpio;
 	unsigned int		scale;
 	bool			legacy;
+	int			turn_on_delay_ms;
 	int			(*notify)(struct device *,
 					  int brightness);
 	void			(*notify_after)(struct device *,
@@ -50,6 +52,19 @@ static void pwm_backlight_power_on(struct pwm_bl_data *pb, int brightness)
 	if (pb->enabled)
 		return;
 
+	pwm_enable(pb->pwm);
+
+	if (pb->turn_on_delay_ms > 0) {
+		dev_dbg(pb->dev, "Sleeping %u..%uµs\n",
+			pb->turn_on_delay_ms * 1000,
+			pb->turn_on_delay_ms * 1100);
+		if (pb->turn_on_delay_ms > 20)
+			msleep(pb->turn_on_delay_ms);
+		else
+			usleep_range(pb->turn_on_delay_ms * 1000,
+			     pb->turn_on_delay_ms * 1100);
+	}
+
 	err = regulator_enable(pb->power_supply);
 	if (err < 0)
 		dev_err(pb->dev, "failed to enable power supply\n");
@@ -57,7 +72,6 @@ static void pwm_backlight_power_on(struct pwm_bl_data *pb, int brightness)
 	if (pb->enable_gpio)
 		gpiod_set_value_cansleep(pb->enable_gpio, 1);
 
-	pwm_enable(pb->pwm);
 	pb->enabled = true;
 }
 
@@ -107,8 +121,9 @@ static int pwm_backlight_update_status(struct backlight_device *bl)
 		duty_cycle = compute_duty_cycle(pb, brightness);
 		pwm_config(pb->pwm, duty_cycle, pb->period);
 		pwm_backlight_power_on(pb, brightness);
-	} else
+	} else {
 		pwm_backlight_power_off(pb);
+	}
 
 	if (pb->notify_after)
 		pb->notify_after(pb->dev, brightness);
@@ -263,9 +278,9 @@ static int pwm_backlight_probe(struct platform_device *pdev)
 				pb->scale = data->levels[i];
 
 		pb->levels = data->levels;
-	} else
+	} else {
 		pb->scale = data->max_brightness;
-
+	}
 	pb->notify = data->notify;
 	pb->notify_after = data->notify_after;
 	pb->check_fb = data->check_fb;
@@ -327,6 +342,8 @@ static int pwm_backlight_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "unable to request PWM\n");
 		goto err_alloc;
 	}
+
+	of_property_read_u32(node, "turn-on-delay-ms", &pb->turn_on_delay_ms);
 
 	dev_dbg(&pdev->dev, "got pwm for backlight\n");
 

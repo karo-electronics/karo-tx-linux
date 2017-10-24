@@ -17,6 +17,10 @@ Optional properties:
                "pwms" property (see PWM binding[0])
   - enable-gpios: contains a single GPIO specifier for the GPIO which enables
                   and disables the backlight (see GPIO binding[1])
+  - turn-on-delay-ms: delay in milliseconds between configuring the PWM
+		  and switching PWM on. This may be required to eliminate
+		  flicker when switching the PWM on after it has been
+		  disabled.
 
 [0]: Documentation/devicetree/bindings/pwm/pwm.txt
 [1]: Documentation/devicetree/bindings/gpio/gpio.txt
