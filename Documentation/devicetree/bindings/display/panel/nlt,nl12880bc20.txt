@@ -1,0 +1,14 @@
+NLT Technologies Ltd. NL12880BC20 12.1" WXGA LVDS panel
+
+Note: The output format of the display can be configured via two
+      control pins (FRC, MSL). Depending on the strapping of those
+      pins the appropriate 'compatible' string has to be used.
+
+Required properties:
+- compatible: should be one of:
+   - "nlt,nl12880bc20-spwg-18" for SPWG (18bpp) FRC: Low or open, MSL: Low or open
+   - "nlt,nl12880bc20-spwg-24" for SPWG (24bpp) FRC: High, MSL: High
+   - "nlt,nl12880bc20-jeida" for JEIDA          FRC: High, MSL: High
+
+This binding is compatible with the simple-panel binding, which is specified
+in simple-panel.txt in this directory.
