@@ -386,6 +386,10 @@ dtb-$(CONFIG_SOC_IMX6Q) += \
 	imx6dl-tx6s-8034-mb7.dtb \
 	imx6dl-tx6s-8035.dtb \
 	imx6dl-tx6s-8035-mb7.dtb \
+	imx6dl-tx6s-8134.dtb \
+	imx6dl-tx6s-8134-mb7.dtb \
+	imx6dl-tx6s-8135.dtb \
+	imx6dl-tx6s-8135-mb7.dtb \
 	imx6dl-tx6u-801x.dtb \
 	imx6dl-tx6u-80xx-mb7.dtb \
 	imx6dl-tx6u-8033.dtb \
