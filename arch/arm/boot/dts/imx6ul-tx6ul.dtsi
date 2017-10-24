@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Lothar Waßmann <LW@KARO-electronics.de>
+ * Copyright 2015-2017 Lothar Waßmann <LW@KARO-electronics.de>
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -357,8 +357,11 @@
 };
 
 &i2c2 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "gpio";
 	pinctrl-0 = <&pinctrl_i2c2>;
+	pinctrl-1 = <&pinctrl_i2c2_gpio>;
+	scl-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
+	sda-gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
 	clock-frequency = <400000>;
 	status = "okay";
 
@@ -814,6 +817,13 @@
 		fsl,pins = <
 			MX6UL_PAD_GPIO1_IO00__I2C2_SCL		0x4001b8b1
 			MX6UL_PAD_GPIO1_IO01__I2C2_SDA		0x4001b8b1
+		>;
+	};
+
+	pinctrl_i2c2_gpio: i2c2-gpiogrp {
+		fsl,pins = <
+			MX6UL_PAD_GPIO1_IO00__GPIO1_IO00	0x4001b0b9
+			MX6UL_PAD_GPIO1_IO01__GPIO1_IO01	0x4001b0b9
 		>;
 	};
 
