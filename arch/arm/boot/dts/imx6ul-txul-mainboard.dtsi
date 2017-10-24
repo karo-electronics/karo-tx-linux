@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Lothar Waßmann <LW@KARO-electronics.de>
+ * Copyright 2017 Lothar Waßmann <LW@KARO-electronics.de>
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -39,21 +39,13 @@
  *     OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/dts-v1/;
-#include "imx6ul.dtsi"
-#include "imx6ul-tx6ul.dtsi"
-
 / {
-	model = "Ka-Ro electronics TXUL-0010 Module on TXUL Mainboard";
-	compatible = "karo,imx6ul-tx6ul", "fsl,imx6ul";
-
 	aliases {
 		lcdif_24bit_pins_a = &pinctrl_disp0_3;
-		mmc0 = &usdhc1;
-		/delete-property/ mmc1;
 		serial2 = &uart3;
 		serial4 = &uart5;
 	};
+
 	/delete-node/ sound;
 };
 
@@ -94,7 +86,6 @@
 			pinctrl-0 = <&pinctrl_etnphy0_int>;
 			interrupt-parent = <&gpio5>;
 			interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
-			interrupts-extended = <&gpio5 5 IRQ_TYPE_EDGE_FALLING>;
 			status = "okay";
 		};
 
@@ -105,7 +96,6 @@
 			pinctrl-0 = <&pinctrl_etnphy1_int>;
 			interrupt-parent = <&gpio4>;
 			interrupts = <27 IRQ_TYPE_EDGE_FALLING>;
-			interrupts-extended = <&gpio4 27 IRQ_TYPE_EDGE_FALLING>;
 			status = "okay";
 		};
 	};
@@ -133,7 +123,7 @@
 	pinctrl-0 = <&pinctrl_disp0_3>;
 };
 
-&reg_usbotg_vbus{
+&reg_usbotg_vbus {
 	status = "disabled";
 };
 
