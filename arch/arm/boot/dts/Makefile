@@ -395,6 +395,8 @@ dtb-$(CONFIG_SOC_IMX6Q) += \
 	imx6dl-tx6u-8033.dtb \
 	imx6dl-tx6u-8033-mb7.dtb \
 	imx6dl-tx6u-811x.dtb \
+	imx6dl-tx6u-8133.dtb \
+	imx6dl-tx6u-8133-mb7.dtb \
 	imx6dl-tx6u-81xx-mb7.dtb \
 	imx6dl-udoo.dtb \
 	imx6dl-wandboard.dtb \
