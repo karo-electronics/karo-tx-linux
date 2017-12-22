@@ -63,12 +63,15 @@
 
 &fec1 {
 	pinctrl-0 = <&pinctrl_enet1 &pinctrl_etnphy0_rst>;
+	pinctrl-1 = <&pinctrl_enet1_sleep &pinctrl_etnphy0_rst_sleep>;
 	/delete-node/ mdio;
 };
 
 &fec2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_enet2 &pinctrl_enet2_mdio &pinctrl_etnphy1_rst>;
+	pinctrl-1 = <&pinctrl_enet2_sleep &pinctrl_enet2_mdio_sleep
+		     &pinctrl_etnphy1_rst_sleep>;
 	phy-mode = "rmii";
 	phy-reset-gpios = <&gpio4 28 GPIO_ACTIVE_LOW>;
 	phy-supply = <&reg_3v3_etn>;
@@ -221,6 +224,13 @@
 		fsl,pins = <
 			MX6UL_PAD_GPIO1_IO07__ENET2_MDC		0x0b0b0
 			MX6UL_PAD_GPIO1_IO06__ENET2_MDIO	0x1b0b0
+		>;
+	};
+
+	pinctrl_enet2_mdio_sleep: enet2-mdio-sleepgrp {
+		fsl,pins = <
+			MX6UL_PAD_GPIO1_IO07__GPIO1_IO07	0x038b0
+			MX6UL_PAD_GPIO1_IO06__GPIO1_IO06	0x038b0
 		>;
 	};
 
