@@ -887,6 +887,15 @@ static int stm32_rproc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static void stm32_rproc_shutdown(struct platform_device *pdev)
+{
+	struct rproc *rproc = platform_get_drvdata(pdev);
+
+	if (atomic_read(&rproc->power) > 0)
+		dev_warn(&pdev->dev,
+			 "Warning: remote fw is still running with possible side effect!!!\n");
+}
+
 static int stm32_rproc_suspend(struct device *dev)
 {
 	struct rproc *rproc = dev_get_drvdata(dev);
@@ -915,6 +924,7 @@ static DEFINE_SIMPLE_DEV_PM_OPS(stm32_rproc_pm_ops,
 static struct platform_driver stm32_rproc_driver = {
 	.probe = stm32_rproc_probe,
 	.remove = stm32_rproc_remove,
+	.shutdown = stm32_rproc_shutdown,
 	.driver = {
 		.name = "stm32-rproc",
 		.pm = pm_ptr(&stm32_rproc_pm_ops),
