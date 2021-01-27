@@ -258,7 +258,7 @@ static void add_dpu_bliteng_components(struct device *dev,
 			found = false;
 		} else {
 			if (num_dpu >= ARRAY_SIZE(dpu)) {
-				dev_err(dev, "The number of found dpu is greater than max [%ld].\n",
+				dev_err(dev, "The number of found dpu is greater than max [%zd].\n",
 					ARRAY_SIZE(dpu));
 				of_node_put(parent);
 				of_node_put(port);
