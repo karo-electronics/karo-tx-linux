@@ -181,6 +181,8 @@ source "drivers/gpu/drm/bridge/nwl-dsi/Kconfig"
 
 source "drivers/gpu/drm/bridge/cadence/Kconfig"
 
+source "drivers/gpu/drm/bridge/sn65dsi83/Kconfig"
+
 source "drivers/gpu/drm/bridge/synopsys/Kconfig"
 
 config DRM_ITE_IT6263
