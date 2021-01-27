@@ -399,8 +399,6 @@ static const struct dsim_hblank_par *sec_mipi_dsim_get_hblank_par(const char *na
 		size   = ARRAY_SIZE(hblank_4lanes);
 		break;
 	default:
-		pr_err("No hblank data for mode %s with %d lanes\n",
-		       name, lanes);
 		return NULL;
 	}
 
