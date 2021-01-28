@@ -266,6 +266,12 @@ static struct mx6s_fmt formats[] = {
 		.pixelformat	= V4L2_PIX_FMT_SBGGR8,
 		.mbus_code	= MEDIA_BUS_FMT_SBGGR8_1X8,
 		.bpp		= 1,
+	}, {
+		.name		= "RAWRGB8 (SRGGB8)",
+		.fourcc		= V4L2_PIX_FMT_SRGGB8,
+		.pixelformat	= V4L2_PIX_FMT_SRGGB8,
+		.mbus_code	= MEDIA_BUS_FMT_SRGGB8_1X8,
+		.bpp		= 1,
 	}
 };
 
@@ -838,6 +844,7 @@ static int mx6s_configure_csi(struct mx6s_csi_dev *csi_dev)
 	switch (csi_dev->fmt->pixelformat) {
 	case V4L2_PIX_FMT_YUV32:
 	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SRGGB8:
 		width = pix->width;
 		break;
 	case V4L2_PIX_FMT_UYVY:
@@ -869,6 +876,7 @@ static int mx6s_configure_csi(struct mx6s_csi_dev *csi_dev)
 			cr18 |= BIT_MIPI_DATA_FORMAT_YUV422_8B;
 			break;
 		case V4L2_PIX_FMT_SBGGR8:
+		case V4L2_PIX_FMT_SRGGB8:
 			cr18 |= BIT_MIPI_DATA_FORMAT_RAW8;
 			break;
 		default:
