@@ -347,7 +347,7 @@ static struct platform_driver imx_dwmac_driver = {
 	.probe  = imx_dwmac_probe,
 	.remove = imx_dwmac_remove,
 	.driver = {
-		.name           = "imx-dwmac",
+		.name		= "imx-dwmac",
 		.pm		= &stmmac_pltfr_pm_ops,
 		.of_match_table = imx_dwmac_match,
 	},
