@@ -20,11 +20,14 @@
 #include <linux/regmap.h>
 #include <linux/slab.h>
 #include <linux/stmmac.h>
+#include <linux/regulator/consumer.h>
 
 #include "stmmac_platform.h"
 
+#ifdef CONFIG_IMX_SCU_SOC
 #include <dt-bindings/firmware/imx/rsrc.h>
 #include <linux/firmware/imx/sci.h>
+#endif
 
 #define GPR_ENET_QOS_INTF_MODE_MASK	GENMASK(21, 16)
 #define GPR_ENET_QOS_INTF_SEL_MII	(0x0 << 16)
@@ -51,10 +54,11 @@
 struct imx_dwmac_ops {
 	u32 addr_width;
 	u32 flags;
-	bool mac_rgmii_txclk_auto_adj;
+	bool mac_txclk_auto_adj;
 
 	int (*fix_soc_reset)(void *priv, void __iomem *ioaddr);
 	int (*set_intf_mode)(struct plat_stmmacenet_data *plat_dat);
+	int (*set_stop_mode)(struct plat_stmmacenet_data *plat_dat, bool is_en);
 	void (*fix_mac_speed)(void *priv, unsigned int speed, unsigned int mode);
 };
 
@@ -70,6 +74,7 @@ struct imx_priv_data {
 
 	const struct imx_dwmac_ops *ops;
 	struct plat_stmmacenet_data *plat_dat;
+	struct regulator *phy_supply;
 };
 
 static int imx8mp_set_intf_mode(struct plat_stmmacenet_data *plat_dat)
@@ -109,6 +114,7 @@ imx8dxl_set_intf_mode(struct plat_stmmacenet_data *plat_dat)
 	int ret = 0;
 
 	/* TBD: depends on imx8dxl scu interfaces to be upstreamed */
+#ifdef CONFIG_IMX_SCU_SOC
 	struct imx_sc_ipc *ipc_handle;
 	int val;
 
@@ -139,9 +145,24 @@ imx8dxl_set_intf_mode(struct plat_stmmacenet_data *plat_dat)
 				      IMX_SC_C_INTF_SEL, val >> 16);
 	ret |= imx_sc_misc_set_control(ipc_handle, IMX_SC_R_ENET_1,
 				       IMX_SC_C_CLK_GEN_EN, 0x1);
+#endif
 
 	return ret;
 }
+
+static int
+imx8mp_set_stop_mode(struct plat_stmmacenet_data *plat_dat, bool is_en)
+{
+	/* TBD */
+	return 0;
+};
+
+static int
+imx8dxl_set_stop_mode(struct plat_stmmacenet_data *plat_dat, bool is_en)
+{
+	/* TBD */
+	return 0;
+};
 
 static int imx93_set_intf_mode(struct plat_stmmacenet_data *plat_dat)
 {
@@ -219,11 +240,25 @@ static int imx_dwmac_clks_config(void *priv, bool enabled)
 
 static int imx_dwmac_init(struct platform_device *pdev, void *priv)
 {
-	struct plat_stmmacenet_data *plat_dat;
 	struct imx_priv_data *dwmac = priv;
+	struct plat_stmmacenet_data *plat_dat = dwmac->plat_dat;
 	int ret;
 
-	plat_dat = dwmac->plat_dat;
+	if (dwmac->phy_supply) {
+		ret = regulator_enable(dwmac->phy_supply);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Failed to enable 'phy-supply' regulator: %d\n",
+				ret);
+			return ret;
+		}
+	}
+
+	if (dwmac->ops->set_stop_mode) {
+		ret = dwmac->ops->set_stop_mode(plat_dat, false);
+		if (ret)
+			return ret;
+	}
 
 	if (dwmac->ops->set_intf_mode) {
 		ret = dwmac->ops->set_intf_mode(plat_dat);
@@ -236,19 +271,30 @@ static int imx_dwmac_init(struct platform_device *pdev, void *priv)
 
 static void imx_dwmac_exit(struct platform_device *pdev, void *priv)
 {
-	/* nothing to do now */
+	struct imx_priv_data *dwmac = priv;
+	struct plat_stmmacenet_data *plat_dat = dwmac->plat_dat;
+	int ret;
+
+	if (dwmac->ops->set_stop_mode) {
+		ret = dwmac->ops->set_stop_mode(plat_dat, true);
+		if (ret) {
+			dev_err(dwmac->dev, "enter stop mode failed %d\n", ret);
+			return;
+		}
+	}
+
+	if (dwmac->phy_supply)
+		regulator_disable(dwmac->phy_supply);
 }
 
 static void imx_dwmac_fix_speed(void *priv, unsigned int speed, unsigned int mode)
 {
-	struct plat_stmmacenet_data *plat_dat;
 	struct imx_priv_data *dwmac = priv;
+	struct plat_stmmacenet_data *plat_dat = dwmac->plat_dat;
 	unsigned long rate;
 	int err;
 
-	plat_dat = dwmac->plat_dat;
-
-	if (dwmac->ops->mac_rgmii_txclk_auto_adj ||
+	if (dwmac->ops->mac_txclk_auto_adj ||
 	    (plat_dat->mac_interface == PHY_INTERFACE_MODE_RMII) ||
 	    (plat_dat->mac_interface == PHY_INTERFACE_MODE_MII))
 		return;
@@ -371,6 +417,16 @@ imx_dwmac_parse_dt(struct imx_priv_data *dwmac, struct device *dev)
 		}
 	}
 
+	dwmac->phy_supply = devm_regulator_get_optional(dev, "phy");
+	if (IS_ERR(dwmac->phy_supply)) {
+		if (PTR_ERR(dwmac->phy_supply) == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+
+		dev_info(dev, "no phy-supply regulator found: %ld\n",
+			 PTR_ERR(dwmac->phy_supply));
+		dwmac->phy_supply = NULL;
+	}
+
 	return err;
 }
 
@@ -445,7 +501,10 @@ err_drv_probe:
 	imx_dwmac_exit(pdev, plat_dat->bsp_priv);
 err_dwmac_init:
 	imx_dwmac_clks_config(dwmac, false);
+	if (dwmac->phy_supply)
+		regulator_disable(dwmac->phy_supply);
 err_clks_config:
+err_dma_mask:
 err_parse_dt:
 err_match_data:
 	stmmac_remove_config_dt(pdev, plat_dat);
@@ -454,20 +513,22 @@ err_match_data:
 
 static struct imx_dwmac_ops imx8mp_dwmac_data = {
 	.addr_width = 34,
-	.mac_rgmii_txclk_auto_adj = false,
+	.mac_txclk_auto_adj = false,
 	.set_intf_mode = imx8mp_set_intf_mode,
+	.set_stop_mode = imx8mp_set_stop_mode,
 	.flags = STMMAC_FLAG_HWTSTAMP_CORRECT_LATENCY,
 };
 
 static struct imx_dwmac_ops imx8dxl_dwmac_data = {
 	.addr_width = 32,
-	.mac_rgmii_txclk_auto_adj = true,
+	.mac_txclk_auto_adj = true,
 	.set_intf_mode = imx8dxl_set_intf_mode,
+	.set_stop_mode = imx8dxl_set_stop_mode,
 };
 
 static struct imx_dwmac_ops imx93_dwmac_data = {
 	.addr_width = 32,
-	.mac_rgmii_txclk_auto_adj = true,
+	.mac_txclk_auto_adj = true,
 	.set_intf_mode = imx93_set_intf_mode,
 	.fix_soc_reset = imx_dwmac_mx93_reset,
 	.fix_mac_speed = imx93_dwmac_fix_speed,
