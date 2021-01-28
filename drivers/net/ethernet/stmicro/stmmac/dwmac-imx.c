@@ -93,7 +93,7 @@ static int imx8mp_set_intf_mode(struct plat_stmmacenet_data *plat_dat)
 		      GPR_ENET_QOS_RGMII_EN;
 		break;
 	default:
-		pr_debug("imx dwmac doesn't support %d interface\n",
+		pr_err("imx dwmac doesn't support %d interface\n",
 			 plat_dat->mac_interface);
 		return -EINVAL;
 	}
@@ -130,7 +130,7 @@ imx8dxl_set_intf_mode(struct plat_stmmacenet_data *plat_dat)
 		val = GPR_ENET_QOS_INTF_SEL_RGMII;
 		break;
 	default:
-		pr_debug("imx dwmac doesn't support %d interface\n",
+		pr_err("imx dwmac doesn't support %d interface\n",
 			 plat_dat->mac_interface);
 		return -EINVAL;
 	}
