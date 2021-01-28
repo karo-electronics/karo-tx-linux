@@ -5231,9 +5231,10 @@ int stmmac_dvr_probe(struct device *device,
 		/* MDIO bus Registration */
 		ret = stmmac_mdio_register(ndev);
 		if (ret < 0) {
-			dev_err(priv->device,
-				"%s: MDIO bus (id: %d) registration failed",
-				__func__, priv->plat->bus_id);
+			if (ret != -EPROBE_DEFER)
+				dev_err(priv->device,
+					"%s: MDIO bus (id: %d) registration failed, err=%d",
+					__func__, priv->plat->bus_id, ret);
 			goto error_mdio_register;
 		}
 	}
