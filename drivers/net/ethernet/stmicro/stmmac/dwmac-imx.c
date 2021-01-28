@@ -21,6 +21,7 @@
 #include <linux/regmap.h>
 #include <linux/slab.h>
 #include <linux/stmmac.h>
+#include <linux/regulator/consumer.h>
 
 #include "stmmac_platform.h"
 
@@ -55,6 +56,7 @@ struct imx_priv_data {
 
 	const struct imx_dwmac_ops *ops;
 	struct plat_stmmacenet_data *plat_dat;
+	struct regulator *phy_supply;
 };
 
 static int imx8mp_set_intf_mode(struct plat_stmmacenet_data *plat_dat)
@@ -148,9 +150,19 @@ static int imx_dwmac_init(struct platform_device *pdev, void *priv)
 	struct plat_stmmacenet_data *plat_dat = dwmac->plat_dat;
 	int ret;
 
+	if (dwmac->phy_supply) {
+		ret = regulator_enable(dwmac->phy_supply);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Failed to enable 'phy-supply' regulator: %d\n",
+				ret);
+			return ret;
+		}
+	}
+
 	ret = pm_runtime_get_sync(&pdev->dev);
 	if (ret < 0)
-		return ret;
+		goto disable_phy_supply;
 
 	ret = clk_prepare_enable(dwmac->clk_mem);
 	if (ret) {
@@ -185,6 +197,9 @@ clk_tx_en_failed:
 	clk_disable_unprepare(dwmac->clk_mem);
 clk_mem_failed:
 	pm_runtime_put_noidle(&pdev->dev);
+disable_phy_supply:
+	if (dwmac->phy_supply)
+		regulator_disable(dwmac->phy_supply);
 	return ret;
 }
 
@@ -206,6 +221,8 @@ static void imx_dwmac_exit(struct platform_device *pdev, void *priv)
 		clk_disable_unprepare(dwmac->clk_tx);
 	clk_disable_unprepare(dwmac->clk_mem);
 	pm_runtime_put(&pdev->dev);
+	if (dwmac->phy_supply)
+		regulator_disable(dwmac->phy_supply);
 }
 
 static void imx_dwmac_fix_speed(void *priv, unsigned int speed)
@@ -278,6 +295,16 @@ imx_dwmac_parse_dt(struct imx_priv_data *dwmac, struct device *dev)
 			dev_err(dev, "Can't get intf mode reg offset (%d)\n", err);
 			return err;
 		}
+	}
+
+	dwmac->phy_supply = devm_regulator_get_optional(dev, "phy");
+	if (IS_ERR(dwmac->phy_supply)) {
+		if (PTR_ERR(dwmac->phy_supply) == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+
+		dev_info(dev, "no phy-supply regulator found: %ld\n",
+			 PTR_ERR(dwmac->phy_supply));
+		dwmac->phy_supply = NULL;
 	}
 
 	return err;
