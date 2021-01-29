@@ -29,7 +29,7 @@ static int send_cmds(struct i2c_client *client, const char *buf, size_t size)
 {
 	int ret;
 
-	LOG_INFO("%s\n", buf);
+	print_hex_dump_bytes("send_cmds: ", DUMP_PREFIX_OFFSET, buf, size);
 
 	ret = i2c_master_send(client, buf, size);
 	if (ret <= 0) {
@@ -37,7 +37,7 @@ static int send_cmds(struct i2c_client *client, const char *buf, size_t size)
 		return ret ?: -ECOMM;
 	}
 	usleep_range(20000, 21000);
-	return 0;
+	return ret;
 }
 
 static int recv_cmds(struct i2c_client *client, char *buf, int size)
@@ -50,7 +50,7 @@ static int recv_cmds(struct i2c_client *client, char *buf, int size)
 		return ret ?: -ECOMM;
 	}
 	usleep_range(20000, 21000);
-	return 0;
+	return ret;
 }
 
 static int init_cmd_check(struct rpi_display_data *mcu_data)
@@ -62,7 +62,7 @@ static int init_cmd_check(struct rpi_display_data *mcu_data)
 	if (ret < 0)
 		goto error;
 
-	recv_cmds(mcu_data->client, buf, 1);
+	ret = recv_cmds(mcu_data->client, buf, 1);
 	if (ret < 0)
 		goto error;
 
@@ -100,6 +100,8 @@ int rpi_display_screen_power_up(void)
 	ret = send_cmds(g_mcu_data->client, buf, sizeof(buf));
 	if (ret <= 0)
 		return ret ?: -ENOMSG;
+	// without sleep next command won't be send
+	usleep_range(20000, 21000);
 
 	buf[0] = 0x81;
 	buf[1] = 0x04;
