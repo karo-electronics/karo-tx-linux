@@ -3897,6 +3897,30 @@ static const struct panel_desc tianma_tm070rvhg71 = {
 	.connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 
+static const struct display_timing tianma_tm101jvhg32_timing = {
+	.pixelclock = { 62600000, 68200000, 78100000, },
+	.hactive = { 1280, 1280, 1280, },
+	.hfront_porch = { 15, 64, 159, },
+	.hback_porch = { 5, 4, 100, },
+	.hsync_len = { 20, 1, 164, },
+	.vactive = { 800, 800, 800, },
+	.vfront_porch = { 3, 40, 99, },
+	.vback_porch = { 2, 1, 61, },
+	.vsync_len = { 1, 1, 128, },
+	.flags = DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW,
+};
+
+static const struct panel_desc tianma_tm101jvhg32 = {
+	.timings = &tianma_tm101jvhg32_timing,
+	.num_timings = 1,
+	.bpc = 8,
+	.size = {
+		.width = 217,
+		.height = 136,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB888_1X24,
+};
+
 static const struct drm_display_mode ti_nspire_cx_lcd_mode[] = {
 	{
 		.clock = 10000,
@@ -4553,6 +4577,9 @@ static const struct of_device_id platform_of_match[] = {
 	}, {
 		.compatible = "tianma,tm070rvhg71",
 		.data = &tianma_tm070rvhg71,
+	}, {
+		.compatible = "tianma,tm101jvhg32",
+		.data = &tianma_tm101jvhg32,
 	}, {
 		.compatible = "ti,nspire-cx-lcd-panel",
 		.data = &ti_nspire_cx_lcd_panel,
