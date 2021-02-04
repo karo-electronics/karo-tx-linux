@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2021 Markus Bauer <mb@karo-electronics.de>
+ *
+ */
+
+#include "imx8m-qs8m-raspi-display.dtsi"
+#include "imx8mm-qsxm-mm60-qsbase3-basler.dtsi"
+
+/ {
+	model = "Ka-Ro electronics QSXM-MM60 (NXP i.MX8MM) module on QSBASE3 baseboard with Basler Camera and Raspi Display";
+};

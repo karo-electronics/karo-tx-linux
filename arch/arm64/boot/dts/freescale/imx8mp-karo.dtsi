@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2020 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+#include "imx8mp.dtsi"
+
+/ {
+	aliases {
+		ethernet0 = &eqos;
+		ethernet1 = &fec;
+	};
+};
+
+&A53_0 {
+	/delete-property/ cpu-idle-states;
+};
+
+&A53_1 {
+	/delete-property/ cpu-idle-states;
+};
+
+&A53_2 {
+	/delete-property/ cpu-idle-states;
+};
+
+&A53_3 {
+	/delete-property/ cpu-idle-states;
+};
+
+&clk {
+	init-on-array = <IMX8MP_CLK_HSIO_ROOT>;
+};
+
+&pcie {
+	bus-range = <0x00 0xff>;
+	ext_osc = <1>;
+	clocks = <&clk IMX8MP_CLK_HSIO_AXI_DIV>,
+		 <&clk IMX8MP_CLK_PCIE_AUX>,
+		 <&clk IMX8MP_CLK_PCIE_PHY>,
+		 <&clk IMX8MP_CLK_PCIE_ROOT>;
+	clock-names = "pcie", "pcie_aux", "pcie_phy", "pcie_bus";
+	assigned-clocks = <&clk IMX8MP_CLK_HSIO_AXI_SRC>,
+			  <&clk IMX8MP_CLK_PCIE_AUX>;
+	assigned-clock-parents = <&clk IMX8MP_SYS_PLL2_500M>,
+				 <&clk IMX8MP_SYS_PLL2_50M>;
+	reserved-region = <&rpmsg_reserved>;
+};
+
+&pcie_phy {
+	ext_osc = <1>;
+};
+
+&resmem {
+	/* overwrite freescale cma setting since it's not allocatable on qsxp */
+	linux,cma {
+		size = <0 0x1e000000>;
+		/delete-property/ alloc-ranges;
+	};
+
+	rpmsg_reserved: rpmsg@0x55800000 {
+		no-map;
+		reg = <0 0x55800000 0 0x800000>;
+	};
+};
+
+&usb3_1 {
+	status = "okay";
+};
+
+&usb3_phy1 {
+	status = "okay";
+};
+
+&usb_dwc3_1 {
+	dr_mode = "host";
+	status = "okay";
+};

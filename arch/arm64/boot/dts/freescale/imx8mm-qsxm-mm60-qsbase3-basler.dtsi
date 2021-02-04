@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2021 Markus Bauer <MB@KARO-electronics.de>
+ *
+ */
+
+&mipi_csi_1 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	port {
+		mipi1_sensor_ep: endpoint@1 {
+			remote-endpoint = <&basler_camera_mipi1_ep>;
+
+			/* If the following entries are changed, then
+			 * the entries in the basler_camera_mipi1_ep node
+			 * need to updated too. */
+			/* On the i.mx8mmini NXP uses data-lanes
+			 * other than expected by the kernel.
+			 * On the imx8mmini the entry data-lanes
+			 * must contain the number of data lanes. */
+			data-lanes = <4>;
+			clock-lanes = <0>;
+			link-frequencies = /bits/ 64 <496000000>;
+
+			csis-hs-settle = <13>;
+			csis-clk-settle = <2>;
+			csis-wclk;
+		};
+
+		csi1_mipi_ep: endpoint@2 {
+			remote-endpoint = <&csi1_ep>;
+		};
+	};
+};
+
+&csi1_bridge {
+	fsl,mipi-mode;
+	dma-coherent;
+	bsl,dma-invalidate;
+	status = "okay";
+
+	port {
+		csi1_ep: endpoint {
+			remote-endpoint = <&csi1_mipi_ep>;
+		};
+	};
+};
+
+&i2c3 {
+	basler_camera_mipi1: basler_camera_mipi@36 {
+		compatible = "basler,basler-camera";
+		reg = <0x36>;
+		status = "okay";
+
+		port {
+			basler_camera_mipi1_ep: endpoint@1 {
+				remote-endpoint = <&mipi1_sensor_ep>;
+
+				/* IMPORTANT: The following three entries needs to be held
+				 * in sync with the information stored in the mipi1_sensor_ep node. */
+				data-lanes = <1 2 3 4>;
+				clock-lanes = <0>;
+				link-frequencies = /bits/ 64 <496000000>;
+			};
+		};
+	};
+};
+
+&vpu_g1 {
+	status = "okay";
+};
+
+&vpu_g2 {
+	status = "okay";
+};
+
+&vpu_h1 {
+	status = "okay";
+};
