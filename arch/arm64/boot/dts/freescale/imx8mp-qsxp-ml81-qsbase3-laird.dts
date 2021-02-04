@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2020 Markus Bauer <mb@karo-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+#include "imx8mp-qsxp-ml81.dts"
+#include "imx8mp-qsxp-ml81-qsbase3.dtsi"
+#include "imx8mp-qsxp-ml81-qsbase3-laird.dtsi"
+
+/ {
+	model = "Ka-Ro electronics QSXP-ML81 (NXP i.MX8MP) module on QSBASE3 baseboard with Laird WiFi";
+};
