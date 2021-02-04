@@ -60,6 +60,18 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mm-evk-8mic-revE.dtb imx8mm-evk-8mic-swpdm.dtb \
 			  imx8mm-evk-iqaudio-dacplus.dtb imx8mm-evk-iqaudio-dacpro.dtb imx8mm-evk-hifiberry-dacplus.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mm-ab2.dtb imx8mm-ab2-m4.dtb imx8mm-ddr4-ab2.dtb imx8mm-ddr4-ab2-m4.dtb \
 			  imx8mm-ddr4-ab2-revb.dtb imx8mm-ddr4-ab2-m4-revb.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mm-qs8m-mq00-qsbase2-cam.dtb imx8mm-qs8m-mq00-qsbase2-dsi83-cam.dtb \
+			  imx8mm-qs8m-mq00-qsbase2-dsi83.dtb imx8mm-qs8m-mq00-qsbase2-raspi-display-cam.dtb \
+			  imx8mm-qs8m-mq00-qsbase2-raspi-display.dtb imx8mm-qs8m-mq00-qsbase2.dtb \
+			  imx8mm-qs8m-mq00.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mm-qsxm-mm60-qsbase3-laird.dtb imx8mm-qsxm-mm60-qsbase3-ml-kit.dtb \
+			  imx8mm-qsxm-mm60-qsbase3-raspi-display.dtb imx8mm-qsxm-mm60-qsbase3.dtb \
+			  imx8mm-qsxm-mm60.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mm-tx8m-1610-mipi-mb.dtb imx8mm-tx8m-1610-tx4etml0500.dtb \
+			  imx8mm-tx8m-1610.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mm-tx8m-1620-lvds-mb.dtb imx8mm-tx8m-1620.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mn-qs8m-nd00-qsbase2-raspi-display.dtb imx8mn-qs8m-nd00-qsbase2.dtb \
+			  imx8mn-qs8m-nd00.dtb imx8mn-tx8m-nd00-mipi-mb.dtb imx8mn-tx8m-nd00.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mn-evk.dtb imx8mn-evk-rm67191.dtb imx8mn-ddr4-evk.dtb imx8mn-ddr4-evk-ak5558.dtb \
 			  imx8mn-ddr4-evk-rm67191.dtb imx8mn-ddr4-evk-rpmsg.dtb imx8mn-ddr4-evk-usd-wifi.dtb \
 			  imx8mn-evk-ak5558.dtb imx8mn-evk-rpmsg.dtb imx8mn-evk-8mic-revE.dtb imx8mn-ddr3l-evk.dtb \
@@ -73,7 +85,10 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk.dtb imx8mp-evk-root.dtb imx8mp-evk-inmate.d
 			  imx8mp-evk-dsp.dtb imx8mp-evk-ov2775.dtb imx8mp-evk-basler.dtb imx8mp-evk-pcie-ep.dtb \
 			  imx8mp-evk-spdif-lb.dtb imx8mp-evk-dsp-lpa.dtb imx8mp-evk-ov2775-ov5640.dtb \
 			  imx8mp-evk-basler-ov5640.dtb imx8mp-evk-dual-ov2775.dtb
-dtb-$(CONFIG_ARCH_MXC) += imx8mp-ddr4-evk.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mp-qsxp-ml81-qsbase3-dsi83.dtb imx8mp-qsxp-ml81-qsbase3-ml-kit.dtb \
+			  imx8mp-qsxp-ml81-qsbase3-raspi-display.dtb imx8mp-qsxp-ml81-qsbase3.dtb \
+			  imx8mp-qsxp-ml81.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mp-tx8p-ml81-lvds-mb.dtb imx8mp-tx8p-ml81-mb7.dtb imx8mp-tx8p-ml81.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk.dtb imx8mq-evk-rpmsg.dtb imx8mq-evk-pcie1-m2.dtb imx8mq-evk-usd-wifi.dtb \
 			  imx8mq-evk-usdhc2-m2.dtb imx8mq-evk-pcie-ep.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk-ak4497.dtb imx8mq-evk-audio-tdm.dtb imx8mq-evk-pdm.dtb
