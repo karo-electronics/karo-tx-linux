@@ -215,6 +215,15 @@ config DRM_TOSHIBA_TC358767
 	help
 	  Toshiba TC358767 eDP bridge chip driver.
 
+config DRM_TOSHIBA_TC358867XBG
+	tristate "Toshiba TC358867XBG DSI to DPI bridge"
+	depends on OF
+	select DRM_MIPI_DSI
+	select DRM_KMS_HELPER
+	select DRM_PANEL
+	help
+	  Toshiba TC358867XBG DSI to DPI bridge driver.
+
 config DRM_TOSHIBA_TC358768
 	tristate "Toshiba TC358768 MIPI DSI bridge"
 	depends on OF
