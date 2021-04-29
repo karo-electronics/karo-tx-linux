@@ -67,7 +67,7 @@ static int init_cmd_check(struct rpi_display_data *mcu_data)
 		goto error;
 
 	LOG_INFO("recv_cmds: 0x%02X\n", buf[0]);
-	if (buf[0] != 0xC3) {
+	if (buf[0] != 0xC3 && buf[0] != 0xDE) {
 		LOG_ERR("received unexpected msg: %02x\n", buf[0]);
 		ret = -EINVAL;
 		goto error;
