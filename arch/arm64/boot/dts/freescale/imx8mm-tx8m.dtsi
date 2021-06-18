@@ -83,7 +83,6 @@
 	phy-supply = <&reg_3v3_etn>;
 	phy-reset-gpios = <&gpio1 29 GPIO_ACTIVE_LOW>;
 	phy-reset-duration = <10>;
-	phy-reset-post-delay = <20>;
 	assigned-clock-parents = <&clk IMX8MM_SYS_PLL1_266M>,
 				 <&clk IMX8MM_SYS_PLL2_100M>,
 				 <&clk IMX8MM_SYS_PLL2_50M>;
@@ -97,6 +96,7 @@
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <0>;
+			clocks = <&clk IMX8MM_CLK_ENET_PHY_REF>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_etnphy_int>;
 			interrupt-parent = <&gpio1>;

@@ -111,6 +111,7 @@
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <0>;
+			clocks = <&clk IMX8MN_CLK_ENET_PHY_REF>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_etnphy_int>;
 			interrupt-parent = <&gpio1>;
