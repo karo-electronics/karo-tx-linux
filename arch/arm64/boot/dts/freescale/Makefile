@@ -64,7 +64,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mm-evk-8mic-revE.dtb imx8mm-evk-8mic-swpdm.dtb \
 dtb-$(CONFIG_ARCH_MXC) += imx8mm-ddr4-evk.dtb imx8mm-ddr4-evk-rm67191.dtb imx8mm-ddr4-evk-revb.dtb \
 			  imx8mm-ddr4-evk-revb-rm67191.dtb imx8mm-ddr4-evk-root.dtb \
 			  imx8mm-ddr4-evk-pcie-ep.dtb \
-			  imx8mm-ddr4-evk-inmate.dtb \
+			  imx8mm-ddr4-evk-inmate.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mm-var-som-symphony.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mm-tx8m-1610.dtb \
 			  imx8mm-tx8m-1610-mipi-mb.dtb \
