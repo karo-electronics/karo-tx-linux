@@ -140,10 +140,6 @@
 	status = "okay";
 };
 
-&mix_gpu_ml {
-	status = "okay";
-};
-
 &pwm1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm1>;
@@ -158,23 +154,8 @@
 };
 
 &usdhc2 {
-	pinctrl-0 = <&pinctrl_usdhc2>;
-	voltage-ranges = <3300 3300>;
 	/delete-property/ cd-gpios;
 	no-mmc;
-	status = "okay";
-};
-
-&vpu_g1 {
-	status = "okay";
-};
-
-&vpu_g2 {
-	status = "okay";
-};
-
-&vpu_vc8000e {
-	status = "okay";
 };
 
 &iomuxc {
@@ -210,12 +191,6 @@
 	pinctrl_lvds: lvdsgrp {
 		fsl,pins = <
 			MX8MP_IOMUXC_I2C4_SCL__GPIO5_IO20		0x146
-		>;
-	};
-
-	pinctrl_wdog: wdoggrp {
-		fsl,pins = <
-			MX8MP_IOMUXC_GPIO1_IO02__WDOG1_WDOG_B		0x140
 		>;
 	};
 };

@@ -178,10 +178,6 @@
 	status = "okay";
 };
 
-&mix_gpu_ml {
-	status = "okay";
-};
-
 &pwm1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm1>;
@@ -196,23 +192,8 @@
 };
 
 &usdhc2 {
-	pinctrl-0 = <&pinctrl_usdhc2>;
-	voltage-ranges = <3300 3300>;
 	/delete-property/ cd-gpios;
 	no-mmc;
-	status = "okay";
-};
-
-&vpu_g1 {
-	status = "okay";
-};
-
-&vpu_g2 {
-	status = "okay";
-};
-
-&vpu_vc8000e {
-	status = "okay";
 };
 
 &iomuxc {
