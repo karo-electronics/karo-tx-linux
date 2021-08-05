@@ -7,128 +7,16 @@
 /dts-v1/;
 
 #include "imx8mn.dtsi"
-#include <dt-bindings/input/input.h>
+#include "imx8m-qs8m.dtsi"
 
 / {
 	model = "Ka-Ro electronics QS8M-ND00 (NXP i.MX8MN) module";
 	compatible = "karo,imx8mn-qs8m", "fsl,imx8mn";
 
-	aliases {
-		usbotg = &usbotg1;
-		i2c0 = &i2c1;
-		i2c1 = &i2c2;
-		i2c2 = &i2c3;
-	};
-
-	chosen {
-		stdout-path = "serial0:115200";
-	};
-
 	memory@40000000 {
 		device_type = "memory";
 		reg = <0x0 0x40000000 0 0x20000000>;
 	};
-
-	reg_3v3: regulator-3v3 {
-		compatible = "regulator-fixed";
-		regulator-name = "3V3";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		regulator-always-on;
-	};
-
-	thermal-zones {
-		cpu-thermal {
-			cooling-maps {
-				map0 {
-					cooling-device =
-						<&A53_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-						<&A53_1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
-				};
-			};
-		};
-	};
-};
-
-&ecspi1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_ecspi1>;
-	status = "okay";
-};
-
-&ecspi2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_ecspi2>;
-	status = "okay";
-};
-
-&i2c2 {
-	pinctrl-names = "default", "gpio";
-	pinctrl-0 = <&pinctrl_i2c2>;
-	pinctrl-1 = <&pinctrl_i2c2_gpio>;
-	clock-frequency = <400000>;
-	status = "okay";
-};
-
-&i2c3 {
-	clock-frequency = <400000>;
-	pinctrl-names = "default", "gpio";
-	pinctrl-0 = <&pinctrl_i2c3>;
-	pinctrl-1 = <&pinctrl_i2c3_gpio>;
-	status = "okay";
-};
-
-&i2c4 {
-	clock-frequency = <400000>;
-	pinctrl-names = "default", "gpio";
-	pinctrl-0 = <&pinctrl_i2c4>;
-	pinctrl-1 = <&pinctrl_i2c4_gpio>;
-	status = "okay";
-};
-
-&uart1 { /* console */
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart1>;
-	status = "okay";
-};
-
-&uart2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart2 &pinctrl_uart2_rtscts>;
-	uart-has-rtscts;
-	status = "okay";
-};
-
-&uart3 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart3>;
-	status = "okay";
-};
-
-&usbotg1 {
-	dr_mode = "device";
-	status = "okay";
-};
-
-&usdhc1 { /* eMMC */
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc1>;
-	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
-	voltage-ranges = <3300 3300>;
-	bus-width = <8>;
-	non-removable;
-	status = "okay";
-};
-
-&usdhc2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usdhc2 &pinctrl_usdhc2_cd>;
-	bus-width = <4>;
-	cd-gpios = <&gpio2 12 GPIO_ACTIVE_LOW>;
-	no-1-8-v;
-	fsl,wp-controller;
-	status = "okay";
 };
 
 &wdog1 {
@@ -141,8 +29,6 @@
 	pinctrl-0 = <&pinctrl_hog>;
 
 	pinctrl_hog: hoggrp {
-		fsl,pins = <
-		>;
 	};
 
 	pinctrl_ecspi1: ecspi1grp {
