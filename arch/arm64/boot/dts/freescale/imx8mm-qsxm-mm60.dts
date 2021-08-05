@@ -23,7 +23,7 @@
 	};
 
 	chosen {
-		stdout-path = &uart1;
+		stdout-path = "serial0:115200";
 	};
 
 	clocks {
