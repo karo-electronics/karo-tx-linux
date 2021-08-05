@@ -20,15 +20,6 @@
 		serial2 = &uart1;
 	};
 
-	reg_3v3: regulator-3v3 {
-		compatible = "regulator-fixed";
-		regulator-name = "3v3";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		vin-supply = <&buck4_reg>;
-		regulator-always-on;
-	};
-
 	reg_3v3_etn: regulator-3v3-etn {
 		compatible = "regulator-fixed";
 		regulator-name = "3v3-etn";
@@ -47,6 +38,8 @@
 };
 
 &ldo5_reg {
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
 	regulator-boot-on;
 	regulator-always-on;
 };

@@ -115,6 +115,11 @@
 	status = "disabled";
 };
 
+&reg_vdd_soc {
+	/* PCIe requires a minimum vdd soc voltage of 0.805V */
+	regulator-min-microvolt = <805000>;
+};
+
 &iomuxc {
 	pinctrl_can0: can0grp {
 		fsl,pins = <

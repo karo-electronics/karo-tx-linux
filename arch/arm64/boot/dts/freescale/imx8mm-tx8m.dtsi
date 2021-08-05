@@ -13,18 +13,6 @@
 	aliases {
 		usb-host = &usbotg2;
 	};
-
-	reg_3v3_etn: regulator-3v3-etn {
-		compatible = "regulator-fixed";
-		regulator-name = "3V3_ETN";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_etnphy_power>;
-		gpio = <&gpio1 23 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		vin-supply = <&reg_3v3>;
-	};
 };
 
 &fec1 {
@@ -75,6 +63,18 @@
 	pinctrl-0 = <&pinctrl_usbh_vbus &pinctrl_usbh_oc>;
 	over-current-active-low;
 	status = "okay";
+};
+
+&vpu_g1_pd {
+	power-supply = <&reg_vdd_dram>;
+};
+
+&vpu_g2_pd {
+	power-supply = <&reg_vdd_dram>;
+};
+
+&vpu_h1_pd {
+	power-supply = <&reg_vdd_dram>;
 };
 
 &iomuxc {

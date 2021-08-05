@@ -21,22 +21,6 @@
 		device_type = "memory";
 		reg = <0x0 0x40000000 0 0x40000000>;
 	};
-
-	reg_1v8: regulator-1v8 {
-		compatible = "regulator-fixed";
-		regulator-name = "1V8";
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <1800000>;
-		regulator-always-on;
-	};
-
-	reg_3v3: regulator-3v3 {
-		compatible = "regulator-fixed";
-		regulator-name = "3V3";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		regulator-always-on;
-	};
 };
 
 &usbotg2 {

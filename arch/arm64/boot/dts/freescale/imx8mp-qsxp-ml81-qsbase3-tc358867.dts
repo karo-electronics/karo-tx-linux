@@ -19,7 +19,7 @@
 	dac@60 {
 		compatible = "microchip,mcp4725";
 		reg = <0x60>;
-		vdd-supply = <&reg_3v3>;
+		vdd-supply = <&reg_vdd_3v3>;
 	};
 };
 
