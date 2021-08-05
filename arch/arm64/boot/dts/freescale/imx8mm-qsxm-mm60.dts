@@ -68,6 +68,7 @@
 &A53_0 {
 	cpu-supply = <&reg_vdd_arm>;
 	arm-supply = <&reg_vdd_arm>;
+	/delete-property/ cpu-idle-states;
 };
 
 &i2c1 {
