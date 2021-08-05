@@ -7,40 +7,11 @@
 /dts-v1/;
 
 #include "imx8mm.dtsi"
+#include "imx8m-tx8m.dtsi"
 
 / {
 	aliases {
 		usb-host = &usbotg2;
-		usbotg = &usbotg1;
-		i2c0 = &i2c1;
-		i2c1 = &i2c2;
-		i2c2 = &i2c3;
-	};
-
-	chosen {
-		stdout-path = "serial0:115200";
-	};
-
-	memory@40000000 {
-		device_type = "memory";
-		reg = <0x0 0x40000000 0 0x40000000>;
-	};
-
-	owire {
-		compatible = "w1-gpio";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_owire>;
-		gpios = <&gpio3 25 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-		linux,open-drain;
-	};
-
-	reg_3v3: regulator-3v3 {
-		compatible = "regulator-fixed";
-		regulator-name = "3V3";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		regulator-always-on;
-		vin-supply = <&buck6_reg>;
 	};
 
 	reg_3v3_etn: regulator-3v3-etn {
@@ -54,11 +25,6 @@
 		enable-active-high;
 		vin-supply = <&reg_3v3>;
 	};
-};
-
-&A53_0 {
-	cpu-supply = <&buck2_reg>;
-	arm-supply = <&buck2_reg>;
 };
 
 &fec1 {
@@ -97,218 +63,17 @@
 	};
 };
 
-&i2c1 {
-	pinctrl-names = "default", "gpio";
-	pinctrl-0 = <&pinctrl_i2c1>;
-	pinctrl-1 = <&pinctrl_i2c1_gpio>;
-	clock-frequency = <400000>;
-	scl-gpios = <&gpio5 14 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-	sda-gpios = <&gpio5 15 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-	status = "okay";
-
-	pmic: pmic@4b {
-		reg = <0x4b>;
-		compatible = "rohm,bd71847";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_pmic>;
-		interrupt-parent = <&gpio1>;
-		interrupts = <3 IRQ_TYPE_EDGE_FALLING>;
-
-		gpo {
-			rohm,drv = <0x0C>;	/* 0b0000_1100 all gpios with CMOS output mode */
-		};
-
-		regulators {
-			buck1_reg: BUCK1 {
-				regulator-name = "VDD_SOC_0V8";
-				regulator-min-microvolt = <700000>;
-				regulator-max-microvolt = <1300000>;
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-ramp-delay = <1250>;
-			};
-
-			buck2_reg: BUCK2 {
-				regulator-name = "VDD_ARM_0V9";
-				regulator-min-microvolt = <700000>;
-				regulator-max-microvolt = <1300000>;
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-ramp-delay = <1250>;
-				rohm,dvs-run-voltage = <1000000>;
-				rohm,dvs-idle-voltage = <900000>;
-			};
-
-			buck3_reg: BUCK3 {
-				// BUCK5 in datasheet
-				regulator-name = "VDD_DRAM&PU_0V9";
-				regulator-min-microvolt = <700000>;
-				regulator-max-microvolt = <1350000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			buck6_reg: BUCK4 {
-				// BUCK6 in datasheet
-				regulator-name = "VDD_3V3";
-				regulator-min-microvolt = <3000000>;
-				regulator-max-microvolt = <3300000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			buck7_reg: BUCK5 {
-				// BUCK7 in datasheet
-				regulator-name = "VDD_1V8";
-				regulator-min-microvolt = <1605000>;
-				regulator-max-microvolt = <1995000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			buck8_reg: BUCK6 {
-				// BUCK8 in datasheet
-				regulator-name = "NVCC_DRAM";
-				regulator-min-microvolt = <800000>;
-				regulator-max-microvolt = <1400000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			ldo1_reg: LDO1 {
-				regulator-name = "NVCC_SNVS_1V8";
-				regulator-min-microvolt = <1600000>;
-				regulator-max-microvolt = <1900000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			ldo2_reg: LDO2 {
-				regulator-name = "VDD_SNVS_0V8";
-				regulator-min-microvolt = <800000>;
-				regulator-max-microvolt = <900000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			ldo3_reg: LDO3 {
-				regulator-name = "VDDA_1V8";
-				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <3300000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			ldo4_reg: LDO4 {
-				regulator-name = "VDD_PHY_0V9";
-				regulator-min-microvolt = <900000>;
-				regulator-max-microvolt = <1800000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			ldo5_reg: LDO5 {
-				regulator-name = "LDO5";
-				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <3300000>;
-			};
-
-			ldo6_reg: LDO6 {
-				regulator-name = "VDD_PHY_1V2";
-				regulator-min-microvolt = <900000>;
-				regulator-max-microvolt = <1800000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-		};
-	};
-};
-
-&i2c2 {
-	clock-frequency = <400000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c2>;
-	scl-gpios = <&gpio5 16 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-	sda-gpios = <&gpio5 17 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-	status = "okay";
-};
-
-&i2c3 {
-	clock-frequency = <400000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c3>;
-	scl-gpios = <&gpio5 18 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-	sda-gpios = <&gpio5 19 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-//	status = "okay";
-};
-
-&mu {
-	status = "okay";
-};
-
-&uart1 { /* console */
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart1 &pinctrl_uart1_rtscts>;
-	uart-has-rtscts;
-	status = "okay";
-};
-
-&uart2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart2 &pinctrl_uart2_rtscts>;
-	uart-has-rtscts;
-	status = "okay";
-};
-
-&uart3 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart3 &pinctrl_uart3_rtscts>;
-	uart-has-rtscts;
-	status = "okay";
-};
-
 &usbotg1 {
-	dr_mode = "device";
-	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usbotg_vbus &pinctrl_usbotg_oc>;
+	over-current-active-low;
 };
 
 &usbotg2 {
 	dr_mode = "host";
-	status = "okay";
-};
-
-&usdhc1 { /* eMMC */
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc1>;
-	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
-	bus-width = <8>;
-	vmmc-supply = <&reg_3v3>;
-	vqmmc-supply = <&buck7_reg>;
-	non-removable;
-	status = "okay";
-};
-
-&usdhc2 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usdhc2 &pinctrl_usdhc2_cd>;
-	bus-width = <4>;
-	cd-gpios = <&gpio2 12 GPIO_ACTIVE_LOW>;
-	no-1-8-v;
-	fsl,wp-controller;
-};
-
-&usdhc3 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usdhc3 &pinctrl_usdhc3_cd>;
-	bus-width = <4>;
-	cd-gpios = <&gpio3 8 GPIO_ACTIVE_LOW>;
-	no-1-8-v;
-	fsl,wp-controller;
-};
-
-&wdog1 {
-	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usbh_vbus &pinctrl_usbh_oc>;
+	over-current-active-low;
 	status = "okay";
 };
 
@@ -439,6 +204,22 @@
 			MX8MM_IOMUXC_ECSPI1_SS0_UART3_DCE_RTS_B		0x140
 			MX8MM_IOMUXC_ECSPI1_MISO_UART3_DCE_CTS_B	0x140
 		>;
+	};
+
+	pinctrl_usbh_vbus: usbh-vbusgrp {
+		fsl,pins = <MX8MM_IOMUXC_GPIO1_IO14_USB2_OTG_PWR	0x100>;
+	};
+
+	pinctrl_usbh_oc: usbh-ocgrp {
+		fsl,pins = <MX8MM_IOMUXC_GPIO1_IO15_USB2_OTG_OC		0x000>;
+	};
+
+	pinctrl_usbotg_vbus: usbotg-vbusgrp {
+		fsl,pins = <MX8MM_IOMUXC_GPIO1_IO12_USB1_OTG_PWR	0x100>;
+	};
+
+	pinctrl_usbotg_oc: usbotg-ocgrp {
+		fsl,pins = <MX8MM_IOMUXC_GPIO1_IO13_USB1_OTG_OC		0x000>;
 	};
 
 	pinctrl_usdhc1: usdhc1grp {
