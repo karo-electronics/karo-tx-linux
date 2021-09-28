@@ -286,7 +286,7 @@ static const char * const imx8mn_clko2_sels[] = {"osc_24m", "sys_pll2_200m", "sy
 static struct clk_hw_onecell_data *clk_hw_data;
 static struct clk_hw **hws;
 
-static int __init imx_clk_init_on(struct device_node *np,
+static int imx_clk_init_on(struct device_node *np,
 				  struct clk_hw * const clks[])
 {
 	u32 *array;
@@ -588,7 +588,7 @@ static int imx8mn_clocks_probe(struct platform_device *pdev)
 	clk_set_rate(hws[IMX8MN_CLK_AUDIO_AHB]->clk, 400000000);
 	clk_set_rate(hws[IMX8MN_CLK_IPG_AUDIO_ROOT]->clk, 400000000);
 
-	imx_register_uart_clocks();
+	imx_register_uart_clocks(4);
 
 	return 0;
 

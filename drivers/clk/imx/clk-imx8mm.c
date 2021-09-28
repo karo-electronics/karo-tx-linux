@@ -294,7 +294,7 @@ static const char *imx8mm_clko2_sels[] = {"osc_24m", "sys_pll2_200m", "sys_pll1_
 static struct clk_hw_onecell_data *clk_hw_data;
 static struct clk_hw **hws;
 
-static int __init imx_clk_init_on(struct device_node *np,
+static int imx_clk_init_on(struct device_node *np,
 				  struct clk_hw * const clks[])
 {
 	u32 *array;
@@ -637,7 +637,7 @@ static int imx8mm_clocks_probe(struct platform_device *pdev)
 	clk_set_parent(hws[IMX8MM_CLK_CSI1_PHY_REF]->clk, hws[IMX8MM_SYS_PLL2_1000M]->clk);
 	clk_set_parent(hws[IMX8MM_CLK_CSI1_ESC]->clk, hws[IMX8MM_SYS_PLL1_800M]->clk);
 
-	imx_register_uart_clocks();
+	imx_register_uart_clocks(4);
 
 	return 0;
 

@@ -62,9 +62,9 @@
 /*
  * The driver only uses one single LUT entry, that is updated on
  * each call of exec_op(). Index 0 is preset at boot with a basic
- * read operation, so let's use the last entry (31).
+ * read operation, so let's use the last entry (15).
  */
-#define	SEQID_LUT			31
+#define	SEQID_LUT			15
 
 /* Registers used by the driver */
 #define FSPI_MCR0			0x00
@@ -319,6 +319,9 @@
 /* access memory via IPS only due to this errata */
 #define NXP_FSPI_QUIRK_ERR050601	BIT(0)
 
+/* Disable Octal DTR */
+#define NXP_FSPI_QUIRK_DISABLE_DTR	BIT(1)
+
 struct nxp_fspi_devtype_data {
 	unsigned int rxfifo;
 	unsigned int txfifo;
@@ -331,7 +334,7 @@ static const struct nxp_fspi_devtype_data lx2160a_data = {
 	.rxfifo = SZ_512,       /* (64  * 64 bits)  */
 	.txfifo = SZ_1K,        /* (128 * 64 bits)  */
 	.ahb_buf_size = SZ_2K,  /* (256 * 64 bits)  */
-	.quirks = 0,
+	.quirks = NXP_FSPI_QUIRK_DISABLE_DTR,
 	.little_endian = true,  /* little-endian    */
 };
 
@@ -374,12 +377,18 @@ struct nxp_fspi {
 	struct pm_qos_request pm_qos_req;
 	int selected;
 #define FSPI_INITILIZED	(1 << 0)
+#define FSPI_RXCLKSRC_3	(1 << 1)
 	int flags;
 };
 
 static inline int nxp_fspi_ips_access_only(struct nxp_fspi *f)
 {
 	return f->devtype_data->quirks & NXP_FSPI_QUIRK_ERR050601;
+}
+
+static inline int nxp_fspi_disable_dtr(struct nxp_fspi *f)
+{
+	return f->devtype_data->quirks & NXP_FSPI_QUIRK_DISABLE_DTR;
 }
 
 /*
@@ -483,6 +492,10 @@ static bool nxp_fspi_supports_op(struct spi_mem *mem,
 	    op->data.nbytes > f->devtype_data->txfifo)
 		return false;
 
+	if (!nxp_fspi_disable_dtr(f) &&
+		op->cmd.dtr && op->addr.dtr && op->dummy.dtr && op->data.dtr)
+		return spi_mem_dtr_supports_op(mem, op);
+
 	return spi_mem_default_supports_op(mem, op);
 }
 
@@ -531,12 +544,21 @@ static void nxp_fspi_prepare_lut(struct nxp_fspi *f,
 	int lutidx = 1, i;
 
 	/* cmd */
-	lutval[0] |= LUT_DEF(0, LUT_CMD, LUT_PAD(op->cmd.buswidth),
-			     op->cmd.opcode);
+	if (op->cmd.dtr) {
+		lutval[0] |= LUT_DEF(0, LUT_CMD_DDR, LUT_PAD(op->cmd.buswidth),
+					op->cmd.opcode >> 8);
+		lutval[lutidx / 2] |= LUT_DEF(lutidx, LUT_CMD_DDR,
+					      LUT_PAD(op->cmd.buswidth),
+					      op->cmd.opcode & 0x00ff);
+		lutidx++;
+	} else {
+		lutval[0] |= LUT_DEF(0, LUT_CMD, LUT_PAD(op->cmd.buswidth),
+				     op->cmd.opcode);
+	}
 
 	/* addr bytes */
 	if (op->addr.nbytes) {
-		lutval[lutidx / 2] |= LUT_DEF(lutidx, LUT_ADDR,
+		lutval[lutidx / 2] |= LUT_DEF(lutidx, op->addr.dtr ? LUT_ADDR_DDR : LUT_ADDR,
 					      LUT_PAD(op->addr.buswidth),
 					      op->addr.nbytes * 8);
 		lutidx++;
@@ -544,7 +566,7 @@ static void nxp_fspi_prepare_lut(struct nxp_fspi *f,
 
 	/* dummy bytes, if needed */
 	if (op->dummy.nbytes) {
-		lutval[lutidx / 2] |= LUT_DEF(lutidx, LUT_DUMMY,
+		lutval[lutidx / 2] |= LUT_DEF(lutidx, op->dummy.dtr ? LUT_DUMMY_DDR : LUT_DUMMY,
 		/*
 		 * Due to FlexSPI controller limitation number of PAD for dummy
 		 * buswidth needs to be programmed as equal to data buswidth.
@@ -559,7 +581,8 @@ static void nxp_fspi_prepare_lut(struct nxp_fspi *f,
 	if (op->data.nbytes) {
 		lutval[lutidx / 2] |= LUT_DEF(lutidx,
 					      op->data.dir == SPI_MEM_DATA_IN ?
-					      LUT_NXP_READ : LUT_NXP_WRITE,
+					      (op->data.dtr ? LUT_READ_DDR : LUT_NXP_READ) :
+					      (op->data.dtr ? LUT_WRITE_DDR : LUT_NXP_WRITE),
 					      LUT_PAD(op->data.buswidth),
 					      0);
 		lutidx++;
@@ -862,6 +885,7 @@ static int nxp_fspi_do_op(struct nxp_fspi *f, const struct spi_mem_op *op)
 static int nxp_fspi_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
 {
 	struct nxp_fspi *f = spi_controller_get_devdata(mem->spi->master);
+	u32 reg;
 	int err = 0;
 
 	mutex_lock(&f->lock);
@@ -878,6 +902,28 @@ static int nxp_fspi_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
 	WARN_ON(err);
 
 	nxp_fspi_select_mem(f, mem->spi);
+
+
+	/*
+	 * For 8 bit DTR mode, need to use mode 3 (Flash provided Read strobe
+	 * and input from DQS pad), otherwise read operaton may meet issue
+	 * when clock rate higher than 50MHz. This mode require flash device
+	 * connect the DQS pad on board.
+	 */
+	if (!(f->flags & FSPI_RXCLKSRC_3) &&
+	    op->cmd.dtr && op->addr.dtr && op->dummy.dtr && op->data.dtr) {
+		reg = fspi_readl(f, f->iobase + FSPI_MCR0);
+		reg |= FSPI_MCR0_RXCLKSRC(3);
+		fspi_writel(f, reg, f->iobase + FSPI_MCR0);
+		f->flags |= FSPI_RXCLKSRC_3;
+	} else if ((f->flags & FSPI_RXCLKSRC_3) &&
+		   !op->cmd.dtr && !op->addr.dtr &&
+		   !op->dummy.dtr && !op->data.dtr) {
+		reg = fspi_readl(f, f->iobase + FSPI_MCR0);
+		reg &= ~FSPI_MCR0_RXCLKSRC(3);
+		fspi_writel(f, reg, f->iobase + FSPI_MCR0);
+		f->flags &= ~FSPI_RXCLKSRC_3;
+	}
 
 	nxp_fspi_prepare_lut(f, op);
 	/*
@@ -904,6 +950,7 @@ static int nxp_fspi_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
 	pm_runtime_put_autosuspend(f->dev);
 
 	mutex_unlock(&f->lock);
+	return err;
 
 err_mutex:
 	mutex_unlock(&f->lock);
@@ -1073,12 +1120,6 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 		goto err_put_ctrl;
 	}
 
-	/* Clear potential interrupts */
-	reg = fspi_readl(f, f->iobase + FSPI_INTR);
-	if (reg)
-		fspi_writel(f, reg, f->iobase + FSPI_INTR);
-
-
 	/* find the resources - controller memory mapped space */
 	if (is_acpi_node(f->dev->fwnode))
 		res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
@@ -1120,6 +1161,11 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 		dev_err(f->dev, "Failed to enable clock %d\n", __LINE__);
 		goto err_put_ctrl;
 	}
+
+	/* Clear potential interrupts */
+	reg = fspi_readl(f, f->iobase + FSPI_INTR);
+	if (reg)
+		fspi_writel(f, reg, f->iobase + FSPI_INTR);
 
 	/* find the irq */
 	ret = platform_get_irq(pdev, 0);
