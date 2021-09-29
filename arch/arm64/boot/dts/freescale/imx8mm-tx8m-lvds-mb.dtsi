@@ -47,13 +47,22 @@
 
 &pcie0 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcie_reset>;
+	pinctrl-0 = <&pinctrl_pcie>;
+	disable-gpio = <&gpio5 18 GPIO_ACTIVE_LOW>;
 	reset-gpio = <&gpio2 19 GPIO_ACTIVE_LOW>;
+	wake-gpio = <&gpio1 0 GPIO_ACTIVE_LOW>;
 	clocks = <&clk IMX8MM_CLK_PCIE1_ROOT>,
 		 <&clk IMX8MM_CLK_PCIE1_AUX>,
 		 <&clk IMX8MM_CLK_PCIE1_PHY>,
 		 <&pcie0_refclk>;
 	clock-names = "pcie", "pcie_aux", "pcie_phy", "pcie_bus";
+	assigned-clocks = <&clk IMX8MM_CLK_PCIE1_AUX>,
+			  <&clk IMX8MM_CLK_PCIE1_PHY>,
+			  <&clk IMX8MM_CLK_PCIE1_CTRL>;
+	assigned-clock-rates = <10000000>, <100000000>, <250000000>;
+	assigned-clock-parents = <&clk IMX8MM_SYS_PLL2_50M>,
+				 <&clk IMX8MM_SYS_PLL2_100M>,
+				 <&clk IMX8MM_SYS_PLL2_250M>;
 	ext_osc = <0>;
 	status = "disabled";
 };
@@ -81,9 +90,11 @@
 
 	};
 
-	pinctrl_pcie_reset: pcie-resetgrp {
+	pinctrl_pcie: pciegrp {
 		fsl,pins = <
-			MX8MM_IOMUXC_SD2_RESET_B_GPIO2_IO19		0x06
+			MX8MM_IOMUXC_SD2_RESET_B_GPIO2_IO19		0x146
+			MX8MM_IOMUXC_GPIO1_IO00_GPIO1_IO0		0x146
+			MX8MM_IOMUXC_I2C3_SCL_GPIO5_IO18		0x146
 		>;
 	};
 

@@ -169,6 +169,10 @@
 	status = "okay";
 };
 
+&ml_vipsi {
+	status = "okay";
+};
+
 &resmem {
 	/* overwrite freescale cma setting since it's not allocatable on qsxp */
 	linux,cma {

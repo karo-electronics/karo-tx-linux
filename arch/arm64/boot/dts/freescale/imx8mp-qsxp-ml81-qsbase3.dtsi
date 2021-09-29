@@ -5,6 +5,11 @@
  */
 
 / {
+	aliases {
+		pcie = &pcie;
+		pcie_phy = &pcie_phy;
+	};
+
 	reg_usbh_vbus: regulator-usbh-vbus {
 		compatible = "regulator-fixed";
 		pinctrl-names = "default";
@@ -14,6 +19,7 @@
 		regulator-max-microvolt = <5000000>;
 		gpio = <&gpio2 12 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
+		regulator-always-on;
 	};
 };
 

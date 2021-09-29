@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2021 Markus Bauer <MB@KARO-electronics.de>
+ *
+ */
+
+#include "imx8mm-tx8m-1610-mipi-mb.dts"
+#include "imx8mm-tx8m-ath9k-wifi.dtsi"
+
+/ {
+	model = "Ka-Ro TX8M-1610 module on TX-MIPI-LVDS Mainboard with ATH9K Wifi";
+};
