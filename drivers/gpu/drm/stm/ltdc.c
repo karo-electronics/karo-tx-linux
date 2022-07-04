@@ -1940,6 +1940,8 @@ void ltdc_suspend(struct drm_device *ddev)
 
 	DRM_DEBUG_DRIVER("\n");
 	clk_disable_unprepare(ldev->pixel_clk);
+	if (ldev->bus_clk)
+		clk_disable_unprepare(ldev->bus_clk);
 }
 
 int ltdc_resume(struct drm_device *ddev)
@@ -1953,6 +1955,12 @@ int ltdc_resume(struct drm_device *ddev)
 	if (ret) {
 		DRM_ERROR("failed to enable pixel clock (%d)\n", ret);
 		return ret;
+	}
+	if (ldev->bus_clk) {
+		if (clk_prepare_enable(ldev->bus_clk)) {
+			DRM_ERROR("Unable to prepare bus clock\n");
+			return -ENODEV;
+		}
 	}
 
 	return 0;
@@ -1985,9 +1993,23 @@ int ltdc_load(struct drm_device *ddev)
 		return PTR_ERR(ldev->pixel_clk);
 	}
 
+	ldev->bus_clk = devm_clk_get(dev, "bus");
+	if (IS_ERR(ldev->bus_clk)) {
+		if (PTR_ERR(ldev->bus_clk) != -EPROBE_DEFER)
+			DRM_DEBUG_DRIVER("Unable to get bus clock\n");
+		ldev->bus_clk = NULL;
+	}
+
 	if (clk_prepare_enable(ldev->pixel_clk)) {
 		DRM_ERROR("Unable to prepare pixel clock\n");
 		return -ENODEV;
+	}
+
+	if (ldev->bus_clk) {
+		if (clk_prepare_enable(ldev->bus_clk)) {
+			DRM_ERROR("Unable to prepare bus clock\n");
+			return -ENODEV;
+		}
 	}
 
 	/* Get endpoints if any */
@@ -2107,6 +2129,8 @@ int ltdc_load(struct drm_device *ddev)
 	}
 
 	clk_disable_unprepare(ldev->pixel_clk);
+	if (ldev->bus_clk)
+		clk_disable_unprepare(ldev->bus_clk);
 
 	pinctrl_pm_select_sleep_state(ddev->dev);
 
@@ -2118,6 +2142,8 @@ err:
 		drm_of_panel_bridge_remove(ddev->dev->of_node, 0, i);
 
 	clk_disable_unprepare(ldev->pixel_clk);
+	if (ldev->bus_clk)
+		clk_disable_unprepare(ldev->bus_clk);
 
 	return ret;
 }
