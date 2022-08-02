@@ -496,6 +496,14 @@ config VCPU_STALL_DETECTOR
 
 	  If you do not intend to run this kernel as a guest, say N.
 
+config RPI_DISPLAY
+	tristate "RaspberryPi 7inch Display Power Controller"
+	default y
+	depends on I2C
+	help
+	  Attiny88 controlling the power of toshiba tc358762xbg chip
+	  and backlight of RaspberryPi 7inch display.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
