@@ -1307,6 +1307,13 @@ config TOUCHSCREEN_SX8654
 	  To compile this driver as a module, choose M here: the
 	  module will be called sx8654.
 
+config TOUCHSCREEN_RPI_FT5406
+	tristate "RaspberryPi 7inch touchscreen ft5406"
+	default y
+	depends on I2C
+	help
+	  Controls the official RaspberryPi 7inch ft5406 touch ic.
+
 config TOUCHSCREEN_TPS6507X
 	tristate "TPS6507x based touchscreens"
 	depends on I2C
