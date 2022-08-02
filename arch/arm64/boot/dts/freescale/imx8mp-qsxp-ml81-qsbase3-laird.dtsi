@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2020 Markus Bauer <mb@karo-electronics.de>
+ *
+ */
+
+&pcie {
+	status = "okay";
+
+	mvl_wifi: wifi@0,0 {
+		compatible = "pci1b4b,2b42";
+		reg = <0 0 0 0 0>;
+		status = "okay";
+	};
+};
+
+&pcie_phy {
+	status = "okay";
+};
+
+&uart1 { /* BT */
+	status = "okay";
+};

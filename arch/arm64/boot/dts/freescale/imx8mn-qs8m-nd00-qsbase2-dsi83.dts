@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2020 Markus Bauer <MB@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+#include "imx8mn-qs8m-nd00-qsbase2.dts"
+#include "imx8m-qs8m-dsi83.dtsi"
+
+/ {
+	model = "Ka-Ro electronics QS8M-ND00 (NXP i.MX8MN) module on QSBASE2 baseboard with DSI83 MIPI2LVDS bridge";
+};

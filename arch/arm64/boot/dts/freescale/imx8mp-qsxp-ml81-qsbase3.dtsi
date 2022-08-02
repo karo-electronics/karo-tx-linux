@@ -1,0 +1,178 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2020 Markus Bauer <mb@karo-electronics.de>
+ *
+ */
+
+/ {
+	aliases {
+		pcie = &pcie;
+		pcie_phy = &pcie_phy;
+	};
+
+	reg_usbh_vbus: regulator-usbh-vbus {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_usbh_vbus>;
+		regulator-name = "USBH-VBUS";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		gpio = <&gpio2 12 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
+	};
+};
+
+&dsp {
+	status = "okay";
+};
+
+&eqos {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_eqos>;
+	pinctrl-1 = <&pinctrl_eqos_sleep>;
+	phy-mode = "rgmii";
+	phy-handle = <&ethphy0>;
+	phy-supply = <&ldo5_reg>;
+	status = "okay";
+
+	mdio {
+		compatible = "snps,dwmac-mdio";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_etnphy_rst_b>;
+		reset-gpios = <&gpio4 22 GPIO_ACTIVE_LOW>;
+		reset-delay-us = <25000>;
+		reset-post-delay-us = <100>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy0: ethernet-phy@3 {
+			reg = <3>;
+			eee-broken-1000t;
+			micrel,force-master;
+			rxd0-skew-ps = <(420 + 99)>;
+			rxd1-skew-ps = <(420 + 119)>;
+			rxd2-skew-ps = <(420 + 111)>;
+			rxd3-skew-ps = <(420 + 129)>;
+			txd0-skew-ps = <(420 + 204)>;
+			txd1-skew-ps = <(420 + 178)>;
+			txd2-skew-ps = <(420 + 192)>;
+			txd3-skew-ps = <(420 + 151)>;
+			rxdv-skew-ps = <(420 + 129)>;
+			txen-skew-ps = <(420 + 150)>;
+			rxc-skew-ps = <(900 + 139)>;
+			txc-skew-ps = <(900 + 150)>;
+		};
+	};
+};
+
+&gpu_3d {
+	status = "okay";
+};
+
+&gpu_2d {
+	status = "okay";
+};
+
+&pcie {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie>;
+	bus-range = <0x00 0xff>;
+	disable-gpio = <&gpio2 13 GPIO_ACTIVE_LOW>;
+	reset-gpio = <&gpio1 15 GPIO_ACTIVE_LOW>;
+	ext_osc = <1>;
+	clocks = <&clk IMX8MP_CLK_HSIO_ROOT>,
+		 <&clk IMX8MP_CLK_PCIE_AUX>,
+		 <&clk IMX8MP_CLK_HSIO_AXI>,
+		 <&clk IMX8MP_CLK_PCIE_ROOT>;
+	clock-names = "pcie", "pcie_aux", "pcie_phy", "pcie_bus";
+	assigned-clocks = <&clk IMX8MP_CLK_HSIO_AXI>,
+			  <&clk IMX8MP_CLK_PCIE_AUX>;
+	assigned-clock-rates = <500000000>, <10000000>;
+	assigned-clock-parents = <&clk IMX8MP_SYS_PLL2_500M>,
+				 <&clk IMX8MP_SYS_PLL2_50M>;
+	l1ss-disabled;
+	status = "disabled";
+};
+
+&pcie_phy {
+	ext_osc = <1>;
+	status = "disabled";
+};
+
+&reg_vdd_soc {
+	/* PCIe requires a minimum vdd soc voltage of 0.805V */
+	regulator-min-microvolt = <805000>;
+};
+
+&usdhc2 {
+	status = "disabled";
+};
+
+&iomuxc {
+	pinctrl_etnphy_int_b: etnphy-int-bgrp {
+		fsl,pins = <
+			    MX8MP_IOMUXC_SAI2_RXFS__GPIO4_IO21		0x90
+		>;
+	};
+
+	pinctrl_etnphy_rst_b: etnphy-rst-bgrp {
+		fsl,pins = <
+			    MX8MP_IOMUXC_SAI2_RXC__GPIO4_IO22		0x140
+		>;
+	};
+
+	pinctrl_eqos: eqosgrp {
+		fsl,pins = <
+			    MX8MP_IOMUXC_GPIO1_IO00__CCM_ENET_PHY_REF_CLK_ROOT 0x150
+			    MX8MP_IOMUXC_ENET_MDC__ENET_QOS_MDC		0x142
+			    MX8MP_IOMUXC_ENET_MDIO__ENET_QOS_MDIO	0x142
+			    MX8MP_IOMUXC_ENET_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK 0x000
+			    MX8MP_IOMUXC_ENET_TD0__ENET_QOS_RGMII_TD0	0x016
+			    MX8MP_IOMUXC_ENET_TD1__ENET_QOS_RGMII_TD1	0x016
+			    MX8MP_IOMUXC_ENET_TD2__ENET_QOS_RGMII_TD2	0x016
+			    MX8MP_IOMUXC_ENET_TD3__ENET_QOS_RGMII_TD3	0x016
+			    MX8MP_IOMUXC_ENET_RD0__ENET_QOS_RGMII_RD0	0x150
+			    MX8MP_IOMUXC_ENET_RD1__ENET_QOS_RGMII_RD1	0x150
+			    MX8MP_IOMUXC_ENET_RD2__ENET_QOS_RGMII_RD2	0x150
+			    MX8MP_IOMUXC_ENET_RD3__ENET_QOS_RGMII_RD3	0x150
+			    MX8MP_IOMUXC_ENET_RXC__CCM_ENET_QOS_CLOCK_GENERATE_RX_CLK 0x116
+			    MX8MP_IOMUXC_ENET_RX_CTL__ENET_QOS_RGMII_RX_CTL 0x156
+			    MX8MP_IOMUXC_ENET_TX_CTL__ENET_QOS_RGMII_TX_CTL 0x016
+		>;
+	};
+
+	pinctrl_eqos_sleep: eqos-sleep-grp {
+		fsl,pins = <
+			    MX8MP_IOMUXC_GPIO1_IO00__GPIO1_IO00		0x120
+			    MX8MP_IOMUXC_ENET_MDC__GPIO1_IO16		0x120
+			    MX8MP_IOMUXC_ENET_MDIO__GPIO1_IO17		0x120
+			    MX8MP_IOMUXC_ENET_TXC__GPIO1_IO23		0x120
+			    MX8MP_IOMUXC_ENET_TD0__GPIO1_IO21		0x120
+			    MX8MP_IOMUXC_ENET_TD1__GPIO1_IO20		0x120
+			    MX8MP_IOMUXC_ENET_TD2__GPIO1_IO19		0x120
+			    MX8MP_IOMUXC_ENET_TD3__GPIO1_IO18		0x120
+			    MX8MP_IOMUXC_ENET_RD0__GPIO1_IO26		0x120
+			    MX8MP_IOMUXC_ENET_RD1__GPIO1_IO27		0x120
+			    MX8MP_IOMUXC_ENET_RD2__GPIO1_IO28		0x120
+			    MX8MP_IOMUXC_ENET_RD3__GPIO1_IO29		0x120
+			    MX8MP_IOMUXC_ENET_RXC__GPIO1_IO25		0x120
+			    MX8MP_IOMUXC_ENET_RX_CTL__GPIO1_IO24	0x120
+			    MX8MP_IOMUXC_ENET_TX_CTL__GPIO1_IO22	0x120
+		>;
+	};
+
+	pinctrl_usbh_vbus: usbh-vbusgrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_SD2_CD_B__GPIO2_IO12		0x06
+		>;
+	};
+
+	pinctrl_pcie: pciegrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_SD2_DATA0__GPIO2_IO15		0x61 /* open drain, pull up */
+			MX8MP_IOMUXC_SD2_CLK__GPIO2_IO13		0x41
+			MX8MP_IOMUXC_GPIO1_IO15__GPIO1_IO15		0x41
+		>;
+	};
+};

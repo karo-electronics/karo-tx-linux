@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2021 Markus Bauer <MB@KARO-electronics.de>
+ *
+ */
+
+#include "imx8mm-tx8m-mb7.dtsi"
+
+/ {
+	pcie0_refclk: pcie0-refclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <100000000>;
+	};
+
+	mcp_clock: mcp-clock {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <16000000>;
+	};
+};
+
+&backlight {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcd_en>;
+	enable-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
+};
+
+&ecspi2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_ecspi2>;
+	spi-max-frequency = <25000000>;
+	cs-gpios = <&gpio5 13 GPIO_ACTIVE_LOW>;
+	status = "disabled";
+
+	can0: can@0 {
+		compatible = "microchip,mcp2515";
+		reg = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_can0>;
+		clocks = <&mcp_clock>;
+		interrupt-parent = <&gpio3>;
+		interrupts = <11 IRQ_TYPE_LEVEL_LOW>;
+		spi-max-frequency = <10000000>;
+	};
+};
+
+&pcie0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie>;
+	disable-gpio = <&gpio5 18 GPIO_ACTIVE_LOW>;
+	reset-gpio = <&gpio2 19 GPIO_ACTIVE_LOW>;
+	wake-gpio = <&gpio1 0 GPIO_ACTIVE_LOW>;
+	clocks = <&clk IMX8MM_CLK_PCIE1_ROOT>,
+		 <&clk IMX8MM_CLK_PCIE1_AUX>,
+		 <&clk IMX8MM_CLK_PCIE1_PHY>,
+		 <&pcie0_refclk>;
+	clock-names = "pcie", "pcie_aux", "pcie_phy", "pcie_bus";
+	assigned-clocks = <&clk IMX8MM_CLK_PCIE1_AUX>,
+			  <&clk IMX8MM_CLK_PCIE1_PHY>,
+			  <&clk IMX8MM_CLK_PCIE1_CTRL>;
+	assigned-clock-rates = <10000000>, <100000000>, <250000000>;
+	assigned-clock-parents = <&clk IMX8MM_SYS_PLL2_50M>,
+				 <&clk IMX8MM_SYS_PLL2_100M>,
+				 <&clk IMX8MM_SYS_PLL2_250M>;
+	ext_osc = <0>;
+	status = "disabled";
+};
+
+&reg_vdd_soc {
+	/* PCIe requires a minimum vdd soc voltage of 0.805V */
+	regulator-min-microvolt = <805000>;
+};
+
+&iomuxc {
+	pinctrl_can0: can0grp {
+		fsl,pins = <
+			MX8MM_IOMUXC_NAND_CLE_GPIO3_IO5		0x156
+			MX8MM_IOMUXC_ECSPI2_SS0_GPIO5_IO13	0x156
+		>;
+
+	};
+
+	pinctrl_ecspi2: ecspi2grp {
+		fsl,pins = <
+			MX8MM_IOMUXC_ECSPI2_SCLK_ECSPI2_SCLK	0x156
+			MX8MM_IOMUXC_ECSPI2_MOSI_ECSPI2_MOSI	0x156
+			MX8MM_IOMUXC_ECSPI2_MISO_ECSPI2_MISO	0x156
+		>;
+
+	};
+
+	pinctrl_pcie: pciegrp {
+		fsl,pins = <
+			MX8MM_IOMUXC_SD2_RESET_B_GPIO2_IO19		0x146
+			MX8MM_IOMUXC_GPIO1_IO00_GPIO1_IO0		0x146
+			MX8MM_IOMUXC_I2C3_SCL_GPIO5_IO18		0x146
+		>;
+	};
+
+	pinctrl_lcd_en: lcd-engrp {
+		fsl,pins = <
+			MX8MM_IOMUXC_GPIO1_IO04_GPIO1_IO4		0x146
+		>;
+	};
+};

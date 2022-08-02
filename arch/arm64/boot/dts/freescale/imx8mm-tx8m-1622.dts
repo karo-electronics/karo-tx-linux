@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2021 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+#include "imx8mm-tx8m.dtsi"
+#include <dt-bindings/input/input.h>
+
+/ {
+	model = "Ka-Ro electronics TX8M-1622 (NXP i.MX8MM) module";
+	compatible = "karo,imx8mm-tx8m", "fsl,imx8mm";
+
+	soc@0 {
+		bus@32c00000 {
+			/delete-node/ display-subsystem;
+		};
+	};
+};

@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2021 Markus Bauer <MBKARO-electronics.de>
+ */
+
+#include "imx8mm-tx8m-1620.dts"
+#include "imx8mm-tx8m-mb7.dtsi"
+
+/ {
+	model = "Ka-Ro electronics TX8M-1620 (NXP i.MX8MM) LVDS module on TX-Mainboard 7";
+};
+
+&dsi_lvds_bridge {
+	ti,lvds-format = <1>;
+	enable-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
+
+	display-timings {
+		lvds {
+			clock-frequency = <25200000>;
+			hactive = <640>;
+			vactive = <480>;
+			hback-porch = <114>;
+			hsync-len = <30>;
+			hfront-porch = <16>;
+			vback-porch = <32>;
+			vsync-len = <3>;
+			vfront-porch = <10>;
+			hsync-active = <0>;
+			vsync-active = <0>;
+			de-active = <1>;
+			pixelclk-active = <1>;
+		};
+	};
+};
+
+&i2c2 {
+	polytouch: edt-ft5x06@38 {
+		compatible = "edt,edt-ft5x06";
+		reg = <0x38>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_edt_ft5x06>;
+		interrupt-parent = <&gpio5>;
+		interrupts = <18 IRQ_TYPE_EDGE_FALLING>;
+		reset-gpios = <&gpio5 19 GPIO_ACTIVE_LOW>;
+		wake-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
+		wakeup-source;
+	};
+};
+
+&i2c3 {
+	status = "disabled";
+};
+
+&iomuxc {
+	pinctrl_edt_ft5x06: edt-ft5x06grp {
+		fsl,pins = <
+			MX8MM_IOMUXC_I2C3_SCL_GPIO5_IO18		0x90 /* Interrupt */
+			MX8MM_IOMUXC_I2C3_SDA_GPIO5_IO19		0x1b0b0 /* Reset */
+			MX8MM_IOMUXC_GPIO1_IO00_GPIO1_IO0		0x1b0b0 /* Wake */
+		>;
+	};
+};
