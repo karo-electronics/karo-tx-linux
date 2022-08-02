@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2020 Markus Bauer <MB@KARO-electronics.de>
+ *
+ */
+
+/ {
+	reg_2v8: regulator-2v8 {
+		compatible = "regulator-fixed";
+		regulator-name = "2V8";
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+		regulator-always-on;
+		vin-supply = <&reg_vdd_3v3>;
+	};
+
+	reg_1v8: regulator-1v8 {
+		compatible = "regulator-fixed";
+		regulator-name = "1V8";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-always-on;
+		vin-supply = <&reg_vdd_3v3>;
+	};
+
+	reg_1v2: regulator-1v2 {
+		compatible = "regulator-fixed";
+		regulator-name = "1V2";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		regulator-always-on;
+		vin-supply = <&reg_vdd_3v3>;
+	};
+
+	imx219_clk: imx219-clk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24000000>;
+	};
+};
+
+&csi1_bridge {
+	fsl,mipi-mode;
+	status = "okay";
+
+	port {
+		csi1_ep: endpoint {
+			remote-endpoint = <&csi1_mipi_ep>;
+		};
+	};
+};
+
+&i2c2 {
+	imx219: sensor@10 {
+		compatible = "sony,imx219";
+		reg = <0x10>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_imx219_reset>;
+		reset-gpios = <&gpio1 14 GPIO_ACTIVE_HIGH>;
+		clocks = <&imx219_clk>;
+		VANA-supply = <&reg_2v8>;   /* 2.8v */
+		VDIG-supply = <&reg_1v8>;   /* 1.8v */
+		VDDL-supply = <&reg_2v8>;   /* 1.2v */
+		status = "okay";
+
+		port {
+			imx219_0: endpoint {
+				remote-endpoint = <&mipi1_sensor_ep>;
+				data-lanes = <1 2>;
+				clock-noncontinuous;
+				link-frequencies = /bits/ 64 <456000000>;
+			};
+		};
+	};
+};
+
+&mipi_csi_1 {
+	status = "okay";
+
+	port {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		mipi1_sensor_ep: endpoint@1 {
+			reg = <1>;
+			remote-endpoint = <&imx219_0>;
+			data-lanes = <2>;
+			csis-hs-settle = <13>;
+			csis-clk-settle = <2>;
+			csis-wclk;
+		};
+
+		csi1_mipi_ep: endpoint@2 {
+			reg = <2>;
+			remote-endpoint = <&csi1_ep>;
+		};
+	};
+};
+
+&iomuxc {
+	pinctrl_imx219_reset: imx219-resetgrp {
+		fsl,pins = <
+			MX8MM_IOMUXC_GPIO1_IO14_GPIO1_IO14		0x06
+		>;
+	};
+};
