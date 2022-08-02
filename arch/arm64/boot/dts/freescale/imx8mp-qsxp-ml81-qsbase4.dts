@@ -1,0 +1,51 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+#include "imx8mp-qsxp-ml81.dts"
+#include "imx8mp-qsxp-ml81-qsbase3.dtsi"
+
+/ {
+	model = "Ka-Ro electronics QSXP-ML81 (NXP i.MX8MP) module on QSBASE4 baseboard";
+};
+
+&eqos {
+	phy-mode = "rgmii-id";
+	phy-handle = <&ethphy1>;
+
+	mdio {
+		ethphy1: ethernet-phy@7 {
+			reg = <7>;
+		};
+	};
+};
+
+&ethphy0 {
+	status = "disabled";
+};
+
+&usb_dwc3_1 {
+	/delete-property/ vbus-supply;
+};
+
+&pinctrl_eqos {
+	fsl,pins = <
+		    MX8MP_IOMUXC_ENET_MDC__ENET_QOS_MDC				0x142
+		    MX8MP_IOMUXC_ENET_MDIO__ENET_QOS_MDIO			0x142
+		    MX8MP_IOMUXC_ENET_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK 	0x40000016
+		    MX8MP_IOMUXC_ENET_TD0__ENET_QOS_RGMII_TD0			0x016
+		    MX8MP_IOMUXC_ENET_TD1__ENET_QOS_RGMII_TD1			0x016
+		    MX8MP_IOMUXC_ENET_TD2__ENET_QOS_RGMII_TD2			0x016
+		    MX8MP_IOMUXC_ENET_TD3__ENET_QOS_RGMII_TD3			0x016
+		    MX8MP_IOMUXC_ENET_TX_CTL__ENET_QOS_RGMII_TX_CTL 		0x016
+		    MX8MP_IOMUXC_ENET_RD0__ENET_QOS_RGMII_RD0			0x110 /* MODE0 */
+		    MX8MP_IOMUXC_ENET_RD1__ENET_QOS_RGMII_RD1			0x150 /* MODE1 */
+		    MX8MP_IOMUXC_ENET_RD2__ENET_QOS_RGMII_RD2			0x150 /* MODE2 */
+		    MX8MP_IOMUXC_ENET_RD3__ENET_QOS_RGMII_RD3			0x150 /* MODE3 */
+		    MX8MP_IOMUXC_ENET_RXC__CCM_ENET_QOS_CLOCK_GENERATE_RX_CLK 	0x156 /* PHYAD2 */
+		    MX8MP_IOMUXC_ENET_RX_CTL__ENET_QOS_RGMII_RX_CTL 		0x000 /* CLK125_EN */
+		    MX8MP_IOMUXC_GPIO1_IO00__CCM_ENET_PHY_REF_CLK_ROOT		0x110 /* LED_MODE */
+	>;
+};
