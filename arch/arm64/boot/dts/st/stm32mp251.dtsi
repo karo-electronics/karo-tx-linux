@@ -2384,6 +2384,12 @@
 				status = "disabled";
 			};
 		};
+
+		a35ss_syscfg: syscon@48802000  {
+			compatible = "st,stm32mp25-a35ss-syscfg", "syscon";
+			reg = <0x48802000 0xac>;
+			status = "disabled";
+		};
 	};
 
 	mlahb: ahb {
