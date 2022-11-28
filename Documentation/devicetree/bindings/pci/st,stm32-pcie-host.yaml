@@ -59,6 +59,13 @@ properties:
     enum: [1, 2]
     default: 2
 
+  max-payload-size:
+    description: Maximum TLP Payload size to use in device control
+      register.
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum: [128, 256]
+    default: 128
+
   msi-parent:
     maxItems: 1
 
