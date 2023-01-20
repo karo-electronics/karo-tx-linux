@@ -86,6 +86,11 @@ properties:
       Refer to "dt-bindings/spi/spi-stm32.h" for the supported values.
       Second parameter is the pattern in case of SPI_SEND_PATTERN mode.
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
 patternProperties:
   "^[a-zA-Z][a-zA-Z0-9,+\\-._]{0,63}@[0-9a-f]+$":
     type: object

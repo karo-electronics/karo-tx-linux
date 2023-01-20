@@ -53,6 +53,11 @@ properties:
     description: Configure the I2S device as MCLK clock provider.
     const: 0
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
 required:
   - compatible
   - "#sound-dai-cells"

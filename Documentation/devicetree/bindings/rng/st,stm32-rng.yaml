@@ -36,6 +36,11 @@ properties:
     type: boolean
     description: If set enable the clock detection management
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
 required:
   - compatible
   - reg

@@ -84,6 +84,11 @@ properties:
           - const: rx
           - const: tx
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
   power-domains: true
 
   resets:

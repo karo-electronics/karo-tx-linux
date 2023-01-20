@@ -47,6 +47,11 @@ properties:
     maxItems: 1
     description: interrupt used for wakeup
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
 # Required child node:
 
 patternProperties:
