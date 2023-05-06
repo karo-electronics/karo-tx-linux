@@ -1461,17 +1461,43 @@ ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/boot/dts/),)
 dtstree := arch/$(SRCARCH)/boot/dts
 endif
 
-ifneq ($(dtstree),)
+ifdef CONFIG_ARCH_STM32
+ifeq ("$(SRCARCH)", "arm")
+export TARGET_ARM32=y
+stdtstree := $(dtstree)
+else ifeq ("$(SRCARCH)", "arm64")
+export TARGET_ARM64=y
+stdtstree := $(dtstree)/st
+endif
+
+# Default path for external device trees
+KBUILD_EXTDTS ?= $(realpath $(srctree))/$(stdtstree)/external-dt/linux
+ifneq ($(wildcard $(KBUILD_EXTDTS)),)
+export DTS_INCLUDE := $(srctree)/$(stdtstree)
+endif
+endif #ARCH_STM32
+
+ifneq ($(stdtstree),)
+
+KBUILD_EXTDTB := $(or $(and $(wildcard $(KBUILD_EXTDTS)), 1), 0)
 
 %.dtb: dtbs_prepare
-	$(Q)$(MAKE) $(build)=$(dtstree) $(dtstree)/$@
+	$(Q)$(MAKE) $(build)=$(stdtstree) $(dtstree)/$@ || ( \
+	test ! -e $(dtstree)/$@ -a $(KBUILD_EXTDTB) -eq 1  && ( \
+		echo "Looking for $(patsubst st/%.dtb,%.dtb,$@) into $(KBUILD_EXTDTS)"; \
+		$(MAKE) $(build)=$(stdtstree) src=$(KBUILD_EXTDTS) $(dtstree)/$@ || \
+		/bin/true) || /bin/true)
 
 %.dtbo: dtbs_prepare
 	$(Q)$(MAKE) $(build)=$(dtstree) $(dtstree)/$@
 
 PHONY += dtbs dtbs_prepare dtbs_install dtbs_check
 dtbs: dtbs_prepare
-	$(Q)$(MAKE) $(build)=$(dtstree)
+	$(Q)$(MAKE) $(build)=$(stdtstree)
+	$(Q)test $(KBUILD_EXTDTB) -eq 1 && ( \
+		echo "Looking for device trees into $(KBUILD_EXTDTS)"; \
+		$(MAKE) $(build)=$(stdtstree) src=$(KBUILD_EXTDTS) || \
+		/bin/true) || /bin/true
 
 # include/config/kernel.release is actually needed when installing DTBs because
 # INSTALL_DTBS_PATH contains $(KERNELRELEASE). However, we do not want to make
