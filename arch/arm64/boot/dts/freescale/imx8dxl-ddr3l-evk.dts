@@ -195,6 +195,10 @@
 	status = "okay";
 };
 
+&edma3 {
+	status = "okay";
+};
+
 &eqos {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_eqos>;
@@ -273,15 +277,26 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexspi0>;
 	status = "okay";
+	nxp,fspi-individual-mode;
 
-	mt35xu512aba0: flash@0 {
+	mt25qu512abb0: flash@0 {
 		reg = <0>;
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "jedec,spi-nor";
 		spi-max-frequency = <133000000>;
 		spi-tx-bus-width = <1>;
-		spi-rx-bus-width = <8>;
+		spi-rx-bus-width = <4>;
+	};
+
+	mt25qu512abb1: flash@2 {
+		reg = <2>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		spi-max-frequency = <133000000>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <4>;
 	};
 };
 
@@ -766,7 +781,7 @@
 				IMX8DXL_EMMC0_CLK_CONN_NAND_READY_B	0x0e00004c
 				IMX8DXL_EMMC0_STROBE_CONN_NAND_CLE		0x0e00004c
 				IMX8DXL_EMMC0_RESET_B_CONN_NAND_WP_B	0x0e00004c
-				IMX8DXL_EMMC0_CMD_CONN_NAND_DQS		0x0e00004c
+				IMX8DXL_USDHC1_CD_B_CONN_NAND_DQS	0x0e00004c
 
 				IMX8DXL_USDHC1_RESET_B_CONN_NAND_WE_B	0x0e00004c
 				IMX8DXL_USDHC1_WP_CONN_NAND_ALE		0x0e00004c

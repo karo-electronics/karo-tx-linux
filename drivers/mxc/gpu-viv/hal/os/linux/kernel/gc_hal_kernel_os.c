@@ -87,6 +87,13 @@
 #include <linux/dma-buf.h>
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)
+#if defined(CONFIG_TRACE_GPU_MEM)
+#   include <trace/events/gpu_mem.h>
+gctINT64 totalMem;
+#endif
+#endif
+
 #define _GC_OBJ_ZONE    gcvZONE_OS
 
 #include "gc_hal_kernel_allocator.h"
@@ -2429,6 +2436,38 @@ gckOS_UnmapPhysical(
 **
 **      Nothing.
 */
+#if IS_ENABLED(CONFIG_PROVE_LOCKING)
+gceSTATUS
+gckOS_DeleteMutex(
+    IN gckOS Os,
+    IN gctPOINTER Mutex
+    )
+{
+    gceSTATUS status = gcvSTATUS_OK;
+
+    struct key_mutex *key_mut = (struct key_mutex *)Mutex;
+
+    gcmkHEADER_ARG("Os=%p Mutex=%p", Os, Mutex);
+
+    /* Validate the arguments. */
+    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+    gcmkVERIFY_ARGUMENT(Mutex != gcvNULL);
+
+    /* Destroy the mutex. */
+
+    mutex_destroy((struct mutex *)&key_mut->mut);
+    lockdep_unregister_key(&key_mut->key);
+
+    /* Free the mutex structure. */
+    gcmkONERROR(gckOS_Free(Os, Mutex));
+
+OnError:
+    /* Return status. */
+    gcmkFOOTER();
+    return status;
+}
+
+#else
 gceSTATUS
 gckOS_DeleteMutex(
     IN gckOS Os,
@@ -2454,6 +2493,7 @@ OnError:
     gcmkFOOTER();
     return status;
 }
+#endif
 
 /*******************************************************************************
 **
@@ -7350,6 +7390,10 @@ gckOS_QueryOption(
     {
         *Value = device->args.mmuException;
     }
+    else if (!strcmp(Option, "gpuTimeout"))
+    {
+        *Value = device->args.gpuTimeout;
+    }
     else if (!strcmp(Option, "extSRAMSizes"))
     {
         memcpy(Value, device->args.extSRAMSizes,
@@ -7645,3 +7689,32 @@ gckOS_GetPolicyID(
     return status;
 }
 
+gceSTATUS
+gckOS_TraceGpuMemory(
+    IN gckOS Os,
+    IN gctINT32 ProcessID,
+    IN gctINT64 Delta
+    )
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)
+#if defined(CONFIG_TRACE_GPU_MEM)
+    gctUINT32 pid = 0;
+
+    if (ProcessID == -1)
+        gckOS_GetProcessID(&pid);
+    else
+        pid = ProcessID;
+
+    if (trace_gpu_mem_total_enabled()) {
+        totalMem += Delta;
+
+        if (Delta < 0)
+            Delta = -Delta;
+
+        trace_gpu_mem_total(0, 0, (gctUINT64)totalMem);
+        trace_gpu_mem_total(0, ProcessID, (gctUINT64)Delta);
+    }
+#endif
+#endif
+    return gcvSTATUS_OK;
+}

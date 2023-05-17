@@ -1236,15 +1236,6 @@ _IsGPUIdle(
     IN gckHARDWARE Hardware
     )
 {
-    return Idle == 0x7FFFFFFF;
-}
-
-static gctBOOL
-_IsGPUIdle2(
-    IN gctUINT32 Idle,
-    IN gckHARDWARE Hardware
-    )
-{
     if (Hardware->identity.chipModel == 0x7000
         && Hardware->identity.chipRevision == 0x6205
         && Hardware->identity.productID == 0x70007
@@ -1252,10 +1243,6 @@ _IsGPUIdle2(
         && Hardware->identity.customerID == 0x12)
     {
         Idle = (Idle | (1 << 14));
-        if (Idle == 0x7FFFFFFF)
-        {
-            gckOS_Delay(Hardware->os, 2);
-        }
     }
 
     return Idle == 0x7FFFFFFF;
@@ -3300,6 +3287,32 @@ gckHARDWARE_InitializeHardware(
                                   Hardware->powerBaseAddress
                                   + 0x00100,
                                   data));
+    }
+
+    if (_IsHardwareMatch(Hardware, gcv8000, 0x7200)
+        || _IsHardwareMatch(Hardware, gcv8000, 0x8002))
+    {
+        if (regPMC == 0)
+        {
+        gcmkONERROR(
+            gckOS_ReadRegisterEx(Hardware->os,
+                                 Hardware->core,
+                                 Hardware->powerBaseAddress
+                                 + 0x00104,
+                                 &regPMC));
+        }
+
+        /* Disable SH_EU clock gating. */
+        regPMC = ((((gctUINT32) (regPMC)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
+ 10:10) - (0 ?
+ 10:10) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ?
+ 10:10) - (0 ?
+ 10:10) + 1))))))) << (0 ?
+ 10:10))) | (((gctUINT32) ((gctUINT32) (1) & ((gctUINT32) ((((1 ?
+ 10:10) - (0 ?
+ 10:10) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ? 10:10) - (0 ? 10:10) + 1))))))) << (0 ? 10:10)));
     }
 
     if (regPMC != 0)
@@ -13867,7 +13880,7 @@ gckHARDWARE_ExecuteFunctions(
             }
 #endif
         }
-        while (!_IsGPUIdle2(idle, hardware));
+        while (!_IsGPUIdle(idle, hardware));
     }
 
     return gcvSTATUS_OK;

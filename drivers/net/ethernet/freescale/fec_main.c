@@ -2140,7 +2140,7 @@ static int fec_restore_mii_bus(struct net_device *ndev)
 
 	writel(0xffc00000, fep->hwp + FEC_IEVENT);
 	writel(fep->phy_speed, fep->hwp + FEC_MII_SPEED);
-	writel(FEC_ENET_MII, fep->hwp + FEC_IMASK);
+	writel(0, fep->hwp + FEC_IMASK);
 	writel(FEC_ENET_ETHEREN, fep->hwp + FEC_ECNTRL);
 
 	pm_runtime_mark_last_busy(&fep->pdev->dev);
@@ -3811,7 +3811,7 @@ static int fec_enet_init_stop_mode(struct fec_enet_private *fep,
 					 ARRAY_SIZE(out_val));
 	if (ret) {
 		dev_dbg(&fep->pdev->dev, "no stop mode property\n");
-		return ret;
+		goto out;
 	}
 
 	fep->stop_gpr.gpr = syscon_node_to_regmap(gpr_np);
