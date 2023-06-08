@@ -25,6 +25,7 @@ struct stm32_pcie {
 	struct clk *clk;
 	struct gpio_desc *reset_gpio;
 	u32 max_payload;
+	bool limit_downstream_mrrs;
 };
 
 static const struct of_device_id stm32_pcie_of_match[] = {
@@ -191,6 +192,9 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 	if (ret && ret != -EINVAL)
 		return dev_err_probe(dev, ret, "Error reading max-payload value\n");
 
+	if (of_property_read_bool(np, "st,limit_mrrs"))
+		stm32_pcie->limit_downstream_mrrs = true;
+
 	stm32_pcie->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(stm32_pcie->reset_gpio))
 		return dev_err_probe(dev, PTR_ERR(stm32_pcie->reset_gpio),
@@ -238,6 +242,70 @@ static struct platform_driver stm32_pcie_driver = {
 		.of_match_table = stm32_pcie_of_match,
 	},
 };
+
+static bool is_stm32_pcie_driver(struct device *dev)
+{
+	/* PCI bridge */
+	dev = get_device(dev);
+
+	/* Platform driver */
+	dev = get_device(dev->parent);
+
+	return (dev->driver == &stm32_pcie_driver.driver);
+}
+
+static bool apply_mrrs_quirk(struct pci_dev *root_port)
+{
+	struct dw_pcie_rp *pp;
+	struct dw_pcie *dw_pci;
+	struct stm32_pcie *stm32_pcie;
+
+	if (WARN_ON(!root_port) || !is_stm32_pcie_driver(root_port->dev.parent))
+		return false;
+
+	pp = root_port->bus->sysdata;
+	dw_pci = to_dw_pcie_from_pp(pp);
+	stm32_pcie = to_stm32_pcie(dw_pci);
+
+	if (!stm32_pcie->limit_downstream_mrrs)
+		return false;
+
+	return true;
+}
+
+static void quirk_stm32_pcie_limit_mrrs(struct pci_dev *pci)
+{
+	struct pci_dev *root_port;
+	struct pci_bus *bus = pci->bus;
+	int readrq;
+	int mps;
+
+	if (pci_is_root_bus(bus))
+		return;
+
+	root_port = pcie_find_root_port(pci);
+
+	if (!apply_mrrs_quirk(root_port))
+		return;
+
+	mps = pcie_get_mps(root_port);
+
+	/*
+	 * STM32 PCI controller has a h/w performance limitation on the AXI DDR requests.
+	 * Limit the maximum read request size to 256B on all downstream devices.
+	 */
+	readrq = pcie_get_readrq(pci);
+	if (readrq > 256) {
+		int mrrs = min(mps, 256);
+
+		pcie_set_readrq(pci, mrrs);
+
+		pci_info(pci, "Max Read Rq set to %4d (was %4d)\n", mrrs, readrq);
+	}
+}
+
+DECLARE_PCI_FIXUP_HEADER(PCI_ANY_ID, PCI_ANY_ID,
+			 quirk_stm32_pcie_limit_mrrs);
 
 module_platform_driver(stm32_pcie_driver);
 MODULE_DESCRIPTION("STM32MP25 PCIe Controller driver");
