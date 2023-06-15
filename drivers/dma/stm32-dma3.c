@@ -2242,9 +2242,6 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		chan->fifo_size = g_fifosz; /* If !g_fifosz, then no FIFO, burst = 0 */
 		chan->max_burst = (!chan->fifo_size) ? 0 : (1 << (chan->fifo_size + 1)) / 2;
 		chan->ext_addressing = (g_addr != G_ADDRESSING_FIXED_BLOCK);
-		chan->vchan.desc_free = stm32_dma3_chan_vdesc_free;
-
-		vchan_init(&chan->vchan, dma_dev);
 	}
 
 	ret = dmaenginem_async_device_register(dma_dev);
@@ -2252,7 +2249,23 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		goto err_clk_disable;
 
 	for (i = 0; i < ddata->dma_channels; i++) {
+		char name[12];
+
 		chan = &ddata->chans[i];
+
+		if (ddata->chan_reserved & BIT(i))
+			continue;
+
+		chan->vchan.desc_free = stm32_dma3_chan_vdesc_free;
+		vchan_init(&chan->vchan, dma_dev);
+		snprintf(name, sizeof(name), "dma%dchan%d", ddata->dma_dev.dev_id, chan->id);
+
+		ret = dma_async_device_channel_register(&ddata->dma_dev, &chan->vchan.chan, name);
+		if (ret) {
+			dev_err(&pdev->dev, "Failed to register %s: %d\n", name, ret);
+			goto err_clk_disable;
+		}
+
 		ret = platform_get_irq(pdev, i);
 		if (ret < 0) {
 			dev_err(&pdev->dev,
