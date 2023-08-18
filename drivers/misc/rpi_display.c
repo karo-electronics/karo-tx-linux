@@ -181,13 +181,12 @@ error:
 	return ret;
 }
 
-static int rpi_display_remove(struct i2c_client *client)
+static void rpi_display_remove(struct i2c_client *client)
 {
 	struct rpi_display_data *mcu_data = i2c_get_clientdata(client);
 
 	connected = 0;
 	kfree(mcu_data);
-	return 0;
 }
 
 static const struct i2c_device_id rpi_display_id[] = {

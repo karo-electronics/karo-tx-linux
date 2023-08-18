@@ -8,6 +8,7 @@
 
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
+#include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
@@ -228,7 +229,6 @@ static int tc358867_mipi_probe(struct mipi_dsi_device *dsi, const struct panel_d
 {
 	struct tc358867 *panel;
 	struct device *dev = &dsi->dev;
-	int err;
 
 	panel = devm_kzalloc(dev, sizeof(*panel), GFP_KERNEL);
 	if (!panel)
@@ -250,15 +250,13 @@ static int tc358867_mipi_probe(struct mipi_dsi_device *dsi, const struct panel_d
 	return 0;
 }
 
-static int tc358867_remove(struct device *dev)
+static void tc358867_remove(struct device *dev)
 {
 	struct tc358867 *panel = dev_get_drvdata(dev);
 
 	drm_panel_remove(&panel->base);
 
 	tc358867_disable(&panel->base);
-
-	return 0;
 }
 
 static void tc358867_shutdown(struct device *dev)
@@ -310,7 +308,6 @@ static int tc358867_dsi_probe(struct mipi_dsi_device *dsi)
 	const struct bridge_desc *desc;
 	const struct of_device_id *id;
 	const struct panel_desc *pdesc;
-	u32 val;
 	int err;
 
 	id = of_match_node(dsi_of_match, dsi->dev.of_node);
@@ -336,7 +333,7 @@ static int tc358867_dsi_probe(struct mipi_dsi_device *dsi)
 	return mipi_dsi_attach(dsi);
 }
 
-static int tc358867_dsi_remove(struct mipi_dsi_device *dsi)
+static void tc358867_dsi_remove(struct mipi_dsi_device *dsi)
 {
 	int err;
 
@@ -344,7 +341,7 @@ static int tc358867_dsi_remove(struct mipi_dsi_device *dsi)
 	if (err < 0)
 		dev_err(&dsi->dev, "failed to detach from DSI host: %d\n", err);
 
-	return tc358867_remove(&dsi->dev);
+	tc358867_remove(&dsi->dev);
 }
 
 static void tc358867_dsi_shutdown(struct mipi_dsi_device *dsi)
