@@ -330,7 +330,7 @@ timeout_failed:
 	return ret;
 }
 
-static int rpi_ft5406_remove(struct i2c_client *client)
+static void rpi_ft5406_remove(struct i2c_client *client)
 {
 	struct rpi_ft5406_data *ts_data = i2c_get_clientdata(client);
 
@@ -339,7 +339,6 @@ static int rpi_ft5406_remove(struct i2c_client *client)
 		input_unregister_device(ts_data->input_dev);
 		input_free_device(ts_data->input_dev);
 	}
-	return 0;
 }
 
 static const struct i2c_device_id rpi_ft5406_id[] = {

@@ -29,6 +29,7 @@
 
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
+#include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
@@ -468,7 +469,7 @@ static int tc358762_dsi_probe(struct mipi_dsi_device *dsi)
 	return mipi_dsi_attach(dsi);
 }
 
-static int tc358762_dsi_remove(struct mipi_dsi_device *dsi)
+static void tc358762_dsi_remove(struct mipi_dsi_device *dsi)
 {
 	int err;
 
@@ -476,7 +477,7 @@ static int tc358762_dsi_remove(struct mipi_dsi_device *dsi)
 	if (err < 0)
 		dev_err(&dsi->dev, "failed to detach from DSI host: %d\n", err);
 
-	return tc358762_remove(&dsi->dev);
+	tc358762_remove(&dsi->dev);
 }
 
 static void tc358762_dsi_shutdown(struct mipi_dsi_device *dsi)
