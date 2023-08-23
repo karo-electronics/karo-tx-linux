@@ -515,6 +515,11 @@
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32mp25-timer-counter";
+					status = "disabled";
+				};
+
 				timer@5 {
 					compatible = "st,stm32mp25-timer-trigger";
 					reg = <5>;
@@ -535,6 +540,11 @@
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32mp25-timer-counter";
+					status = "disabled";
+				};
+
 				timer@6 {
 					compatible = "st,stm32mp25-timer-trigger";
 					reg = <6>;
@@ -554,6 +564,11 @@
 				feature-domains = <&rifsc STM32MP25_RIFSC_TIM12_ID>;
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
+
+				counter {
+					compatible = "st,stm32mp25-timer-counter";
+					status = "disabled";
+				};
 
 				pwm {
 					compatible = "st,stm32mp25-pwm";
@@ -581,6 +596,11 @@
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32mp25-timer-counter";
+					status = "disabled";
+				};
+
 				pwm {
 					compatible = "st,stm32mp25-pwm";
 					#pwm-cells = <3>;
@@ -606,6 +626,11 @@
 				feature-domains = <&rifsc STM32MP25_RIFSC_TIM14_ID>;
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
+
+				counter {
+					compatible = "st,stm32mp25-timer-counter";
+					status = "disabled";
+				};
 
 				pwm {
 					compatible = "st,stm32mp25-pwm";
@@ -993,6 +1018,11 @@
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32mp25-timer-counter";
+					status = "disabled";
+				};
+
 				pwm {
 					compatible = "st,stm32mp25-pwm";
 					#pwm-cells = <3>;
@@ -1018,6 +1048,11 @@
 				feature-domains = <&rifsc STM32MP25_RIFSC_TIM11_ID>;
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
+
+				counter {
+					compatible = "st,stm32mp25-timer-counter";
+					status = "disabled";
+				};
 
 				pwm {
 					compatible = "st,stm32mp25-pwm";
@@ -1174,6 +1209,11 @@
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32mp25-timer-counter";
+					status = "disabled";
+				};
+
 				pwm {
 					compatible = "st,stm32mp25-pwm";
 					#pwm-cells = <3>;
@@ -1200,6 +1240,11 @@
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32mp25-timer-counter";
+					status = "disabled";
+				};
+
 				pwm {
 					compatible = "st,stm32mp25-pwm";
 					#pwm-cells = <3>;
@@ -1225,6 +1270,11 @@
 				feature-domains = <&rifsc STM32MP25_RIFSC_TIM17_ID>;
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
+
+				counter {
+					compatible = "st,stm32mp25-timer-counter";
+					status = "disabled";
+				};
 
 				pwm {
 					compatible = "st,stm32mp25-pwm";
