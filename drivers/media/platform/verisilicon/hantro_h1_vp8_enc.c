@@ -716,11 +716,11 @@ static void hantro_h1_vp8_enc_write_header(struct hantro_ctx *ctx, u32 qp,
 		ctx->vp8_enc.frame_tag->magic[1] = 0x01;
 		ctx->vp8_enc.frame_tag->magic[2] = 0x2a;
 
-		ctx->vp8_enc.frame_tag->width[0] = ctx->src_fmt.width & 0xff;
-		ctx->vp8_enc.frame_tag->width[1] = (ctx->src_fmt.width >> 8) & 0xff;
+		ctx->vp8_enc.frame_tag->width[0] = ctx->dst_fmt.width & 0xff;
+		ctx->vp8_enc.frame_tag->width[1] = (ctx->dst_fmt.width >> 8) & 0xff;
 
-		ctx->vp8_enc.frame_tag->height[0] = ctx->src_fmt.height & 0xff;
-		ctx->vp8_enc.frame_tag->height[1] = (ctx->src_fmt.height >> 8) & 0xff;
+		ctx->vp8_enc.frame_tag->height[0] = ctx->dst_fmt.height & 0xff;
+		ctx->vp8_enc.frame_tag->height[1] = (ctx->dst_fmt.height >> 8) & 0xff;
 	} else {
 		ctx->vp8_enc.frame_tag->tag[0] |= 0x1;
 	}
