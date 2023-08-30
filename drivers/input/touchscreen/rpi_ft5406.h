@@ -3,9 +3,9 @@
 #ifndef _RPI_FT5406_H_
 #define _RPI_FT5406_H_
 
-#define LOG_DBG(fmt, arg...)	pr_debug("rpi-ft5406: %s: "fmt, __func__, ##arg)
-#define LOG_INFO(fmt, arg...)	pr_info("rpi-ft5406: %s: "fmt, __func__, ##arg)
-#define LOG_ERR(fmt, arg...)	pr_err("rpi-ft5406: %s: "fmt, __func__, ##arg)
+#define LOG_DBG(fmt, arg...) pr_debug("rpi-ft5406: %s: "fmt, __func__, ##arg)
+#define LOG_INFO(fmt, arg...) pr_info("rpi-ft5406: %s: "fmt, __func__, ##arg)
+#define LOG_ERR(fmt, arg...) pr_err("rpi-ft5406: %s: "fmt, __func__, ##arg)
 
 #define RETRY_COUNT		10
 #define XY_REVERSE		1
@@ -64,6 +64,8 @@ struct rpi_ft5406_data {
 	int polling_enabled;
 	int known_ids;
 	int retry_count;
+
+	struct regulator *power_supply;
 };
 
 #endif
