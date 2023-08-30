@@ -3,17 +3,20 @@
  *
  * RPI Display FT5406 touch driver.
  *
- * Copyright (C) 2020 Markus Bauer <MB@karo-electronics.de>
- *
- * based on: drivers/input/touchscreen/rpi_ft406.c
- * from: https://github.com/TinkerEdgeT/mendel-linux-imx
- *
  * Copyright (c) 2016 ASUSTek Computer Inc.
  * Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
  *
+ * This software is licensed under the terms of the GNU General Public
+ * License version 2, as published by the Free Software Foundation, and
+ * may be copied, distributed, and modified under those terms.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
  */
 
-#include <drm/rpi_display.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
@@ -21,95 +24,36 @@
 #include <linux/input.h>
 #include <linux/input/mt.h>
 #include <linux/module.h>
+#include <linux/regulator/consumer.h>
 #include <linux/workqueue.h>
 #include "rpi_ft5406.h"
 
-static struct rpi_ft5406_data g_ts_data;
-
-static int fts_i2c_read(struct i2c_client *client, char *writebuf,
-			   int writelen, char *readbuf, int readlen)
-{
-	int ret;
-
-	if (writelen > 0) {
-		struct i2c_msg msgs[] = {
-			{
-				 .addr = client->addr,
-				 .flags = 0,
-				 .len = writelen,
-				 .buf = writebuf,
-			 },
-			{
-				 .addr = client->addr,
-				 .flags = I2C_M_RD,
-				 .len = readlen,
-				 .buf = readbuf,
-			 },
-		};
-		ret = i2c_transfer(client->adapter, msgs, 2);
-		if (ret < 0)
-			LOG_ERR("i2c read error, %d\n", ret);
-	} else {
-		struct i2c_msg msgs[] = {
-			{
-				 .addr = client->addr,
-				 .flags = I2C_M_RD,
-				 .len = readlen,
-				 .buf = readbuf,
-			 },
-		};
-		ret = i2c_transfer(client->adapter, msgs, 1);
-		if (ret < 0)
-			LOG_ERR("i2c read error, %d\n", ret);
-	}
-
-	return ret;
-}
-
-static int fts_read_reg(struct i2c_client *client, u8 addr, u8 *val)
-{
-	return fts_i2c_read(client, &addr, 1, val, 1);
-}
-
 static int fts_check_fw_ver(struct i2c_client *client)
 {
-	u8 reg_addr, fw_ver[3];
+	u8 fw_ver[3];
 	int ret;
 
-	reg_addr = FT_REG_FW_VER;
-	ret = fts_i2c_read(client, &reg_addr, 1, &fw_ver[0], 1);
+	fw_ver[0] = i2c_smbus_read_byte_data(client, FT_REG_FW_VER);
+	ret = i2c_smbus_read_i2c_block_data(client, FT_REG_FW_MIN_VER, 2,
+					     &fw_ver[1]);
 	if (ret < 0)
-		goto error;
+		return ret;
+	if (ret != 2)
+		return -EIO;
 
-	reg_addr = FT_REG_FW_MIN_VER;
-	ret = fts_i2c_read(client, &reg_addr, 1, &fw_ver[1], 1);
-	if (ret < 0)
-		goto error;
-
-	reg_addr = FT_REG_FW_SUB_MIN_VER;
-	ret = fts_i2c_read(client, &reg_addr, 1, &fw_ver[2], 1);
-	if (ret < 0)
-		goto error;
-
-	LOG_INFO("Firmware version = %d.%d.%d\n",
-		 fw_ver[0], fw_ver[1], fw_ver[2]);
+	LOG_INFO("Firmware version = %d.%d.%d\n", fw_ver[0], fw_ver[1], fw_ver[2]);
 	return 0;
-
-error:
-	return ret;
 }
 
 static int fts_read_td_status(struct rpi_ft5406_data *ts_data)
 {
-	u8 td_status;
 	int ret;
 
-	ret = fts_read_reg(ts_data->client, FT_TD_STATUS_REG, &td_status);
-	if (ret < 0) {
+	ret = i2c_smbus_read_byte_data(ts_data->client, FT_TD_STATUS_REG);
+	if (ret < 0)
 		LOG_ERR("get reg td_status failed, %d\n", ret);
-		return ret;
-	}
-	return td_status;
+
+	return ret;
 }
 
 static int fts_read_touchdata(struct rpi_ft5406_data *ts_data)
@@ -121,10 +65,11 @@ static int fts_read_touchdata(struct rpi_ft5406_data *ts_data)
 
 	for (i = 0; i < event->touch_point && i < MAX_TOUCH_POINTS; i++) {
 		reg_addr = FT_TOUCH_X_H_REG + (i * FT_ONE_TCH_LEN);
-		ret = fts_i2c_read(ts_data->client, &reg_addr, 1, buf,
-				   FT_ONE_TCH_LEN - 2);
+		ret = i2c_smbus_read_i2c_block_data(ts_data->client, reg_addr,
+						    FT_ONE_TCH_LEN - 2, buf);
 		if (ret < 0) {
-			LOG_ERR("read touchdata failed.\n");
+			dev_err(&ts_data->client->dev,
+				"failed to read touchdata: %d\n", ret);
 			return ret;
 		}
 
@@ -161,7 +106,7 @@ static void fts_report_value(struct rpi_ft5406_data *ts_data)
 				      event->au8_finger_id[i]);
 			input_mt_report_slot_state(ts_data->input_dev,
 						   MT_TOOL_FINGER,
-						   true);
+				true);
 			input_report_abs(ts_data->input_dev,
 					 ABS_MT_TOUCH_MAJOR, event->pressure);
 			input_report_abs(ts_data->input_dev, ABS_MT_POSITION_X,
@@ -213,11 +158,22 @@ static int fts_retry_wait(struct rpi_ft5406_data *ts_data)
 
 static void rpi_ft5406_work(struct work_struct *work)
 {
-	struct ts_event *event = &g_ts_data.event;
-	int ret = 0, count = 5, td_status;
+	struct rpi_ft5406_data *ts_data = container_of(work, struct rpi_ft5406_data,
+						      ft5406_work);
+	struct ts_event *event = &ts_data->event;
+	int ret;
+	int count = 5;
+	int td_status;
+
+	ret = regulator_enable(ts_data->power_supply);
+	if (ret) {
+		dev_err(&ts_data->client->dev, "Failed to enable power_supply: %d\n",
+			ret);
+		return;
+	}
 
 	while (count > 0) {
-		ret = fts_check_fw_ver(g_ts_data.client);
+		ret = fts_check_fw_ver(ts_data->client);
 		if (ret == 0)
 			break;
 		LOG_INFO("checking touch ic, countdown: %d\n", count);
@@ -226,77 +182,65 @@ static void rpi_ft5406_work(struct work_struct *work)
 	}
 	if (!count) {
 		LOG_ERR("checking touch ic timeout, %d\n", ret);
-		g_ts_data.is_polling = 0;
+		ts_data->is_polling = 0;
 		return;
 	}
 
 	/* polling 60fps */
 	while (1) {
-		td_status = fts_read_td_status(&g_ts_data);
+		td_status = fts_read_td_status(ts_data);
 		if (td_status < 0) {
-			ret = fts_retry_wait(&g_ts_data);
+			ret = fts_retry_wait(ts_data);
 			if (ret == 0) {
 				LOG_ERR("stop touch polling\n");
-				g_ts_data.is_polling = 0;
+				ts_data->is_polling = 0;
 				break;
 			}
 		} else if (td_status < VALID_TD_STATUS_VAL + 1 &&
-			   (td_status > 0 || g_ts_data.known_ids != 0)) {
-			fts_retry_clear(&g_ts_data);
+			   (td_status > 0 || ts_data->known_ids != 0)) {
+			fts_retry_clear(ts_data);
 			memset(event, -1, sizeof(struct ts_event));
 			event->touch_point = td_status;
-			ret = fts_read_touchdata(&g_ts_data);
+			ret = fts_read_touchdata(ts_data);
 			if (ret == 0)
-				fts_report_value(&g_ts_data);
+				fts_report_value(ts_data);
 		}
 		msleep_interruptible(17);
 	}
-}
 
-void rpi_ft5406_start_polling(void)
-{
-	if (g_ts_data.polling_enabled && g_ts_data.is_polling != 1) {
-		g_ts_data.is_polling = 1;
-		schedule_work(&g_ts_data.ft5406_work);
-	} else {
-		g_ts_data.is_polling = 1;
-	}
+	regulator_disable(ts_data->power_supply);
 }
-EXPORT_SYMBOL_GPL(rpi_ft5406_start_polling);
 
 static int rpi_ft5406_probe(struct i2c_client *client)
 {
 	struct input_dev *input_dev;
-	int ret, timeout = 10;
+	struct rpi_ft5406_data *ts_data;
+	int ret;
 
 	LOG_INFO("address = 0x%x\n", client->addr);
 
-	g_ts_data.client = client;
-	i2c_set_clientdata(client, &g_ts_data);
+	ts_data = devm_kzalloc(&client->dev, sizeof(*ts_data), GFP_KERNEL);
+	if (!ts_data)
+		return -ENOMEM;
+	ts_data->client = client;
+	i2c_set_clientdata(client, ts_data);
 
-	while (!rpi_display_is_connected() && timeout > 0) {
-		msleep(50);
-		timeout--;
-	}
-
-	if (!rpi_display_is_connected()) {
-		LOG_ERR("wait connected timeout\n");
-		ret = -ENODEV;
-		goto timeout_failed;
-	}
+	ts_data->power_supply = devm_regulator_get(&client->dev, "power");
+	if (IS_ERR(ts_data->power_supply))
+		return dev_err_probe(&client->dev, PTR_ERR(ts_data->power_supply),
+				     "Failed to get power_supply\n");
 
 	input_dev = input_allocate_device();
 	if (!input_dev) {
 		LOG_ERR("failed to allocate input device\n");
-		ret = -ENOMEM;
-		goto input_allocate_failed;
+		return -ENOMEM;
 	}
 	input_dev->name = "fts_ts";
 	input_dev->id.bustype = BUS_I2C;
-	input_dev->dev.parent = &g_ts_data.client->dev;
+	input_dev->dev.parent = &ts_data->client->dev;
 
-	g_ts_data.input_dev = input_dev;
-	input_set_drvdata(input_dev, &g_ts_data);
+	ts_data->input_dev = input_dev;
+	input_set_drvdata(input_dev, ts_data);
 
 	__set_bit(EV_SYN, input_dev->evbit);
 	__set_bit(EV_KEY, input_dev->evbit);
@@ -315,18 +259,14 @@ static int rpi_ft5406_probe(struct i2c_client *client)
 		goto input_register_failed;
 	}
 
-	INIT_WORK(&g_ts_data.ft5406_work, rpi_ft5406_work);
-	g_ts_data.polling_enabled = 1;
+	INIT_WORK(&ts_data->ft5406_work, rpi_ft5406_work);
 
-	if (g_ts_data.is_polling)
-		schedule_work(&g_ts_data.ft5406_work);
+	schedule_work(&ts_data->ft5406_work);
 
 	return 0;
 
 input_register_failed:
 	input_free_device(input_dev);
-input_allocate_failed:
-timeout_failed:
 	return ret;
 }
 
@@ -339,10 +279,11 @@ static void rpi_ft5406_remove(struct i2c_client *client)
 		input_unregister_device(ts_data->input_dev);
 		input_free_device(ts_data->input_dev);
 	}
+	regulator_disable(ts_data->power_supply);
 }
 
 static const struct i2c_device_id rpi_ft5406_id[] = {
-	{ "rpi_ft5406", },
+	{"rpi_ft5406", 0},
 	{}
 };
 
