@@ -42,6 +42,12 @@
 	};
 
 	clocks {
+		cec_clock: cec-clock {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <12000000>;
+		};
+
 		clk_ext_camera: clk-ext-camera {
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
@@ -336,6 +342,10 @@
 		compatible = "adi,adv7533";
 		reg = <0x3d>, <0x3c>, <0x3f>, <0x38>;
 		reg-names = "main", "cec", "edid", "packet";
+		clocks = <&cec_clock>;
+		clock-names = "cec";
+		interrupt-parent = <&gpiod>;
+		interrupts = <10 IRQ_TYPE_EDGE_FALLING>;
 		status = "disabled";
 		adi,dsi-lanes = <4>;
 		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
