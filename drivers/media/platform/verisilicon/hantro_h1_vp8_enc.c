@@ -1216,7 +1216,7 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 	reg = 0;
 	if (mb_width * mb_height > MAX_MB_COUNT_TO_DISABLE_QUARTER_PIXEL_MV)
 		reg = H1_REG_ENC_CTRL2_DISABLE_QUARTER_PIXMV;
-	reg |= H1_REG_ENC_CTRL2_ENTROPY_CODING_MODE;
+	reg |= H1_REG_ENC_CTRL2_VP8_BOOLENC_ENABLE;
 
 	inter_favor = 128 - ctx->vp8_enc.prob_intra;
 	if (inter_favor >= 0)
