@@ -105,6 +105,80 @@ static void stm32_pcie_stop_link(struct dw_pcie *pci)
 		gpiod_set_value(stm32_pcie->reset_gpio, 1);
 }
 
+static int stm32_pcie_suspend_noirq(struct device *dev)
+{
+	struct stm32_pcie *stm32_pcie = dev_get_drvdata(dev);
+
+	stm32_pcie_stop_link(stm32_pcie->pci);
+	clk_disable_unprepare(stm32_pcie->clk);
+	phy_exit(stm32_pcie->phy);
+
+	return pinctrl_pm_select_sleep_state(dev);
+}
+
+static int stm32_pcie_resume_noirq(struct device *dev)
+{
+	struct stm32_pcie *stm32_pcie = dev_get_drvdata(dev);
+	struct dw_pcie *pci = stm32_pcie->pci;
+	struct dw_pcie_rp *pp = &pci->pp;
+	int ret;
+
+	/* init_state was set in pinctrl_bind_pins() before probe */
+	if (!IS_ERR(dev->pins->init_state))
+		ret = pinctrl_select_state(dev->pins->p, dev->pins->init_state);
+	else
+		ret = pinctrl_pm_select_default_state(dev);
+
+	if (ret) {
+		dev_err(dev, "Failed to activate pinctrl pm state: %d\n", ret);
+		return ret;
+	}
+
+	ret = phy_init(stm32_pcie->phy);
+	if (ret) {
+		pinctrl_pm_select_default_state(dev);
+		return ret;
+	}
+
+	ret = clk_prepare_enable(stm32_pcie->clk);
+	if (ret)
+		goto clk_err;
+
+	ret = stm32_pcie_host_init(pp);
+	if (ret)
+		goto host_err;
+
+	ret = dw_pcie_setup_rc(pp);
+	if (ret)
+		goto pcie_err;
+
+	ret = stm32_pcie_start_link(stm32_pcie->pci);
+	if (ret)
+		goto pcie_err;
+
+	/* Ignore errors, the link may come up later */
+	dw_pcie_wait_for_link(stm32_pcie->pci);
+
+	pinctrl_pm_select_default_state(dev);
+
+	return 0;
+
+pcie_err:
+	dw_pcie_host_deinit(pp);
+host_err:
+	clk_disable_unprepare(stm32_pcie->clk);
+clk_err:
+	phy_exit(stm32_pcie->phy);
+	pinctrl_pm_select_default_state(dev);
+
+	return ret;
+}
+
+static const struct dev_pm_ops stm32_pcie_pm_ops = {
+	NOIRQ_SYSTEM_SLEEP_PM_OPS(stm32_pcie_suspend_noirq,
+				  stm32_pcie_resume_noirq)
+};
+
 static const struct dw_pcie_host_ops stm32_pcie_host_ops = {
 	.host_init = stm32_pcie_host_init
 };
@@ -339,6 +413,7 @@ static struct platform_driver stm32_pcie_driver = {
 	.driver = {
 		.name = "stm32-pcie",
 		.of_match_table = stm32_pcie_of_match,
+		.pm		= &stm32_pcie_pm_ops,
 	},
 };
 
