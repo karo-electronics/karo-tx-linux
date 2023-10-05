@@ -108,8 +108,26 @@ static void macronix_nor_default_init(struct spi_nor *nor)
 	nor->params->set_4byte_addr_mode = spi_nor_set_4byte_addr_mode;
 }
 
+static int macronix_nor_read_id(struct spi_nor *nor, u8 naddr, u8 ndummy, u8 *id,
+				enum spi_nor_protocol proto)
+{
+	int i, ret;
+
+	ret = spi_nor_default_read_id(nor, naddr, ndummy, id, proto);
+	/* Retrieve odd array and re-sort id because of read id format will be A-A-B-B-C-C
+	 * after enter into octal dtr mode for Macronix flashes.
+	 */
+	if (proto == SNOR_PROTO_8_8_8_DTR) {
+		for (i = 0; i < nor->info->id_len; i++)
+			id[i] = id[i * 2];
+	}
+
+	return ret;
+}
+
 static const struct spi_nor_fixups macronix_nor_fixups = {
 	.default_init = macronix_nor_default_init,
+	.read_id = macronix_nor_read_id,
 };
 
 const struct spi_nor_manufacturer spi_nor_macronix = {
