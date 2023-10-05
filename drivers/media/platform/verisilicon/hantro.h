@@ -497,4 +497,7 @@ int hantro_postproc_alloc(struct hantro_ctx *ctx);
 int hanto_postproc_enum_framesizes(struct hantro_ctx *ctx,
 				   struct v4l2_frmsizeenum *fsize);
 
+void hantro_h1_set_axi_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx);
+void hantro_h1_set_color_conv(struct hantro_dev *vpu, struct hantro_ctx *ctx);
+
 #endif /* HANTRO_H_ */
