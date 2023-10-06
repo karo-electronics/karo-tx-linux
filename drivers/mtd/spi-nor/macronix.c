@@ -118,6 +118,40 @@ static const struct flash_info macronix_nor_parts[] = {
 	{ "mx66u2g45g",	 INFO(0xc2253c, 0, 64 * 1024, 4096)
 		NO_SFDP_FLAGS(SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ)
 		FIXUP_FLAGS(SPI_NOR_4B_OPCODES) },
+	{ "mx66uw2g345gx0", INFO(0xc2943c, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx66lm1g45g", INFO(0xc2853b, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25lm51245g", INFO(0xc2853a, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25lw51245g", INFO(0xc2863a, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25lm25645g", INFO(0xc28539, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx66uw2g345g", INFO(0xc2843c, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx66um1g45g", INFO(0xc2803b, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx66uw1g45g", INFO(0xc2813b, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25uw51345g", INFO(0xc2843a, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25um25645g", INFO(0xc28039, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25uw25645g", INFO(0xc28139, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25um25345g", INFO(0xc28339, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25uw25345g", INFO(0xc28439, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25uw12845g", INFO(0xc28138, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25uw12345g", INFO(0xc28438, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25uw6445g", INFO(0xc28137, 0, 0, 0)
+		PARSE_SFDP },
+	{ "mx25uw6345g", INFO(0xc28437, 0, 0, 0)
+		PARSE_SFDP },
 };
 
 static int macronix_nor_octal_dtr_en(struct spi_nor *nor)
