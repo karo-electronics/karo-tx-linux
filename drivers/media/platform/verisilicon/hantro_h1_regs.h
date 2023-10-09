@@ -80,6 +80,7 @@
 #define    H1_REG_ENC_CTRL2_TRANS8X8_MODE_EN		BIT(21)
 #define    H1_REG_ENC_CTRL2_CABAC_INIT_IDC(x)		((x) << 19)
 #define    H1_REG_ENC_CTRL2_VP8_BOOLENC_ENABLE		BIT(18)
+#define    H1_REG_ENC_CTRL2_ENTROPY_CABAC		BIT(18)
 #define    H1_REG_ENC_CTRL2_H264_INTER4X4_MODE		BIT(17)
 #define    H1_REG_ENC_CTRL2_H264_STREAM_MODE		BIT(16)
 #define    H1_REG_ENC_CTRL2_INTRA16X16_MODE(x)		((x))
@@ -148,6 +149,8 @@
 #define     H1_REG_VP8_SEG0_DQUT_DC_Y2(x)		(((x) & 0x1ff) << 17)
 #define     H1_REG_VP8_SEG0_DQUT_AC_Y1(x)		(((x) & 0x1ff) << 8)
 #define     H1_REG_VP8_SEG0_DQUT_DC_Y1(x)		(((x) & 0xff) << 0)
+#define H1_REG_H264_REFERENCE_IDX			0x084
+#define     H1_REG_H264_MV_REF_IDX(x)			(((x) & 0x03) << 26)
 #define H1_REG_VP8_SEG0_QUANT_DQUT_1			0x088
 #define     H1_REG_VP8_SEGMENT_MAP_UPDATE		BIT(30)
 #define     H1_REG_VP8_SEGMENT_EN			BIT(29)
@@ -156,6 +159,8 @@
 #define     H1_REG_VP8_SEG0_DQUT_AC_CHR(x)		(((x) & 0x1ff) << 17)
 #define     H1_REG_VP8_SEG0_DQUT_DC_CHR(x)		(((x) & 0xff) << 9)
 #define     H1_REG_VP8_SEG0_DQUT_AC_Y2(x)		(((x) & 0x1ff) << 0)
+#define H1_REG_H264_REFERENCE_CTRL			0x088
+#define     H1_REG_H264_MARK_LONGTRERM			BIT(26)
 #define H1_REG_VP8_BOOL_ENC				0x08c
 #define H1_REG_CHKPT_DELTA_QP				0x090
 #define     H1_REG_CHKPT_DELTA_QP_CHK0(x)		(((x) & 0x0f) << 0)
