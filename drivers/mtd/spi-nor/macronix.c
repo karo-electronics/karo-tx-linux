@@ -235,6 +235,10 @@ static int macronix_nor_set_octal_dtr(struct spi_nor *nor, bool enable)
 static void macronix_nor_default_init(struct spi_nor *nor)
 {
 	nor->params->quad_enable = spi_nor_sr1_bit6_quad_enable;
+}
+
+static void macronix_nor_late_init(struct spi_nor *nor)
+{
 	nor->params->set_4byte_addr_mode = spi_nor_set_4byte_addr_mode;
 	nor->params->octal_dtr_enable = macronix_nor_set_octal_dtr;
 }
@@ -258,6 +262,7 @@ static int macronix_nor_read_id(struct spi_nor *nor, u8 naddr, u8 ndummy, u8 *id
 
 static const struct spi_nor_fixups macronix_nor_fixups = {
 	.default_init = macronix_nor_default_init,
+	.late_init = macronix_nor_late_init,
 	.read_id = macronix_nor_read_id,
 };
 
