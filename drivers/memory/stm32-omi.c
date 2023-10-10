@@ -235,6 +235,10 @@ int stm32_omi_dlyb_find_tap(struct stm32_omi *omi, bool rx_only, u8 *window_len)
 			ret = omi->check_transfer(omi);
 			omi->calibration = false;
 			if (ret) {
+				if ((!rx_only && ret == -ETIMEDOUT) ||
+				    ret == -EOPNOTSUPP)
+					break;
+
 				rx_len = 0;
 			} else {
 				rx_len++;
@@ -244,6 +248,9 @@ int stm32_omi_dlyb_find_tap(struct stm32_omi *omi, bool rx_only, u8 *window_len)
 				}
 			}
 		}
+
+		if (ret == -EOPNOTSUPP)
+			break;
 
 		rx_tap_w[tx_tap].end = rx_window_end;
 		rx_tap_w[tx_tap].length = rx_window_len;
@@ -259,6 +266,11 @@ int stm32_omi_dlyb_find_tap(struct stm32_omi *omi, bool rx_only, u8 *window_len)
 		}
 		dev_dbg(omi->dev, "rx_tap_w[%02d].end = %d rx_tap_w[%02d].length = %d\n",
 			tx_tap, rx_tap_w[tx_tap].end, tx_tap, rx_tap_w[tx_tap].length);
+	}
+
+	if (ret == -EOPNOTSUPP) {
+		dev_err(omi->dev, "Calibration can not be done on this device\n");
+		return ret;
 	}
 
 	if (rx_only) {
