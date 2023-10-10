@@ -67,6 +67,7 @@
 #define TOUCH_EVENT_RESERVED		0x03
 
 #define EDT_NAME_LEN			23
+#define EDT_DMA_BUFSZ			63
 #define EDT_SWITCH_MODE_RETRIES		10
 #define EDT_SWITCH_MODE_DELAY		5 /* msec */
 #define EDT_RAW_DATA_RETRIES		100
@@ -112,6 +113,7 @@ struct edt_ft5x06_ts_data {
 	struct gpio_desc *reset_gpio;
 	struct gpio_desc *wake_gpio;
 
+	u8 *rdbuf;
 #if defined(CONFIG_DEBUG_FS)
 	struct dentry *debug_dir;
 	u8 *raw_buffer;
@@ -199,7 +201,7 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 	struct edt_ft5x06_ts_data *tsdata = dev_id;
 	struct device *dev = &tsdata->client->dev;
 	u8 cmd;
-	u8 rdbuf[63];
+	u8 *rdbuf = tsdata->rdbuf;
 	int i, type, x, y, id;
 	int offset, tplen, datalen, crclen;
 	int error;
@@ -226,7 +228,7 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 		goto out;
 	}
 
-	memset(rdbuf, 0, sizeof(rdbuf));
+	memset(rdbuf, 0, sizeof(*rdbuf));
 	datalen = tplen * tsdata->max_support_points + offset + crclen;
 
 	error = edt_ft5x06_ts_readwrite(tsdata->client,
@@ -319,7 +321,8 @@ static int edt_ft5x06_register_write(struct edt_ft5x06_ts_data *tsdata,
 static int edt_ft5x06_register_read(struct edt_ft5x06_ts_data *tsdata,
 				    u8 addr)
 {
-	u8 wrbuf[2], rdbuf[2];
+	u8 *rdbuf = tsdata->rdbuf;
+	u8 *wrbuf = &tsdata->rdbuf[2];
 	int error;
 
 	switch (tsdata->version) {
@@ -765,7 +768,7 @@ static ssize_t edt_ft5x06_debugfs_raw_data_read(struct file *file,
 	int val, i, error;
 	size_t read = 0;
 	int colbytes;
-	char wrbuf[3];
+	u8 *wrbuf = tsdata->rdbuf;
 	u8 *rdbuf;
 
 	if (*off < 0 || *off >= tsdata->raw_bufsize)
@@ -813,8 +816,7 @@ static ssize_t edt_ft5x06_debugfs_raw_data_read(struct file *file,
 	wrbuf[1] = 0x0e;
 	for (i = 0; i < tsdata->num_x; i++) {
 		wrbuf[2] = i;  /* column index */
-		error = edt_ft5x06_ts_readwrite(tsdata->client,
-						sizeof(wrbuf), wrbuf,
+		error = edt_ft5x06_ts_readwrite(tsdata->client, 3, wrbuf,
 						colbytes, rdbuf);
 		if (error)
 			goto out;
@@ -880,7 +882,7 @@ static void edt_ft5x06_ts_teardown_debugfs(struct edt_ft5x06_ts_data *tsdata)
 static int edt_ft5x06_ts_identify(struct i2c_client *client,
 				  struct edt_ft5x06_ts_data *tsdata)
 {
-	u8 rdbuf[EDT_NAME_LEN];
+	u8 *rdbuf = tsdata->rdbuf;
 	char *p;
 	int error;
 	char *model_name = tsdata->name;
@@ -890,7 +892,7 @@ static int edt_ft5x06_ts_identify(struct i2c_client *client,
 	 * if we get less than EDT_NAME_LEN, we don't want
 	 * to have garbage in there
 	 */
-	memset(rdbuf, 0, sizeof(rdbuf));
+	memset(rdbuf, 0, sizeof(*rdbuf));
 	error = edt_ft5x06_ts_readwrite(client, 1, "\xBB",
 					EDT_NAME_LEN - 1, rdbuf);
 	if (error)
@@ -1136,7 +1138,6 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 {
 	const struct edt_i2c_chip_data *chip_data;
 	struct edt_ft5x06_ts_data *tsdata;
-	u8 buf[2] = { 0xfc, 0x00 };
 	struct input_dev *input;
 	unsigned long irq_flags;
 	int error;
@@ -1144,11 +1145,12 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 
 	dev_dbg(&client->dev, "probing for EDT FT5x06 I2C\n");
 
-	tsdata = devm_kzalloc(&client->dev, sizeof(*tsdata), GFP_KERNEL);
+	tsdata = devm_kzalloc(&client->dev, sizeof(*tsdata) + EDT_DMA_BUFSZ, GFP_KERNEL);
 	if (!tsdata) {
 		dev_err(&client->dev, "failed to allocate driver data.\n");
 		return -ENOMEM;
 	}
+	tsdata->rdbuf = (void *)tsdata + sizeof(*tsdata);
 
 	chip_data = device_get_match_data(&client->dev);
 	if (!chip_data)
@@ -1263,7 +1265,8 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 	 * Dummy read access. EP0700MLP1 returns bogus data on the first
 	 * register read access and ignores writes.
 	 */
-	edt_ft5x06_ts_readwrite(tsdata->client, 2, buf, 2, buf);
+	tsdata->rdbuf[0] = 0xfc;
+	edt_ft5x06_ts_readwrite(tsdata->client, 2, tsdata->rdbuf, 2, tsdata->rdbuf);
 
 	edt_ft5x06_ts_set_regs(tsdata);
 	edt_ft5x06_ts_get_defaults(&client->dev, tsdata);
