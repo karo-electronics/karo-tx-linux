@@ -482,20 +482,23 @@ static int imx_sec_dsim_probe(struct platform_device *pdev)
 
 	ret = sec_dsim_of_parse_resets(dsim_dev);
 	if (ret)
-		return ret;
+		goto put_resets;
 
 	atomic_set(&dsim_dev->rpm_suspended, 1);
 
 	pm_runtime_enable(dev);
 
 	ret = component_add(dev, &imx_sec_dsim_ops);
-	if (ret) {
-		pm_runtime_disable(dev);
-		sec_dsim_of_put_resets(dsim_dev);
-		dev_err_probe(dev, ret, "Failed to add component\n");
-	}
+	if (ret)
+		goto pm_disable;
 
 	return ret;
+
+ pm_disable:
+	pm_runtime_disable(dev);
+ put_resets:
+	sec_dsim_of_put_resets(dsim_dev);
+	return dev_err_probe(dev, ret, "Failed to add component\n");
 }
 
 static int imx_sec_dsim_remove(struct platform_device *pdev)
