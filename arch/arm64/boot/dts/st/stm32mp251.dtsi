@@ -1368,6 +1368,7 @@
 					clocks = <&rcc CK_KER_SAI1>;
 					clock-names = "sai_ck";
 					dmas = <&hpdma 73 0x43 0x21 0>;
+					power-domains = <&CLUSTER_PD>;
 					status = "disabled";
 				};
 
@@ -1378,6 +1379,7 @@
 					clocks = <&rcc CK_KER_SAI1>;
 					clock-names = "sai_ck";
 					dmas = <&hpdma 74 0x43 0x12 0>;
+					power-domains = <&CLUSTER_PD>;
 					status = "disabled";
 				};
 			};
@@ -1403,6 +1405,7 @@
 					clocks = <&rcc CK_KER_SAI2>;
 					clock-names = "sai_ck";
 					dmas = <&hpdma 75 0x43 0x21 0>;
+					power-domains = <&CLUSTER_PD>;
 					status = "disabled";
 				};
 
@@ -1413,6 +1416,7 @@
 					clocks = <&rcc CK_KER_SAI2>;
 					clock-names = "sai_ck";
 					dmas = <&hpdma 76 0x43 0x12 0>;
+					power-domains = <&CLUSTER_PD>;
 					status = "disabled";
 				};
 			};
@@ -1438,6 +1442,7 @@
 					clocks = <&rcc CK_KER_SAI3>;
 					clock-names = "sai_ck";
 					dmas = <&hpdma 77 0x43 0x21 0>;
+					power-domains = <&CLUSTER_PD>;
 					status = "disabled";
 				};
 
@@ -1448,6 +1453,7 @@
 					clocks = <&rcc CK_KER_SAI3>;
 					clock-names = "sai_ck";
 					dmas = <&hpdma 78 0x43 0x12 0>;
+					power-domains = <&CLUSTER_PD>;
 					status = "disabled";
 				};
 			};
@@ -1533,6 +1539,7 @@
 					clocks = <&rcc CK_KER_SAI4>;
 					clock-names = "sai_ck";
 					dmas = <&hpdma 79 0x63 0x21 0>;
+					power-domains = <&CLUSTER_PD>;
 					status = "disabled";
 				};
 
@@ -1543,6 +1550,7 @@
 					clocks = <&rcc CK_KER_SAI4>;
 					clock-names = "sai_ck";
 					dmas = <&hpdma 80 0x43 0x12 0>;
+					power-domains = <&CLUSTER_PD>;
 					status = "disabled";
 				};
 			};
