@@ -36,12 +36,35 @@ static const struct stm32_mdf_sf_mode stm32_mdf_mode[STM32_MDF_MODE_NB] = {
 	{ "manchester_f", STM32_MDF_MODE_MANCHESTER_F },
 };
 
+static bool stm32_mdf_sitf_readable_reg(struct device *dev, unsigned int reg)
+{
+	switch (reg) {
+	case MDF_SITFCR_REG:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool stm32_mdf_sitf_writeable_reg(struct device *dev, unsigned int reg)
+{
+	switch (reg) {
+	case MDF_SITFCR_REG:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static const struct regmap_config stm32_sitf_regmap_cfg = {
 	.reg_bits = 32,
 	.val_bits = 32,
 	.reg_stride = sizeof(u32),
 	.max_register = MDF_SITFCR_REG,
+	.readable_reg = stm32_mdf_sitf_readable_reg,
+	.writeable_reg = stm32_mdf_sitf_writeable_reg,
 	.fast_io = true,
+	/* Do not use regcache as it does not support single register map */
 };
 
 int stm32_mdf_sitf_start(struct stm32_mdf_sitf *sitf)
@@ -231,25 +254,22 @@ static int stm32_mdf_sitf_remove(struct platform_device *pdev)
 static int stm32_mdf_sitf_suspend(struct device *dev)
 {
 	struct stm32_mdf_sitf *sitf = dev_get_drvdata(dev);
+	int ret;
 
-	regcache_cache_only(sitf->regmap, true);
-	regcache_mark_dirty(sitf->regmap);
+	ret = pinctrl_pm_select_sleep_state(dev);
 
-	return pinctrl_pm_select_sleep_state(dev);
+	regmap_read(sitf->regmap, MDF_SITFCR_REG, &sitf->sitfcr);
+
+	return ret;
 }
 
 static int stm32_mdf_sitf_resume(struct device *dev)
 {
 	struct stm32_mdf_sitf *sitf = dev_get_drvdata(dev);
-	int ret;
 
-	ret = pinctrl_pm_select_default_state(dev);
-	if (ret)
-		return ret;
+	regmap_write(sitf->regmap, MDF_SITFCR_REG, sitf->sitfcr);
 
-	regcache_cache_only(sitf->regmap, false);
-
-	return regcache_sync(sitf->regmap);
+	return pinctrl_pm_select_default_state(dev);
 }
 
 static int stm32_mdf_sitf_runtime_suspend(struct device *dev)

@@ -39,12 +39,12 @@ static bool stm32_mdf_readable_reg(struct device *dev, unsigned int reg)
 
 static bool stm32_mdf_volatile_reg(struct device *dev, unsigned int reg)
 {
-	switch (reg) {
-	case MDF_CKGCR_REG:
-		return true;
-	default:
-		return false;
-	}
+	/*
+	 * In MDF_CKGCR_REG register only CKGACTIVE bit is volatile. MDF_CKGCR_REG is not marked
+	 * as volatible to ease the suspend/resume case, and benefit from the regcache API.
+	 * Access to CKGACTIVE bit is managed specifically instead.
+	 */
+	return false;
 }
 
 static bool stm32_mdf_writeable_reg(struct device *dev, unsigned int reg)
@@ -66,7 +66,9 @@ static const struct regmap_config stm32_mdf_regmap_cfg = {
 	.readable_reg = stm32_mdf_readable_reg,
 	.volatile_reg = stm32_mdf_volatile_reg,
 	.writeable_reg = stm32_mdf_writeable_reg,
+	.num_reg_defaults_raw = MDF_SIDR_REG / sizeof(u32) + 1,
 	.fast_io = true,
+	.cache_type = REGCACHE_FLAT,
 };
 
 /*
@@ -117,8 +119,10 @@ int stm32_mdf_start_mdf(struct stm32_mdf *mdf)
 		if (ret < 0)
 			goto pm_put;
 
-		/* Check clock status */
+		/* Check clock status. Bypass cache to access volatile CKGACTIVE active bit */
+		regcache_cache_bypass(priv->regmap, true);
 		regmap_read(priv->regmap, MDF_CKGCR_REG, &val);
+		regcache_cache_bypass(priv->regmap, false);
 		if (!(val & MDF_CKG_ACTIVE)) {
 			ret = -EINVAL;
 			dev_err(dev, "MDF clock not active\n");
@@ -142,7 +146,10 @@ int stm32_mdf_trigger(struct stm32_mdf *mdf)
 	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
 	int ret;
 
+	/* Bypass cache to ensure TRGO bit is actually set on each write access */
+	regcache_cache_bypass(priv->regmap, true);
 	ret = regmap_set_bits(priv->regmap, MDF_GCR_REG, MDF_GCR_TRGO);
+	regcache_cache_bypass(priv->regmap, false);
 	if (ret < 0)
 		return ret;
 
@@ -572,19 +579,32 @@ static int stm32_mdf_core_resume(struct device *dev)
 	int ret;
 
 	ret = pinctrl_pm_select_default_state(dev);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "Failed to set pins default state: %d\n", ret);
 		return ret;
+	}
 
 	ret = clk_prepare(priv->kclk);
-	if (ret)
-		return ret;
+	if (ret) {
+		dev_err(dev, "Failed to prepare kernel clock: %d\n", ret);
+		goto err_clk;
+	}
 
 	regcache_cache_only(priv->regmap, false);
 	ret = regcache_sync(priv->regmap);
-	if (ret)
-		return ret;
+	if (ret) {
+		dev_err(dev, "Failed to sync cache: %d\n", ret);
+		goto err_cache;
+	}
 
 	return pm_runtime_force_resume(dev);
+
+err_cache:
+	clk_unprepare(priv->kclk);
+err_clk:
+	pinctrl_pm_select_sleep_state(dev);
+
+	return ret;
 }
 
 static int stm32_mdf_core_runtime_suspend(struct device *dev)

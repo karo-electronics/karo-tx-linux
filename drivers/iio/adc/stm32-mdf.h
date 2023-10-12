@@ -265,6 +265,7 @@ enum stm32_sitf_mode {
  * @scksrc: sitf clock source
  * @id: serial interface index
  * @mode: sitf mode
+ * @sitfcr: sitf configuration register backup
  */
 struct stm32_mdf_sitf {
 	struct list_head entry;
@@ -279,6 +280,7 @@ struct stm32_mdf_sitf {
 	unsigned int scksrc;
 	u32 id;
 	u32 mode;
+	u32 sitfcr;
 };
 
 /*

@@ -263,10 +263,12 @@ static const struct regmap_config stm32_mdf_regmap_cfg = {
 	.reg_bits = 32,
 	.val_bits = 32,
 	.reg_stride = sizeof(u32),
-	.max_register = MDF_SIDR_REG,
+	.max_register = MDF_DLTDR_REG,
 	.readable_reg = stm32_mdf_readable_reg,
 	.volatile_reg = stm32_mdf_volatile_reg,
 	.writeable_reg = stm32_mdf_writeable_reg,
+	.num_reg_defaults_raw = MDF_DLTDR_REG / sizeof(u32) + 1,
+	.cache_type = REGCACHE_FLAT,
 	.fast_io = true,
 };
 
@@ -1338,21 +1340,31 @@ static int stm32_mdf_adc_remove(struct platform_device *pdev)
 static int stm32_mdf_adc_suspend(struct device *dev)
 {
 	struct iio_dev *indio_dev = dev_get_drvdata(dev);
+	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
+	int ret = 0;
 
 	if (iio_buffer_enabled(indio_dev))
-		stm32_mdf_predisable(indio_dev);
+		ret = stm32_mdf_predisable(indio_dev);
 
-	return 0;
+	regcache_cache_only(adc->regmap, true);
+	regcache_mark_dirty(adc->regmap);
+
+	return ret;
 }
 
 static int stm32_mdf_adc_resume(struct device *dev)
 {
 	struct iio_dev *indio_dev = dev_get_drvdata(dev);
+	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
+	int ret;
 
-	if (iio_buffer_enabled(indio_dev))
-		stm32_mdf_postenable(indio_dev);
+	regcache_cache_only(adc->regmap, false);
+	ret = regcache_sync(adc->regmap);
 
-	return 0;
+	if (!ret && iio_buffer_enabled(indio_dev))
+		ret = stm32_mdf_postenable(indio_dev);
+
+	return ret;
 }
 
 static SIMPLE_DEV_PM_OPS(stm32_mdf_adc_pm_ops, stm32_mdf_adc_suspend, stm32_mdf_adc_resume);
