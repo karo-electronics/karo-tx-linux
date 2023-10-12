@@ -1702,6 +1702,7 @@
 				resets = <&rcc MDF1_R>;
 				reset-names = "mdf";
 				feature-domains = <&rifsc STM32MP25_RIFSC_MDF1_ID>;
+				power-domains = <&RET_PD>;
 				status = "disabled";
 
 				sitf0: sitf@80 {
