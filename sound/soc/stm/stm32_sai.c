@@ -12,6 +12,7 @@
 #include <linux/module.h>
 #include <linux/of_platform.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/pm_runtime.h>
 #include <linux/reset.h>
 
 #include <sound/dmaengine_pcm.h>
@@ -266,6 +267,8 @@ static int stm32_sai_probe(struct platform_device *pdev)
 
 	sai->set_sync = &stm32_sai_set_sync;
 	platform_set_drvdata(pdev, sai);
+
+	pm_runtime_enable(&pdev->dev);
 
 	return devm_of_platform_populate(&pdev->dev);
 }
