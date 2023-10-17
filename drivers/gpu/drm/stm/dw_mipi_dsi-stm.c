@@ -1111,27 +1111,20 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 		goto err_clk_get;
 	}
 
-	ret = clk_prepare_enable(dsi->pllref_clk);
-	if (ret) {
-		DRM_ERROR("Failed to enable pllref_clk: %d\n", ret);
-		goto err_clk_get;
-	}
-
 	dsi->pclk = devm_clk_get(dev, "pclk");
 	if (IS_ERR(dsi->pclk)) {
 		ret = PTR_ERR(dsi->pclk);
 		DRM_ERROR("Unable to get peripheral clock: %d\n", ret);
-		goto err_dsi_probe;
+		goto err_clk_get;
 	}
 
 	ret = clk_prepare_enable(dsi->pclk);
 	if (ret) {
 		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
-		goto err_dsi_probe;
+		goto err_clk_get;
 	}
 
 	dsi->hw_version = dsi_read(dsi, DSI_VERSION) & VERSION;
-	clk_disable_unprepare(dsi->pclk);
 
 	if (dsi->hw_version != HWVER_130 &&
 	    dsi->hw_version != HWVER_131 &&
@@ -1178,16 +1171,6 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 		goto err_dsi_probe;
 	}
 
-	/*
-	 * We need to wait for the generic bridge to probe before enabling and
-	 * register the internal pixel clock.
-	 */
-	ret = clk_prepare_enable(dsi->pclk);
-	if (ret) {
-		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
-		goto err_dsi_probe;
-	}
-
 	ret = dw_mipi_dsi_clk_register(dsi, dev);
 	if (ret) {
 		DRM_ERROR("Failed to register DSI pixel clock: %d\n", ret);
@@ -1207,11 +1190,12 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	}
 
 	clk_disable_unprepare(dsi->pclk);
+	regulator_disable(dsi->vdd_supply);
 
 	return 0;
 
 err_dsi_probe:
-	clk_disable_unprepare(dsi->pllref_clk);
+	clk_disable_unprepare(dsi->pclk);
 err_clk_get:
 	regulator_disable(dsi->vdd_supply);
 
@@ -1223,9 +1207,7 @@ static int dw_mipi_dsi_stm_remove(struct platform_device *pdev)
 	struct dw_mipi_dsi_stm *dsi = platform_get_drvdata(pdev);
 
 	dw_mipi_dsi_remove(dsi->dsi);
-	clk_disable_unprepare(dsi->pllref_clk);
 	dw_mipi_dsi_clk_unregister(dsi);
-	regulator_disable(dsi->vdd_supply);
 
 	return 0;
 }
