@@ -142,6 +142,7 @@ struct dw_mipi_dsi_stm {
 	int lane_min_kbps;
 	int lane_max_kbps;
 	struct regulator *vdd_supply;
+	struct regulator *vdda18_supply;
 	struct dw_mipi_dsi_plat_data pdata;
 	unsigned int lane_mbps;
 	u32 format;
@@ -1100,7 +1101,20 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 
 	ret = regulator_enable(dsi->vdd_supply);
 	if (ret) {
-		DRM_ERROR("Failed to enable regulator: %d\n", ret);
+		DRM_ERROR("Failed to enable regulator vdd: %d\n", ret);
+		return ret;
+	}
+
+	dsi->vdda18_supply = devm_regulator_get(dev, "vdda18");
+	if (IS_ERR(dsi->vdda18_supply)) {
+		ret = PTR_ERR(dsi->vdda18_supply);
+		dev_err_probe(dev, ret, "Failed to request regulator\n");
+		goto err_clk_get;
+	}
+
+	ret = regulator_enable(dsi->vdda18_supply);
+	if (ret) {
+		DRM_ERROR("Failed to enable regulator vdda18: %d\n", ret);
 		return ret;
 	}
 
@@ -1108,20 +1122,20 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	if (IS_ERR(dsi->pllref_clk)) {
 		ret = PTR_ERR(dsi->pllref_clk);
 		dev_err_probe(dev, ret, "Unable to get pll reference clock\n");
-		goto err_clk_get;
+		goto err_regu_enable;
 	}
 
 	dsi->pclk = devm_clk_get(dev, "pclk");
 	if (IS_ERR(dsi->pclk)) {
 		ret = PTR_ERR(dsi->pclk);
 		DRM_ERROR("Unable to get peripheral clock: %d\n", ret);
-		goto err_clk_get;
+		goto err_regu_enable;
 	}
 
 	ret = clk_prepare_enable(dsi->pclk);
 	if (ret) {
 		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
-		goto err_clk_get;
+		goto err_regu_enable;
 	}
 
 	dsi->hw_version = dsi_read(dsi, DSI_VERSION) & VERSION;
@@ -1196,6 +1210,8 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 
 err_dsi_probe:
 	clk_disable_unprepare(dsi->pclk);
+err_regu_enable:
+	regulator_disable(dsi->vdda18_supply);
 err_clk_get:
 	regulator_disable(dsi->vdd_supply);
 
@@ -1221,6 +1237,7 @@ static int __maybe_unused dw_mipi_dsi_stm_suspend(struct device *dev)
 	clk_disable_unprepare(dsi->pllref_clk);
 	clk_disable_unprepare(dsi->pclk);
 	regulator_disable(dsi->vdd_supply);
+	regulator_disable(dsi->vdda18_supply);
 
 	return 0;
 }
@@ -1232,15 +1249,23 @@ static int __maybe_unused dw_mipi_dsi_stm_resume(struct device *dev)
 
 	DRM_DEBUG_DRIVER("\n");
 
+	ret = regulator_enable(dsi->vdda18_supply);
+	if (ret) {
+		DRM_ERROR("Failed to enable regulator vdda18: %d\n", ret);
+		return ret;
+	}
+
 	ret = regulator_enable(dsi->vdd_supply);
 	if (ret) {
-		DRM_ERROR("Failed to enable regulator: %d\n", ret);
+		regulator_disable(dsi->vdda18_supply);
+		DRM_ERROR("Failed to enable regulator vdd: %d\n", ret);
 		return ret;
 	}
 
 	ret = clk_prepare_enable(dsi->pclk);
 	if (ret) {
 		regulator_disable(dsi->vdd_supply);
+		regulator_disable(dsi->vdda18_supply);
 		DRM_ERROR("Failed to enable pclk: %d\n", ret);
 		return ret;
 	}
@@ -1249,6 +1274,7 @@ static int __maybe_unused dw_mipi_dsi_stm_resume(struct device *dev)
 	if (ret) {
 		clk_disable_unprepare(dsi->pclk);
 		regulator_disable(dsi->vdd_supply);
+		regulator_disable(dsi->vdda18_supply);
 		DRM_ERROR("Failed to enable pllref_clk: %d\n", ret);
 		return ret;
 	}
