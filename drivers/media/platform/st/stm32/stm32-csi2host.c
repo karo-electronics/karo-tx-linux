@@ -170,6 +170,7 @@ struct csi2host_priv {
 	struct clk			*pclk;
 	struct clk			*txesc;
 	struct clk			*csi2phy;
+	struct regulator_bulk_data	supplies[2];
 	struct reset_control		*rstc;
 
 	u8				lanes[CSI2HOST_LANES_MAX];
@@ -927,8 +928,9 @@ static int csi2host_get_resources(struct csi2host_priv *csi2priv,
 {
 	struct resource *res;
 #ifdef CSI2HOST_ERROR_HANDLING
-	int irq, ret;
+	int irq;
 #endif
+	int ret;
 	u32 dev_cfg;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -956,6 +958,13 @@ static int csi2host_get_resources(struct csi2host_priv *csi2priv,
 	if (IS_ERR(csi2priv->rstc))
 		return dev_err_probe(&pdev->dev, PTR_ERR(csi2priv->rstc),
 				     "Couldn't get reset control\n");
+
+	csi2priv->supplies[0].supply = "vdd";
+	csi2priv->supplies[1].supply = "vdda18";
+	ret = devm_regulator_bulk_get(&pdev->dev, ARRAY_SIZE(csi2priv->supplies),
+				      csi2priv->supplies);
+	if (ret)
+		return dev_err_probe(&pdev->dev, ret, "Failed to request regulator vdd\n");
 
 #ifdef CSI2HOST_ERROR_HANDLING
 	irq = platform_get_irq(pdev, 0);
@@ -1135,10 +1144,15 @@ static int csi2host_remove(struct platform_device *pdev)
 static int __maybe_unused csi2host_runtime_suspend(struct device *dev)
 {
 	struct csi2host_priv *csi2priv = dev_get_drvdata(dev);
+	int ret;
 
 	clk_disable_unprepare(csi2priv->csi2phy);
 	clk_disable_unprepare(csi2priv->txesc);
 	clk_disable_unprepare(csi2priv->pclk);
+
+	ret = regulator_bulk_disable(ARRAY_SIZE(csi2priv->supplies), csi2priv->supplies);
+	if (ret < 0)
+		dev_err(dev, "cannot disable regulators %d\n", ret);
 
 	return 0;
 }
@@ -1148,9 +1162,13 @@ static int __maybe_unused csi2host_runtime_resume(struct device *dev)
 	struct csi2host_priv *csi2priv = dev_get_drvdata(dev);
 	int ret;
 
-	ret = clk_prepare_enable(csi2priv->pclk);
+	ret = regulator_bulk_enable(ARRAY_SIZE(csi2priv->supplies), csi2priv->supplies);
 	if (ret)
 		goto error_out;
+
+	ret = clk_prepare_enable(csi2priv->pclk);
+	if (ret)
+		goto error_disable_supplies;
 
 	ret = clk_prepare_enable(csi2priv->txesc);
 	if (ret)
@@ -1166,6 +1184,10 @@ error_disable_txesc:
 	clk_disable_unprepare(csi2priv->txesc);
 error_disable_pclk:
 	clk_disable_unprepare(csi2priv->pclk);
+error_disable_supplies:
+	ret = regulator_bulk_disable(ARRAY_SIZE(csi2priv->supplies), csi2priv->supplies);
+	if (ret < 0)
+		dev_err(dev, "cannot disable regulators %d\n", ret);
 error_out:
 	dev_err(csi2priv->dev, "Failed to resume: %d\n", ret);
 
