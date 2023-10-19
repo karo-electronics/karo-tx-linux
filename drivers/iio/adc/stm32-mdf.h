@@ -240,6 +240,9 @@
 
 #define STM32MP25_MDF_IPIDR_NUMBER 0x00110032
 
+#define STM32_MDF_CCK0 "clk_cck0"
+#define STM32_MDF_CCK1 "clk_cck1"
+
 enum stm32_sitf_mode {
 	STM32_MDF_MODE_LF_SPI,
 	STM32_MDF_MODE_SPI,

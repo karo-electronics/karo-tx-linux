@@ -96,9 +96,9 @@ static int stm32_mdf_sitf_get_clk(struct device *dev, struct stm32_mdf_sitf *sit
 	sitf->sck = sck;
 
 	if (sitf->sck) {
-		if (!strncmp(__clk_get_name(sck), "cck0", 4))
+		if (!strncmp(__clk_get_name(sck), STM32_MDF_CCK0, sizeof(STM32_MDF_CCK0)))
 			sitf->scksrc = STM32_MDF_SCKSRC_CCK0;
-		else if (!strncmp(__clk_get_name(sck), "cck1", 4))
+		else if (!strncmp(__clk_get_name(sck), STM32_MDF_CCK1, sizeof(STM32_MDF_CCK1)))
 			sitf->scksrc = STM32_MDF_SCKSRC_CCK1;
 		else
 			sitf->scksrc = STM32_MDF_SCKSRC_CLK;
