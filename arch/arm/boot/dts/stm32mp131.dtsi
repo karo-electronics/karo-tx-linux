@@ -104,15 +104,15 @@
 					#address-cells = <1>;
 					#size-cells = <0>;
 
-					scmi_reg11: voltd-reg11 {
+					scmi_reg11: regulator@0 {
 						reg = <VOLTD_SCMI_REG11>;
 						regulator-name = "reg11";
 					};
-					scmi_reg18: voltd-reg18 {
+					scmi_reg18: regulator@1 {
 						reg = <VOLTD_SCMI_REG18>;
 						regulator-name = "reg18";
 					};
-					scmi_usb33: voltd-usb33 {
+					scmi_usb33: regulator@2 {
 						reg = <VOLTD_SCMI_USB33>;
 						regulator-name = "usb33";
 					};
