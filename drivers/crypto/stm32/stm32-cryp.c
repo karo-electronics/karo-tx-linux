@@ -114,7 +114,7 @@ static const struct debugfs_reg32 stm32_cryp_regs[] = {
 
 #define SR_IFNF                 BIT(1)
 #define SR_OFNE                 BIT(2)
-#define SR_BUSY                 BIT(8)
+#define SR_BUSY                 BIT(4)
 
 #define DMACR_DIEN              BIT(0)
 #define DMACR_DOEN              BIT(1)
