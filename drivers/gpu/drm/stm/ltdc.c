@@ -929,6 +929,7 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	struct drm_encoder *encoder = NULL, *en_iter;
 	struct drm_bridge *bridge = NULL, *br_iter;
 	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
+	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
 	u32 hsync, vsync, accum_hbp, accum_vbp, accum_act_w, accum_act_h;
 	u32 total_width, total_height;
 	u32 bus_formats = MEDIA_BUS_FMT_RGB888_1X24;
@@ -966,6 +967,8 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 		bus_flags = connector->display_info.bus_flags;
 		if (connector->display_info.num_bus_formats)
 			bus_formats = connector->display_info.bus_formats[0];
+
+		orientation = connector->display_info.panel_orientation;
 	}
 
 	if (!pm_runtime_active(ddev->dev)) {
@@ -1018,7 +1021,9 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 			   GCR_HSPOL | GCR_VSPOL | GCR_DEPOL | GCR_PCPOL | GCR_DEN, val);
 
 	/* check that an output rotation is required */
-	if (ldev->caps.crtc_rotation && (ldev->output_rotation == 90 || ldev->output_rotation == 270)) {
+	if (ldev->caps.crtc_rotation &&
+	    (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
+	     orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)) {
 		/* Set Synchronization size */
 		val = (vsync << 16) | hsync;
 		regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
@@ -1104,7 +1109,8 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 		DRM_DEBUG_DRIVER("Rotation buffer1 address %x\n", rota1_buf);
 		DRM_DEBUG_DRIVER("Rotation buffer picth %x\n", pitch);
 
-		if (ldev->output_rotation == 90 || ldev->output_rotation == 270)
+		if (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
+		    orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)
 			regmap_set_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
 		else
 			regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
@@ -1421,11 +1427,34 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	u32 paddr, paddr1, paddr2, lxcr;
 	enum ltdc_pix_fmt pf;
 	unsigned int plane_rotation = newstate->rotation;
+	struct drm_connector_list_iter co_iter;
+	struct drm_connector *connector = NULL;
+	struct drm_encoder *encoder = NULL, *en_iter;
 	struct drm_rect dst, src;
+	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
 
 	if (!newstate->crtc || !fb) {
 		DRM_DEBUG_DRIVER("fb or crtc NULL");
 		return;
+	}
+
+	/* get encoder from crtc */
+	drm_for_each_encoder(en_iter, ddev)
+		if (en_iter->crtc == newstate->crtc) {
+			encoder = en_iter;
+			break;
+		}
+
+	if (encoder) {
+		/* Get the connector from encoder */
+		drm_connector_list_iter_begin(ddev, &co_iter);
+		drm_for_each_connector_iter(connector, &co_iter)
+			if (connector->encoder == encoder)
+				break;
+		drm_connector_list_iter_end(&co_iter);
+
+		if (connector)
+			orientation = connector->display_info.panel_orientation;
 	}
 
 	/* convert src_ from 16:16 format */
@@ -1443,7 +1472,9 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 
 	regmap_read(ldev->regmap, LTDC_BPCR, &bpcr);
 
-	if (ldev->caps.crtc_rotation && (ldev->output_rotation == 90 || ldev->output_rotation == 270)) {
+	if (ldev->caps.crtc_rotation &&
+	    (orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP ||
+	     orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP)) {
 		avbp = (bpcr & BPCR_AHBP) >> 16;
 		ahbp = bpcr & BPCR_AVBP;
 
@@ -1459,7 +1490,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 
 		/* need to mirroring on X (rotation will switch lines & columns,
 		   not a real rotate */
-		if (ldev->output_rotation == 90) {
+		if (orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP) {
 			if (plane_rotation & DRM_MODE_REFLECT_X)
 				plane_rotation &= ~DRM_MODE_REFLECT_X;
 			else
@@ -1468,7 +1499,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 
 		/* need to mirroring on Y (rotation will switch lines & columns,
 		   not a real rotate */
-		if (ldev->output_rotation == 270) {
+		if (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP) {
 			if (plane_rotation & DRM_MODE_REFLECT_Y)
 				plane_rotation &= ~DRM_MODE_REFLECT_Y;
 			else
@@ -1488,7 +1519,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 		regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
 				  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
 
-		if (ldev->output_rotation == 180) {
+		if (orientation == DRM_MODE_PANEL_ORIENTATION_BOTTOM_UP) {
 			if (plane_rotation & DRM_MODE_REFLECT_X)
 				plane_rotation &= ~DRM_MODE_REFLECT_X;
 			else
@@ -2337,27 +2368,12 @@ int ltdc_load(struct drm_device *ddev)
 		}
 
 		if (bridge) {
-			/* get panel connected to the bridge */
-			ret = drm_of_find_panel_or_bridge(bridge->of_node, 1, 0, &panel, NULL);
-			if (ret && panel) {
-				if (ret != -EPROBE_DEFER)
-					DRM_ERROR("find a panel %d\n", ret);
-				goto err;
-			}
-
 			ret = ltdc_encoder_init(ddev, bridge);
 			if (ret) {
 				if (ret != -EPROBE_DEFER)
 					DRM_ERROR("init encoder endpoint %d\n", i);
 				goto err;
 			}
-		}
-
-		if (panel) {
-			ret = of_property_read_u32(panel->dev->of_node, "rotation",
-						   &ldev->output_rotation);
-			if (ret == -EINVAL)
-				ldev->output_rotation = 0;
 		}
 	}
 

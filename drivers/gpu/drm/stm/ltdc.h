@@ -62,7 +62,6 @@ struct ltdc_device {
 	bool crc_active;
 	u32 max_burst_length;
 	struct reserved_mem *rot_mem;
-	int output_rotation;
 };
 
 int ltdc_load(struct drm_device *ddev);
