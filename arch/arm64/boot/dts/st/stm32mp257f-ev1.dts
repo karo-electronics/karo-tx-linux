@@ -209,7 +209,8 @@
 &eth1 {
 	status = "okay";
 	pinctrl-0 = <&eth1_mdio_pins_a>;
-	pinctrl-names = "default";
+	pinctrl-1 = <&eth1_mdio_sleep_pins_a>;
+	pinctrl-names = "default", "sleep";
 	phy-mode = "rgmii";
 	max-speed = <1000>;
 	st,eth-clk-sel;
@@ -246,7 +247,8 @@
 &eth2 {
 	status = "okay";
 	pinctrl-0 = <&eth2_rgmii_pins_a>;
-	pinctrl-names = "default";
+	pinctrl-1 = <&eth2_rgmii_sleep_pins_a>;
+	pinctrl-names = "default", "sleep";
 	phy-mode = "rgmii-id";
 	max-speed = <1000>;
 	phy-handle = <&phy1_eth2>;
@@ -614,7 +616,8 @@
 &switch0 {
 	status = "okay";
 	pinctrl-0 = <&eth1_rgmii_pins_a>, <&eth3_rgmii_pins_a>;
-	pinctrl-names = "default";
+	pinctrl-1 = <&eth1_rgmii_sleep_pins_a>, <&eth3_rgmii_sleep_pins_a>;
+	pinctrl-names = "default", "sleep";
 	phy-mode = "rgmii";
 	st,ethsw-internal-125;
 };
