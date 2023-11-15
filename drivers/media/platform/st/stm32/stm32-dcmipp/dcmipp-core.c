@@ -36,8 +36,6 @@
 }
 
 #define DCMIPP_CMHWCFGR (0x200)
-#define DCMIPP_CMCR (0x204)
-#define DCMIPP_CMCR_INSEL BIT(0)
 #define DCMIPP_CMSR2 (0x3F8)
 #define DCMIPP_P0HWCFGR (0x400)
 #define DCMIPP_VERR (0xFF4)
@@ -530,9 +528,6 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 			}
 		}
 
-		/* Use the parallel interface */
-		reg_write(dcmipp, DCMIPP_CMCR, 0);
-
 		return 0;
 	}
 
@@ -551,6 +546,7 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 
 		for (i = 0; i < ARRAY_SIZE(sink_ids); i++) {
 			sink = platform_get_drvdata(dcmipp->subdevs[sink_ids[i]]);
+			sink->bus_type = V4L2_MBUS_CSI2_DPHY;
 			ret = media_create_pad_link(&subdev->entity, src_pad + endpoint.port,
 						    sink->ent, 0,
 						    flags);
@@ -573,9 +569,6 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 		 */
 		flags = 0;
 	}
-
-	/* Use the CSI interface */
-	reg_write(dcmipp, DCMIPP_CMCR, DCMIPP_CMCR_INSEL);
 
 	return ret;
 }

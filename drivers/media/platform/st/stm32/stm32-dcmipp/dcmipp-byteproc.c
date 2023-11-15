@@ -26,6 +26,9 @@
 #define DCMIPP_FMT_WIDTH_DEFAULT  640
 #define DCMIPP_FMT_HEIGHT_DEFAULT 480
 
+#define DCMIPP_CMCR (0x204)
+#define DCMIPP_CMCR_INSEL BIT(0)
+
 #define DCMIPP_P0FSCR (0x404)
 #define DCMIPP_P0FSCR_DTMODE_MASK GENMASK(17, 16)
 #define DCMIPP_P0FSCR_DTMODE_SHIFT 16
@@ -704,6 +707,16 @@ static int dcmipp_byteproc_s_stream(struct v4l2_subdev *sd, int enable)
 		dcmipp_byteproc_configure_framerate(byteproc);
 
 		ret = dcmipp_byteproc_configure_scale_crop(byteproc);
+
+		/*
+		 * In case of the subdev is the last one before the csi bridge
+		 * the ent.bus.bus_type will be set to V4L2_MBUS_CSI2_DPHY,
+		 * in which case we need to enable the CSI input of the DCMIPP
+		 * TODO: to will have to reworked to avoid duplication between
+		 * subdeves
+		 */
+		if (byteproc->ved.bus_type == V4L2_MBUS_CSI2_DPHY)
+			reg_write(byteproc, DCMIPP_CMCR, DCMIPP_CMCR_INSEL);
 	}
 	mutex_unlock(&byteproc->lock);
 

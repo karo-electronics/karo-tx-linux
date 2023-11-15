@@ -39,6 +39,8 @@
 #define DCMIPP_PRESCR (0x108)
 #define DCMIPP_PRESUR (0x10c)
 
+#define DCMIPP_CMCR (0x204)
+
 #define IS_SINK(pad) (!(pad))
 #define IS_SRC(pad)  ((pad))
 
@@ -367,6 +369,9 @@ static int dcmipp_par_s_stream(struct v4l2_subdev *sd, int enable)
 		ret = dcmipp_par_configure(par);
 		if (ret)
 			return ret;
+
+		/* Select the DCMIPP parallel interface */
+		reg_write(par, DCMIPP_CMCR, 0);
 
 		/* Enable parallel interface */
 		reg_set(par, DCMIPP_PRCR, DCMIPP_PRCR_ENABLE);

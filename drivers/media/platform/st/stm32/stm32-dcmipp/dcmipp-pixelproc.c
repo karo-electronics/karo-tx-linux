@@ -27,6 +27,9 @@
 #define DCMIPP_FMT_WIDTH_DEFAULT  640
 #define DCMIPP_FMT_HEIGHT_DEFAULT 480
 
+#define DCMIPP_CMCR (0x204)
+#define DCMIPP_CMCR_INSEL BIT(0)
+
 #define DCMIPP_P1FCTCR (0x900)
 #define DCMIPP_P2FCTCR (0xD00)
 #define DCMIPP_PxFCTCR(id) (((id) == 1) ? DCMIPP_P1FCTCR :\
@@ -728,6 +731,16 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 			val |= DCMIPP_PxPPCR_SWAPRB;
 
 		reg_write(pixelproc, DCMIPP_PxPPCR(pixelproc->pipe_id), val);
+
+		/*
+		 * In case of the subdev is the last one before the csi bridge
+		 * the ent.bus.bus_type will be set to V4L2_MBUS_CSI2_DPHY,
+		 * in which case we need to enable the CSI input of the DCMIPP
+		 * TODO: to will have to reworked to avoid duplication between
+		 * subdeves
+		 */
+		if (pixelproc->ved.bus_type == V4L2_MBUS_CSI2_DPHY)
+			reg_write(pixelproc, DCMIPP_CMCR, DCMIPP_CMCR_INSEL);
 	}
 
 out:

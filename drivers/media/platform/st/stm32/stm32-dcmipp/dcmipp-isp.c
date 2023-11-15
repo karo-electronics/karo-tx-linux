@@ -30,6 +30,9 @@
 
 #define DCMIPP_CMSR2_P1VSYNCF BIT(18)
 
+#define DCMIPP_CMCR (0x204)
+#define DCMIPP_CMCR_INSEL BIT(0)
+
 #define DCMIPP_P1FSCR (0x804)
 #define DCMIPP_P1FSCR_DTIDA_MASK GENMASK(5, 0)
 #define DCMIPP_P1FSCR_DTIDA_SHIFT 0
@@ -952,6 +955,16 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		ret = dcmipp_isp_colorconv_auto(isp);
 		if (ret)
 			goto out;
+
+		/*
+		 * In case of the subdev is the last one before the csi bridge
+		 * the ent.bus.bus_type will be set to V4L2_MBUS_CSI2_DPHY,
+		 * in which case we need to enable the CSI input of the DCMIPP
+		 * TODO: to will have to reworked to avoid duplication between
+		 * subdeves
+		 */
+		if (isp->ved.bus_type == V4L2_MBUS_CSI2_DPHY)
+			reg_write(isp, DCMIPP_CMCR, DCMIPP_CMCR_INSEL);
 	}
 
 	isp->streaming = enable;
