@@ -192,28 +192,6 @@ static void hantro_h1_h264_enc_set_params(struct hantro_dev *vpu, struct hantro_
 	/* Don't use stabilization */
 	vepu_write_relaxed(vpu, 0, H1_REG_STABILIZATION_OUTPUT);
 
-	/*
-	 * Color conversion:
-	 *
-	 * Y  = (A * R + B * G + C * B) / 65536
-	 * Cb = (E * (B - Y)) / 65536 + 128
-	 * Cr = (F * (R - Y)) / 65536 + 128
-	 *
-	 * alternatively Cb=f(R,G,B), Cr=f(R,G,B):
-	 *
-	 * Cb = (((-A * R - B * G + (65536 - C) * B) * E) / 65536) / 65536 + 128
-	 * Cr = ((((65536 - A) * R - B * G - C * B) * F) / 65536) / 65536 + 128
-	 *
-	 * BT.601 coefficients
-	 *
-	 * A = 19589 [0x4c85] B = 38443 [0x962b] C = 7504 [0x1d50]
-	 * E = 37008 [0x9090] F = 46740 [0xb694]
-	 *
-	 */
-	vepu_write_relaxed(vpu, 0x962b4c85, H1_REG_RGB_YUV_COEFF(0));
-	vepu_write_relaxed(vpu, 0x90901d50, H1_REG_RGB_YUV_COEFF(1));
-	vepu_write_relaxed(vpu, 0x0000b694, H1_REG_RGB_YUV_COEFF(2));
-
 	/* Disable CIR */
 	vepu_write_relaxed(vpu, 0, H1_REG_CIR_INTRA_CTRL);
 
@@ -420,6 +398,8 @@ int hantro_h1_h264_enc_run(struct hantro_ctx *ctx)
 	hantro_h1_h264_enc_set_src_img_ctrl(vpu, ctx);
 	hantro_h1_h264_enc_set_buffers(vpu, ctx, params);
 
+	hantro_h1_set_color_conv(vpu, ctx);
+
 	reg = H1_REG_DEVICE_CTRL_SCALE_OUTPUT_SWAP8
 		| H1_REG_DEVICE_CTRL_SCALE_OUTPUT_SWAP16
 		| H1_REG_DEVICE_CTRL_SCALE_OUTPUT_SWAP32
@@ -428,15 +408,8 @@ int hantro_h1_h264_enc_run(struct hantro_ctx *ctx)
 		| H1_REG_DEVICE_CTRL_MV_OUTPUT_SWAP32;
 	vepu_write(vpu, reg, H1_REG_DEVICE_CTRL);
 
-	reg = H1_REG_AXI_CTRL_OUTPUT_SWAP16
-		| H1_REG_AXI_CTRL_INPUT_SWAP16
-		| H1_REG_AXI_CTRL_BURST_LEN(16)
-		| H1_REG_AXI_CTRL_OUTPUT_SWAP32
-		| H1_REG_AXI_CTRL_INPUT_SWAP32
-		| H1_REG_AXI_CTRL_OUTPUT_SWAP8
-		| H1_REG_AXI_CTRL_INPUT_SWAP8;
-	/* Make sure that all registers are written at this point */
-	vepu_write(vpu, reg, H1_REG_AXI_CTRL);
+	/* Make sure that all registers are written at this point. */
+	hantro_h1_set_axi_ctrl(vpu, ctx);
 
 	/* Start the hardware */
 	reg = H1_REG_ENC_CTRL_TIMEOUT_EN
