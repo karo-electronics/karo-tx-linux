@@ -833,11 +833,10 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 
 	/* Enable IRQ */
 	if (ldev->caps.crtc_rotation)
-		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE |
-			        IER_RRIE | IER_TERRIE | IER_FURIE);
+		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE |
+				IER_FURIE);
 	else
-		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE |
-			        IER_RRIE | IER_TERRIE);
+		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE);
 
 	/* Commit shadow registers = update planes at next vblank */
 	if (!ldev->caps.plane_reg_shadow)
@@ -864,10 +863,10 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	/* disable IRQ */
 	if (ldev->caps.crtc_rotation)
 		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE |
-				  IER_RRIE | IER_TERRIE | IER_FURIE);
+				  IER_TERRIE | IER_FURIE);
 	else
 		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE |
-				  IER_RRIE | IER_TERRIE);
+				  IER_TERRIE);
 
 	/* immediately commit disable of layers before switching off LTDC */
 	if (!ldev->caps.plane_reg_shadow)
@@ -2387,11 +2386,11 @@ int ltdc_load(struct drm_device *ddev)
 
 	/* Disable interrupts */
 	if (ldev->caps.fifo_threshold)
-		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE | IER_RRIE | IER_FUWIE |
-				  IER_TERRIE);
+		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE | IER_FUWIE |
+				  IER_RRIE | IER_TERRIE);
 	else
-		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE | IER_RRIE | IER_FUWIE |
-				  IER_TERRIE | IER_FUEIE | IER_FURIE);
+		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE | IER_FUWIE |
+				  IER_RRIE | IER_TERRIE | IER_FUEIE | IER_FURIE);
 
 	DRM_DEBUG_DRIVER("ltdc hw version 0x%08x\n", ldev->caps.hw_version);
 
