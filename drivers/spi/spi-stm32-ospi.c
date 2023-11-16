@@ -23,6 +23,7 @@ struct stm32_ospi_flash {
 	bool dtr_calibration_done_once;
 	bool is_calibrated;
 	bool sample_later;
+	bool is_octal_bus;
 };
 
 struct stm32_ospi {
@@ -854,6 +855,7 @@ static int stm32_ospi_setup(struct spi_device *spi)
 	struct stm32_omi *omi = ospi->omi;
 	struct stm32_ospi_flash *flash;
 	void __iomem *regs_base = omi->regs_base;
+	u32 bus_freq;
 	int ret;
 
 	if (ctrl->busy)
@@ -885,31 +887,53 @@ static int stm32_ospi_setup(struct spi_device *spi)
 	stm32_ospi_set_prescaler(ospi, flash->presc);
 
 	ospi->last_cs = spi->chip_select;
-	flash->is_str_calibration = true;
+	if (flash->is_octal_bus) {
+		if (gpiod_count(omi->dev, "cs") == -ENOENT) {
+			dev_err(omi->dev, "Can't find cs-gpio property in DT\n");
 
-	ret = stm32_ospi_str_calibration(ospi);
-	if (ret) {
-		dev_info(ospi->dev, "Set flash frequency to a safe value (%d Hz)\n",
-			 STM32_DLYB_FREQ_THRESHOLD);
+			ret = -EINVAL;
+			goto exit;
+		}
 
-		/* Stop the DLL */
-		stm32_omi_dlyb_stop(omi);
-		flash->sample_later = false;
+		bus_freq = DIV_ROUND_UP(omi->clk_rate, flash->presc + 1);
+		if (bus_freq > STM32_DLYB_FREQ_THRESHOLD) {
+			dev_err(ospi->dev, "Octal bus mode not supported above %d Hz)\n",
+				STM32_DLYB_FREQ_THRESHOLD);
 
-		flash->presc = DIV_ROUND_UP(omi->clk_rate,
-					    STM32_DLYB_FREQ_THRESHOLD) - 1;
-		stm32_ospi_set_prescaler(ospi, flash->presc);
+			ret = -EINVAL;
+			goto exit;
+		}
+	} else {
+		flash->is_str_calibration = true;
 
-		flash->dcr_reg |= DCR1_DLYBYP;
-		writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
+		ret = stm32_ospi_str_calibration(ospi);
+		if (ret) {
+			ret = 0;
+
+			dev_info(ospi->dev, "Set flash frequency to a safe value (%d Hz)\n",
+				 STM32_DLYB_FREQ_THRESHOLD);
+
+			/* Stop the DLL */
+			stm32_omi_dlyb_stop(omi);
+			flash->sample_later = false;
+
+			flash->presc = DIV_ROUND_UP(omi->clk_rate,
+						    STM32_DLYB_FREQ_THRESHOLD) - 1;
+			stm32_ospi_set_prescaler(ospi, flash->presc);
+
+			flash->dcr_reg |= DCR1_DLYBYP;
+			writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
+		}
+
+		flash->is_str_calibration = false;
 	}
 
-	flash->is_str_calibration = false;
+exit:
 	mutex_unlock(&ospi->lock);
 	pm_runtime_mark_last_busy(omi->dev);
 	pm_runtime_put_autosuspend(omi->dev);
 
-	return 0;
+	return ret;
 }
 
 static bool stm32_ospi_supports_mem_op(struct spi_mem *mem,
@@ -1055,6 +1079,12 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 			struct stm32_ospi_flash *flash = &ospi->flash[cs];
 
 			flash->is_spi_nor = true;
+		}
+
+		if (of_device_is_compatible(child, "st,octal-bus")) {
+			struct stm32_ospi_flash *flash = &ospi->flash[cs];
+
+			flash->is_octal_bus = true;
 		}
 	}
 
