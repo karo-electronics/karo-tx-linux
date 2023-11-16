@@ -447,7 +447,8 @@ static int stm32_omi_probe(struct platform_device *pdev)
 			hyperflash_count++;
 
 		if (of_device_is_compatible(child, "jedec,spi-nor") ||
-		    of_device_is_compatible(child, "spi-nand"))
+		    of_device_is_compatible(child, "spi-nand") ||
+		    of_device_is_compatible(child, "st,octal-bus"))
 			spi_flash_count++;
 
 		child_count++;
