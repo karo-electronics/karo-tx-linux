@@ -94,6 +94,17 @@
 	};
 };
 
+&mlahb {
+	intc_rpmsg: interrupt-controller@1 {
+		compatible = "rpmsg,intc";
+		reg = <1 0>;
+		#interrupt-cells = <1>;
+		interrupt-controller;
+	};
+
+
+};
+
 &rtc {
 	st,lsco = <RTC_OUT2_RMP>;
 	pinctrl-0 = <&rtc_out2_rmp_pins_a>;
