@@ -212,3 +212,13 @@
 &usb2_phy2 {
 	status = "okay";
 };
+
+&usb3dr {
+	status = "okay";
+
+	dwc3: usb@48300000 {
+		maximum-speed = "high-speed";
+		role-switch-default-mode = "peripheral";
+		usb-role-switch;
+	};
+};
