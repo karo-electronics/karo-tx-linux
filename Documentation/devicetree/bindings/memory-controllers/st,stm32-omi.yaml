@@ -76,6 +76,9 @@ properties:
 
   ranges: true
 
+  power-domains:
+    maxItems: 1
+
 required:
   - compatible
   - reg
@@ -158,6 +161,7 @@ examples:
       clocks = <&scmi_clk CK_SCMI_OSPI1>;
       resets = <&scmi_reset RST_SCMI_OSPI1DLL>, <&scmi_reset RST_SCMI_OSPI1DLL>;
       feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+      power-domains = <&CLUSTER_PD>;
 
       #address-cells = <1>;
       #size-cells = <0>;
@@ -186,6 +190,7 @@ examples:
       clocks = <&scmi_clk CK_SCMI_OSPI1>;
       resets = <&scmi_reset RST_SCMI_OSPI1>, <&scmi_reset RST_SCMI_OSPI1DLL>;
       feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+      power-domains = <&CLUSTER_PD>;
 
       #address-cells = <2>;
       #size-cells = <1>;
