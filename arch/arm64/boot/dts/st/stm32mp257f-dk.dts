@@ -24,6 +24,7 @@
 		serial0 = &usart2;
 		serial1 = &usart6;
 		serial2 = &usart1;
+		ethernet0 = &eth1;
 	};
 
 	chosen {
@@ -67,6 +68,30 @@
 &arm_wdt {
 	timeout-sec = <32>;
 	status = "okay";
+};
+
+&eth1 {
+	status = "okay";
+	pinctrl-0 = <&eth1_rgmii_pins_b>;
+	pinctrl-names = "default";
+	phy-mode = "rgmii-id";
+	max-speed = <1000>;
+	phy-handle = <&phy1_eth1>;
+	st,eth-ptp-from-rcc;
+
+	mdio1 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "snps,dwmac-mdio";
+		phy1_eth1: ethernet-phy@1 {
+			compatible = "ethernet-phy-id001c.c916";
+			reset-gpios =  <&gpioa 2 GPIO_ACTIVE_LOW>;
+			reset-assert-us = <10000>;
+			reset-deassert-us = <300>;
+			realtek,eee-disable;
+			reg = <1>;
+		};
+	};
 };
 
 &rtc {
