@@ -17,6 +17,7 @@
 	compatible = "st,stm32mp257f-dk", "st,stm32mp257";
 
 	aliases {
+		serial0 = &usart2;
 	};
 
 	chosen {
@@ -51,5 +52,15 @@
 	bus-width = <4>;
 	vmmc-supply = <&scmi_vdd_sdcard>;
 	vqmmc-supply = <&scmi_vddio1>;
+	status = "okay";
+};
+
+&usart2 {
+	pinctrl-names = "default", "idle", "sleep";
+	pinctrl-0 = <&usart2_pins_a>;
+	pinctrl-1 = <&usart2_idle_pins_a>;
+	pinctrl-2 = <&usart2_sleep_pins_a>;
+	/delete-property/dmas;
+	/delete-property/dma-names;
 	status = "okay";
 };
