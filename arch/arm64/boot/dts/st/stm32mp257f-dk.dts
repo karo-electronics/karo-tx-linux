@@ -55,6 +55,11 @@
 		device_type = "memory";
 		reg = <0x0 0x80000000 0x1 0x0>;
 	};
+
+	wifi_pwrseq: wifi-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		reset-gpios = <&gpiog 8 GPIO_ACTIVE_LOW>;
+	};
 };
 
 &arm_wdt {
@@ -112,6 +117,28 @@
 	vmmc-supply = <&scmi_vdd_sdcard>;
 	vqmmc-supply = <&scmi_vddio1>;
 	status = "okay";
+};
+
+/* Wifi */
+&sdmmc3 {
+	pinctrl-names = "default", "opendrain", "sleep";
+	pinctrl-0 = <&sdmmc3_b4_pins_a>;
+	pinctrl-1 = <&sdmmc3_b4_od_pins_a>;
+	pinctrl-2 = <&sdmmc3_b4_sleep_pins_a>;
+	non-removable;
+	st,neg-edge;
+	bus-width = <4>;
+	vmmc-supply = <&scmi_v3v3>;
+	mmc-pwrseq = <&wifi_pwrseq>;
+	cap-sdio-irq;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	brcmf: bcrmf@1 {
+		reg = <1>;
+		compatible = "brcm,bcm4329-fmac";
+	};
 };
 
 &usart2 {
