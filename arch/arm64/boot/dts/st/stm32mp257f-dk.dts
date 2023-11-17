@@ -415,6 +415,10 @@
 	};
 };
 
+&ipcc1 {
+	status = "okay";
+};
+
 &ltdc {
 	status = "okay";
 
