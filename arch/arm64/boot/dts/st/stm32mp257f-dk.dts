@@ -204,3 +204,11 @@
 	uart-has-rtscts;
 	status = "disabled";
 };
+
+&usb2_phy1 {
+	status = "okay";
+};
+
+&usb2_phy2 {
+	status = "okay";
+};
