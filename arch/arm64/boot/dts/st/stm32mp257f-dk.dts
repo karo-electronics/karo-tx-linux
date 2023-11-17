@@ -174,7 +174,7 @@
 };
 
 &csi2host {
-	status = "disabled";
+	status = "okay";
 	ports {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -196,7 +196,7 @@
 };
 
 &dcmipp {
-	status = "disabled";
+	status = "okay";
 	port {
 		dcmipp_0: endpoint {
 			remote-endpoint = <&csi2host_source>;
@@ -287,7 +287,7 @@
 		clocks = <&clk_ext_camera>;
 		reset-gpios = <&gpiob 1 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
 		powerdown-gpios = <&gpiob 11 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
-		status = "disabled";
+		status = "okay";
 
 		port {
 			imx335_ep: endpoint {
