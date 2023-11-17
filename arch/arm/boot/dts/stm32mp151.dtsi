@@ -489,14 +489,6 @@
 			status = "disabled";
 		};
 
-		hdp: hdp@5002a000 {
-			compatible = "st,stm32mp1-hdp";
-			reg = <0x5002a000 0x400>;
-			clocks = <&rcc HDP>;
-			clock-names = "hdp";
-			status = "disabled";
-		};
-
 		pinctrl_z: pinctrl@54004000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
