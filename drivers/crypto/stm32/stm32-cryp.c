@@ -1633,6 +1633,17 @@ static int stm32_cryp_cipher_one_req(struct crypto_engine *engine, void *areq)
 	if (!cryp)
 		return -ENODEV;
 
+	/* Avoid to use DMA if peripheral 32 bit counter is about to overflow with ctr(aes) */
+	if (is_aes(cryp) && is_ctr(cryp)) {
+		u32 iv_overflow[4];
+
+		memcpy(iv_overflow, req->iv, sizeof(__be32) * 4);
+		iv_overflow[3] = 0xffffffff - be32_to_cpu((__be32)iv_overflow[3]);
+
+		if (req->src->length > iv_overflow[3])
+			cryp->flags &= ~FLG_IN_OUT_DMA;
+	}
+
 	if (cryp->flags & FLG_IN_OUT_DMA)
 		err = stm32_cryp_dma_start(cryp);
 	else
