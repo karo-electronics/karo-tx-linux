@@ -1527,8 +1527,6 @@ static int stm32_cryp_prepare_req(struct skcipher_request *req,
 	rctx = req ? skcipher_request_ctx(req) : aead_request_ctx(areq);
 	rctx->mode &= FLG_MODE_MASK;
 
-	ctx->cryp = cryp;
-
 	cryp->flags = (cryp->flags & ~FLG_MODE_MASK) | rctx->mode;
 	cryp->hw_blocksize = is_aes(cryp) ? AES_BLOCK_SIZE : DES_BLOCK_SIZE;
 	cryp->ctx = ctx;
