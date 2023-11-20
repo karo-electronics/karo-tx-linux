@@ -101,6 +101,7 @@ patternProperties:
           - enum:
               - jedec,spi-nor
               - spi-nand
+              - st,octal-bus
 
     allOf:
       - if:
@@ -109,6 +110,7 @@ patternProperties:
               enum:
                 - jedec,spi-nor
                 - spi-nand
+                - st,octal-bus
 
         then:
           $ref: "/schemas/spi/spi-controller.yaml#"
@@ -140,6 +142,17 @@ patternProperties:
 
           required:
             - st,max-frequency
+
+      - if:
+          properties:
+            compatible:
+              contains:
+                enum:
+                  - st,octal-bus
+
+        then:
+          required:
+            - spi-max-frequency
 
 additionalProperties: false
 
@@ -200,5 +213,34 @@ examples:
         reg = <0x2 0x0 0x4000000>;
         st,max-frequency = <100000000>;
         st,tacc-ns = <48>;
+      };
+    };
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/bus/stm32mp25_sys_bus.h>
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/reset/stm32mp25-resets.h>
+    memory-controller@40430000 {
+      compatible = "st,stm32mp25-omi";
+      reg = <0x40430000 0x400>;
+      memory-region = <&mm_ospi1>;
+      interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
+      dmas = <&hpdma 2 0x62 0x00003121 0x0>,
+             <&hpdma 2 0x42 0x00003112 0x0>;
+      dma-names = "tx", "rx";
+      st,syscfg-dlyb = <&syscfg 0x1000>;
+      clocks = <&scmi_clk CK_SCMI_OSPI1>;
+      resets = <&scmi_reset RST_SCMI_OSPI1>, <&scmi_reset RST_SCMI_OSPI1DLL>;
+      feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+      power-domains = <&CLUSTER_PD>;
+      cs-gpios = <&gpiod 1 GPIO_ACTIVE_LOW>;
+
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      flash@0 {
+        compatible = "st,octal-bus";
+        reg = <0>;
+        spi-max-frequency = <50000000>;
       };
     };
