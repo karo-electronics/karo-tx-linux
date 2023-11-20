@@ -102,6 +102,9 @@ properties:
         - 0x2: swapped mode
         - 0x3: mux OCTOSPI1 and OCTOSPI2 to port 2
 
+  power-domains:
+    maxItems: 1
+
 patternProperties:
   "^spi@[a-f0-9]+$":
     type: object
@@ -142,6 +145,7 @@ examples:
       st,omm-mux = <0x0>;
       st,omm-cssel-ovr = <0x0>;
       feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPIM_ID>;
+      power-domains = <&CLUSTER_PD>;
 
       ranges = <0 0 0x40430000 0x400>,
                <1 0 0x40440000 0x400>;
@@ -159,6 +163,7 @@ examples:
         clocks = <&rcc CK_KER_OSPI1>;
         resets = <&rcc OSPI1_R>, <&rcc OSPI1DLL_R>;
         feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+        power-domains = <&CLUSTER_PD>;
       };
 
       memory-controller@40440000 {
@@ -174,5 +179,6 @@ examples:
         clocks = <&rcc CK_KER_OSPI2>;
         resets = <&rcc OSPI2_R>, <&rcc OSPI2DLL_R>;
         feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI2_ID>;
+        power-domains = <&CLUSTER_PD>;
       };
     };
