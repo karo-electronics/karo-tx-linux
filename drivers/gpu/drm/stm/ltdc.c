@@ -187,6 +187,7 @@
 #define IER_FUEIE	BIT(6)		/* Fifo Underrun Error Interrupt Enable */
 #define IER_CRCIE	BIT(7)		/* CRC Error Interrupt Enable */
 #define IER_FURIE	BIT(8)		/* Fifo Underrun Rotation Interrupt Enable */
+#define IER_MASK (IER_LIE | IER_FUWIE | IER_TERRIE | IER_RRIE | IER_FUEIE | IER_CRCIE | IER_FURIE)
 
 #define CPSR_CYPOS	GENMASK(15, 0)	/* Current Y position */
 
@@ -831,12 +832,11 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	/* Sets the background color value */
 	regmap_write(ldev->regmap, LTDC_BCCR, BCCR_BCBLACK);
 
-	/* Enable IRQ */
+	/* Enable error IRQ */
+	regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE);
+
 	if (ldev->caps.crtc_rotation)
-		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE |
-				IER_FURIE);
-	else
-		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE);
+		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FURIE);
 
 	/* Commit shadow registers = update planes at next vblank */
 	if (!ldev->caps.plane_reg_shadow)
@@ -860,13 +860,8 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	for (layer_index = 0; layer_index < ldev->caps.nb_layers; layer_index++)
 		regmap_write_bits(ldev->regmap, LTDC_L1CR + layer_index * LAY_OFS, LXCR_MASK, 0);
 
-	/* disable IRQ */
-	if (ldev->caps.crtc_rotation)
-		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE |
-				  IER_TERRIE | IER_FURIE);
-	else
-		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE |
-				  IER_TERRIE);
+	/* disable IRQ errors */
+	regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE | IER_FURIE);
 
 	/* immediately commit disable of layers before switching off LTDC */
 	if (!ldev->caps.plane_reg_shadow)
@@ -2384,13 +2379,8 @@ int ltdc_load(struct drm_device *ddev)
 		goto err;
 	}
 
-	/* Disable interrupts */
-	if (ldev->caps.fifo_threshold)
-		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE | IER_FUWIE |
-				  IER_RRIE | IER_TERRIE);
-	else
-		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE | IER_FUWIE |
-				  IER_RRIE | IER_TERRIE | IER_FUEIE | IER_FURIE);
+	/* Disable all interrupts */
+	regmap_clear_bits(ldev->regmap, LTDC_IER, IER_MASK);
 
 	DRM_DEBUG_DRIVER("ltdc hw version 0x%08x\n", ldev->caps.hw_version);
 
