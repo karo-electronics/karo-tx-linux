@@ -74,8 +74,6 @@ properties:
     description: |
       Phandle to the rifsc device to check access right.
 
-  ranges: true
-
   power-domains:
     maxItems: 1
 
