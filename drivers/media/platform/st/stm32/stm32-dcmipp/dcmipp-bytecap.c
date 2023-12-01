@@ -1066,7 +1066,7 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	/* Initialize the video_device struct */
 	vdev = &vcap->vdev;
 	vdev->device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING |
-			    V4L2_CAP_READWRITE;
+			    V4L2_CAP_IO_MC;
 	vdev->entity.ops = &dcmipp_bytecap_mops;
 	vdev->release = dcmipp_bytecap_release;
 	vdev->fops = &dcmipp_bytecap_fops;
