@@ -761,9 +761,18 @@ static int csi2host_set_pad_format(struct v4l2_subdev *sd,
 
 	if (format->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
 		csi2priv->mf[format->pad] = format->format;
+		/* Same format is exposed to the source pad as well */
+		if (format->pad == CSI2HOST_PAD_SINK)
+			csi2priv->mf[CSI2HOST_PAD_SOURCE_STREAM0] =
+					format->format;
 	} else {
-		framefmt = v4l2_subdev_get_try_format(sd, state, 0);
+		framefmt = v4l2_subdev_get_try_format(sd, state, format->pad);
 		*framefmt = format->format;
+		if (format->pad == CSI2HOST_PAD_SINK) {
+			framefmt = v4l2_subdev_get_try_format(sd, state,
+							      CSI2HOST_PAD_SOURCE_STREAM0);
+			*framefmt = format->format;
+		}
 	}
 
 	return 0;
@@ -778,7 +787,8 @@ static int csi2host_get_pad_format(struct v4l2_subdev *sd,
 	if (format->which == V4L2_SUBDEV_FORMAT_ACTIVE)
 		format->format = csi2priv->mf[format->pad];
 	else
-		format->format = *v4l2_subdev_get_try_format(sd, state, 0);
+		format->format =
+			*v4l2_subdev_get_try_format(sd, state, format->pad);
 
 	return 0;
 }
