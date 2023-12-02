@@ -783,9 +783,17 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 		return -ENOMEM;
 
 	byteproc->regs = bind_data->regs;
+	byteproc->dev = comp;
 
 	/* Initialize the lock */
 	mutex_init(&byteproc->lock);
+
+	/* Initialize the frame format */
+	byteproc->sink_fmt = fmt_default;
+	byteproc->crop = r;
+	byteproc->compose = r;
+	byteproc->src_interval = interval;
+	byteproc->sink_interval = interval;
 
 	/* Initialize ved and sd */
 	ret = dcmipp_ent_sd_register(&byteproc->ved, &byteproc->sd,
@@ -805,14 +813,6 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 	}
 
 	dev_set_drvdata(comp, &byteproc->ved);
-	byteproc->dev = comp;
-
-	/* Initialize the frame format */
-	byteproc->sink_fmt = fmt_default;
-	byteproc->crop = r;
-	byteproc->compose = r;
-	byteproc->src_interval = interval;
-	byteproc->sink_interval = interval;
 
 	return 0;
 }
