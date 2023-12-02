@@ -264,20 +264,15 @@ struct dcmipp_isp_device {
 	struct v4l2_ctrl_handler ctrls;
 };
 
-static const struct v4l2_mbus_framefmt fmt_sink_default = {
+static const struct v4l2_mbus_framefmt fmt_default = {
 	.width = DCMIPP_FMT_WIDTH_DEFAULT,
 	.height = DCMIPP_FMT_HEIGHT_DEFAULT,
 	.code = ISP_MEDIA_BUS_SINK_FMT_DEFAULT,
 	.field = V4L2_FIELD_NONE,
-	.colorspace = V4L2_COLORSPACE_DEFAULT,
-};
-
-static const struct v4l2_mbus_framefmt fmt_src_default = {
-	.width = DCMIPP_FMT_WIDTH_DEFAULT,
-	.height = DCMIPP_FMT_HEIGHT_DEFAULT,
-	.code = ISP_MEDIA_BUS_SRC_FMT_DEFAULT,
-	.field = V4L2_FIELD_NONE,
-	.colorspace = V4L2_COLORSPACE_DEFAULT,
+	.colorspace = V4L2_COLORSPACE_REC709,
+	.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT,
+	.quantization = V4L2_QUANTIZATION_DEFAULT,
+	.xfer_func = V4L2_XFER_FUNC_DEFAULT,
 };
 
 /*
@@ -487,8 +482,8 @@ static void dcmipp_isp_adjust_fmt(struct v4l2_mbus_framefmt *fmt, u32 pad)
 	/* Only accept code in the pix map table */
 	vpix = dcmipp_isp_pix_map_by_code(fmt->code, pad);
 	if (!vpix)
-		fmt->code = IS_SRC(pad) ? fmt_src_default.code :
-					  fmt_sink_default.code;
+		fmt->code = IS_SRC(pad) ? ISP_MEDIA_BUS_SRC_FMT_DEFAULT :
+					  ISP_MEDIA_BUS_SINK_FMT_DEFAULT;
 
 	fmt->width = clamp_t(u32, fmt->width, DCMIPP_FRAME_MIN_WIDTH,
 			     DCMIPP_FRAME_MAX_WIDTH) & ~1;
@@ -496,8 +491,7 @@ static void dcmipp_isp_adjust_fmt(struct v4l2_mbus_framefmt *fmt, u32 pad)
 			      DCMIPP_FRAME_MAX_HEIGHT);
 
 	if (fmt->field == V4L2_FIELD_ANY || fmt->field == V4L2_FIELD_ALTERNATE)
-		fmt->field = IS_SRC(pad) ? fmt_src_default.field :
-					   fmt_sink_default.field;
+		fmt->field = V4L2_FIELD_NONE;
 
 	dcmipp_colorimetry_clamp(fmt);
 }
@@ -511,7 +505,9 @@ static int dcmipp_isp_init_cfg(struct v4l2_subdev *sd,
 		struct v4l2_mbus_framefmt *mf;
 
 		mf = v4l2_subdev_get_try_format(sd, state, i);
-		*mf = IS_SRC(i) ? fmt_src_default : fmt_sink_default;
+		*mf = fmt_default;
+		mf->code = IS_SRC(i) ? ISP_MEDIA_BUS_SRC_FMT_DEFAULT :
+				       ISP_MEDIA_BUS_SINK_FMT_DEFAULT;
 	}
 
 	return 0;
@@ -1121,8 +1117,10 @@ static int dcmipp_isp_comp_bind(struct device *comp, struct device *master,
 	isp->dev = comp;
 
 	/* Initialize the frame format */
-	isp->sink_fmt = fmt_sink_default;
-	isp->src_fmt = fmt_src_default;
+	isp->sink_fmt = fmt_default;
+	isp->sink_fmt.code = ISP_MEDIA_BUS_SINK_FMT_DEFAULT;
+	isp->src_fmt = fmt_default;
+	isp->src_fmt.code = ISP_MEDIA_BUS_SRC_FMT_DEFAULT;
 
 	/* Initialize controls */
 	v4l2_ctrl_handler_init(&isp->ctrls, ARRAY_SIZE(dcmipp_isp_ctrls));
