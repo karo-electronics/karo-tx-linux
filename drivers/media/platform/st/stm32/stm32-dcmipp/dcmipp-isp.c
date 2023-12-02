@@ -603,16 +603,29 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 
 	dcmipp_isp_adjust_fmt(&fmt->format, fmt->pad);
 
-	if (IS_SINK(fmt->pad) && fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-		/* When setting sink format, we have to update the src format */
-		isp->src_fmt = fmt->format;
+	/* When setting sink format, we have to update the src format */
+	if (IS_SINK(fmt->pad)) {
+		struct v4l2_mbus_framefmt *src_pad_fmt;
+
+		if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE)
+			src_pad_fmt = &isp->src_fmt;
+		else
+			src_pad_fmt = v4l2_subdev_get_try_format(sd, state, 1);
+
+		*src_pad_fmt = fmt->format;
 		if (fmt->format.code >= MEDIA_BUS_FMT_Y8_1X8 &&
 		    fmt->format.code < MEDIA_BUS_FMT_SBGGR8_1X8)
-			isp->src_fmt.code = MEDIA_BUS_FMT_YUV8_1X24;
+			src_pad_fmt->code = MEDIA_BUS_FMT_YUV8_1X24;
 		else
-			isp->src_fmt.code = MEDIA_BUS_FMT_RGB888_1X24;
+			src_pad_fmt->code = MEDIA_BUS_FMT_RGB888_1X24;
+
+		dev_dbg(isp->dev, "%s: source format update: new:%dx%d (0x%x, %d, %d, %d, %d)\n",
+			isp->sd.name,
+			src_pad_fmt->width, src_pad_fmt->height,
+			src_pad_fmt->code, src_pad_fmt->colorspace,
+			src_pad_fmt->quantization,
+			src_pad_fmt->xfer_func, src_pad_fmt->ycbcr_enc);
 	}
-	/* TODO - we need to update the try src format as well */
 
 	dev_dbg(isp->dev, "%s: %s format update: old:%dx%d (0x%x, %d, %d, %d, %d) new:%dx%d (0x%x, %d, %d, %d, %d)\n",
 		isp->sd.name,
