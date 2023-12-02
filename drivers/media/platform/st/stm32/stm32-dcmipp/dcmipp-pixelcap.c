@@ -394,8 +394,10 @@ static int dcmipp_pixelcap_try_fmt_vid_cap(struct file *file, void *priv,
 
 	/* Don't accept a pixelformat that is not on the table */
 	vpix = dcmipp_pixelcap_pix_map_by_pixelformat(format->pixelformat);
-	if (!vpix)
+	if (!vpix) {
 		format->pixelformat = fmt_default.pixelformat;
+		vpix = dcmipp_pixelcap_pix_map_by_pixelformat(format->pixelformat);
+	}
 
 	/* Semiplanar & planar formats are only supported on main pipe */
 	if (vpix->plane_nb > 1 && vcap->pipe_id != 1)
