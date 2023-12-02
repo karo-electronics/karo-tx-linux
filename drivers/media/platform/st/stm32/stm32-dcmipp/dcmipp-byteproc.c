@@ -98,17 +98,6 @@ static const struct dcmipp_byteproc_pix_map dcmipp_byteproc_pix_map_list[] = {
 	PIXMAP_MBUS_BPP(JPEG_1X8, 1, 0x00), /* TODO - DT value to be fixed */
 };
 
-static const struct dcmipp_byteproc_pix_map *dcmipp_byteproc_pix_map_by_index(unsigned int i)
-{
-	const struct dcmipp_byteproc_pix_map *l = dcmipp_byteproc_pix_map_list;
-	unsigned int size = ARRAY_SIZE(dcmipp_byteproc_pix_map_list);
-
-	if (i >= size)
-		return NULL;
-
-	return &l[i];
-}
-
 static const struct dcmipp_byteproc_pix_map *dcmipp_byteproc_pix_map_by_code(u32 code)
 {
 	const struct dcmipp_byteproc_pix_map *l = dcmipp_byteproc_pix_map_list;
@@ -275,13 +264,26 @@ static int dcmipp_byteproc_enum_mbus_code(struct v4l2_subdev *sd,
 					  struct v4l2_subdev_state *sd_state,
 					  struct v4l2_subdev_mbus_code_enum *code)
 {
+	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
 	const struct dcmipp_byteproc_pix_map *vpix;
+	struct v4l2_mbus_framefmt *sink_fmt;
 
-	vpix = dcmipp_byteproc_pix_map_by_index(code->index);
-	if (!vpix)
-		return -EINVAL;
+	if (IS_SINK(code->pad)) {
+		if (code->index >= ARRAY_SIZE(dcmipp_byteproc_pix_map_list))
+			return -EINVAL;
+		vpix = &dcmipp_byteproc_pix_map_list[code->index];
+		code->code = vpix->code;
+	} else {
+		/* byteproc doesn't support transformation on format */
+		if (code->index > 0)
+			return -EINVAL;
 
-	code->code = vpix->code;
+		if (code->which == V4L2_SUBDEV_FORMAT_TRY)
+			sink_fmt = v4l2_subdev_get_try_format(sd, sd_state, 0);
+		else
+			sink_fmt = &byteproc->sink_fmt;
+		code->code = sink_fmt->code;
+	}
 
 	return 0;
 }
