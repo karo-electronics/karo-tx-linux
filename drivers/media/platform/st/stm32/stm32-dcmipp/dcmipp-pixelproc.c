@@ -401,11 +401,11 @@ static int dcmipp_pixelproc_get_fmt(struct v4l2_subdev *sd,
 
 	if (IS_SINK(fmt->pad))
 		fmt->format = fmt->which == V4L2_SUBDEV_FORMAT_TRY ?
-			      *v4l2_subdev_get_try_format(sd, state, 0) :
+			      *v4l2_subdev_get_try_format(sd, state, fmt->pad) :
 			      pixelproc->sink_fmt;
 	else
 		fmt->format = fmt->which == V4L2_SUBDEV_FORMAT_TRY ?
-			      *v4l2_subdev_get_try_format(sd, state, 0) :
+			      *v4l2_subdev_get_try_format(sd, state, fmt->pad) :
 			      pixelproc->src_fmt;
 
 	mutex_unlock(&pixelproc->lock);
@@ -435,10 +435,34 @@ static int dcmipp_pixelproc_set_fmt(struct v4l2_subdev *sd,
 			pad_fmt = &pixelproc->src_fmt;
 
 	} else {
-		pad_fmt = v4l2_subdev_get_try_format(sd, state, 0);
+		pad_fmt = v4l2_subdev_get_try_format(sd, state, fmt->pad);
 	}
 
 	dcmipp_pixelproc_adjust_fmt(&fmt->format, fmt->pad);
+
+	/* When setting sink format, we have to update the src format */
+	if (IS_SINK(fmt->pad)) {
+		struct v4l2_mbus_framefmt *src_pad_fmt;
+
+		if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE)
+			src_pad_fmt = &pixelproc->src_fmt;
+		else
+			src_pad_fmt = v4l2_subdev_get_try_format(sd, state, 1);
+
+		*src_pad_fmt = fmt->format;
+		if (fmt->format.code >= MEDIA_BUS_FMT_Y8_1X8 &&
+		    fmt->format.code < MEDIA_BUS_FMT_SBGGR8_1X8)
+			src_pad_fmt->code = MEDIA_BUS_FMT_YUYV8_2X8;
+		else
+			src_pad_fmt->code = MEDIA_BUS_FMT_RGB565_2X8_LE;
+
+		dev_dbg(pixelproc->dev, "%s: source format update: new:%dx%d (0x%x, %d, %d, %d, %d)\n",
+			pixelproc->sd.name,
+			src_pad_fmt->width, src_pad_fmt->height,
+			src_pad_fmt->code, src_pad_fmt->colorspace,
+			src_pad_fmt->quantization,
+			src_pad_fmt->xfer_func, src_pad_fmt->ycbcr_enc);
+	}
 
 	dev_dbg(pixelproc->dev, "%s: %s format update: old:%dx%d (0x%x, %d, %d, %d, %d) new:%dx%d (0x%x, %d, %d, %d, %d)\n",
 		pixelproc->sd.name,
@@ -466,16 +490,6 @@ static int dcmipp_pixelproc_set_fmt(struct v4l2_subdev *sd,
 		pixelproc->compose.left = 0;
 		pixelproc->compose.width = fmt->format.width;
 		pixelproc->compose.height = fmt->format.height;
-
-		/* Update src pad format & size */
-		pixelproc->src_fmt = fmt_src_default;
-		if (fmt->format.code >= MEDIA_BUS_FMT_Y8_1X8 &&
-		    fmt->format.code < MEDIA_BUS_FMT_SBGGR8_1X8)
-			pixelproc->src_fmt.code = MEDIA_BUS_FMT_YUYV8_2X8;
-		else
-			pixelproc->src_fmt.code = MEDIA_BUS_FMT_RGB565_2X8_LE;
-		pixelproc->src_fmt.width = fmt->format.width;
-		pixelproc->src_fmt.height = fmt->format.height;
 	}
 
 out:
