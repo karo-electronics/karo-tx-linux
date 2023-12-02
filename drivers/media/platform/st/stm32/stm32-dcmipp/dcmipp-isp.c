@@ -564,11 +564,11 @@ static int dcmipp_isp_get_fmt(struct v4l2_subdev *sd,
 
 	if (IS_SINK(fmt->pad))
 		fmt->format = fmt->which == V4L2_SUBDEV_FORMAT_TRY ?
-			      *v4l2_subdev_get_try_format(sd, state, 0) :
+			      *v4l2_subdev_get_try_format(sd, state, fmt->pad) :
 			      isp->sink_fmt;
 	else
 		fmt->format = fmt->which == V4L2_SUBDEV_FORMAT_TRY ?
-			      *v4l2_subdev_get_try_format(sd, state, 0) :
+			      *v4l2_subdev_get_try_format(sd, state, fmt->pad) :
 			      isp->src_fmt;
 
 	mutex_unlock(&isp->lock);
@@ -598,7 +598,7 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 			pad_fmt = &isp->src_fmt;
 
 	} else {
-		pad_fmt = v4l2_subdev_get_try_format(sd, state, 0);
+		pad_fmt = v4l2_subdev_get_try_format(sd, state, fmt->pad);
 	}
 
 	dcmipp_isp_adjust_fmt(&fmt->format, fmt->pad);
