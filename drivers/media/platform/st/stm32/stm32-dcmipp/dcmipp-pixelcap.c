@@ -202,7 +202,10 @@ static const struct v4l2_pix_format fmt_default = {
 	.height = DCMIPP_FMT_HEIGHT_DEFAULT,
 	.pixelformat = V4L2_PIX_FMT_RGB565,
 	.field = V4L2_FIELD_NONE,
-	.colorspace = V4L2_COLORSPACE_DEFAULT,
+	.colorspace = V4L2_COLORSPACE_REC709,
+	.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT,
+	.quantization = V4L2_QUANTIZATION_DEFAULT,
+	.xfer_func = V4L2_XFER_FUNC_DEFAULT,
 };
 
 struct dcmipp_pixelcap_buffer {
