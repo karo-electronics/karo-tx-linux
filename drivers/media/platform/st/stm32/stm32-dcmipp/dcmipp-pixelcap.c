@@ -409,8 +409,7 @@ static int dcmipp_pixelcap_try_fmt_vid_cap(struct file *file, void *priv,
 			      hdw_pixel_alignment(format->pixelformat),
 			      &format->height,
 			      DCMIPP_FRAME_MIN_HEIGHT, DCMIPP_FRAME_MAX_HEIGHT,
-			      hdw_pixel_alignment(format->pixelformat),
-			      0);
+			      0, 0);
 	if (format->width != in_w || format->height != in_h)
 		dev_dbg(vcap->dev,
 			"resolution updated: %dx%d -> %dx%d\n",
