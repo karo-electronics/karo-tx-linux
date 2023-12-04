@@ -5,13 +5,13 @@
  *          Fabien Dessenne <fabien.dessenne@st.com> for STMicroelectronics.
  */
 
+#include <linux/arm-smccc.h>
 #include <linux/dma-mapping.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/mailbox_client.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
-#include <linux/nvmem-consumer.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
 #include <linux/of_reserved_mem.h>
@@ -20,10 +20,8 @@
 #include <linux/remoteproc.h>
 #include <linux/reset.h>
 #include <linux/slab.h>
-#include <linux/tee_remoteproc.h>
 
 #include "remoteproc_internal.h"
-#include "remoteproc_elf_helpers.h"
 
 #define HOLD_BOOT		0
 #define RELEASE_BOOT		1
@@ -39,33 +37,14 @@
 #define STM32_MBX_SHUTDOWN	"shutdown"
 #define STM32_MBX_DETACH	"detach"
 
-#define RSC_TBL_SIZE		1024UL
+#define RSC_TBL_SIZE		1024
 
-#define CM_STATE_OFF		0
-#define CM_STATE_INI		1
-#define CM_STATE_CRUN		2
-#define CM_STATE_CSTOP		3
-#define CM_STATE_STANDBY	4
-#define CM_STATE_CRASH		5
-
-/* PWR_CPU2D2SR register definitions */
-#define M33_STATE_FIELD_SHIFT   2
-#define M33_STATE_FIELD_MASK    0x3
-
-#define M33_STATE_OFF		0
-#define M33_STATE_CRUN		1
-#define M33_STATE_CSLEEP	2
-#define M33_STATE_CSTOP		3
-
-/*
- * Define a default index in future may come a global list of
- * firmwares which list platforms and associated firmware(s)
- */
-
-#define STM32_MP1_FW_ID    0
-#define STM32_MP2_FW_ID    1
-
-struct stm32_rproc;
+#define M4_STATE_OFF		0
+#define M4_STATE_INI		1
+#define M4_STATE_CRUN		2
+#define M4_STATE_CSTOP		3
+#define M4_STATE_STANDBY	4
+#define M4_STATE_CRASH		5
 
 struct stm32_syscon {
 	struct regmap *map;
@@ -79,12 +58,6 @@ struct stm32_rproc_mem {
 	phys_addr_t bus_addr;
 	u32 dev_addr;
 	size_t size;
-};
-
-struct stm32_rproc_data {
-	int fw_id;
-	int (*get_info)(struct rproc *rproc);
-	bool dma_ranges;
 };
 
 struct stm32_rproc_mem_ranges {
@@ -102,83 +75,23 @@ struct stm32_mbox {
 
 struct stm32_rproc {
 	struct reset_control *rst;
-	struct reset_control *hold_boot_rst;
 	struct stm32_syscon hold_boot;
 	struct stm32_syscon pdds;
-	struct stm32_syscon cm_state;
+	struct stm32_syscon m4_state;
 	struct stm32_syscon rsctbl;
-	struct stm32_syscon boot_vec;
 	int wdg_irq;
 	u32 nb_rmems;
 	struct stm32_rproc_mem *rmems;
 	struct stm32_mbox mb[MBOX_NB_MBX];
-	bool fw_loaded;
-	struct tee_rproc *trproc;
-	const struct stm32_rproc_data *desc;
+	bool secured_soc;
 	void __iomem *rsc_va;
-	size_t rsc_sz;
 };
-
-static u64 stm32_rproc_get_vect_table(struct rproc *rproc, const struct firmware *fw)
-{
-	struct device *dev = rproc->dev.parent;
-	struct stm32_rproc *ddata = rproc->priv;
-	const void *shdr, *name_table_shdr;
-	const char *name_table;
-	const u8 *elf_data = (void *)fw->data;
-	const void *ehdr = elf_data;
-	size_t fw_size = fw->size;
-	int i;
-	u8 class = fw_elf_get_class(fw);
-	u32 elf_shdr_get_size = elf_size_of_shdr(class);
-	u16 shnum = elf_hdr_get_e_shnum(class, ehdr);
-	u16 shstrndx = elf_hdr_get_e_shstrndx(class, ehdr);
-
-	/*
-	 * If the platform does not support the boot address configuration set the boot address
-	 * to 0.
-	 */
-	if (!ddata->boot_vec.map)
-		return 0;
-
-	/* Look for the vector table */
-	/* First, get the section header according to the elf class */
-	shdr = elf_data + elf_hdr_get_e_shoff(class, ehdr);
-	/* Compute name table section header entry in shdr array */
-	name_table_shdr = shdr + (shstrndx * elf_shdr_get_size);
-	/* Finally, compute the name table section address in elf */
-	name_table = elf_data + elf_shdr_get_sh_offset(class, name_table_shdr);
-
-	for (i = 0; i < shnum; i++, shdr += elf_shdr_get_size) {
-		u64 size = elf_shdr_get_sh_size(class, shdr);
-		u64 offset = elf_shdr_get_sh_offset(class, shdr);
-		u32 name = elf_shdr_get_sh_name(class, shdr);
-
-		if (strcmp(name_table + name, ".isr_vectors"))
-			continue;
-
-		/* make sure we have the entire table */
-		if (offset + size > fw_size || offset + size < size) {
-			dev_err(dev, "vector table truncated\n");
-			return 0;
-		}
-
-		return elf_shdr_get_sh_addr(class, shdr);
-	}
-
-	return 0;
-}
 
 static int stm32_rproc_pa_to_da(struct rproc *rproc, phys_addr_t pa, u64 *da)
 {
 	unsigned int i;
 	struct stm32_rproc *ddata = rproc->priv;
 	struct stm32_rproc_mem *p_mem;
-
-	if (!ddata->rmems) {
-		*da = pa;
-		return 0;
-	}
 
 	for (i = 0; i < ddata->nb_rmems; i++) {
 		p_mem = &ddata->rmems[i];
@@ -200,10 +113,10 @@ static int stm32_rproc_mem_alloc(struct rproc *rproc,
 	struct device *dev = rproc->dev.parent;
 	void *va;
 
-	dev_dbg(dev, "map memory: %pa+%zu\n", &mem->dma, mem->len);
+	dev_dbg(dev, "map memory: %pa+%x\n", &mem->dma, mem->len);
 	va = ioremap_wc(mem->dma, mem->len);
 	if (IS_ERR_OR_NULL(va)) {
-		dev_err(dev, "Unable to map memory region: %pa+%zu\n",
+		dev_err(dev, "Unable to map memory region: %pa+%x\n",
 			&mem->dma, mem->len);
 		return -ENOMEM;
 	}
@@ -230,26 +143,16 @@ static int stm32_rproc_of_memory_translations(struct platform_device *pdev,
 	struct device_node *np;
 	struct stm32_rproc_mem *p_mems;
 	struct stm32_rproc_mem_ranges *mem_range;
-	int cnt = 0, array_size, i, ret = 0;
+	int cnt, array_size, i, ret = 0;
 
 	parent = dev->parent;
 	np = parent->of_node;
 
-	if (ddata->desc->dma_ranges) {
-		cnt = of_property_count_elems_of_size(np, "dma-ranges",
-						      sizeof(*mem_range));
-		if (cnt < 0) {
-			dev_err(dev, "dma-ranges property not defined\n");
-			return -EINVAL;
-		}
-	}
-
-	if (!cnt) {
-		/*  If dma-ranges is empty no memory translation requested. */
-		dev_dbg(dev, "no memory translation\n");
-		ddata->rmems = NULL;
-		ddata->nb_rmems = 0;
-		return 0;
+	cnt = of_property_count_elems_of_size(np, "dma-ranges",
+					      sizeof(*mem_range));
+	if (cnt <= 0) {
+		dev_err(dev, "%s: dma-ranges property not defined\n", __func__);
+		return -EINVAL;
 	}
 
 	p_mems = devm_kcalloc(dev, cnt, sizeof(*p_mems), GFP_KERNEL);
@@ -298,139 +201,6 @@ static int stm32_rproc_mbox_idx(struct rproc *rproc, const unsigned char *name)
 	dev_err(&rproc->dev, "mailbox %s not found\n", name);
 
 	return -EINVAL;
-}
-
-static void stm32_rproc_request_shutdown(struct rproc *rproc)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	int err, dummy_data, idx;
-
-	/* Request shutdown of the remote processor */
-	if (rproc->state != RPROC_OFFLINE && rproc->state != RPROC_CRASHED) {
-		idx = stm32_rproc_mbox_idx(rproc, STM32_MBX_SHUTDOWN);
-		if (idx >= 0 && ddata->mb[idx].chan) {
-			/* A dummy data is sent to allow to block on transmit. */
-			err = mbox_send_message(ddata->mb[idx].chan,
-						&dummy_data);
-			if (err < 0)
-				dev_warn(&rproc->dev, "warning: remote FW shutdown without ack\n");
-		}
-	}
-}
-
-static int stm32_rproc_release(struct rproc *rproc)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	unsigned int err = 0;
-
-	/* To allow platform Standby power mode, set remote proc Deep Sleep. */
-	if (ddata->pdds.map) {
-		err = regmap_update_bits(ddata->pdds.map, ddata->pdds.reg,
-					 ddata->pdds.mask, 1);
-		if (err) {
-			dev_err(&rproc->dev, "failed to set pdds\n");
-			return err;
-		}
-	}
-
-	/* Update coprocessor state to OFF if available. */
-	if (ddata->desc->fw_id == STM32_MP1_FW_ID && ddata->cm_state.map) {
-		err = regmap_update_bits(ddata->cm_state.map,
-					 ddata->cm_state.reg,
-					 ddata->cm_state.mask,
-					 CM_STATE_OFF);
-		if (err) {
-			dev_err(&rproc->dev, "failed to set copro state\n");
-			return err;
-		}
-	}
-
-	return err;
-}
-
-static int stm32_rproc_tee_elf_sanity_check(struct rproc *rproc,
-					    const struct firmware *fw)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	unsigned int ret = 0;
-
-	if (rproc->state == RPROC_DETACHED)
-		return 0;
-
-	ret = tee_rproc_load_fw(ddata->trproc, fw);
-	if (!ret)
-		ddata->fw_loaded = true;
-
-	return ret;
-}
-
-static int stm32_rproc_tee_elf_load(struct rproc *rproc,
-				    const struct firmware *fw)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	unsigned int ret;
-
-	/*
-	 * This function can be called by remote proc for recovery
-	 * without the sanity check. In this case we need to load the firmware
-	 * else nothing done here as the firmware has been preloaded for the
-	 * sanity check to be able to parse it for the resource table
-	 */
-	if (ddata->fw_loaded)
-		return 0;
-
-	ret =  tee_rproc_load_fw(ddata->trproc, fw);
-	if (ret)
-		return ret;
-	ddata->fw_loaded = true;
-
-	/* update the resource table parameters */
-	if (rproc_tee_get_rsc_table(ddata->trproc)) {
-		/* no resource table: reset the related fields */
-		rproc->cached_table = NULL;
-		rproc->table_ptr = NULL;
-		rproc->table_sz = 0;
-	}
-
-	return 0;
-}
-
-static struct resource_table *
-stm32_rproc_tee_elf_find_loaded_rsc_table(struct rproc *rproc,
-					  const struct firmware *fw)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-
-	return tee_rproc_get_loaded_rsc_table(ddata->trproc);
-}
-
-static int stm32_rproc_tee_start(struct rproc *rproc)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-
-	return tee_rproc_start(ddata->trproc);
-}
-
-static int stm32_rproc_tee_attach(struct rproc *rproc)
-{
-	/* Nothing to do, remote proc already started by the secured context */
-	return 0;
-}
-
-static int stm32_rproc_tee_stop(struct rproc *rproc)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	int err;
-
-	stm32_rproc_request_shutdown(rproc);
-
-	err = tee_rproc_stop(ddata->trproc);
-	if (err)
-		return err;
-
-	ddata->fw_loaded = false;
-
-	return stm32_rproc_release(rproc);
 }
 
 static int stm32_rproc_prepare(struct rproc *rproc)
@@ -495,14 +265,7 @@ static int stm32_rproc_prepare(struct rproc *rproc)
 
 static int stm32_rproc_parse_fw(struct rproc *rproc, const struct firmware *fw)
 {
-	struct stm32_rproc *ddata = rproc->priv;
-	int ret;
-
-	if (ddata->trproc)
-		ret = rproc_tee_get_rsc_table(ddata->trproc);
-	else
-		ret = rproc_elf_load_rsc_table(rproc, fw);
-	if (ret)
+	if (rproc_elf_load_rsc_table(rproc, fw))
 		dev_warn(&rproc->dev, "no resource table found for this firmware\n");
 
 	return 0;
@@ -621,20 +384,20 @@ static int stm32_rproc_set_hold_boot(struct rproc *rproc, bool hold)
 {
 	struct stm32_rproc *ddata = rproc->priv;
 	struct stm32_syscon hold_boot = ddata->hold_boot;
+	struct arm_smccc_res smc_res;
 	int val, err;
-
-	if (ddata->hold_boot_rst) {
-		/* Use the SCMI reset controller */
-		if (!hold)
-			return reset_control_deassert(ddata->hold_boot_rst);
-		else
-			return reset_control_assert(ddata->hold_boot_rst);
-	}
 
 	val = hold ? HOLD_BOOT : RELEASE_BOOT;
 
-	err = regmap_update_bits(hold_boot.map, hold_boot.reg,
-				 hold_boot.mask, val);
+	if (IS_ENABLED(CONFIG_HAVE_ARM_SMCCC) && ddata->secured_soc) {
+		arm_smccc_smc(STM32_SMC_RCC, STM32_SMC_REG_WRITE,
+			      hold_boot.reg, val, 0, 0, 0, 0, &smc_res);
+		err = smc_res.a0;
+	} else {
+		err = regmap_update_bits(hold_boot.map, hold_boot.reg,
+					 hold_boot.mask, val);
+	}
+
 	if (err)
 		dev_err(&rproc->dev, "failed to set hold boot\n");
 
@@ -680,22 +443,6 @@ static int stm32_rproc_start(struct rproc *rproc)
 		}
 	}
 
-	/* Configure the boot vector register with the vector table address read in the ELF. */
-	if (ddata->boot_vec.map) {
-		if (rproc->bootaddr & ~ddata->boot_vec.mask) {
-			dev_err(&rproc->dev, "Boot address is %#llx no aligned on mask %#x\n",
-				rproc->bootaddr, ddata->boot_vec.mask);
-			return err;
-		}
-		dev_dbg(&rproc->dev, "boot vector address = %#llx", rproc->bootaddr);
-		err = regmap_update_bits(ddata->boot_vec.map, ddata->boot_vec.reg,
-					 ddata->boot_vec.mask, rproc->bootaddr);
-		if (err) {
-			dev_err(&rproc->dev, "failed to set boot_vec\n");
-				return err;
-		}
-	}
-
 	err = stm32_rproc_set_hold_boot(rproc, false);
 	if (err)
 		return err;
@@ -730,9 +477,17 @@ static int stm32_rproc_detach(struct rproc *rproc)
 static int stm32_rproc_stop(struct rproc *rproc)
 {
 	struct stm32_rproc *ddata = rproc->priv;
-	int err;
+	int err, idx;
 
-	stm32_rproc_request_shutdown(rproc);
+	/* request shutdown of the remote processor */
+	if (rproc->state != RPROC_OFFLINE && rproc->state != RPROC_CRASHED) {
+		idx = stm32_rproc_mbox_idx(rproc, STM32_MBX_SHUTDOWN);
+		if (idx >= 0 && ddata->mb[idx].chan) {
+			err = mbox_send_message(ddata->mb[idx].chan, "detach");
+			if (err < 0)
+				dev_warn(&rproc->dev, "warning: remote FW shutdown without ack\n");
+		}
+	}
 
 	err = stm32_rproc_set_hold_boot(rproc, true);
 	if (err)
@@ -744,8 +499,29 @@ static int stm32_rproc_stop(struct rproc *rproc)
 		return err;
 	}
 
+	/* to allow platform Standby power mode, set remote proc Deep Sleep */
+	if (ddata->pdds.map) {
+		err = regmap_update_bits(ddata->pdds.map, ddata->pdds.reg,
+					 ddata->pdds.mask, 1);
+		if (err) {
+			dev_err(&rproc->dev, "failed to set pdds\n");
+			return err;
+		}
+	}
 
-	return stm32_rproc_release(rproc);
+	/* update coprocessor state to OFF if available */
+	if (ddata->m4_state.map) {
+		err = regmap_update_bits(ddata->m4_state.map,
+					 ddata->m4_state.reg,
+					 ddata->m4_state.mask,
+					 M4_STATE_OFF);
+		if (err) {
+			dev_err(&rproc->dev, "failed to set copro state\n");
+			return err;
+		}
+	}
+
+	return 0;
 }
 
 static void stm32_rproc_kick(struct rproc *rproc, int vqid)
@@ -778,12 +554,6 @@ static int stm32_rproc_da_to_pa(struct rproc *rproc,
 	struct stm32_rproc_mem *p_mem;
 	unsigned int i;
 
-
-	if (!ddata->rmems) {
-		*pa = da;
-		return 0;
-	}
-
 	for (i = 0; i < ddata->nb_rmems; i++) {
 		p_mem = &ddata->rmems[i];
 
@@ -806,8 +576,45 @@ static struct resource_table *
 stm32_rproc_get_loaded_rsc_table(struct rproc *rproc, size_t *table_sz)
 {
 	struct stm32_rproc *ddata = rproc->priv;
+	struct device *dev = rproc->dev.parent;
+	phys_addr_t rsc_pa;
+	u32 rsc_da;
+	int err;
 
-	*table_sz = ddata->rsc_sz;
+	/* The resource table has already been mapped, nothing to do */
+	if (ddata->rsc_va)
+		goto done;
+
+	err = regmap_read(ddata->rsctbl.map, ddata->rsctbl.reg, &rsc_da);
+	if (err) {
+		dev_err(dev, "failed to read rsc tbl addr\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	if (!rsc_da)
+		/* no rsc table */
+		return ERR_PTR(-ENOENT);
+
+	err = stm32_rproc_da_to_pa(rproc, rsc_da, &rsc_pa);
+	if (err)
+		return ERR_PTR(err);
+
+	ddata->rsc_va = devm_ioremap_wc(dev, rsc_pa, RSC_TBL_SIZE);
+	if (IS_ERR_OR_NULL(ddata->rsc_va)) {
+		dev_err(dev, "Unable to map memory region: %pa+%zx\n",
+			&rsc_pa, RSC_TBL_SIZE);
+		ddata->rsc_va = NULL;
+		return ERR_PTR(-ENOMEM);
+	}
+
+done:
+	/*
+	 * Assuming the resource table fits in 1kB is fair.
+	 * Notice for the detach, that this 1 kB memory area has to be reserved in the coprocessor
+	 * firmware for the resource table. On detach, the remoteproc core re-initializes this
+	 * entire area by overwriting it with the initial values stored in rproc->clean_table.
+	 */
+	*table_sz = RSC_TBL_SIZE;
 	return (struct resource_table *)ddata->rsc_va;
 }
 
@@ -823,162 +630,11 @@ static const struct rproc_ops st_rproc_ops = {
 	.find_loaded_rsc_table = rproc_elf_find_loaded_rsc_table,
 	.get_loaded_rsc_table = stm32_rproc_get_loaded_rsc_table,
 	.sanity_check	= rproc_elf_sanity_check,
-	.get_boot_addr = stm32_rproc_get_vect_table,
-};
-
-static const struct rproc_ops st_rproc_tee_ops = {
-	.prepare	= stm32_rproc_prepare,
-	.start		= stm32_rproc_tee_start,
-	.stop		= stm32_rproc_tee_stop,
-	.attach		= stm32_rproc_tee_attach,
-	.kick		= stm32_rproc_kick,
-	.parse_fw	= stm32_rproc_parse_fw,
-	.find_loaded_rsc_table = stm32_rproc_tee_elf_find_loaded_rsc_table,
-	.get_loaded_rsc_table = stm32_rproc_get_loaded_rsc_table,
-	.sanity_check	= stm32_rproc_tee_elf_sanity_check,
-	.load		= stm32_rproc_tee_elf_load,
-};
-
-static int stm32_rproc_get_m4_info(struct rproc *rproc)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	struct device *dev = rproc->dev.parent;
-	phys_addr_t rsc_pa;
-	u32 rsc_da;
-	unsigned int state;
-	int ret;
-
-	rproc->state = CM_STATE_OFF;
-	ddata->rsc_va = NULL;
-	ddata->rsc_sz = 0;
-
-	/* check the Cortex-M state */
-	if (!ddata->cm_state.map)
-		 /* We couldn't get the coprocessor's state, assume it is not running */
-		return 0;
-
-	ret = regmap_read(ddata->cm_state.map, ddata->cm_state.reg, &state);
-	if (ret)
-		return ret;
-
-	if (state == CM_STATE_OFF)
-		return 0;
-
-	rproc->state = RPROC_DETACHED;
-
-	/* Get the resource table information */
-	ret = regmap_read(ddata->rsctbl.map, ddata->rsctbl.reg, &rsc_da);
-	if (ret) {
-		dev_err(dev, "failed to read rsc tbl addr\n");
-		return -EINVAL;
-	}
-
-	if (!rsc_da)
-		/* no rsc table */
-		return 0;
-
-	ret = stm32_rproc_da_to_pa(rproc, rsc_da, &rsc_pa);
-	if (ret)
-		return ret;
-
-	ddata->rsc_va = devm_ioremap_wc(dev, rsc_pa, RSC_TBL_SIZE);
-	if (IS_ERR_OR_NULL(ddata->rsc_va)) {
-		dev_err(dev, "Unable to map memory region: %pa+%zx\n",	&rsc_pa, RSC_TBL_SIZE);
-		return -ENOMEM;
-	}
-
-	/*
-	 * Assuming the resource table fits in 1kB is fair.
-	 * Notice for the detach, that this 1 kB memory area has to be reserved in the coprocessor
-	 * firmware for the resource table. On detach, the remoteproc core re-initializes this
-	 * entire area by overwriting it with the initial values stored in rproc->clean_table.
-	 */
-	ddata->rsc_sz = RSC_TBL_SIZE;
-
-	return 0;
-}
-
-static int stm32_rproc_get_m33_info(struct rproc *rproc)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	struct device *dev = rproc->dev.parent;
-	unsigned int cm_state;
-	phys_addr_t rsc_pa;
-	u32 rsc_da;
-	u32 size;
-	int ret;
-
-	rproc->state = CM_STATE_OFF;
-	ddata->rsc_va = NULL;
-	ddata->rsc_sz = 0;
-
-	if (!ddata->cm_state.map) {
-		/* We couldn't get the coprocessor's state, assume it is not running */
-		return 0;
-	}
-
-	ret = regmap_read(ddata->cm_state.map, ddata->cm_state.reg, &cm_state);
-	if (ret)
-		return ret;
-
-	switch ((cm_state >> M33_STATE_FIELD_SHIFT) & M33_STATE_FIELD_MASK) {
-	case M33_STATE_OFF:
-		break;
-	case M33_STATE_CRUN:
-	case M33_STATE_CSLEEP:
-	case M33_STATE_CSTOP:
-		rproc->state = RPROC_DETACHED;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	/* Get the resource table information */
-	ret = nvmem_cell_read_u32(dev, "rsc-tbl-addr", &rsc_da);
-	if (ret) {
-		dev_err(dev, "failed to read rsc tbl addr\n");
-		return -EINVAL;
-	}
-
-	if (!rsc_da)
-		/* no rsc table */
-		return 0;
-
-	ret = stm32_rproc_da_to_pa(rproc, rsc_da, &rsc_pa);
-	if (ret)
-		return ret;
-
-	ddata->rsc_va = devm_ioremap_wc(dev, rsc_pa, RSC_TBL_SIZE);
-	if (IS_ERR_OR_NULL(ddata->rsc_va)) {
-		dev_err(dev, "Unable to map memory region: %pa+%zx\n",	&rsc_pa, RSC_TBL_SIZE);
-		return -ENOMEM;
-	}
-
-	ret = nvmem_cell_read_u32(dev, "rsc-tbl-size", &size);
-	if (ret) {
-		dev_err(dev, "failed to read rsc tbl size\n");
-		return -EINVAL;
-	}
-	ddata->rsc_sz = size;
-
-	return 0;
-}
-
-static const struct stm32_rproc_data stm32_rproc_stm32pm15 = {
-	.fw_id = STM32_MP1_FW_ID,
-	.get_info = stm32_rproc_get_m4_info,
-	.dma_ranges = true,
-};
-
-static const struct stm32_rproc_data stm32_rproc_stm32pm25 = {
-	.fw_id = STM32_MP2_FW_ID,
-	.get_info = stm32_rproc_get_m33_info,
-	.dma_ranges = false,
+	.get_boot_addr	= rproc_elf_get_boot_addr,
 };
 
 static const struct of_device_id stm32_rproc_match[] = {
-	{.compatible = "st,stm32mp1-m4", .data = &stm32_rproc_stm32pm15},
-	{.compatible = "st,stm32mp2-m33", .data = &stm32_rproc_stm32pm25},
+	{ .compatible = "st,stm32mp1-m4" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_rproc_match);
@@ -1010,6 +666,8 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
+	struct stm32_syscon tz;
+	unsigned int tzen;
 	int err, irq;
 
 	irq = platform_get_irq(pdev, 0);
@@ -1033,31 +691,39 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 		dev_info(dev, "wdg irq registered\n");
 	}
 
-	ddata->rst = devm_reset_control_get(dev, "mcu_rst");
+	ddata->rst = devm_reset_control_get_by_index(dev, 0);
 	if (IS_ERR(ddata->rst))
 		return dev_err_probe(dev, PTR_ERR(ddata->rst),
 				     "failed to get mcu_reset\n");
 
-	ddata->hold_boot_rst = devm_reset_control_get(dev, "hold_boot");
-	if (PTR_ERR(ddata->hold_boot_rst) == -EPROBE_DEFER)
-		return PTR_ERR(ddata->hold_boot_rst);
+	/*
+	 * if platform is secured the hold boot bit must be written by
+	 * smc call and read normally.
+	 * if not secure the hold boot bit could be read/write normally
+	 */
+	err = stm32_rproc_get_syscon(np, "st,syscfg-tz", &tz);
+	if (err) {
+		dev_err(dev, "failed to get tz syscfg\n");
+		return err;
+	}
 
-	if (!ddata->hold_boot_rst) {
-		/*
-		 * If the hold boot is not managed by the SCMI reset controller,
-		 * manage it through the syscon controller
-		 */
-		err = stm32_rproc_get_syscon(np, "st,syscfg-holdboot",
-					     &ddata->hold_boot);
-		if (err) {
-			dev_err(dev, "failed to get hold boot\n");
-			return err;
-		}
+	err = regmap_read(tz.map, tz.reg, &tzen);
+	if (err) {
+		dev_err(dev, "failed to read tzen\n");
+		return err;
+	}
+	ddata->secured_soc = tzen & tz.mask;
+
+	err = stm32_rproc_get_syscon(np, "st,syscfg-holdboot",
+				     &ddata->hold_boot);
+	if (err) {
+		dev_err(dev, "failed to get hold boot\n");
+		return err;
 	}
 
 	err = stm32_rproc_get_syscon(np, "st,syscfg-pdds", &ddata->pdds);
 	if (err)
-		dev_info(dev, "pdds sys config not defined\n");
+		dev_info(dev, "failed to get pdds\n");
 
 	*auto_boot = of_property_read_bool(np, "st,auto-boot");
 
@@ -1065,11 +731,11 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 	 * See if we can check the M4 status, i.e if it was started
 	 * from the boot loader or not.
 	 */
-	err = stm32_rproc_get_syscon(np, "st,syscfg-cm-state",
-				     &ddata->cm_state);
+	err = stm32_rproc_get_syscon(np, "st,syscfg-m4-state",
+				     &ddata->m4_state);
 	if (err) {
 		/* remember this */
-		ddata->cm_state.map = NULL;
+		ddata->m4_state.map = NULL;
 		/* no coprocessor state syscon (optional) */
 		dev_warn(dev, "m4 state not supported\n");
 
@@ -1088,81 +754,57 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 	return 0;
 }
 
+static int stm32_rproc_get_m4_status(struct stm32_rproc *ddata,
+				     unsigned int *state)
+{
+	/* See stm32_rproc_parse_dt() */
+	if (!ddata->m4_state.map) {
+		/*
+		 * We couldn't get the coprocessor's state, assume
+		 * it is not running.
+		 */
+		*state = M4_STATE_OFF;
+		return 0;
+	}
+
+	return regmap_read(ddata->m4_state.map, ddata->m4_state.reg, state);
+}
+
 static int stm32_rproc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct stm32_rproc *ddata;
 	struct device_node *np = dev->of_node;
-	const struct stm32_rproc_data *desc;
-	struct tee_rproc *trproc = NULL;
 	struct rproc *rproc;
-	struct stm32_syscon boot_vec;
+	unsigned int state;
 	int ret;
-
-	desc = device_get_match_data(&pdev->dev);
 
 	ret = dma_coerce_mask_and_coherent(dev, DMA_BIT_MASK(32));
 	if (ret)
 		return ret;
 
-	/*
-	 * If the "st,syscfg-nsvtor" property is defined in DT, the Linux
-	 * remoteproc driver expects to load the firmware. In this case we don't
-	 * verify if we have to delegate the firmware management to the
-	 * secure context. Exception should be raised on secure context side in case
-	 * of issue.
-	 */
-	ret = stm32_rproc_get_syscon(np, "st,syscfg-nsvtor", &boot_vec);
-	if (ret)
-		dev_dbg(dev, "nsvector sys config not defined\n");
-
-	if (!boot_vec.map)
-		trproc = tee_rproc_register(dev, desc->fw_id);
-	if (IS_ERR(trproc)) {
-		if (PTR_ERR(trproc) == -EPROBE_DEFER)
-			return PTR_ERR(trproc);
-		trproc = NULL;
-	}
-
-	rproc = rproc_alloc(dev, np->name,
-			    trproc ? &st_rproc_tee_ops : &st_rproc_ops,
-			    NULL, sizeof(*ddata));
-	if (!rproc) {
-		ret = -ENOMEM;
-		goto free_tee;
-	}
+	rproc = rproc_alloc(dev, np->name, &st_rproc_ops, NULL, sizeof(*ddata));
+	if (!rproc)
+		return -ENOMEM;
 
 	ddata = rproc->priv;
-	ddata->desc = desc;
-	ddata->trproc = trproc;
-	ddata->boot_vec = boot_vec;
+
+	rproc_coredump_set_elf_info(rproc, ELFCLASS32, EM_NONE);
 
 	ret = stm32_rproc_parse_dt(pdev, ddata, &rproc->auto_boot);
 	if (ret)
 		goto free_rproc;
 
-	if (trproc) {
-		/*
-		 * Delegate the firmware management to the secure context. The
-		 * firmware loaded has to be signed.
-		 */
-		dev_info(dev, "Support of signed firmware only\n");
-		rproc->fw_format = RPROC_FW_TEE;
-		trproc->rproc = rproc;
-	} else {
-		rproc->fw_format = RPROC_FW_ELF;
-	}
-
-	rproc_coredump_set_elf_info(rproc, ELFCLASS32, EM_NONE);
-
 	ret = stm32_rproc_of_memory_translations(pdev, ddata);
 	if (ret)
 		goto free_rproc;
 
-	ret = ddata->desc->get_info(rproc);
+	ret = stm32_rproc_get_m4_status(ddata, &state);
 	if (ret)
 		goto free_rproc;
 
+	if (state == M4_STATE_CRUN)
+		rproc->state = RPROC_DETACHED;
 
 	rproc->has_iommu = false;
 
@@ -1188,10 +830,6 @@ free_rproc:
 		device_init_wakeup(dev, false);
 	}
 	rproc_free(rproc);
-free_tee:
-	if (trproc)
-		tee_rproc_unregister(trproc);
-
 	return ret;
 }
 
@@ -1212,19 +850,8 @@ static int stm32_rproc_remove(struct platform_device *pdev)
 		device_init_wakeup(dev, false);
 	}
 	rproc_free(rproc);
-	if (ddata->trproc)
-		tee_rproc_unregister(ddata->trproc);
 
 	return 0;
-}
-
-static void stm32_rproc_shutdown(struct platform_device *pdev)
-{
-	struct rproc *rproc = platform_get_drvdata(pdev);
-
-	if (atomic_read(&rproc->power) > 0)
-		dev_warn(&pdev->dev,
-			 "Warning: remote fw is still running with possible side effect!!!\n");
 }
 
 static int __maybe_unused stm32_rproc_suspend(struct device *dev)
@@ -1255,7 +882,6 @@ static SIMPLE_DEV_PM_OPS(stm32_rproc_pm_ops,
 static struct platform_driver stm32_rproc_driver = {
 	.probe = stm32_rproc_probe,
 	.remove = stm32_rproc_remove,
-	.shutdown = stm32_rproc_shutdown,
 	.driver = {
 		.name = "stm32-rproc",
 		.pm = &stm32_rproc_pm_ops,
