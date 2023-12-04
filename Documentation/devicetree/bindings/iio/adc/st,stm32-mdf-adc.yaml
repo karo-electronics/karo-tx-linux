@@ -64,6 +64,14 @@ properties:
     items:
       - const: mdf
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
+  power-domains:
+    maxItems: 1
+
   st,interleave:
     description: |
       List of phandles of interleaved filters. The indexes of interleaved filters must be
