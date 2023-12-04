@@ -13,6 +13,7 @@
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/vmalloc.h>
 #include <linux/v4l2-mediabus.h>
 #include <media/mipi-csi2.h>
@@ -241,6 +242,7 @@ struct dcmipp_isp_device {
 	struct dcmipp_ent_device ved;
 	struct v4l2_subdev sd;
 	struct device *dev;
+	struct device *cdev;
 	struct v4l2_mbus_framefmt sink_fmt;
 	struct v4l2_mbus_framefmt src_fmt;
 	unsigned int decimation;
@@ -294,7 +296,7 @@ static int dcmipp_isp_s_ctrl(struct v4l2_ctrl *ctrl)
 
 	dev_dbg(isp->dev, ">> %s: ctrl->id = 0x%x\n", __func__, ctrl->id);
 
-	if (!isp->streaming)
+	if (pm_runtime_get_if_in_use(isp->cdev) == 0)
 		return 0;
 
 	spin_lock_irq(&isp->irqlock);
@@ -343,6 +345,7 @@ static int dcmipp_isp_s_ctrl(struct v4l2_ctrl *ctrl)
 	}
 
 	spin_unlock_irq(&isp->irqlock);
+	pm_runtime_put(isp->cdev);
 
 	return 0;
 };
@@ -353,7 +356,7 @@ static int dcmipp_isp_g_ctrl(struct v4l2_ctrl *ctrl)
 			container_of(ctrl->handler, struct dcmipp_isp_device, ctrls);
 	int ret = 0;
 
-	if (!isp->streaming)
+	if (pm_runtime_get_if_in_use(isp->cdev) == 0)
 		return 0;
 
 	switch (ctrl->id) {
@@ -362,6 +365,8 @@ static int dcmipp_isp_g_ctrl(struct v4l2_ctrl *ctrl)
 				     DCMIPP_P1BPRSR_BADCNT_MASK;
 		break;
 	}
+
+	pm_runtime_put(isp->cdev);
 
 	return ret;
 };
@@ -1099,6 +1104,7 @@ static int dcmipp_isp_comp_bind(struct device *comp, struct device *master,
 
 	isp->regs = bind_data->regs;
 	isp->dev = comp;
+	isp->cdev = master;
 
 	/* Initialize the lock */
 	mutex_init(&isp->lock);
