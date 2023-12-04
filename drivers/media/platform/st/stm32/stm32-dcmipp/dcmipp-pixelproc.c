@@ -823,35 +823,18 @@ dcmipp_pixelproc_comp_bind(struct device *comp, struct device *master,
 		return -ENOMEM;
 
 	pixelproc->regs = bind_data->regs;
+	pixelproc->dev = comp;
 
 	/* Initialize the lock */
 	mutex_init(&pixelproc->lock);
-
-	/* Initialize ved and sd */
-	ret = dcmipp_ent_sd_register(&pixelproc->ved, &pixelproc->sd,
-				     bind_data->v4l2_dev,
-				     pdata->entity_name,
-				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 2,
-				     (const unsigned long[2]) {
-				     MEDIA_PAD_FL_SINK,
-				     MEDIA_PAD_FL_SOURCE,
-				     },
-				     &dcmipp_pixelproc_int_ops, &dcmipp_pixelproc_ops,
-				     NULL, NULL);
-	if (ret) {
-		kfree(pixelproc);
-		return ret;
-	}
-
-	dev_set_drvdata(comp, &pixelproc->ved);
-	pixelproc->dev = comp;
 
 	/* Pipe identifier */
 	pixelproc->pipe_id = dcmipp_name_to_pipe_id(pdata->entity_name);
 	if (pixelproc->pipe_id != 1 && pixelproc->pipe_id != 2) {
 		dev_err(comp, "failed to retrieve pipe_id\n");
-		/* TODO - fix error handling */
-		return -1;
+		mutex_destroy(&pixelproc->lock);
+		kfree(pixelproc);
+		return -EIO;
 	}
 
 	/* Initialize the frame format */
@@ -878,10 +861,31 @@ dcmipp_pixelproc_comp_bind(struct device *comp, struct device *master,
 
 	pixelproc->sd.ctrl_handler = &pixelproc->ctrls;
 	if (pixelproc->ctrls.error) {
-		dev_err(pixelproc->dev, "control initialization error %d\n",
-			pixelproc->ctrls.error);
-		/* TODO - error handling */
+		ret = pixelproc->ctrls.error;
+		dev_err(pixelproc->dev, "control initialization error %d\n", ret);
+		mutex_destroy(&pixelproc->lock);
+		kfree(pixelproc);
+		return ret;
 	}
+
+	/* Initialize ved and sd */
+	ret = dcmipp_ent_sd_register(&pixelproc->ved, &pixelproc->sd,
+				     bind_data->v4l2_dev,
+				     pdata->entity_name,
+				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 2,
+				     (const unsigned long[2]) {
+				     MEDIA_PAD_FL_SINK,
+				     MEDIA_PAD_FL_SOURCE,
+				     },
+				     &dcmipp_pixelproc_int_ops, &dcmipp_pixelproc_ops,
+				     NULL, NULL);
+	if (ret) {
+		mutex_destroy(&pixelproc->lock);
+		kfree(pixelproc);
+		return ret;
+	}
+
+	dev_set_drvdata(comp, &pixelproc->ved);
 
 	return 0;
 }
