@@ -1098,30 +1098,10 @@ static int dcmipp_isp_comp_bind(struct device *comp, struct device *master,
 		return -ENOMEM;
 
 	isp->regs = bind_data->regs;
+	isp->dev = comp;
 
 	/* Initialize the lock */
 	mutex_init(&isp->lock);
-
-	/* Initialize ved and sd */
-	ret = dcmipp_ent_sd_register(&isp->ved, &isp->sd,
-				     bind_data->v4l2_dev,
-				     pdata->entity_name,
-				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 4,
-				     (const unsigned long[4]) {
-				     MEDIA_PAD_FL_SINK,
-				     MEDIA_PAD_FL_SOURCE,
-				     MEDIA_PAD_FL_SOURCE,
-				     MEDIA_PAD_FL_SOURCE,
-				     },
-				     &dcmipp_isp_int_ops, &dcmipp_isp_ops,
-				     NULL, dcmipp_isp_irq_thread);
-	if (ret) {
-		kfree(isp);
-		return ret;
-	}
-
-	dev_set_drvdata(comp, &isp->ved);
-	isp->dev = comp;
 
 	/* Initialize the frame format */
 	isp->sink_fmt = fmt_default;
@@ -1138,16 +1118,41 @@ static int dcmipp_isp_comp_bind(struct device *comp, struct device *master,
 
 	isp->sd.ctrl_handler = &isp->ctrls;
 	if (isp->ctrls.error) {
-		dev_err(isp->dev, "control initialization error %d\n",
-			isp->ctrls.error);
-		/* TODO - error handling */
+		ret = isp->ctrls.error;
+		dev_err(isp->dev, "control initialization error %d\n", ret);
+		mutex_destroy(&isp->lock);
+		kfree(isp);
+		return ret;
 	}
 
 	ret = v4l2_ctrl_handler_setup(&isp->ctrls);
 	if (ret < 0) {
 		dev_err(isp->dev, "Failed to set up control handlers\n");
-		/* TODO - error handling */
+		mutex_destroy(&isp->lock);
+		kfree(isp);
+		return ret;
 	}
+
+	/* Initialize ved and sd */
+	ret = dcmipp_ent_sd_register(&isp->ved, &isp->sd,
+				     bind_data->v4l2_dev,
+				     pdata->entity_name,
+				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 4,
+				     (const unsigned long[4]) {
+				     MEDIA_PAD_FL_SINK,
+				     MEDIA_PAD_FL_SOURCE,
+				     MEDIA_PAD_FL_SOURCE,
+				     MEDIA_PAD_FL_SOURCE,
+				     },
+				     &dcmipp_isp_int_ops, &dcmipp_isp_ops,
+				     NULL, dcmipp_isp_irq_thread);
+	if (ret) {
+		mutex_destroy(&isp->lock);
+		kfree(isp);
+		return ret;
+	}
+
+	dev_set_drvdata(comp, &isp->ved);
 
 	return 0;
 }
