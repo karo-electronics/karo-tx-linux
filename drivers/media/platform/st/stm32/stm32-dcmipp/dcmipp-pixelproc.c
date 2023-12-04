@@ -13,6 +13,7 @@
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/vmalloc.h>
 #include <linux/v4l2-mediabus.h>
 #include <media/v4l2-ctrls.h>
@@ -203,6 +204,7 @@ struct dcmipp_pixelproc_device {
 	struct dcmipp_ent_device ved;
 	struct v4l2_subdev sd;
 	struct device *dev;
+	struct device *cdev;
 	struct v4l2_mbus_framefmt sink_fmt;
 	struct v4l2_mbus_framefmt src_fmt;
 	bool streaming;
@@ -253,12 +255,10 @@ static int dcmipp_pixelproc_s_ctrl(struct v4l2_ctrl *ctrl)
 			     struct dcmipp_pixelproc_device, ctrls);
 	int ret = 0;
 
-	mutex_lock(&pixelproc->lock);
+	if (pm_runtime_get_if_in_use(pixelproc->cdev) == 0)
+		return 0;
 
-	if (pixelproc->streaming) {
-		ret = -EBUSY;
-		goto out;
-	}
+	mutex_lock(&pixelproc->lock);
 
 	switch (ctrl->id) {
 	case V4L2_CID_PIXELPROC_GAMMA_CORRECTION:
@@ -267,8 +267,9 @@ static int dcmipp_pixelproc_s_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	}
 
-out:
 	mutex_unlock(&pixelproc->lock);
+	pm_runtime_put(pixelproc->cdev);
+
 	return ret;
 };
 
@@ -824,6 +825,7 @@ dcmipp_pixelproc_comp_bind(struct device *comp, struct device *master,
 
 	pixelproc->regs = bind_data->regs;
 	pixelproc->dev = comp;
+	pixelproc->cdev = master;
 
 	/* Initialize the lock */
 	mutex_init(&pixelproc->lock);
