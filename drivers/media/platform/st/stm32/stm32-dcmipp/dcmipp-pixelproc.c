@@ -16,6 +16,7 @@
 #include <linux/vmalloc.h>
 #include <linux/v4l2-mediabus.h>
 #include <media/v4l2-ctrls.h>
+#include <media/v4l2-event.h>
 #include <media/v4l2-rect.h>
 #include <media/v4l2-subdev.h>
 
@@ -759,11 +760,17 @@ out:
 	return ret;
 }
 
+static const struct v4l2_subdev_core_ops dcmipp_pixelproc_core_ops = {
+	.subscribe_event = v4l2_ctrl_subdev_subscribe_event,
+	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
+};
+
 static const struct v4l2_subdev_video_ops dcmipp_pixelproc_video_ops = {
 	.s_stream = dcmipp_pixelproc_s_stream,
 };
 
 static const struct v4l2_subdev_ops dcmipp_pixelproc_ops = {
+	.core = &dcmipp_pixelproc_core_ops,
 	.pad = &dcmipp_pixelproc_pad_ops,
 	.video = &dcmipp_pixelproc_video_ops,
 };
