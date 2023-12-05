@@ -208,38 +208,25 @@
 
 &eth1 {
 	status = "okay";
-	pinctrl-0 = <&eth1_mdio_pins_a>;
-	pinctrl-1 = <&eth1_mdio_sleep_pins_a>;
+	pinctrl-0 = <&eth1_rgmii_pins_a &eth1_mdio_pins_a>;
+	pinctrl-1 = <&eth1_rgmii_sleep_pins_a &eth1_mdio_sleep_pins_a>;
 	pinctrl-names = "default", "sleep";
-	phy-mode = "rgmii";
+	phy-mode = "rgmii-id";
 	max-speed = <1000>;
+	phy-handle = <&phy1_eth1>;
 	st,eth-clk-sel;
-
-	fixed_link: fixed-link {
-		speed = <1000>;
-		full-duplex;
-	};
 
 	mdio1 {
 		#address-cells = <1>;
 		#size-cells = <0>;
 		compatible = "snps,dwmac-mdio";
-
 		phy1_eth1: ethernet-phy@4 {
-			compatible = "ethernet-phy-id001c.c916",
-				     "ethernet-phy-ieee802.3-c22";
-			realtek,eee-disable;
-			reg = <4>;
-		};
-
-		phy2_eth1: ethernet-phy@5 {
-			compatible = "ethernet-phy-id001c.c916",
-				     "ethernet-phy-ieee802.3-c22";
+			compatible = "ethernet-phy-id001c.c916";
 			reset-gpios =  <&gpioj 9 GPIO_ACTIVE_LOW>;
 			reset-assert-us = <10000>;
 			reset-deassert-us = <80000>;
 			realtek,eee-disable;
-			reg = <5>;
+			reg = <4>;
 		};
 	};
 };
@@ -614,7 +601,7 @@
 };
 
 &switch0 {
-	status = "okay";
+	status = "disabled";
 	pinctrl-0 = <&eth1_rgmii_pins_a>, <&eth3_rgmii_pins_a>;
 	pinctrl-1 = <&eth1_rgmii_sleep_pins_a>, <&eth3_rgmii_sleep_pins_a>;
 	pinctrl-names = "default", "sleep";
