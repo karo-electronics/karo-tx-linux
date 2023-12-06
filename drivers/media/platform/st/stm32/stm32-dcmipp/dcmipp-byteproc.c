@@ -662,6 +662,8 @@ static int dcmipp_byteproc_s_frame_interval(struct v4l2_subdev *sd,
 				  ratio >= 4 ? 2 :
 				  ratio >= 2 ? 1 : 0;
 
+		ratio = dcmipp_frates[byteproc->frate];
+
 		/* Adjust src frame interval to what hardware can really do */
 		byteproc->src_interval.numerator =
 			byteproc->sink_interval.numerator * ratio;
