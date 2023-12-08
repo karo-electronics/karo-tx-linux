@@ -97,7 +97,7 @@
 		compatible = "gpio-backlight";
 		gpios = <&gpioe 12 GPIO_ACTIVE_HIGH>;
 		default-on;
-		default-brightness-level = <0>;
+		default-brightness-level = <1>;
 		status = "okay";
 	};
 
@@ -423,6 +423,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ltdc_pins_a>;
 	pinctrl-1 = <&ltdc_sleep_pins_a>;
+	default-on;
 	status = "okay";
 
 	port {
