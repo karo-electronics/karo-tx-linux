@@ -537,9 +537,10 @@
 };
 
 &pcie_rc {
-	pinctrl-names = "default", "init";
+	pinctrl-names = "default", "init", "sleep";
 	pinctrl-0 = <&pcie_pins_a>;
 	pinctrl-1 = <&pcie_init_pins_a>;
+	pinctrl-2 = <&pcie_sleep_pins_a>;
 	reset-gpios = <&gpioj 8 GPIO_ACTIVE_LOW>;
 	status = "okay";
 };
