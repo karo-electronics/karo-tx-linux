@@ -85,6 +85,7 @@ struct stm32_rproc_mem {
 struct stm32_rproc_data {
 	int proc_id;
 	int (*get_info)(struct rproc *rproc);
+	bool signed_fw;
 };
 
 struct stm32_mbox {
@@ -974,15 +975,24 @@ static int stm32_rproc_get_m33_info(struct rproc *rproc)
 static const struct stm32_rproc_data stm32_rproc_stm32pm15 = {
 	.proc_id = STM32_MP1_PROC_ID,
 	.get_info = stm32_rproc_get_m4_info,
+	.signed_fw = false,
+};
+
+static const struct stm32_rproc_data stm32_rproc_stm32pm15_tee = {
+	.proc_id = STM32_MP1_PROC_ID,
+	.get_info = stm32_rproc_get_m4_info,
+	.signed_fw = true,
 };
 
 static const struct stm32_rproc_data stm32_rproc_stm32pm25 = {
 	.proc_id = STM32_MP2_PROC_ID,
 	.get_info = stm32_rproc_get_m33_info,
+	.signed_fw = false,
 };
 
 static const struct of_device_id stm32_rproc_match[] = {
 	{.compatible = "st,stm32mp1-m4", .data = &stm32_rproc_stm32pm15},
+	{.compatible = "st,stm32mp1-m4-tee", .data = &stm32_rproc_stm32pm15_tee},
 	{.compatible = "st,stm32mp2-m33", .data = &stm32_rproc_stm32pm25},
 	{},
 };
@@ -1142,7 +1152,7 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	if (of_device_is_compatible(np, "st,stm32mp1-m4-tee")) {
+	if (desc->signed_fw) {
 		trproc = tee_rproc_register(dev, desc->proc_id);
 		if (IS_ERR_OR_NULL(trproc)) {
 			return PTR_ERR(trproc);
