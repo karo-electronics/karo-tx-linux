@@ -990,10 +990,17 @@ static const struct stm32_rproc_data stm32_rproc_stm32pm25 = {
 	.signed_fw = false,
 };
 
+static const struct stm32_rproc_data stm32_rproc_stm32pm25_tee = {
+	.proc_id = STM32_MP2_PROC_ID,
+	.get_info = stm32_rproc_get_m33_info,
+	.signed_fw = true,
+};
+
 static const struct of_device_id stm32_rproc_match[] = {
 	{.compatible = "st,stm32mp1-m4", .data = &stm32_rproc_stm32pm15},
 	{.compatible = "st,stm32mp1-m4-tee", .data = &stm32_rproc_stm32pm15_tee},
 	{.compatible = "st,stm32mp2-m33", .data = &stm32_rproc_stm32pm25},
+	{.compatible = "st,stm32mp2-m33-tee", .data = &stm32_rproc_stm32pm25_tee},
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_rproc_match);
