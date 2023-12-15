@@ -285,7 +285,7 @@ config ARCH_STM32
 	select GPIOLIB
 	select PINCTRL
 	select RESET_CONTROLLER
-	select STM32_EXTI
+	select STM32MP_EXTI
 	select COMMON_CLK_STM32MP257
 	select RESET_STM32MP1
 	select ARM_SMC_MBOX
