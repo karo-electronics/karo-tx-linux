@@ -56,6 +56,9 @@ properties:
     description: |
       Phandle to the rifsc device to check access right.
 
+  power-domains:
+    maxItems: 1
+
 required:
   - compatible
   - reg
@@ -95,6 +98,9 @@ patternProperties:
           - const: sai_ck
           - const: MCLK
         minItems: 1
+
+      power-domains:
+        maxItems: 1
 
       dmas:
         maxItems: 1
