@@ -39,6 +39,9 @@ properties:
   resets:
     maxItems: 1
 
+  power-domains:
+    maxItems: 1
+
   sram:
     $ref: /schemas/types.yaml#/definitions/phandle
     description:
