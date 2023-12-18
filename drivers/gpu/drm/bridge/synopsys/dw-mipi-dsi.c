@@ -663,6 +663,21 @@ static void dw_mipi_dsi_dpi_config(struct dw_mipi_dsi *dsi,
 				   const struct drm_display_mode *mode)
 {
 	u32 val = 0, color = 0;
+	struct drm_bridge *bridge = &dsi->bridge;
+	struct drm_encoder *encoder = bridge->encoder;
+	struct drm_connector_list_iter iter;
+	struct drm_connector *connector = NULL;
+	u32 bus_flags = 0;
+
+	/* Get the connector from encoder */
+	drm_connector_list_iter_begin(encoder->dev, &iter);
+	drm_for_each_connector_iter(connector, &iter)
+		if (connector->encoder == encoder)
+			break;
+	drm_connector_list_iter_end(&iter);
+
+	if (connector)
+		bus_flags = connector->display_info.bus_flags;
 
 	switch (dsi->format) {
 	case MIPI_DSI_FMT_RGB888:
@@ -683,6 +698,8 @@ static void dw_mipi_dsi_dpi_config(struct dw_mipi_dsi *dsi,
 		val |= VSYNC_ACTIVE_LOW;
 	if (mode->flags & DRM_MODE_FLAG_NHSYNC)
 		val |= HSYNC_ACTIVE_LOW;
+	if (bus_flags & DRM_BUS_FLAG_DE_LOW)
+		val |= DATAEN_ACTIVE_LOW;
 
 	dsi_write(dsi, DSI_DPI_VCID, DPI_VCID(dsi->channel));
 	dsi_write(dsi, DSI_DPI_COLOR_CODING, color);
