@@ -52,6 +52,9 @@ properties:
   resets:
     maxItems: 1
 
+  power-domains:
+    maxItems: 1
+
   dmas:
     description: |
       DMA specifiers for tx and rx dma. DMA fifo mode must be used. See
