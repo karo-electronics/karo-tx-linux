@@ -13,12 +13,11 @@
 #include <linux/irq.h>
 #include <linux/irqchip.h>
 #include <linux/irqdomain.h>
-#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
-#include <linux/syscore_ops.h>
+#include <linux/pm.h>
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 
@@ -77,7 +76,6 @@ struct stm32mp_exti_chip_data {
 };
 
 struct stm32mp_exti_host_data {
-	struct list_head lh;
 	void __iomem *base;
 	struct device *dev;
 	struct stm32mp_exti_chip_data *chips_data;
@@ -88,8 +86,6 @@ struct stm32mp_exti_host_data {
 	DECLARE_BITMAP(gpio_mux_used, STM32MP_GPIO_IRQ_LINES);
 	u8 gpio_mux_pos[STM32MP_GPIO_IRQ_LINES];
 };
-
-static LIST_HEAD(stm32mp_host_data_list);
 
 static const struct stm32mp_exti_bank stm32mp_exti_b1 = {
 	.imr_ofst	= 0x80,
@@ -460,19 +456,15 @@ static void stm32mp_exti_ack(struct irq_data *d)
 		irq_chip_ack_parent(d);
 }
 
-static int stm32mp_exti_suspend(void)
+static int stm32mp_exti_suspend(struct device *dev)
 {
+	struct stm32mp_exti_host_data *host_data = dev_get_drvdata(dev);
 	struct stm32mp_exti_chip_data *chip_data;
-	struct stm32mp_exti_host_data *host_data;
 	int i;
 
-	list_for_each_entry(host_data, &stm32mp_host_data_list, lh) {
-		for (i = 0; i < host_data->drv_data->bank_nr; i++) {
-			chip_data = &host_data->chips_data[i];
-			raw_spin_lock(&chip_data->rlock);
-			stm32mp_chip_suspend(chip_data, chip_data->wake_active);
-			raw_spin_unlock(&chip_data->rlock);
-		}
+	for (i = 0; i < host_data->drv_data->bank_nr; i++) {
+		chip_data = &host_data->chips_data[i];
+		stm32mp_chip_suspend(chip_data, chip_data->wake_active);
 	}
 
 	return 0;
@@ -498,49 +490,20 @@ static void stm32mp_exti_resume_gpio_mux(struct stm32mp_exti_host_data *host_dat
 	}
 }
 
-static void stm32mp_exti_resume(void)
+static int stm32mp_exti_resume(struct device *dev)
 {
+	struct stm32mp_exti_host_data *host_data = dev_get_drvdata(dev);
 	struct stm32mp_exti_chip_data *chip_data;
-	struct stm32mp_exti_host_data *host_data;
 	int i;
 
-	list_for_each_entry(host_data, &stm32mp_host_data_list, lh) {
-		for (i = 0; i < host_data->drv_data->bank_nr; i++) {
-			chip_data = &host_data->chips_data[i];
-			raw_spin_lock(&chip_data->rlock);
-			if (i == 0)
-				stm32mp_exti_resume_gpio_mux(host_data);
-			stm32mp_chip_resume(chip_data, chip_data->mask_cache);
-			raw_spin_unlock(&chip_data->rlock);
-		}
+	for (i = 0; i < host_data->drv_data->bank_nr; i++) {
+		chip_data = &host_data->chips_data[i];
+		if (i == 0)
+			stm32mp_exti_resume_gpio_mux(host_data);
+		stm32mp_chip_resume(chip_data, chip_data->mask_cache);
 	}
-}
 
-static struct syscore_ops stm32mp_exti_syscore_ops = {
-	.suspend	= stm32mp_exti_suspend,
-	.resume		= stm32mp_exti_resume,
-};
-
-static void stm32mp_exti_syscore_init(struct stm32mp_exti_host_data *host_data)
-{
-	if (IS_ENABLED(CONFIG_PM_SLEEP)) {
-		if (list_empty(&stm32mp_host_data_list))
-			register_syscore_ops(&stm32mp_exti_syscore_ops);
-
-		list_add_tail(&host_data->lh, &stm32mp_host_data_list);
-	}
-}
-
-static void stm32mp_exti_syscore_deinit(struct platform_device *pdev)
-{
-	struct stm32mp_exti_host_data *host_data = platform_get_drvdata(pdev);
-
-	if (IS_ENABLED(CONFIG_PM_SLEEP)) {
-		list_del(&host_data->lh);
-
-		if (list_empty(&stm32mp_host_data_list))
-			unregister_syscore_ops(&stm32mp_exti_syscore_ops);
-	}
+	return 0;
 }
 
 static int stm32mp_exti_retrigger(struct irq_data *d)
@@ -882,12 +845,6 @@ static void stm32mp_exti_remove_irq(void *data)
 		irq_domain_free_fwnode(fwnode);
 }
 
-static int stm32mp_exti_remove(struct platform_device *pdev)
-{
-	stm32mp_exti_syscore_deinit(pdev);
-	return 0;
-}
-
 static int stm32mp_exti_probe(struct platform_device *pdev)
 {
 	int ret, i;
@@ -903,7 +860,7 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 	if (!host_data)
 		return -ENOMEM;
 
-	platform_set_drvdata(pdev, host_data);
+	dev_set_drvdata(dev, host_data);
 	host_data->dev = dev;
 
 	if (of_device_is_compatible(np, "syscon"))
@@ -1012,8 +969,6 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 			return ret;
 	}
 
-	stm32mp_exti_syscore_init(host_data);
-
 	return 0;
 }
 
@@ -1024,12 +979,16 @@ static const struct of_device_id stm32mp_exti_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, stm32mp_exti_ids);
 
+static const struct dev_pm_ops stm32mp_exti_dev_pm_ops = {
+	NOIRQ_SYSTEM_SLEEP_PM_OPS(stm32mp_exti_suspend, stm32mp_exti_resume)
+};
+
 static struct platform_driver stm32mp_exti_driver = {
 	.probe		= stm32mp_exti_probe,
-	.remove		= stm32mp_exti_remove,
 	.driver		= {
 		.name	= "stm32mp_exti",
 		.of_match_table = stm32mp_exti_ids,
+		.pm = &stm32mp_exti_dev_pm_ops,
 	},
 };
 
