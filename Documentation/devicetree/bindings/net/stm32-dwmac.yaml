@@ -72,6 +72,9 @@ properties:
         - eth-ck
         - ptp_ref
 
+  power-domains:
+    maxItems: 1
+
   st,syscon:
     $ref: "/schemas/types.yaml#/definitions/phandle-array"
     items:
