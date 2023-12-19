@@ -798,9 +798,52 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 {
 	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
 	struct drm_device *ddev = crtc->dev;
+	struct drm_connector_list_iter iter;
+	struct drm_connector *connector = NULL;
+	struct drm_encoder *encoder = NULL, *en_iter;
+	struct drm_bridge *bridge = NULL, *br_iter;
+	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
+	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
+	u32 bus_formats = MEDIA_BUS_FMT_RGB888_1X24;
+	u32 bus_flags = 0;
+	u32 pitch, rota0_buf, rota1_buf;
+	u32 val;
 	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	/* get encoder from crtc */
+	drm_for_each_encoder(en_iter, ddev)
+		if (en_iter->crtc == crtc) {
+			encoder = en_iter;
+			break;
+		}
+
+	if (encoder) {
+		/* get bridge from encoder */
+		list_for_each_entry(br_iter, &encoder->bridge_chain, chain_node)
+			if (br_iter->encoder == encoder) {
+				bridge = br_iter;
+				break;
+			}
+
+		/* Get the connector from encoder */
+		drm_connector_list_iter_begin(ddev, &iter);
+		drm_for_each_connector_iter(connector, &iter)
+			if (connector->encoder == encoder)
+				break;
+		drm_connector_list_iter_end(&iter);
+	}
+
+	if (bridge && bridge->timings) {
+		bus_flags = bridge->timings->input_bus_flags;
+	} else if (connector) {
+		bus_flags = connector->display_info.bus_flags;
+		if (connector->display_info.num_bus_formats)
+			bus_formats = connector->display_info.bus_formats[0];
+
+		orientation = connector->display_info.panel_orientation;
+	}
 
 	if (!pm_runtime_active(ddev->dev)) {
 		ret = pm_runtime_get_sync(ddev->dev);
@@ -808,6 +851,84 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 			DRM_ERROR("Failed to set mode, cannot get sync\n");
 			return;
 		}
+	}
+
+	/* Configures the HS, VS, DE and PC polarities. Default Active Low */
+	val = 0;
+
+	if (mode->flags & DRM_MODE_FLAG_PHSYNC)
+		val |= GCR_HSPOL;
+
+	if (mode->flags & DRM_MODE_FLAG_PVSYNC)
+		val |= GCR_VSPOL;
+
+	if (bus_flags & DRM_BUS_FLAG_DE_LOW)
+		val |= GCR_DEPOL;
+
+	if (bus_flags & DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE)
+		val |= GCR_PCPOL;
+
+	if (connector && connector->state->dithering == DRM_MODE_DITHERING_ON)
+		val |= GCR_DEN;
+
+	regmap_update_bits(ldev->regmap, LTDC_GCR,
+			   GCR_HSPOL | GCR_VSPOL | GCR_DEPOL | GCR_PCPOL | GCR_DEN, val);
+
+	/* Configure the output format (hw version dependent) */
+	if (ldev->caps.ycbcr_output) {
+		/* Input video dynamic_range & colorimetry */
+		int vic = drm_match_cea_mode(mode);
+		u32 val;
+
+		if (vic == 6 || vic == 7 || vic == 21 || vic == 22 ||
+		    vic == 2 || vic == 3 || vic == 17 || vic == 18)
+			/* ITU-R BT.601 */
+			val = 0;
+		else
+			/* ITU-R BT.709 */
+			val = EDCR_OCYSEL;
+
+		switch (bus_formats) {
+		case MEDIA_BUS_FMT_YUYV8_1X16:
+			/* enable ycbcr output converter */
+			regmap_write(ldev->regmap, LTDC_EDCR, EDCR_OCYEN | val);
+			break;
+		case MEDIA_BUS_FMT_YVYU8_1X16:
+			/* enable ycbcr output converter & invert chrominance order */
+			regmap_write(ldev->regmap, LTDC_EDCR, EDCR_OCYEN | EDCR_OCYCO | val);
+			break;
+		default:
+			/* disable ycbcr output converter */
+			regmap_write(ldev->regmap, LTDC_EDCR, 0);
+			break;
+		}
+	}
+
+	if (ldev->caps.crtc_rotation) {
+		rota0_buf = (u32)ldev->rot_mem->base;
+		rota1_buf = (u32)ldev->rot_mem->base + (ldev->rot_mem->size >> 1);
+
+		regmap_write(ldev->regmap, LTDC_RB0AR, rota0_buf);
+		regmap_write(ldev->regmap, LTDC_RB1AR, rota1_buf);
+
+		/*
+		 * LTDC_RBPR register is used define the pitch (line-to-line address increment)
+		 * of the stored rotation buffer. The pitch is proportional to the width of the
+		 * composed display (before rotation) and,(after rotation) proportional to the
+		 * non-raster dimension of the display panel.
+		 */
+		pitch = ((mode->hdisplay + 9) / 10) * 64;
+		regmap_write(ldev->regmap, LTDC_RBPR, pitch);
+
+		DRM_DEBUG_DRIVER("Rotation buffer0 address %x\n", rota0_buf);
+		DRM_DEBUG_DRIVER("Rotation buffer1 address %x\n", rota1_buf);
+		DRM_DEBUG_DRIVER("Rotation buffer picth %x\n", pitch);
+
+		if (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
+		    orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)
+			regmap_set_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
+		else
+			regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
 	}
 
 	/* Sets the background color value */
@@ -927,14 +1048,10 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	struct drm_connector_list_iter iter;
 	struct drm_connector *connector = NULL;
 	struct drm_encoder *encoder = NULL, *en_iter;
-	struct drm_bridge *bridge = NULL, *br_iter;
 	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
 	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
 	u32 hsync, vsync, accum_hbp, accum_vbp, accum_act_w, accum_act_h;
 	u32 total_width, total_height;
-	u32 bus_formats = MEDIA_BUS_FMT_RGB888_1X24;
-	u32 bus_flags = 0;
-	u32 pitch, rota0_buf, rota1_buf;
 	u32 val;
 	int ret;
 
@@ -946,13 +1063,6 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 		}
 
 	if (encoder) {
-		/* get bridge from encoder */
-		list_for_each_entry(br_iter, &encoder->bridge_chain, chain_node)
-			if (br_iter->encoder == encoder) {
-				bridge = br_iter;
-				break;
-			}
-
 		/* Get the connector from encoder */
 		drm_connector_list_iter_begin(ddev, &iter);
 		drm_for_each_connector_iter(connector, &iter)
@@ -961,15 +1071,8 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 		drm_connector_list_iter_end(&iter);
 	}
 
-	if (bridge && bridge->timings) {
-		bus_flags = bridge->timings->input_bus_flags;
-	} else if (connector) {
-		bus_flags = connector->display_info.bus_flags;
-		if (connector->display_info.num_bus_formats)
-			bus_formats = connector->display_info.bus_formats[0];
-
+	if (connector)
 		orientation = connector->display_info.panel_orientation;
-	}
 
 	if (!pm_runtime_active(ddev->dev)) {
 		ret = pm_runtime_get_sync(ddev->dev);
@@ -998,27 +1101,6 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	accum_act_h = accum_vbp + mode->vdisplay;
 	total_width = mode->htotal - 1;
 	total_height = mode->vtotal - 1;
-
-	/* Configures the HS, VS, DE and PC polarities. Default Active Low */
-	val = 0;
-
-	if (mode->flags & DRM_MODE_FLAG_PHSYNC)
-		val |= GCR_HSPOL;
-
-	if (mode->flags & DRM_MODE_FLAG_PVSYNC)
-		val |= GCR_VSPOL;
-
-	if (bus_flags & DRM_BUS_FLAG_DE_LOW)
-		val |= GCR_DEPOL;
-
-	if (bus_flags & DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE)
-		val |= GCR_PCPOL;
-
-	if (connector && connector->state->dithering == DRM_MODE_DITHERING_ON)
-		val |= GCR_DEN;
-
-	regmap_update_bits(ldev->regmap, LTDC_GCR,
-			   GCR_HSPOL | GCR_VSPOL | GCR_DEPOL | GCR_PCPOL | GCR_DEN, val);
 
 	/* check that an output rotation is required */
 	if (ldev->caps.crtc_rotation &&
@@ -1059,61 +1141,6 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 		regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
 
 		regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_h + 1));
-	}
-
-	/* Configure the output format (hw version dependent) */
-	if (ldev->caps.ycbcr_output) {
-		/* Input video dynamic_range & colorimetry */
-		int vic = drm_match_cea_mode(mode);
-		u32 val;
-
-		if (vic == 6 || vic == 7 || vic == 21 || vic == 22 ||
-		    vic == 2 || vic == 3 || vic == 17 || vic == 18)
-			/* ITU-R BT.601 */
-			val = 0;
-		else
-			/* ITU-R BT.709 */
-			val = EDCR_OCYSEL;
-
-		switch (bus_formats) {
-		case MEDIA_BUS_FMT_YUYV8_1X16:
-			/* enable ycbcr output converter */
-			regmap_write(ldev->regmap, LTDC_EDCR, EDCR_OCYEN | val);
-			break;
-		case MEDIA_BUS_FMT_YVYU8_1X16:
-			/* enable ycbcr output converter & invert chrominance order */
-			regmap_write(ldev->regmap, LTDC_EDCR, EDCR_OCYEN | EDCR_OCYCO | val);
-			break;
-		default:
-			/* disable ycbcr output converter */
-			regmap_write(ldev->regmap, LTDC_EDCR, 0);
-			break;
-		}
-	}
-
-	if (ldev->caps.crtc_rotation) {
-		rota0_buf = (u32)ldev->rot_mem->base;
-		rota1_buf = (u32)ldev->rot_mem->base + (ldev->rot_mem->size >> 1);
-
-		regmap_write(ldev->regmap, LTDC_RB0AR, rota0_buf);
-		regmap_write(ldev->regmap, LTDC_RB1AR, rota1_buf);
-
-		/* LTDC_RBPR register is used define the pitch (line-to-line address increment)
-		   of the stored rotation buffer. The pitch is proportional to the width of the
-		   composed display (before rotation) and,(after rotation) proportional to the
-		   non-raster dimension of the display panel. */
-		pitch = ((mode->hdisplay + 9) / 10) * 64;
-		regmap_write(ldev->regmap, LTDC_RBPR, pitch);
-
-		DRM_DEBUG_DRIVER("Rotation buffer0 address %x\n", rota0_buf);
-		DRM_DEBUG_DRIVER("Rotation buffer1 address %x\n", rota1_buf);
-		DRM_DEBUG_DRIVER("Rotation buffer picth %x\n", pitch);
-
-		if (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
-		    orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)
-			regmap_set_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
-		else
-			regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
 	}
 }
 
