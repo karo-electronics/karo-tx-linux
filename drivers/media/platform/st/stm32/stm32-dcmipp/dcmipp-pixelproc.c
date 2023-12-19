@@ -821,53 +821,55 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 	int ret = 0;
 	unsigned int val;
 
+	if (!enable)
+		return 0;
+
 	mutex_lock(&pixelproc->lock);
-	if (enable) {
-		/* Configure framerate */
-		dcmipp_pixelproc_configure_framerate(pixelproc);
 
-		/* Configure cropping */
-		reg_write(pixelproc, DCMIPP_PxCRSTR(pixelproc->pipe_id),
-			  (pixelproc->crop.top << DCMIPP_PxCRSTR_VSTART_SHIFT) |
-			  (pixelproc->crop.left << DCMIPP_PxCRSTR_HSTART_SHIFT));
-		reg_write(pixelproc, DCMIPP_PxCRSZR(pixelproc->pipe_id),
-			  (pixelproc->crop.width << DCMIPP_PxCRSZR_HSIZE_SHIFT) |
-			  (pixelproc->crop.height << DCMIPP_PxCRSZR_VSIZE_SHIFT) |
-			  DCMIPP_PxCRSZR_ENABLE);
+	/* Configure framerate */
+	dcmipp_pixelproc_configure_framerate(pixelproc);
 
-		/* Configure downsize */
-		dcmipp_pixelproc_set_downsize(pixelproc);
+	/* Configure cropping */
+	reg_write(pixelproc, DCMIPP_PxCRSTR(pixelproc->pipe_id),
+		  (pixelproc->crop.top << DCMIPP_PxCRSTR_VSTART_SHIFT) |
+		  (pixelproc->crop.left << DCMIPP_PxCRSTR_HSTART_SHIFT));
+	reg_write(pixelproc, DCMIPP_PxCRSZR(pixelproc->pipe_id),
+		  (pixelproc->crop.width << DCMIPP_PxCRSZR_HSIZE_SHIFT) |
+		  (pixelproc->crop.height << DCMIPP_PxCRSZR_VSIZE_SHIFT) |
+		  DCMIPP_PxCRSZR_ENABLE);
 
-		/* Configure YUV Conversion (if applicable) */
-		if (pixelproc->pipe_id == 1) {
-			ret = dcmipp_pixelproc_colorconv_config(pixelproc);
-			if (ret)
-				goto out;
-		}
+	/* Configure downsize */
+	dcmipp_pixelproc_set_downsize(pixelproc);
 
-		/* Setup the PixelPacker based on the src pad format */
-		vpix = dcmipp_pixelproc_pix_map_by_code(pixelproc->src_fmt.code, 1);
-		if (!vpix) {
-			ret = -EINVAL;
+	/* Configure YUV Conversion (if applicable) */
+	if (pixelproc->pipe_id == 1) {
+		ret = dcmipp_pixelproc_colorconv_config(pixelproc);
+		if (ret)
 			goto out;
-		}
-
-		val = vpix->ppcr_fmt;
-		if (vpix->swap_uv)
-			val |= DCMIPP_PxPPCR_SWAPRB;
-
-		reg_write(pixelproc, DCMIPP_PxPPCR(pixelproc->pipe_id), val);
-
-		/*
-		 * In case of the subdev is the last one before the csi bridge
-		 * the ent.bus.bus_type will be set to V4L2_MBUS_CSI2_DPHY,
-		 * in which case we need to enable the CSI input of the DCMIPP
-		 * TODO: to will have to reworked to avoid duplication between
-		 * subdeves
-		 */
-		if (pixelproc->ved.bus_type == V4L2_MBUS_CSI2_DPHY)
-			reg_write(pixelproc, DCMIPP_CMCR, DCMIPP_CMCR_INSEL);
 	}
+
+	/* Setup the PixelPacker based on the src pad format */
+	vpix = dcmipp_pixelproc_pix_map_by_code(pixelproc->src_fmt.code, 1);
+	if (!vpix) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	val = vpix->ppcr_fmt;
+	if (vpix->swap_uv)
+		val |= DCMIPP_PxPPCR_SWAPRB;
+
+	reg_write(pixelproc, DCMIPP_PxPPCR(pixelproc->pipe_id), val);
+
+	/*
+	 * In case of the subdev is the last one before the csi bridge
+	 * the ent.bus.bus_type will be set to V4L2_MBUS_CSI2_DPHY,
+	 * in which case we need to enable the CSI input of the DCMIPP
+	 * TODO: to will have to reworked to avoid duplication between
+	 * subdeves
+	 */
+	if (pixelproc->ved.bus_type == V4L2_MBUS_CSI2_DPHY)
+		reg_write(pixelproc, DCMIPP_CMCR, DCMIPP_CMCR_INSEL);
 
 out:
 	mutex_unlock(&pixelproc->lock);
