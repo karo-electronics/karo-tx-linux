@@ -29,6 +29,9 @@ properties:
   resets:
     maxItems: 1
 
+  power-domains:
+    maxItems: 1
+
   clock-error-detect:
     type: boolean
     description: If set enable the clock detection management
