@@ -60,6 +60,9 @@ properties:
   reset-names:
     const: phy-rst
 
+  power-domains:
+    maxItems: 1
+
   st,ssc-on:
     type: boolean
     description:
