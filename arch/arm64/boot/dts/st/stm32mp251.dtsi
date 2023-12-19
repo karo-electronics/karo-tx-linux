@@ -2299,6 +2299,7 @@
 				phys = <&combophy PHY_TYPE_PCIE>;
 				phy-names = "pcie-phy";
 				feature-domains = <&rifsc STM32MP25_RIFSC_PCIE_ID>;
+				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 			};
 
