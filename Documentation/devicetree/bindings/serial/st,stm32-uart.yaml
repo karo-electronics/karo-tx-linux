@@ -67,7 +67,6 @@ properties:
   rs485-rx-during-tx: true
 
   power-domains:
-    $ref: ../power/power-domain.yaml
     maxItems: 1
 
   rx-threshold:
