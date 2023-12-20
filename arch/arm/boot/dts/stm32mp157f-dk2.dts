@@ -30,7 +30,7 @@
 
 		framebuffer {
 			compatible = "simple-framebuffer";
-			clocks = <&rcc LTDC_PX>;
+			clocks = <&rcc LTDC_PX>, <&rcc DSI>, <&rcc DSI_PX>;
 			status = "disabled";
 		};
 	};
@@ -101,6 +101,7 @@
 };
 
 &ltdc {
+	default-on;
 	status = "okay";
 
 	port {
