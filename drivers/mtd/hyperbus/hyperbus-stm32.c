@@ -19,6 +19,7 @@ struct stm32_hyperbus {
 	u32 real_flash_freq;	/* real flash freq = bus_freq x prescaler */
 	u32 tacc;
 	u32 cs;
+	u32 dlyb_cr;
 	bool wzl;
 };
 
@@ -145,8 +146,6 @@ static int stm32_hyperbus_calibrate(struct hyperbus_device *hbdev)
 
 	prescaler = FIELD_GET(DCR2_PRESC_MASK,
 			      readl(regs_base + OSPI_DCR2));
-	if (prescaler)
-		writel_relaxed(TCR_DHQC, regs_base + OSPI_TCR);
 
 	if (hyperbus->real_flash_freq <= STM32_DLYB_FREQ_THRESHOLD) {
 		bypass_mode = true;
@@ -205,6 +204,9 @@ static void stm32_hyperbus_init(struct stm32_hyperbus *hyperbus)
 	if (prescaler > 255)
 		prescaler = 255;
 
+	if (prescaler)
+		writel_relaxed(TCR_DHQC, regs_base + OSPI_TCR);
+
 	writel_relaxed(FIELD_PREP(DCR2_PRESC_MASK, prescaler), regs_base + OSPI_DCR2);
 	hyperbus->real_flash_freq = omi->clk_rate / (prescaler + 1);
 
@@ -239,6 +241,9 @@ static int __maybe_unused stm32_hyperbus_suspend(struct device *dev)
 	if (ret < 0)
 		return ret;
 
+	/* save DLYB configuration */
+	stm32_omi_dlyb_get_cr(omi, &hyperbus->dlyb_cr);
+
 	cr = readl_relaxed(regs_base + OSPI_CR);
 	cr &= ~CR_EN;
 	writel_relaxed(cr, regs_base + OSPI_CR);
@@ -266,7 +271,15 @@ static int __maybe_unused stm32_hyperbus_resume(struct device *dev)
 	if (ret < 0)
 		return ret;
 
+	/* dlyb may be restarted by bootloarder stage, so ensure it's stopped */
+	stm32_omi_dlyb_stop(omi);
+
 	stm32_hyperbus_init(hyperbus);
+
+	/* restore DLYB configuration */
+	ret = stm32_omi_dlyb_set_cr(omi, hyperbus->dlyb_cr);
+	if (ret)
+		return ret;
 
 	pm_runtime_mark_last_busy(omi->dev);
 	pm_runtime_put_autosuspend(omi->dev);
