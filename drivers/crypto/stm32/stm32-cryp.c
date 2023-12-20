@@ -765,7 +765,10 @@ static void stm32_cryp_dma_callback(void *param)
 	complete(&cryp->dma_completion); /* completion to indicate no timeout */
 
 	dma_sync_sg_for_device(cryp->dev, cryp->out_sg, cryp->out_sg_len, DMA_FROM_DEVICE);
-	dma_unmap_sg(cryp->dev, cryp->in_sg, cryp->in_sg_len, DMA_TO_DEVICE);
+
+	if (cryp->in_sg != cryp->out_sg)
+		dma_unmap_sg(cryp->dev, cryp->in_sg, cryp->in_sg_len, DMA_TO_DEVICE);
+
 	dma_unmap_sg(cryp->dev, cryp->out_sg, cryp->out_sg_len, DMA_FROM_DEVICE);
 
 	reg = stm32_cryp_read(cryp, CRYP_DMACR);
@@ -856,10 +859,12 @@ static int stm32_cryp_dma_start(struct stm32_cryp *cryp)
 	struct dma_async_tx_descriptor *tx_in, *tx_out;
 	u32 reg;
 
-	err = dma_map_sg(cryp->dev, cryp->in_sg, cryp->in_sg_len, DMA_TO_DEVICE);
-	if (!err) {
-		dev_err(cryp->dev, "dma_map_sg() error\n");
-		return err;
+	if (cryp->in_sg != cryp->out_sg) {
+		err = dma_map_sg(cryp->dev, cryp->in_sg, cryp->in_sg_len, DMA_TO_DEVICE);
+		if (!err) {
+			dev_err(cryp->dev, "dma_map_sg() error\n");
+			return err;
+		}
 	}
 
 	err = dma_map_sg(cryp->dev, cryp->out_sg, cryp->out_sg_len, DMA_FROM_DEVICE);
