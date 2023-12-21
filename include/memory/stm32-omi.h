@@ -167,7 +167,6 @@ struct stm32_omi {
 
 	void __iomem *regs_base;
 	void __iomem *mm_base;
-	phys_addr_t mm_phys_base;
 	phys_addr_t regs_phys_base;
 	resource_size_t mm_size;
 	u32 clk_rate;

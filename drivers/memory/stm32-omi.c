@@ -558,7 +558,6 @@ static int stm32_omi_probe(struct platform_device *pdev)
 	of_node_put(node);
 
 	if (rmem) {
-		omi->mm_phys_base = rmem->base;
 		omi->mm_size = rmem->size;
 		omi->mm_base = devm_ioremap(dev, rmem->base, rmem->size);
 		if (IS_ERR(omi->mm_base)) {
