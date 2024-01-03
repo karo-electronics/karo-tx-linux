@@ -146,6 +146,7 @@ struct dw_mipi_dsi_stm {
 	struct dw_mipi_dsi_plat_data pdata;
 	unsigned int lane_mbps;
 	u32 format;
+	bool probe_done;
 };
 
 static inline void dsi_write(struct dw_mipi_dsi_stm *dsi, u32 reg, u32 val)
@@ -419,6 +420,9 @@ static int dw_mipi_dsi_phy_141_init(void *priv_data)
 	dsi_clear(dsi, DSI_PTCR0, PTCR0_TRSEN);
 	mdelay(1);
 
+	if (clk_hw_is_enabled(&dsi->txbyte_clk))
+		clk_disable_unprepare(dsi->txbyte_clk.clk);
+
 	/* dummy set rate ... */
 	clk_set_rate(dsi->txbyte_clk.clk, dsi->lane_mbps * 1000000);
 
@@ -479,8 +483,18 @@ dw_mipi_dsi_phy_141_get_lane_mbps(void *priv_data,
 static void dw_mipi_dsi_clk_disable(struct clk_hw *clk)
 {
 	struct dw_mipi_dsi_stm *dsi = clk_to_dw_mipi_dsi_stm(clk);
+	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	if (!dsi->probe_done)
+		return;
+
+	ret = clk_prepare_enable(dsi->pclk);
+	if (ret) {
+		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
+		return;
+	}
 
 	if (dsi->hw_version == HWVER_141) {
 		/* Disable the DSI PLL */
@@ -492,6 +506,8 @@ static void dw_mipi_dsi_clk_disable(struct clk_hw *clk)
 		/* Disable the regulator */
 		dsi_clear(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
 	}
+
+	clk_disable_unprepare(dsi->pclk);
 }
 
 static int dw_mipi_dsi_clk_enable(struct clk_hw *clk)
@@ -501,6 +517,15 @@ static int dw_mipi_dsi_clk_enable(struct clk_hw *clk)
 	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	if (!dsi->probe_done)
+		return 0;
+
+	ret = clk_prepare_enable(dsi->pclk);
+	if (ret) {
+		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
+		return ret;
+	}
 
 	if (dsi->hw_version == HWVER_141) {
 		ret = readl_poll_timeout_atomic(dsi->base + DSI_PSR, val, val & PSR_PSSC,
@@ -525,17 +550,30 @@ static int dw_mipi_dsi_clk_enable(struct clk_hw *clk)
 			DRM_DEBUG_DRIVER("!TIMEOUT! waiting PLL, let's continue\n");
 	}
 
+	clk_disable_unprepare(dsi->pclk);
+
 	return 0;
 }
 
 static int dw_mipi_dsi_clk_is_enabled(struct clk_hw *hw)
 {
 	struct dw_mipi_dsi_stm *dsi = clk_to_dw_mipi_dsi_stm(hw);
+	int ret;
+
+	ret = clk_prepare_enable(dsi->pclk);
+	if (ret) {
+		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
+		return false;
+	}
 
 	if (dsi->hw_version == HWVER_141)
-		return dsi_read(dsi, DSI_WRPCR2) & WRPCR2_PLLEN;
+		ret = dsi_read(dsi, DSI_WRPCR2) & WRPCR2_PLLEN;
 	else
-		return dsi_read(dsi, DSI_WRPCR) & WRPCR_PLLEN;
+		ret = dsi_read(dsi, DSI_WRPCR) & WRPCR_PLLEN;
+
+	clk_disable_unprepare(dsi->pclk);
+
+	return ret;
 }
 
 static unsigned long dw_mipi_dsi_clk_recalc_rate(struct clk_hw *hw,
@@ -543,9 +581,16 @@ static unsigned long dw_mipi_dsi_clk_recalc_rate(struct clk_hw *hw,
 {
 	struct dw_mipi_dsi_stm *dsi = clk_to_dw_mipi_dsi_stm(hw);
 	unsigned int idf, ndiv, odf, pll_in_khz, pll_out_khz;
+	int ret;
 	u32 val;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	ret = clk_prepare_enable(dsi->pclk);
+	if (ret) {
+		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
+		return -EINVAL;
+	}
 
 	pll_in_khz = (unsigned int)(parent_rate / 1000);
 
@@ -571,6 +616,8 @@ static unsigned long dw_mipi_dsi_clk_recalc_rate(struct clk_hw *hw,
 	/* Get the adjusted pll out value */
 	pll_out_khz = dsi_pll_get_clkout_khz(pll_in_khz, idf, ndiv, odf);
 
+	clk_disable_unprepare(dsi->pclk);
+
 	return (unsigned long)pll_out_khz * 1000;
 }
 
@@ -582,6 +629,12 @@ static long dw_mipi_dsi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	ret = clk_prepare_enable(dsi->pclk);
+	if (ret) {
+		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
+		return -EINVAL;
+	}
 
 	pll_in_khz = (unsigned int)(*parent_rate / 1000);
 
@@ -602,6 +655,8 @@ static long dw_mipi_dsi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 	/* Get the adjusted pll out value */
 	pll_out_khz = dsi_pll_get_clkout_khz(pll_in_khz, idf, ndiv, odf);
 
+	clk_disable_unprepare(dsi->pclk);
+
 	return pll_out_khz * 1000;
 }
 
@@ -616,6 +671,12 @@ static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 	DRM_DEBUG_DRIVER("\n");
 
 	pll_in_khz = (unsigned int)(parent_rate / 1000);
+
+	ret = clk_prepare_enable(dsi->pclk);
+	if (ret) {
+		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
+		return -EINVAL;
+	}
 
 	/* Compute best pll parameters */
 	idf = 0;
@@ -679,6 +740,8 @@ static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 		val = 4000000 / pll_out_khz;
 		dsi_update_bits(dsi, DSI_WPCR0, WPCR0_UIX4, val);
 	}
+
+	clk_disable_unprepare(dsi->pclk);
 
 	return 0;
 }
@@ -748,9 +811,11 @@ static int dw_mipi_dsi_clk_register(struct dw_mipi_dsi_stm *dsi,
 static int dw_mipi_dsi_phy_init(void *priv_data)
 {
 	struct dw_mipi_dsi_stm *dsi = priv_data;
-	int ret;
+	int ret = 0;
 
-	ret = clk_prepare_enable(dsi->txbyte_clk.clk);
+	if (!clk_hw_is_enabled(&dsi->txbyte_clk))
+		ret = clk_prepare_enable(dsi->txbyte_clk.clk);
+
 	return ret;
 }
 
@@ -1201,6 +1266,20 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 		/* No need to return since only MP25 has it */
 		if (IS_ERR(dsi->ltdc_clk))
 			dev_err_probe(dev, PTR_ERR(dsi->ltdc_clk), "Unable to get pixclk clock\n");
+	}
+
+	dsi->probe_done = true;
+
+	/*
+	 * To obtain a continuous display after the probe, the txbyte clock must
+	 * remain activated
+	 */
+	if (device_property_read_bool(dev, "default-on")) {
+		ret = clk_prepare_enable(dsi->txbyte_clk.clk);
+		if (ret) {
+			DRM_ERROR("Failed to enable DSI pixel clock: %d\n", ret);
+			goto err_dsi_probe;
+		}
 	}
 
 	clk_disable_unprepare(dsi->pclk);
