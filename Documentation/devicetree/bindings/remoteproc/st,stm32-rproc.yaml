@@ -117,10 +117,10 @@ properties:
       address, used to boot it.
     maxItems: 1
 
-  st,syscfg-m4-state:
+  st,syscfg-cm-state:
     $ref: "/schemas/types.yaml#/definitions/phandle-array"
     description: |
-      Reference to the tamp register which exposes the Cortex-M4 state.
+      Reference to the register which exposes the Cortex-M state.
     items:
       - items:
           - description: Phandle of syscon block with the tamp register
@@ -202,7 +202,7 @@ examples:
       /* Hold boot managed using system config*/
       st,syscfg-holdboot = <&rcc 0x10C 0x1>;
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
-      st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+      st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
     };
 
 #--------------------
@@ -219,6 +219,6 @@ examples:
                <&scmi_reset RST_SCMI_MCU_HOLD_BOOT>;
       reset-names = "mcu_rst", "hold_boot";
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
-      st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+      st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
     };
 ...
