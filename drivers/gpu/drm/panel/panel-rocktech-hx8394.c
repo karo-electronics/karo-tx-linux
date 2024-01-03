@@ -257,6 +257,7 @@ static int hx8394_unprepare(struct drm_panel *panel)
 	if (ret)
 		dev_warn(panel->dev, "failed to enter sleep mode: %d\n", ret);
 
+	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
 	pm_runtime_mark_last_busy(panel->dev);
 	ret = pm_runtime_put_autosuspend(panel->dev);
 	if (ret < 0)
@@ -337,7 +338,8 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
 			  MIPI_DSI_MODE_LPM | MIPI_DSI_CLOCK_NON_CONTINUOUS;
 
 	pm_runtime_enable(ctx->dev);
-	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
+	/* set delay to 60s to keep alive the panel to wait the splash screen */
+	pm_runtime_set_autosuspend_delay(ctx->dev, 60000);
 	pm_runtime_use_autosuspend(ctx->dev);
 
 	drm_panel_init(&ctx->panel, dev, &hx8394_drm_funcs,
@@ -397,8 +399,6 @@ static __maybe_unused int rocktech_hx8394_resume(struct device *dev)
 		return ret;
 	}
 
-	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-	mdelay(1);
 	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
 	msleep(50);
 
