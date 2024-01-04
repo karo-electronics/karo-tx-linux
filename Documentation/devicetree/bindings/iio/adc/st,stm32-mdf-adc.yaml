@@ -31,12 +31,13 @@ properties:
       - const: ker_ck
 
   "#clock-cells":
-    const: 1
+    enum: [0, 1]
 
   clock-output-names:
     description: |
       CCK0 and CCK1 are optional output clocks, which share the same clock frequency,
       but can be gated independently to save power.
+    minItems: 1
     items:
       - const: cck0
       - const: cck1
@@ -135,6 +136,7 @@ patternProperties:
       compatible:
         enum:
           - st,stm32mp25-mdf-dmic
+          - st,stm32mp25-mdf-adc
 
       reg:
         description: Specify the MDF filter instance
@@ -214,30 +216,81 @@ patternProperties:
       - "#io-channel-cells"
       - st,sitf
 
-    patternProperties:
-      "^mdf-dai+$":
-        type: object
-        description: child node
+    allOf:
+      - if:
+          properties:
+            compatible:
+              contains:
+                const: st,stm32mp25-mdf-adc
 
-        properties:
-          compatible:
-            enum:
-              - st,stm32mp25-mdf-dai
+        then:
+          properties:
+            '#address-cells':
+              const: 1
 
-          "#sound-dai-cells":
-            const: 0
+            '#size-cells':
+              const: 0
 
-          io-channels:
-            description:
-              From common IIO binding. Used to pipe external sigma delta
-              modulator or internal ADC output to MDF channel.
+          required:
+            - '#address-cells'
+            - '#size-cells'
 
-        required:
-          - compatible
-          - "#sound-dai-cells"
-          - io-channels
+          patternProperties:
+            "^channel@([0-9])$":
+              type: object
+              $ref: "adc.yaml"
+              description: Represents the external channel which is connected to the MDF.
 
-    additionalProperties: false
+              properties:
+                reg:
+                  maxItems: 1
+                  items:
+                    minimum: 0
+                    maximum: 8
+
+              required:
+                - reg
+
+              additionalProperties: false
+
+      - if:
+          properties:
+            compatible:
+              contains:
+                const: st,stm32mp25-mdf-dmic
+
+        then:
+          patternProperties:
+            "^mdf-dai+$":
+              type: object
+              description: child node
+
+              properties:
+                compatible:
+                  enum:
+                    - st,stm32mp25-mdf-dai
+
+                "#sound-dai-cells":
+                  const: 0
+
+                io-channels:
+                  description:
+                    From common IIO binding. Used to pipe external sigma delta
+                    modulator or internal ADC output to MDF channel.
+
+                power-domains:
+                  maxItems: 1
+
+                port:
+                  $ref: /schemas/sound/audio-graph-port.yaml#
+                  unevaluatedProperties: false
+
+              required:
+                - compatible
+                - "#sound-dai-cells"
+                - io-channels
+
+              additionalProperties: false
 
 examples:
   - |
@@ -277,6 +330,23 @@ examples:
           compatible = "st,stm32mp25-mdf-dai";
           #sound-dai-cells = <0>;
           io-channels = <&filter0 0>;
+        };
+      };
+
+      filter1: filter@104  {
+        compatible = "st,stm32mp25-mdf-adc";
+        reg = <0x104 0x70>;
+        #io-channel-cells = <1>;
+        interrupts = <GIC_SPI 185 IRQ_TYPE_LEVEL_HIGH>;
+        dmas = <&hpdma 64 0x63 0x12 0>;
+        dma-names = "rx";
+        st,cic-mode = <2>;
+        st,sitf = <&sitf5 1>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        channel@1 {
+          reg = <1>;
         };
       };
     };
