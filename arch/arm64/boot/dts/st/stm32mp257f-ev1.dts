@@ -559,6 +559,8 @@
 	pinctrl-1 = <&pcie_init_pins_a>;
 	pinctrl-2 = <&pcie_sleep_pins_a>;
 	reset-gpios = <&gpioj 8 GPIO_ACTIVE_LOW>;
+	wakeup-source;
+	wake-gpios = <&gpioh 5 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 	status = "okay";
 };
 
