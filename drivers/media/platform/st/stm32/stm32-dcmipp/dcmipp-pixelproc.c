@@ -51,6 +51,14 @@
 #define DCMIPP_PxCRSZR_HSIZE_SHIFT	0
 #define DCMIPP_PxCRSZR_VSIZE_SHIFT	16
 
+#define DCMIPP_P1DCCR (0x90C)
+#define DCMIPP_P2DCCR (0xD0C)
+#define DCMIPP_PxDCCR(id) (((id) == 1) ? DCMIPP_P1DCCR :\
+			   DCMIPP_P2DCCR)
+#define DCMIPP_PxDCCR_ENABLE BIT(0)
+#define DCMIPP_PxDCCR_HDEC_SHIFT 1
+#define DCMIPP_PxDCCR_VDEC_SHIFT 3
+
 #define DCMIPP_P1DSCR (0x910)
 #define DCMIPP_P2DSCR (0xD10)
 #define DCMIPP_PxDSCR(id) (((id) == 1) ? DCMIPP_P1DSCR :\
@@ -242,7 +250,13 @@ static const struct v4l2_rect crop_min = {
 	.left = 0,
 };
 
-#define DCMIPP_MAX_DOWNSIZE_RATIO 8
+/*
+ * Downscale is a combination of both decimation block (1/2/4/8)
+ * and downsize block (up to 8x) for a total of maximum downscale of 64
+ */
+#define DCMIPP_MAX_DECIMATION_RATIO	8
+#define DCMIPP_MAX_DOWNSIZE_RATIO	8
+#define DCMIPP_MAX_DOWNSCALE_RATIO	64
 
 /*
  * Functions handling controls
@@ -585,13 +599,13 @@ static int dcmipp_pixelproc_set_selection(struct v4l2_subdev *sd,
 	case V4L2_SEL_TGT_COMPOSE:
 		if (s->r.width > crop->width)
 			s->r.width = crop->width;
-		else if (s->r.width < (crop->width / DCMIPP_MAX_DOWNSIZE_RATIO))
-			s->r.width = crop->width / DCMIPP_MAX_DOWNSIZE_RATIO;
+		else if (s->r.width < (crop->width / DCMIPP_MAX_DOWNSCALE_RATIO))
+			s->r.width = crop->width / DCMIPP_MAX_DOWNSCALE_RATIO;
 
 		if (s->r.height > crop->height)
 			s->r.height = crop->height;
-		else if (s->r.height < (crop->height / DCMIPP_MAX_DOWNSIZE_RATIO))
-			s->r.height = crop->width / DCMIPP_MAX_DOWNSIZE_RATIO;
+		else if (s->r.height < (crop->height / DCMIPP_MAX_DOWNSCALE_RATIO))
+			s->r.height = crop->width / DCMIPP_MAX_DOWNSCALE_RATIO;
 		s->r.top = 0;
 		s->r.left = 0;
 
@@ -698,31 +712,56 @@ dcmipp_pixelproc_colorconv_config(struct dcmipp_pixelproc_device *pixelproc)
 #define DCMIPP_PIXELPROC_HVDIV_CONS	1024
 #define DCMIPP_PIXELPROC_HVDIV_MAX	1023
 static void
-dcmipp_pixelproc_set_downsize(struct dcmipp_pixelproc_device *pixelproc)
+dcmipp_pixelproc_set_downscale(struct dcmipp_pixelproc_device *pixelproc)
 {
 	unsigned int hratio, vratio, hdiv, vdiv;
+	unsigned int hdec = 0, vdec = 0;
+	unsigned int h_post_dec = pixelproc->crop.width;
+	unsigned int v_post_dec = pixelproc->crop.height;
 
-	hratio = (pixelproc->crop.width - 1) * DCMIPP_PIXELPROC_HVRATIO_CONS /
+	/* Compute decimation factors (HDEC/VDEC) */
+	while (pixelproc->compose.width * DCMIPP_MAX_DOWNSIZE_RATIO < h_post_dec) {
+		hdec++;
+		h_post_dec /= 2;
+	}
+	while (pixelproc->compose.height * DCMIPP_MAX_DOWNSIZE_RATIO < v_post_dec) {
+		vdec++;
+		v_post_dec /= 2;
+	}
+
+	/* Compute downsize factor */
+	hratio = (h_post_dec - 1) * DCMIPP_PIXELPROC_HVRATIO_CONS /
 		 (pixelproc->compose.width - 1);
 	if (hratio > DCMIPP_PIXELPROC_HVRATIO_MAX)
 		hratio = DCMIPP_PIXELPROC_HVRATIO_MAX;
-	vratio = (pixelproc->crop.height - 1) * DCMIPP_PIXELPROC_HVRATIO_CONS /
+	vratio = (v_post_dec - 1) * DCMIPP_PIXELPROC_HVRATIO_CONS /
 		 (pixelproc->compose.height - 1);
 	if (vratio > DCMIPP_PIXELPROC_HVRATIO_MAX)
 		vratio = DCMIPP_PIXELPROC_HVRATIO_MAX;
 	hdiv = (DCMIPP_PIXELPROC_HVDIV_CONS * pixelproc->compose.width) /
-		pixelproc->crop.width;
+		h_post_dec;
 	if (hdiv > DCMIPP_PIXELPROC_HVDIV_MAX)
 		hdiv = DCMIPP_PIXELPROC_HVDIV_MAX;
 	vdiv = (DCMIPP_PIXELPROC_HVDIV_CONS * pixelproc->compose.height) /
-		pixelproc->crop.height;
+		v_post_dec;
 	if (vdiv > DCMIPP_PIXELPROC_HVDIV_MAX)
 		vdiv = DCMIPP_PIXELPROC_HVDIV_MAX;
 
+	dev_dbg(pixelproc->dev, "%s: decimation config: hdec: 0x%x, vdec: 0x%x\n",
+		pixelproc->sd.name,
+		hdec, vdec);
 	dev_dbg(pixelproc->dev, "%s: downsize config: hratio: 0x%x, vratio: 0x%x, hdiv: 0x%x, vdiv: 0x%x\n",
 		pixelproc->sd.name,
 		hratio, vratio,
 		hdiv, vdiv);
+
+	reg_clear(pixelproc, DCMIPP_PxDCCR(pixelproc->pipe_id),
+		  DCMIPP_PxDCCR_ENABLE);
+	if (hdec || vdec)
+		reg_write(pixelproc, DCMIPP_PxDCCR(pixelproc->pipe_id),
+			  (hdec << DCMIPP_PxDCCR_HDEC_SHIFT) |
+			  (vdec << DCMIPP_PxDCCR_VDEC_SHIFT) |
+			  DCMIPP_PxDCCR_ENABLE);
 
 	reg_clear(pixelproc, DCMIPP_PxDSCR(pixelproc->pipe_id),
 		  DCMIPP_PxDSCR_ENABLE);
@@ -838,8 +877,8 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 		  (pixelproc->crop.height << DCMIPP_PxCRSZR_VSIZE_SHIFT) |
 		  DCMIPP_PxCRSZR_ENABLE);
 
-	/* Configure downsize */
-	dcmipp_pixelproc_set_downsize(pixelproc);
+	/* Configure downscale */
+	dcmipp_pixelproc_set_downscale(pixelproc);
 
 	/* Configure YUV Conversion (if applicable) */
 	if (pixelproc->pipe_id == 1) {
