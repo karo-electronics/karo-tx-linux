@@ -33,8 +33,8 @@
 #define MDF_DFLTIER_REG 0x28
 #define MDF_DFLTISR_REG 0x2C
 #define MDF_OECCR_REG 0x30
-#define MDF_SNPSxDR 0x64
-#define MDF_DLTDR_REG 0x6c
+#define MDF_SNPSDR 0x64
+#define MDF_DFLTDR_REG 0x6c
 
 /* MDF_GCR: Global Control Register */
 #define MDF_GCR_TRGO BIT(0)
@@ -85,6 +85,7 @@
 #define MDF_DFLTCR_ACQMOD_MASK GENMASK(6, 4)
 #define MDF_DFLTCR_ACQMOD(v) FIELD_PREP(MDF_DFLTCR_ACQMOD_MASK, v)
 #define MDF_DFLTCR_TRGSENS BIT(8)
+#define MDF_DFLTCR_TRGSENS_SET(v) FIELD_PREP(MDF_DFLTCR_TRGSENS, v)
 #define MDF_DFLTCR_TRGSRC_MASK GENMASK(15, 12)
 #define MDF_DFLTCR_TRGSRC(v) FIELD_PREP(MDF_DFLTCR_TRGSRC_MASK, v)
 #define MDF_DFLTCR_SNPSFMT BIT(16)
@@ -301,9 +302,9 @@ struct stm32_mdf {
 	unsigned int nb_interleave;
 };
 
-int stm32_mdf_start_mdf(struct stm32_mdf *mdf);
-int stm32_mdf_stop_mdf(struct stm32_mdf *mdf);
-int stm32_mdf_trigger(struct stm32_mdf *mdf);
+int stm32_mdf_core_start_mdf(struct stm32_mdf *mdf);
+int stm32_mdf_core_stop_mdf(struct stm32_mdf *mdf);
+int stm32_mdf_core_trigger(struct stm32_mdf *mdf);
 
 int stm32_mdf_sitf_start(struct stm32_mdf_sitf *sitf);
 int stm32_mdf_sitf_stop(struct stm32_mdf_sitf *sitf);

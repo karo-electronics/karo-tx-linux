@@ -22,7 +22,7 @@
 
 #include "stm32-mdf.h"
 
-static bool stm32_mdf_readable_reg(struct device *dev, unsigned int reg)
+static bool stm32_mdf_core_readable_reg(struct device *dev, unsigned int reg)
 {
 	switch (reg) {
 	case MDF_GCR_REG:
@@ -37,7 +37,7 @@ static bool stm32_mdf_readable_reg(struct device *dev, unsigned int reg)
 	}
 }
 
-static bool stm32_mdf_volatile_reg(struct device *dev, unsigned int reg)
+static bool stm32_mdf_core_volatile_reg(struct device *dev, unsigned int reg)
 {
 	/*
 	 * In MDF_CKGCR_REG register only CKGACTIVE bit is volatile. MDF_CKGCR_REG is not marked
@@ -47,7 +47,7 @@ static bool stm32_mdf_volatile_reg(struct device *dev, unsigned int reg)
 	return false;
 }
 
-static bool stm32_mdf_writeable_reg(struct device *dev, unsigned int reg)
+static bool stm32_mdf_core_writeable_reg(struct device *dev, unsigned int reg)
 {
 	switch (reg) {
 	case MDF_GCR_REG:
@@ -63,9 +63,9 @@ static const struct regmap_config stm32_mdf_regmap_cfg = {
 	.val_bits = 32,
 	.reg_stride = sizeof(u32),
 	.max_register = MDF_SIDR_REG,
-	.readable_reg = stm32_mdf_readable_reg,
-	.volatile_reg = stm32_mdf_volatile_reg,
-	.writeable_reg = stm32_mdf_writeable_reg,
+	.readable_reg = stm32_mdf_core_readable_reg,
+	.volatile_reg = stm32_mdf_core_volatile_reg,
+	.writeable_reg = stm32_mdf_core_writeable_reg,
 	.num_reg_defaults_raw = MDF_SIDR_REG / sizeof(u32) + 1,
 	.fast_io = true,
 	.cache_type = REGCACHE_FLAT,
@@ -80,7 +80,7 @@ static const struct regmap_config stm32_mdf_regmap_cfg = {
  * @base: mdf registers base cpu address
  * @phys_base: mdf registers base physical address
  * @n_active_ch: number of active channels
- * @lock: lock to manage clock provider
+ * @lock: lock to manage common resources
  * @cck_freq: output cck clocks frequencies array
  */
 struct stm32_mdf_priv {
@@ -91,7 +91,7 @@ struct stm32_mdf_priv {
 	void __iomem *base;
 	phys_addr_t phys_base;
 	atomic_t n_active_ch;
-	spinlock_t lock; /* Manage clock provider race conditions */
+	spinlock_t lock; /* Manage common resources race conditions */
 	unsigned long cck_freq;
 };
 
@@ -102,7 +102,7 @@ static inline struct stm32_mdf_priv *to_stm32_mdf_priv(struct stm32_mdf *mdf)
 	return container_of(mdf, struct stm32_mdf_priv, mdf);
 }
 
-int stm32_mdf_start_mdf(struct stm32_mdf *mdf)
+int stm32_mdf_core_start_mdf(struct stm32_mdf *mdf)
 {
 	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
 	struct device *dev = &priv->pdev->dev;
@@ -139,25 +139,39 @@ err:
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(stm32_mdf_start_mdf);
+EXPORT_SYMBOL_GPL(stm32_mdf_core_start_mdf);
 
-int stm32_mdf_trigger(struct stm32_mdf *mdf)
+int stm32_mdf_core_trigger(struct stm32_mdf *mdf)
 {
 	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
 	int ret;
+	u32 val;
 
-	/* Bypass cache to ensure TRGO bit is actually set on each write access */
+	spin_lock(&priv->lock);
+
+	/* Bypass cache to access TRGO volatile bit */
 	regcache_cache_bypass(priv->regmap, true);
-	ret = regmap_set_bits(priv->regmap, MDF_GCR_REG, MDF_GCR_TRGO);
-	regcache_cache_bypass(priv->regmap, false);
+
+	ret = regmap_read(priv->regmap, MDF_GCR_REG, &val);
 	if (ret < 0)
-		return ret;
+		goto err;
 
-	return 0;
+	if (val & MDF_GCR_TRGO) {
+		ret = -EBUSY;
+		goto err;
+	}
+
+	ret = regmap_set_bits(priv->regmap, MDF_GCR_REG, MDF_GCR_TRGO);
+
+err:
+	regcache_cache_bypass(priv->regmap, false);
+	spin_unlock(&priv->lock);
+
+	return ret;
 }
-EXPORT_SYMBOL_GPL(stm32_mdf_trigger);
+EXPORT_SYMBOL_GPL(stm32_mdf_core_trigger);
 
-int stm32_mdf_stop_mdf(struct stm32_mdf *mdf)
+int stm32_mdf_core_stop_mdf(struct stm32_mdf *mdf)
 {
 	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
 	int ret = 0;
@@ -170,11 +184,11 @@ int stm32_mdf_stop_mdf(struct stm32_mdf *mdf)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(stm32_mdf_stop_mdf);
+EXPORT_SYMBOL_GPL(stm32_mdf_core_stop_mdf);
 
-static int stm32_mdf_cck_divider_set_rate(struct platform_device *pdev,
-					  struct stm32_mdf_priv *priv,
-					  unsigned long parent_rate)
+static int stm32_mdf_core_cck_divider_set_rate(struct platform_device *pdev,
+					       struct stm32_mdf_priv *priv,
+					       unsigned long parent_rate)
 {
 	struct device *dev = &pdev->dev;
 	unsigned long rate = priv->cck_freq;
@@ -220,7 +234,8 @@ static int stm32_mdf_cck_divider_set_rate(struct platform_device *pdev,
 				  MDF_CKG_PROCDIV(procdiv - 1));
 }
 
-static unsigned long stm32_mdf_cck_divider_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
+static unsigned long stm32_mdf_core_cck_divider_recalc_rate(struct clk_hw *hw,
+							    unsigned long parent_rate)
 {
 	struct clk_regmap *clk = to_clk_regmap(hw);
 	unsigned int val;
@@ -239,7 +254,7 @@ static unsigned long stm32_mdf_cck_divider_recalc_rate(struct clk_hw *hw, unsign
 };
 
 static const struct clk_ops clk_cck_ops = {
-	.recalc_rate = stm32_mdf_cck_divider_recalc_rate,
+	.recalc_rate = stm32_mdf_core_cck_divider_recalc_rate,
 };
 
 static struct clk_regmap clk_cck;
@@ -288,8 +303,6 @@ static int stm32_mdf_core_register_clock_provider(struct platform_device *pdev,
 	if (!clk_data)
 		return -ENOMEM;
 
-	spin_lock_init(&priv->lock);
-
 	of_property_for_each_string(node, "clock-output-names", prop, clk_name) {
 		if (index >= STM32_MDF_MAX_CCK) {
 			dev_err(dev, "Too many cck providers defined\n");
@@ -337,7 +350,7 @@ static int stm32_mdf_core_register_clock_provider(struct platform_device *pdev,
 				  MDF_CKG_CCK1DIR | MDF_CKG_CCK0DIR, ckgcr);
 }
 
-static int stm32_mdf_of_cck_get(struct platform_device *pdev, struct stm32_mdf_priv *priv)
+static int stm32_mdf_core_of_cck_get(struct platform_device *pdev, struct stm32_mdf_priv *priv)
 {
 	struct device *dev = &pdev->dev;
 	u32 freq;
@@ -378,12 +391,12 @@ static int stm32_mdf_core_parse_clocks(struct platform_device *pdev, struct stm3
 	kclk_rate = clk_get_rate(kclk);
 
 	/* CCK0 and CCK1 clocks are optional. Used only in SPI master modes. */
-	ret = stm32_mdf_of_cck_get(pdev, priv);
+	ret = stm32_mdf_core_of_cck_get(pdev, priv);
 	if (ret)
 		return ret;
 
 	if (priv->cck_freq) {
-		ret = stm32_mdf_cck_divider_set_rate(pdev, priv, kclk_rate);
+		ret = stm32_mdf_core_cck_divider_set_rate(pdev, priv, kclk_rate);
 		if (ret) {
 			dev_err(dev, "Failed to set cck rate: %d\n", ret);
 			return ret;
@@ -495,6 +508,7 @@ static int stm32_mdf_core_probe(struct platform_device *pdev)
 	if (!priv)
 		return -ENOMEM;
 	priv->pdev = pdev;
+	spin_lock_init(&priv->lock);
 
 	priv->base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
 	if (IS_ERR(priv->base))
