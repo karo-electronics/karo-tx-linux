@@ -89,6 +89,19 @@ properties:
   feature-domains:
     maxItems: 1
 
+  wake-gpios:
+    description: GPIO controlled connection to WAKE# input signal
+    maxItems: 1
+
+  wakeup-source: true
+
+if:
+  required:
+     - wakeup-source
+then:
+  required:
+     - wake-gpios
+
 required:
   - st,syscfg
   - interrupt-map
@@ -105,6 +118,7 @@ unevaluatedProperties: false
 
 examples:
   - |
+    #include <dt-bindings/gpio/gpio.h>
     #include <dt-bindings/phy/phy.h>
     #include <dt-bindings/clock/stm32mp25-clks.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
@@ -139,5 +153,7 @@ examples:
              phy-names = "pcie-phy";
              resets = <&rcc PCIE_R>;
              reset-names = "pcie";
+             wakeup-source;
+             wake-gpios = <&gpioh 5 GPIO_ACTIVE_LOW>;
              msi-parent = <&v2m0>;
     };
