@@ -21,6 +21,7 @@
 #include <media/v4l2-mc.h>
 #include <media/videobuf2-core.h>
 #include <media/videobuf2-vmalloc.h>
+#include <uapi/linux/stm32-dcmipp-config.h>
 
 #include "dcmipp-common.h"
 
@@ -52,22 +53,6 @@
 #define DCMIPP_P1STXSR(a) (0x864 + ((a) * 0x4))
 
 #define DCMIPP_NB_STAT_REGION	1
-
-/*
- * TODO - should be moved to an include file accessible from user space,
- * such as within uapi folder
- */
-struct stm32_dcmipp_stat_buf {
-	/*
-	 * TODO - we should have a field indicating which data is the
-	 * latest, and also maybe all valid fields.  Another idea could be
-	 * to avoid output of the buffer until we have performed a first loop
-	 * on the capture state so that we are sure we have a valid value
-	 * for all statistics
-	 */
-	__u32 average_RGB[3];
-	__u32 bins[12];
-} __packed;
 
 struct dcmipp_buf {
 	struct vb2_v4l2_buffer	vb;
