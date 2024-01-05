@@ -819,7 +819,7 @@ static int stm32_cryp_header_dma_start(struct stm32_cryp *cryp)
 	err = dma_map_sg(cryp->dev, cryp->header_sg, cryp->header_sg_len, DMA_TO_DEVICE);
 	if (!err) {
 		dev_err(cryp->dev, "dma_map_sg() error\n");
-		return err;
+		return -ENOMEM;
 	}
 
 	dma_sync_sg_for_device(cryp->dev, cryp->header_sg, cryp->header_sg_len, DMA_TO_DEVICE);
@@ -863,14 +863,14 @@ static int stm32_cryp_dma_start(struct stm32_cryp *cryp)
 		err = dma_map_sg(cryp->dev, cryp->in_sg, cryp->in_sg_len, DMA_TO_DEVICE);
 		if (!err) {
 			dev_err(cryp->dev, "dma_map_sg() error\n");
-			return err;
+			return -ENOMEM;
 		}
 	}
 
 	err = dma_map_sg(cryp->dev, cryp->out_sg, cryp->out_sg_len, DMA_FROM_DEVICE);
 	if (!err) {
 		dev_err(cryp->dev, "dma_map_sg() error\n");
-		return err;
+		return -ENOMEM;
 	}
 
 	dma_sync_sg_for_device(cryp->dev, cryp->in_sg, cryp->in_sg_len, DMA_TO_DEVICE);
