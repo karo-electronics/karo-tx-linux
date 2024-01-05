@@ -15,6 +15,7 @@
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/phy/phy.h>
+#include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include <dt-bindings/phy/phy.h>
@@ -391,6 +392,8 @@ static int stm32_combophy_exit(struct phy *phy)
 
 	stm32_combophy_disable_clocks(combophy);
 
+	pm_runtime_put_sync(combophy->dev);
+
 	return 0;
 }
 
@@ -399,9 +402,16 @@ static int stm32_combophy_init(struct phy *phy)
 	struct stm32_combophy *combophy = phy_get_drvdata(phy);
 	int ret;
 
+	ret = pm_runtime_resume_and_get(combophy->dev);
+	if (ret < 0) {
+		dev_err(combophy->dev, "pm_runtime_resume_and_get failed\n");
+		return ret;
+	}
+
 	ret = stm32_combophy_enable_clocks(combophy);
 	if (ret) {
 		dev_err(combophy->dev, "Clock enable failed %d\n", ret);
+		pm_runtime_put_sync(combophy->dev);
 		return ret;
 	}
 
@@ -409,12 +419,15 @@ static int stm32_combophy_init(struct phy *phy)
 	if (ret) {
 		dev_err(combophy->dev, "combophy mode not set\n");
 		stm32_combophy_disable_clocks(combophy);
+		pm_runtime_put_sync(combophy->dev);
 		return ret;
 	}
 
 	ret = stm32_combophy_pll_init(combophy);
-	if (ret)
+	if (ret) {
 		stm32_combophy_disable_clocks(combophy);
+		pm_runtime_put_sync(combophy->dev);
+	}
 
 	return ret;
 }
@@ -431,6 +444,7 @@ static int stm32_combophy_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
 	struct phy_provider *phy_provider;
+	int ret;
 
 	combophy = devm_kzalloc(dev, sizeof(*combophy), GFP_KERNEL);
 	if (!combophy)
@@ -473,6 +487,10 @@ static int stm32_combophy_probe(struct platform_device *pdev)
 	if (IS_ERR(combophy->phy))
 		return dev_err_probe(dev, PTR_ERR(combophy->phy),
 				     "failed to create PCIe/USB3 ComboPHY\n");
+
+	ret = devm_pm_runtime_enable(dev);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to enable pm runtime\n");
 
 	phy_set_drvdata(combophy->phy, combophy);
 
