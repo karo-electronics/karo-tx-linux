@@ -14,6 +14,7 @@
 #include <linux/of_gpio.h>
 #include <linux/phy/phy.h>
 #include <linux/msi.h>
+#include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include "pcie-designware.h"
@@ -381,11 +382,26 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, stm32_pcie);
 
+	ret = devm_pm_runtime_enable(dev);
+	if (ret < 0) {
+		dev_err(dev, "Failed to enable pm runtime %d\n", ret);
+		goto phy_disable;
+	}
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0) {
+		dev_err(dev, "pm runtime resume failed: %d\n", ret);
+		goto phy_disable;
+	}
+
 	ret = stm32_add_pcie_port(stm32_pcie, pdev);
 	if (ret)
-		goto phy_disable;
+		goto sync_disable;
 
 	return 0;
+
+sync_disable:
+	pm_runtime_put_sync(dev);
 
 phy_disable:
 	phy_exit(stm32_pcie->phy);
@@ -401,6 +417,8 @@ static int stm32_pcie_remove(struct platform_device *pdev)
 	dw_pcie_host_deinit(pp);
 	clk_disable_unprepare(stm32_pcie->clk);
 	pcie_port_irqs_hook = NULL;
+
+	pm_runtime_put_sync(&pdev->dev);
 
 	phy_exit(stm32_pcie->phy);
 
