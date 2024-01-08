@@ -1135,10 +1135,11 @@ struct dcmipp_ent_device *dcmipp_isp_ent_init(struct device *dev,
 	ret = dcmipp_ent_sd_register(&isp->ved, &isp->sd,
 				     v4l2_dev,
 				     entity_name,
-				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 3,
-				     (const unsigned long[3]) {
+				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 4,
+				     (const unsigned long[4]) {
 				     MEDIA_PAD_FL_SINK,
 				     MEDIA_PAD_FL_SOURCE,
+				     MEDIA_PAD_FL_SINK,
 				     MEDIA_PAD_FL_SOURCE,
 				     },
 				     &dcmipp_isp_int_ops, &dcmipp_isp_ops,
