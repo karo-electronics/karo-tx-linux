@@ -86,6 +86,13 @@
 			gpios = <&gpioc 11 GPIO_ACTIVE_HIGH>;
 			status = "okay";
 		};
+
+		button-wake-up {
+			label = "wake-up";
+			linux,code = <KEY_WAKEUP>;
+			interrupts-extended = <&optee 0>;
+			status = "okay";
+		};
 	};
 
 	gpio-leds {
