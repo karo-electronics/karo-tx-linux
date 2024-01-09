@@ -596,7 +596,7 @@ static int stm32_hash_hmac_dma_send(struct stm32_hash_dev *hdev)
 	struct stm32_hash_ctx *ctx = crypto_ahash_ctx(tfm);
 	int err;
 
-	if (ctx->keylen < rctx->state.blocklen || hdev->dma_mode == 1) {
+	if (ctx->keylen < rctx->state.blocklen || hdev->dma_mode > 0) {
 		err = stm32_hash_write_key(hdev);
 		if (stm32_hash_wait_busy(hdev))
 			return -ETIMEDOUT;
@@ -696,7 +696,7 @@ static int stm32_hash_dma_send(struct stm32_hash_dev *hdev)
 				 * transfer.
 				 */
 				sg->length = rctx->total - bufcnt;
-				if (hdev->dma_mode == 1) {
+				if (hdev->dma_mode > 0) {
 					len = (ALIGN(sg->length, 16) - 16);
 
 					ncp = sg_pcopy_to_buffer(rctx->sg, rctx->nents,
@@ -751,7 +751,7 @@ static int stm32_hash_dma_send(struct stm32_hash_dev *hdev)
 	 * last transfer of 4 words or less.
 	 */
 	if (final) {
-		if (hdev->dma_mode == 1) {
+		if (hdev->dma_mode > 0) {
 			if (stm32_hash_wait_busy(hdev))
 				return -ETIMEDOUT;
 			reg = stm32_hash_read(hdev, HASH_CR);
