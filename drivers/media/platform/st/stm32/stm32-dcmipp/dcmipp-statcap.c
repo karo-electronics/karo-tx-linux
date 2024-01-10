@@ -140,7 +140,7 @@ static int dcmipp_statcap_g_fmt_meta_cap(struct file *file, void *priv,
 {
 	struct v4l2_meta_format *meta = &f->fmt.meta;
 
-	meta->dataformat = V4L2_META_FMT_ST_ISP_STAT;
+	meta->dataformat = V4L2_META_FMT_ST_DCMIPP_ISP_STAT;
 	meta->buffersize = sizeof(struct stm32_dcmipp_stat_buf);
 
 	return 0;
@@ -153,7 +153,7 @@ static int dcmipp_statcap_enum_fmt_meta_cap(struct file *file, void *priv,
 		return -EINVAL;
 
 	f->type = V4L2_BUF_TYPE_META_CAPTURE;
-	f->pixelformat = V4L2_META_FMT_ST_ISP_STAT;
+	f->pixelformat = V4L2_META_FMT_ST_DCMIPP_ISP_STAT;
 
 	return 0;
 }
