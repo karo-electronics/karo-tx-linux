@@ -2358,6 +2358,7 @@ static void cryp_debugfs(struct stm32_cryp *cryp)
 	if (!regset)
 		return;
 
+	regset->dev = cryp->dev;
 	regset->regs = stm32_cryp_regs;
 	regset->nregs = ARRAY_SIZE(stm32_cryp_regs);
 	regset->base = cryp->regs;
