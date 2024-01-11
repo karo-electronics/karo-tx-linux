@@ -359,9 +359,3 @@ int dcmipp_colorconv_configure(struct device *dev,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(dcmipp_colorconv_configure);
-
-MODULE_AUTHOR("Hugues Fruchet <hugues.fruchet@foss.st.com>");
-MODULE_AUTHOR("Alain Volmat <alain.volmat@foss.st.com>");
-MODULE_DESCRIPTION("STMicroelectronics STM32 Digital Camera Memory Interface with Pixel Processor driver");
-MODULE_LICENSE("GPL");

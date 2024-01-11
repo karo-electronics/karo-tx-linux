@@ -8,7 +8,6 @@
  *          for STMicroelectronics.
  */
 
-#include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
@@ -242,7 +241,6 @@ struct dcmipp_isp_device {
 	struct dcmipp_ent_device ved;
 	struct v4l2_subdev sd;
 	struct device *dev;
-	struct device *cdev;
 	struct v4l2_mbus_framefmt sink_fmt;
 	struct v4l2_mbus_framefmt src_fmt;
 	unsigned int decimation;
@@ -296,7 +294,7 @@ static int dcmipp_isp_s_ctrl(struct v4l2_ctrl *ctrl)
 
 	dev_dbg(isp->dev, ">> %s: ctrl->id = 0x%x\n", __func__, ctrl->id);
 
-	if (pm_runtime_get_if_in_use(isp->cdev) == 0)
+	if (pm_runtime_get_if_in_use(isp->dev) == 0)
 		return 0;
 
 	spin_lock_irq(&isp->irqlock);
@@ -345,7 +343,7 @@ static int dcmipp_isp_s_ctrl(struct v4l2_ctrl *ctrl)
 	}
 
 	spin_unlock_irq(&isp->irqlock);
-	pm_runtime_put(isp->cdev);
+	pm_runtime_put(isp->dev);
 
 	return 0;
 };
@@ -356,7 +354,7 @@ static int dcmipp_isp_g_ctrl(struct v4l2_ctrl *ctrl)
 			container_of(ctrl->handler, struct dcmipp_isp_device, ctrls);
 	int ret = 0;
 
-	if (pm_runtime_get_if_in_use(isp->cdev) == 0)
+	if (pm_runtime_get_if_in_use(isp->dev) == 0)
 		return 0;
 
 	switch (ctrl->id) {
@@ -366,7 +364,7 @@ static int dcmipp_isp_g_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	}
 
-	pm_runtime_put(isp->cdev);
+	pm_runtime_put(isp->dev);
 
 	return ret;
 };
@@ -1079,32 +1077,29 @@ static const struct v4l2_subdev_internal_ops dcmipp_isp_int_ops = {
 	.release = dcmipp_isp_release,
 };
 
-static void dcmipp_isp_comp_unbind(struct device *comp, struct device *master,
-				   void *master_data)
+void dcmipp_isp_ent_release(struct dcmipp_ent_device *ved)
 {
-	struct dcmipp_ent_device *ved = dev_get_drvdata(comp);
 	struct dcmipp_isp_device *isp =
 			container_of(ved, struct dcmipp_isp_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &isp->sd);
 }
 
-static int dcmipp_isp_comp_bind(struct device *comp, struct device *master,
-				void *master_data)
+struct dcmipp_ent_device *dcmipp_isp_ent_init(struct device *dev,
+					      const char *entity_name,
+					      struct v4l2_device *v4l2_dev,
+					      void __iomem *regs)
 {
-	struct dcmipp_bind_data *bind_data = master_data;
-	struct dcmipp_platform_data *pdata = comp->platform_data;
 	struct dcmipp_isp_device *isp;
 	int ret, i;
 
 	/* Allocate the isp struct */
 	isp = kzalloc(sizeof(*isp), GFP_KERNEL);
 	if (!isp)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
-	isp->regs = bind_data->regs;
-	isp->dev = comp;
-	isp->cdev = master;
+	isp->regs = regs;
+	isp->dev = dev;
 
 	/* Initialize the lock */
 	mutex_init(&isp->lock);
@@ -1128,7 +1123,7 @@ static int dcmipp_isp_comp_bind(struct device *comp, struct device *master,
 		dev_err(isp->dev, "control initialization error %d\n", ret);
 		mutex_destroy(&isp->lock);
 		kfree(isp);
-		return ret;
+		return ERR_PTR(ret);
 	}
 
 	ret = v4l2_ctrl_handler_setup(&isp->ctrls);
@@ -1136,13 +1131,13 @@ static int dcmipp_isp_comp_bind(struct device *comp, struct device *master,
 		dev_err(isp->dev, "Failed to set up control handlers\n");
 		mutex_destroy(&isp->lock);
 		kfree(isp);
-		return ret;
+		return ERR_PTR(ret);
 	}
 
 	/* Initialize ved and sd */
 	ret = dcmipp_ent_sd_register(&isp->ved, &isp->sd,
-				     bind_data->v4l2_dev,
-				     pdata->entity_name,
+				     v4l2_dev,
+				     entity_name,
 				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 4,
 				     (const unsigned long[4]) {
 				     MEDIA_PAD_FL_SINK,
@@ -1155,52 +1150,8 @@ static int dcmipp_isp_comp_bind(struct device *comp, struct device *master,
 	if (ret) {
 		mutex_destroy(&isp->lock);
 		kfree(isp);
-		return ret;
+		return ERR_PTR(ret);
 	}
 
-	dev_set_drvdata(comp, &isp->ved);
-
-	return 0;
+	return &isp->ved;
 }
-
-static const struct component_ops dcmipp_isp_comp_ops = {
-	.bind = dcmipp_isp_comp_bind,
-	.unbind = dcmipp_isp_comp_unbind,
-};
-
-static int dcmipp_isp_probe(struct platform_device *pdev)
-{
-	return component_add(&pdev->dev, &dcmipp_isp_comp_ops);
-}
-
-static int dcmipp_isp_remove(struct platform_device *pdev)
-{
-	component_del(&pdev->dev, &dcmipp_isp_comp_ops);
-
-	return 0;
-}
-
-static const struct platform_device_id dcmipp_isp_driver_ids[] = {
-	{
-		.name           = DCMIPP_ISP_DRV_NAME,
-	},
-	{ }
-};
-
-static struct platform_driver dcmipp_isp_pdrv = {
-	.probe		= dcmipp_isp_probe,
-	.remove		= dcmipp_isp_remove,
-	.id_table	= dcmipp_isp_driver_ids,
-	.driver		= {
-		.name	= DCMIPP_ISP_DRV_NAME,
-	},
-};
-
-module_platform_driver(dcmipp_isp_pdrv);
-
-MODULE_DEVICE_TABLE(platform, dcmipp_isp_driver_ids);
-
-MODULE_AUTHOR("Hugues Fruchet <hugues.fruchet@foss.st.com>");
-MODULE_AUTHOR("Alain Volmat <alain.volmat@foss.st.com>");
-MODULE_DESCRIPTION("STMicroelectronics STM32 Digital Camera Memory Interface with Pixel Processor driver");
-MODULE_LICENSE("GPL");

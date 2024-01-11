@@ -8,7 +8,6 @@
  *          for STMicroelectronics.
  */
 
-#include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
@@ -212,7 +211,6 @@ struct dcmipp_pixelproc_device {
 	struct dcmipp_ent_device ved;
 	struct v4l2_subdev sd;
 	struct device *dev;
-	struct device *cdev;
 	struct v4l2_mbus_framefmt sink_fmt;
 	struct v4l2_mbus_framefmt src_fmt;
 	bool streaming;
@@ -270,7 +268,7 @@ static int dcmipp_pixelproc_s_ctrl(struct v4l2_ctrl *ctrl)
 			     struct dcmipp_pixelproc_device, ctrls);
 	int ret = 0;
 
-	if (pm_runtime_get_if_in_use(pixelproc->cdev) == 0)
+	if (pm_runtime_get_if_in_use(pixelproc->dev) == 0)
 		return 0;
 
 	mutex_lock(&pixelproc->lock);
@@ -283,7 +281,7 @@ static int dcmipp_pixelproc_s_ctrl(struct v4l2_ctrl *ctrl)
 	}
 
 	mutex_unlock(&pixelproc->lock);
-	pm_runtime_put(pixelproc->cdev);
+	pm_runtime_put(pixelproc->dev);
 
 	return ret;
 };
@@ -945,11 +943,8 @@ static const struct v4l2_subdev_internal_ops dcmipp_pixelproc_int_ops = {
 	.release = dcmipp_pixelproc_release,
 };
 
-static void
-dcmipp_pixelproc_comp_unbind(struct device *comp, struct device *master,
-			     void *master_data)
+void dcmipp_pixelproc_ent_release(struct dcmipp_ent_device *ved)
 {
-	struct dcmipp_ent_device *ved = dev_get_drvdata(comp);
 	struct dcmipp_pixelproc_device *pixelproc =
 			container_of(ved, struct dcmipp_pixelproc_device, ved);
 
@@ -966,12 +961,10 @@ static int dcmipp_name_to_pipe_id(const char *name)
 		return -EINVAL;
 }
 
-static int
-dcmipp_pixelproc_comp_bind(struct device *comp, struct device *master,
-			   void *master_data)
+struct dcmipp_ent_device *
+dcmipp_pixelproc_ent_init(struct device *dev, const char *entity_name,
+			  struct v4l2_device *v4l2_dev, void __iomem *regs)
 {
-	struct dcmipp_bind_data *bind_data = master_data;
-	struct dcmipp_platform_data *pdata = comp->platform_data;
 	struct dcmipp_pixelproc_device *pixelproc;
 	struct v4l2_fract interval = {
 		.numerator = 1,
@@ -982,22 +975,21 @@ dcmipp_pixelproc_comp_bind(struct device *comp, struct device *master,
 	/* Allocate the pixelproc struct */
 	pixelproc = kzalloc(sizeof(*pixelproc), GFP_KERNEL);
 	if (!pixelproc)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
-	pixelproc->regs = bind_data->regs;
-	pixelproc->dev = comp;
-	pixelproc->cdev = master;
+	pixelproc->regs = regs;
+	pixelproc->dev = dev;
 
 	/* Initialize the lock */
 	mutex_init(&pixelproc->lock);
 
 	/* Pipe identifier */
-	pixelproc->pipe_id = dcmipp_name_to_pipe_id(pdata->entity_name);
+	pixelproc->pipe_id = dcmipp_name_to_pipe_id(entity_name);
 	if (pixelproc->pipe_id != 1 && pixelproc->pipe_id != 2) {
-		dev_err(comp, "failed to retrieve pipe_id\n");
+		dev_err(dev, "failed to retrieve pipe_id\n");
 		mutex_destroy(&pixelproc->lock);
 		kfree(pixelproc);
-		return -EIO;
+		return ERR_PTR(-EIO);
 	}
 
 	/* Initialize the frame format */
@@ -1030,13 +1022,13 @@ dcmipp_pixelproc_comp_bind(struct device *comp, struct device *master,
 		dev_err(pixelproc->dev, "control initialization error %d\n", ret);
 		mutex_destroy(&pixelproc->lock);
 		kfree(pixelproc);
-		return ret;
+		return ERR_PTR(ret);
 	}
 
 	/* Initialize ved and sd */
 	ret = dcmipp_ent_sd_register(&pixelproc->ved, &pixelproc->sd,
-				     bind_data->v4l2_dev,
-				     pdata->entity_name,
+				     v4l2_dev,
+				     entity_name,
 				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 2,
 				     (const unsigned long[2]) {
 				     MEDIA_PAD_FL_SINK,
@@ -1047,52 +1039,8 @@ dcmipp_pixelproc_comp_bind(struct device *comp, struct device *master,
 	if (ret) {
 		mutex_destroy(&pixelproc->lock);
 		kfree(pixelproc);
-		return ret;
+		return ERR_PTR(ret);
 	}
 
-	dev_set_drvdata(comp, &pixelproc->ved);
-
-	return 0;
+	return &pixelproc->ved;
 }
-
-static const struct component_ops dcmipp_pixelproc_comp_ops = {
-	.bind = dcmipp_pixelproc_comp_bind,
-	.unbind = dcmipp_pixelproc_comp_unbind,
-};
-
-static int dcmipp_pixelproc_probe(struct platform_device *pdev)
-{
-	return component_add(&pdev->dev, &dcmipp_pixelproc_comp_ops);
-}
-
-static int dcmipp_pixelproc_remove(struct platform_device *pdev)
-{
-	component_del(&pdev->dev, &dcmipp_pixelproc_comp_ops);
-
-	return 0;
-}
-
-static const struct platform_device_id dcmipp_pixelproc_driver_ids[] = {
-	{
-		.name           = DCMIPP_PIXELPROC_DRV_NAME,
-	},
-	{ }
-};
-
-static struct platform_driver dcmipp_pixelproc_pdrv = {
-	.probe		= dcmipp_pixelproc_probe,
-	.remove		= dcmipp_pixelproc_remove,
-	.id_table	= dcmipp_pixelproc_driver_ids,
-	.driver		= {
-		.name	= DCMIPP_PIXELPROC_DRV_NAME,
-	},
-};
-
-module_platform_driver(dcmipp_pixelproc_pdrv);
-
-MODULE_DEVICE_TABLE(platform, dcmipp_pixelproc_driver_ids);
-
-MODULE_AUTHOR("Hugues Fruchet <hugues.fruchet@foss.st.com>");
-MODULE_AUTHOR("Alain Volmat <alain.volmat@foss.st.com>");
-MODULE_DESCRIPTION("STMicroelectronics STM32 Digital Camera Memory Interface with Pixel Processor driver");
-MODULE_LICENSE("GPL");

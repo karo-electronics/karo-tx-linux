@@ -8,7 +8,6 @@
  *          for STMicroelectronics.
  */
 
-#include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
@@ -750,22 +749,18 @@ static const struct v4l2_subdev_internal_ops dcmipp_byteproc_int_ops = {
 	.release = dcmipp_byteproc_release,
 };
 
-static void dcmipp_byteproc_comp_unbind(struct device *comp,
-					struct device *master,
-					void *master_data)
+void dcmipp_byteproc_ent_release(struct dcmipp_ent_device *ved)
 {
-	struct dcmipp_ent_device *ved = dev_get_drvdata(comp);
 	struct dcmipp_byteproc_device *byteproc =
 			container_of(ved, struct dcmipp_byteproc_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &byteproc->sd);
 }
 
-static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
-				     void *master_data)
+struct dcmipp_ent_device *
+dcmipp_byteproc_ent_init(struct device *dev, const char *entity_name,
+			 struct v4l2_device *v4l2_dev, void __iomem *regs)
 {
-	struct dcmipp_bind_data *bind_data = master_data;
-	struct dcmipp_platform_data *pdata = comp->platform_data;
 	struct dcmipp_byteproc_device *byteproc;
 	struct v4l2_rect r = {
 		.top = 0,
@@ -782,10 +777,9 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 	/* Allocate the byteproc struct */
 	byteproc = kzalloc(sizeof(*byteproc), GFP_KERNEL);
 	if (!byteproc)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
-	byteproc->regs = bind_data->regs;
-	byteproc->dev = comp;
+	byteproc->regs = regs;
 
 	/* Initialize the lock */
 	mutex_init(&byteproc->lock);
@@ -799,8 +793,8 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 
 	/* Initialize ved and sd */
 	ret = dcmipp_ent_sd_register(&byteproc->ved, &byteproc->sd,
-				     bind_data->v4l2_dev,
-				     pdata->entity_name,
+				     v4l2_dev,
+				     entity_name,
 				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 2,
 				     (const unsigned long[2]) {
 				     MEDIA_PAD_FL_SINK,
@@ -811,52 +805,10 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 				     NULL, NULL);
 	if (ret) {
 		kfree(byteproc);
-		return ret;
+		return ERR_PTR(ret);
 	}
 
-	dev_set_drvdata(comp, &byteproc->ved);
+	byteproc->dev = dev;
 
-	return 0;
+	return &byteproc->ved;
 }
-
-static const struct component_ops dcmipp_byteproc_comp_ops = {
-	.bind = dcmipp_byteproc_comp_bind,
-	.unbind = dcmipp_byteproc_comp_unbind,
-};
-
-static int dcmipp_byteproc_probe(struct platform_device *pdev)
-{
-	return component_add(&pdev->dev, &dcmipp_byteproc_comp_ops);
-}
-
-static int dcmipp_byteproc_remove(struct platform_device *pdev)
-{
-	component_del(&pdev->dev, &dcmipp_byteproc_comp_ops);
-
-	return 0;
-}
-
-static const struct platform_device_id dcmipp_byteproc_driver_ids[] = {
-	{
-		.name           = DCMIPP_BYTEPROC_DRV_NAME,
-	},
-	{ }
-};
-
-static struct platform_driver dcmipp_byteproc_pdrv = {
-	.probe		= dcmipp_byteproc_probe,
-	.remove		= dcmipp_byteproc_remove,
-	.id_table	= dcmipp_byteproc_driver_ids,
-	.driver		= {
-		.name	= DCMIPP_BYTEPROC_DRV_NAME,
-	},
-};
-
-module_platform_driver(dcmipp_byteproc_pdrv);
-
-MODULE_DEVICE_TABLE(platform, dcmipp_byteproc_driver_ids);
-
-MODULE_AUTHOR("Hugues Fruchet <hugues.fruchet@foss.st.com>");
-MODULE_AUTHOR("Alain Volmat <alain.volmat@foss.st.com>");
-MODULE_DESCRIPTION("STMicroelectronics STM32 Digital Camera Memory Interface with Pixel Processor driver");
-MODULE_LICENSE("GPL");

@@ -8,7 +8,6 @@
  *          for STMicroelectronics.
  */
 
-#include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/iopoll.h>
 #include <linux/module.h>
@@ -120,7 +119,6 @@ struct dcmipp_bytecap_device {
 	struct dcmipp_ent_device ved;
 	struct video_device vdev;
 	struct device *dev;
-	struct device *cdev;
 	struct v4l2_pix_format format;
 	struct vb2_queue queue;
 	struct list_head buffers;
@@ -543,7 +541,7 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 	vcap->underrun_count = 0;
 	vcap->nactive_count = 0;
 
-	ret = pm_runtime_get_sync(vcap->cdev);
+	ret = pm_runtime_get_sync(vcap->dev);
 	if (ret < 0) {
 		dev_err(vcap->dev, "%s: Failed to start streaming, cannot get sync (%d)\n",
 			__func__, ret);
@@ -613,7 +611,7 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 err_media_pipeline_stop:
 	media_pipeline_stop(entity->pads);
 err_pm_put:
-	pm_runtime_put(vcap->cdev);
+	pm_runtime_put(vcap->dev);
 	spin_lock_irq(&vcap->irqlock);
 	/*
 	 * Return all buffers to vb2 in QUEUED state.
@@ -690,7 +688,7 @@ static void dcmipp_bytecap_stop_streaming(struct vb2_queue *vq)
 
 	spin_unlock_irq(&vcap->irqlock);
 
-	pm_runtime_put(vcap->cdev);
+	pm_runtime_put(vcap->dev);
 
 	if (vcap->errors_count)
 		dev_warn(vcap->dev, "Some errors found while streaming: errors=%d (overrun=%d, limit=%d, nactive=%d), underrun=%d, buffers=%d\n",
@@ -826,11 +824,8 @@ static void dcmipp_bytecap_release(struct video_device *vdev)
 	kfree(vcap);
 }
 
-static void dcmipp_bytecap_comp_unbind(struct device *comp,
-				       struct device *master,
-				       void *master_data)
+void dcmipp_bytecap_ent_release(struct dcmipp_ent_device *ved)
 {
-	struct dcmipp_ent_device *ved = dev_get_drvdata(comp);
 	struct dcmipp_bytecap_device *vcap =
 		container_of(ved, struct dcmipp_bytecap_device, ved);
 
@@ -985,11 +980,11 @@ static irqreturn_t dcmipp_bytecap_irq_callback(int irq, void *arg)
 	return IRQ_WAKE_THREAD;
 }
 
-static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
-				    void *master_data)
+struct dcmipp_ent_device *dcmipp_bytecap_ent_init(struct device *dev,
+						  const char *entity_name,
+						  struct v4l2_device *v4l2_dev,
+						  void __iomem *regs)
 {
-	struct dcmipp_bind_data *bind_data = master_data;
-	struct dcmipp_platform_data *pdata = comp->platform_data;
 	struct dcmipp_bytecap_device *vcap;
 	struct v4l2_pix_format *format;
 	struct video_device *vdev;
@@ -999,7 +994,7 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	/* Allocate the dcmipp_bytecap_device struct */
 	vcap = kzalloc(sizeof(*vcap), GFP_KERNEL);
 	if (!vcap)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
 	/* Allocate the pads */
 	vcap->ved.pads =
@@ -1011,7 +1006,7 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	}
 
 	/* Initialize the media entity */
-	vcap->vdev.entity.name = pdata->entity_name;
+	vcap->vdev.entity.name = entity_name;
 	vcap->vdev.entity.function = MEDIA_ENT_F_IO_V4L;
 	ret = media_entity_pads_init(&vcap->vdev.entity,
 				     1, vcap->ved.pads);
@@ -1032,12 +1027,12 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->min_buffers_needed = 1;
-	q->dev = comp;
+	q->dev = dev;
 
 	ret = vb2_queue_init(q);
 	if (ret) {
-		dev_err(comp, "%s: vb2 queue init failed (err=%d)\n",
-			pdata->entity_name, ret);
+		dev_err(dev, "%s: vb2 queue init failed (err=%d)\n",
+			entity_name, ret);
 		goto err_clean_m_ent;
 	}
 
@@ -1058,10 +1053,8 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	vcap->ved.vdev_get_format = dcmipp_bytecap_get_format;
 	vcap->ved.handler = dcmipp_bytecap_irq_callback;
 	vcap->ved.thread_fn = dcmipp_bytecap_irq_thread;
-	dev_set_drvdata(comp, &vcap->ved);
-	vcap->dev = comp;
-	vcap->regs = bind_data->regs;
-	vcap->cdev = master;
+	vcap->dev = dev;
+	vcap->regs = regs;
 
 	/* Initialize the video_device struct */
 	vdev = &vcap->vdev;
@@ -1073,19 +1066,19 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	vdev->ioctl_ops = &dcmipp_bytecap_ioctl_ops;
 	vdev->lock = &vcap->lock;
 	vdev->queue = q;
-	vdev->v4l2_dev = bind_data->v4l2_dev;
-	strscpy(vdev->name, pdata->entity_name, sizeof(vdev->name));
+	vdev->v4l2_dev = v4l2_dev;
+	strscpy(vdev->name, entity_name, sizeof(vdev->name));
 	video_set_drvdata(vdev, &vcap->ved);
 
 	/* Register the video_device with the v4l2 and the media framework */
 	ret = video_register_device(vdev, VFL_TYPE_VIDEO, -1);
 	if (ret) {
-		dev_err(comp, "%s: video register failed (err=%d)\n",
+		dev_err(dev, "%s: video register failed (err=%d)\n",
 			vcap->vdev.name, ret);
 		goto err_clean_m_ent;
 	}
 
-	return 0;
+	return &vcap->ved;
 
 err_clean_m_ent:
 	media_entity_cleanup(&vcap->vdev.entity);
@@ -1094,47 +1087,5 @@ err_clean_pads:
 err_free_vcap:
 	kfree(vcap);
 
-	return ret;
+	return ERR_PTR(ret);
 }
-
-static const struct component_ops dcmipp_bytecap_comp_ops = {
-	.bind = dcmipp_bytecap_comp_bind,
-	.unbind = dcmipp_bytecap_comp_unbind,
-};
-
-static int dcmipp_bytecap_probe(struct platform_device *pdev)
-{
-	return component_add(&pdev->dev, &dcmipp_bytecap_comp_ops);
-}
-
-static int dcmipp_bytecap_remove(struct platform_device *pdev)
-{
-	component_del(&pdev->dev, &dcmipp_bytecap_comp_ops);
-
-	return 0;
-}
-
-static const struct platform_device_id dcmipp_bytecap_driver_ids[] = {
-	{
-		.name	= DCMIPP_BYTECAP_DRV_NAME,
-	},
-	{ }
-};
-
-static struct platform_driver dcmipp_bytecap_pdrv = {
-	.probe		= dcmipp_bytecap_probe,
-	.remove		= dcmipp_bytecap_remove,
-	.id_table	= dcmipp_bytecap_driver_ids,
-	.driver		= {
-		.name	= DCMIPP_BYTECAP_DRV_NAME,
-	},
-};
-
-module_platform_driver(dcmipp_bytecap_pdrv);
-
-MODULE_DEVICE_TABLE(platform, dcmipp_bytecap_driver_ids);
-
-MODULE_AUTHOR("Hugues Fruchet <hugues.fruchet@foss.st.com>");
-MODULE_AUTHOR("Alain Volmat <alain.volmat@foss.st.com>");
-MODULE_DESCRIPTION("STMicroelectronics STM32 Digital Camera Memory Interface with Pixel Processor driver");
-MODULE_LICENSE("GPL");

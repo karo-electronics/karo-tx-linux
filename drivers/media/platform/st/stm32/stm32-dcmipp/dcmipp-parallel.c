@@ -8,7 +8,6 @@
  *          for STMicroelectronics.
  */
 
-#include <linux/component.h>
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
@@ -405,35 +404,33 @@ static const struct v4l2_subdev_internal_ops dcmipp_par_int_ops = {
 	.release = dcmipp_par_release,
 };
 
-static void dcmipp_par_comp_unbind(struct device *comp, struct device *master,
-				   void *master_data)
+void dcmipp_par_ent_release(struct dcmipp_ent_device *ved)
 {
-	struct dcmipp_ent_device *ved = dev_get_drvdata(comp);
 	struct dcmipp_par_device *par =
 			container_of(ved, struct dcmipp_par_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &par->sd);
 }
 
-static int dcmipp_par_comp_bind(struct device *comp, struct device *master,
-				void *master_data)
+struct dcmipp_ent_device *dcmipp_par_ent_init(struct device *dev,
+					      const char *entity_name,
+					      struct v4l2_device *v4l2_dev,
+					      void __iomem *regs)
 {
-	struct dcmipp_bind_data *bind_data = master_data;
-	struct dcmipp_platform_data *pdata = comp->platform_data;
 	struct dcmipp_par_device *par;
 	int ret;
 
 	/* Allocate the par struct */
 	par = kzalloc(sizeof(*par), GFP_KERNEL);
 	if (!par)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
-	par->regs = bind_data->regs;
+	par->regs = regs;
 
 	/* Initialize ved and sd */
 	ret = dcmipp_ent_sd_register
-		(&par->ved, &par->sd, bind_data->v4l2_dev,
-		 pdata->entity_name,
+		(&par->ved, &par->sd, v4l2_dev,
+		 entity_name,
 		 MEDIA_ENT_F_VID_IF_BRIDGE, 2,
 		 (const unsigned long[2]) {
 		  MEDIA_PAD_FL_SINK,
@@ -444,59 +441,16 @@ static int dcmipp_par_comp_bind(struct device *comp, struct device *master,
 	if (ret)
 		goto err_free_hdl;
 
-	dev_set_drvdata(comp, &par->ved);
-	par->dev = comp;
+	par->dev = dev;
 
 	/* Initialize the frame format */
 	par->sink_format = fmt_default;
 	par->src_format = fmt_default;
 
-	return 0;
+	return &par->ved;
 
 err_free_hdl:
 	kfree(par);
 
-	return ret;
+	return ERR_PTR(ret);
 }
-
-static const struct component_ops dcmipp_par_comp_ops = {
-	.bind = dcmipp_par_comp_bind,
-	.unbind = dcmipp_par_comp_unbind,
-};
-
-static int dcmipp_par_probe(struct platform_device *pdev)
-{
-	return component_add(&pdev->dev, &dcmipp_par_comp_ops);
-}
-
-static int dcmipp_par_remove(struct platform_device *pdev)
-{
-	component_del(&pdev->dev, &dcmipp_par_comp_ops);
-
-	return 0;
-}
-
-static const struct platform_device_id dcmipp_par_driver_ids[] = {
-	{
-		.name           = DCMIPP_PAR_DRV_NAME,
-	},
-	{ }
-};
-
-static struct platform_driver dcmipp_par_pdrv = {
-	.probe		= dcmipp_par_probe,
-	.remove		= dcmipp_par_remove,
-	.id_table	= dcmipp_par_driver_ids,
-	.driver		= {
-		.name	= DCMIPP_PAR_DRV_NAME,
-	},
-};
-
-module_platform_driver(dcmipp_par_pdrv);
-
-MODULE_DEVICE_TABLE(platform, dcmipp_par_driver_ids);
-
-MODULE_AUTHOR("Hugues Fruchet <hugues.fruchet@foss.st.com>");
-MODULE_AUTHOR("Alain Volmat <hugues.fruchet@foss.st.com>");
-MODULE_DESCRIPTION("STMicroelectronics STM32 Digital Camera Memory Interface with Pixel Processor driver");
-MODULE_LICENSE("GPL");
