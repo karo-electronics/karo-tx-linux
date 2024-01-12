@@ -202,6 +202,8 @@
 };
 
 &dsi {
+	phy-dsi-supply =  <&scmi_vddcore>;
+	vdda18-supply = <&scmi_v1v8>;
 	status = "disabled";
 
 	ports {
@@ -561,6 +563,14 @@
 	scmi_vddio1: regulator@0 {
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <3300000>;
+	};
+	scmi_vddcore: regulator@11  {
+		reg = <VOLTD_SCMI_STPMIC2_BUCK2>;
+		regulator-name = "vddcore";
+	};
+	scmi_v1v8: regulator@14  {
+		reg = <VOLTD_SCMI_STPMIC2_BUCK5>;
+		regulator-name = "v1v8";
 	};
 	scmi_v3v3: regulator@16 {
 		reg = <VOLTD_SCMI_STPMIC2_BUCK7>;
