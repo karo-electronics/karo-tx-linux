@@ -332,12 +332,12 @@
 		status = "disabled";
 		adi,dsi-lanes = <4>;
 		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
-		avdd-supply = <&scmi_v3v3>;
-		dvdd-supply = <&scmi_v3v3>;
-		pvdd-supply = <&scmi_v3v3>;
-		a2vdd-supply = <&scmi_v3v3>;
+		avdd-supply = <&scmi_v1v8>;
+		dvdd-supply = <&scmi_v1v8>;
+		pvdd-supply = <&scmi_v1v8>;
+		a2vdd-supply = <&scmi_v1v8>;
 		v3p3-supply = <&scmi_v3v3>;
-		v1p2-supply = <&scmi_v3v3>;
+		v1p2-supply = <&scmi_v1v8>;
 
 		ports {
 			#address-cells = <1>;
