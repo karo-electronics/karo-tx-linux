@@ -416,8 +416,9 @@ unspinlock:
 unlock:
 	raw_spin_unlock(&chip_data->rlock);
 
+	/* configurable events only propagate level high type to GIC */
 	if (d->parent_data->chip)
-		irq_chip_set_type_parent(d, type);
+		irq_chip_set_type_parent(d, IRQ_TYPE_LEVEL_HIGH);
 
 	return err;
 }
