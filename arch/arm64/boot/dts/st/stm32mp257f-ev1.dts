@@ -95,14 +95,6 @@
 		reg = <0x0 0x80000000 0x1 0x0>;
 	};
 
-	panel_dsi_backlight: panel-dsi-backlight {
-		compatible = "gpio-backlight";
-		gpios = <&gpioi 5 GPIO_ACTIVE_LOW>;
-		default-on;
-		default-brightness-level = <0>;
-		status = "disabled";
-	};
-
 	panel_lvds: panel-lvds {
 		compatible = "edt,etml0700z9ndha", "panel-lvds";
 		enable-gpios = <&gpiog 15 GPIO_ACTIVE_HIGH>;
