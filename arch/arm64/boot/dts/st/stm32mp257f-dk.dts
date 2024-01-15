@@ -453,7 +453,6 @@
 	status = "okay";
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
-	backlight = <&panel_lvds_backlight>;
 	ports {
 		#address-cells = <1>;
 		#size-cells = <0>;
