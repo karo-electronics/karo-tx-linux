@@ -918,6 +918,7 @@ void dcmipp_pixelcap_ent_release(struct dcmipp_ent_device *ved)
 	struct dcmipp_pixelcap_device *vcap =
 		container_of(ved, struct dcmipp_pixelcap_device, ved);
 
+	mutex_destroy(&vcap->lock);
 	media_entity_cleanup(ved->ent);
 	vb2_video_unregister_device(&vcap->vdev);
 }
@@ -1123,7 +1124,7 @@ dcmipp_pixelcap_ent_init(struct device *dev, const char *entity_name,
 	if (ret) {
 		dev_err(dev, "%s: vb2 queue init failed (err=%d)\n",
 			entity_name, ret);
-		goto err_clean_m_ent;
+		goto err_mutex_destroy;
 	}
 
 	/* Initialize buffer list and its lock */
@@ -1163,12 +1164,13 @@ dcmipp_pixelcap_ent_init(struct device *dev, const char *entity_name,
 	if (ret) {
 		dev_err(dev, "%s: video register failed (err=%d)\n",
 			vcap->vdev.name, ret);
-		goto err_clean_m_ent;
+		goto err_mutex_destroy;
 	}
 
 	return &vcap->ved;
 
-err_clean_m_ent:
+err_mutex_destroy:
+	mutex_destroy(&vcap->lock);
 	media_entity_cleanup(&vcap->vdev.entity);
 err_clean_pads:
 	dcmipp_pads_cleanup(vcap->ved.pads);
