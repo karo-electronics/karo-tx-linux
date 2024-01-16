@@ -31,13 +31,9 @@
 
 #define DCMIPP_CMSR2_P1VSYNCF BIT(18)
 
-#define DCMIPP_CMCR (0x204)
-#define DCMIPP_CMCR_INSEL BIT(0)
-
 #define DCMIPP_P1FSCR (0x804)
-#define DCMIPP_P1FSCR_DTIDA_MASK GENMASK(5, 0)
-#define DCMIPP_P1FSCR_DTIDA_SHIFT 0
 #define DCMIPP_P1FSCR_PIPEDIFF BIT(18)
+
 #define DCMIPP_P1SRCR (0x820)
 #define DCMIPP_P1SRCR_LASTLINE_SHIFT 0
 #define DCMIPP_P1SRCR_LASTLINE_MASK GENMASK(11, 0)
@@ -934,17 +930,10 @@ static int dcmipp_isp_colorconv_user(struct dcmipp_isp_device *isp)
 static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
-	const struct dcmipp_isp_pix_map *vpix =
-		dcmipp_isp_pix_map_by_code(isp->sink_fmt.code, 0);
 	int ret = 0;
 
 	mutex_lock(&isp->lock);
 	if (enable) {
-		/* Configure CSI DataType */
-		reg_clear(isp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_DTIDA_MASK);
-		reg_set(isp, DCMIPP_P1FSCR,
-			vpix->dt << DCMIPP_P1FSCR_DTIDA_SHIFT);
-
 		/* Check if link between ISP & Pipe2 postproc is enabled */
 		if (media_pad_remote_pad_first(&sd->entity.pads[2]))
 			reg_clear(isp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
@@ -968,16 +957,6 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		ret = dcmipp_isp_colorconv_auto(isp);
 		if (ret)
 			goto out;
-
-		/*
-		 * In case of the subdev is the last one before the csi bridge
-		 * the ent.bus.bus_type will be set to V4L2_MBUS_CSI2_DPHY,
-		 * in which case we need to enable the CSI input of the DCMIPP
-		 * TODO: to will have to reworked to avoid duplication between
-		 * subdeves
-		 */
-		if (isp->ved.bus_type == V4L2_MBUS_CSI2_DPHY)
-			reg_write(isp, DCMIPP_CMCR, DCMIPP_CMCR_INSEL);
 	}
 
 	isp->streaming = enable;

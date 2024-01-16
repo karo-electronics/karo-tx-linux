@@ -25,16 +25,6 @@
 #define DCMIPP_FMT_WIDTH_DEFAULT  640
 #define DCMIPP_FMT_HEIGHT_DEFAULT 480
 
-#define DCMIPP_CMCR (0x204)
-#define DCMIPP_CMCR_INSEL BIT(0)
-
-#define DCMIPP_P0FSCR (0x404)
-#define DCMIPP_P0FSCR_DTMODE_MASK GENMASK(17, 16)
-#define DCMIPP_P0FSCR_DTMODE_SHIFT 16
-#define DCMIPP_P0FSCR_DTMODE_DTIDA	0x00
-#define DCMIPP_P0FSCR_DTMODE_ALLDT	0x03
-#define DCMIPP_P0FSCR_DTIDA_MASK GENMASK(5, 0)
-#define DCMIPP_P0FSCR_DTIDA_SHIFT 0
 #define DCMIPP_P0FCTCR (0x500)
 #define DCMIPP_P0FCTCR_FRATE_MASK GENMASK(1, 0)
 #define DCMIPP_P0SCSTR (0x504)
@@ -684,42 +674,9 @@ static int dcmipp_byteproc_s_stream(struct v4l2_subdev *sd, int enable)
 
 	mutex_lock(&byteproc->lock);
 	if (enable) {
-		const struct dcmipp_byteproc_pix_map *vpix;
-
-		/*
-		 * find output format datatype - this call will always succeed since
-		 * format code has been sanitized at the set_fmt stage
-		 */
-		vpix = dcmipp_byteproc_pix_map_by_code(byteproc->sink_fmt.code);
-
-		/*
-		 * TODO - this should only be done with HW supporting CSI and
-		 * only when the source is CSI
-		 */
-		reg_clear(byteproc, DCMIPP_P0FSCR,
-			  DCMIPP_P0FSCR_DTMODE_MASK | DCMIPP_P0FSCR_DTIDA_MASK);
-
-		if (byteproc->sink_fmt.code == MEDIA_BUS_FMT_JPEG_1X8)
-			reg_set(byteproc, DCMIPP_P0FSCR,
-				DCMIPP_P0FSCR_DTMODE_ALLDT << DCMIPP_P0FSCR_DTMODE_SHIFT);
-		else
-			reg_set(byteproc, DCMIPP_P0FSCR,
-				vpix->dt << DCMIPP_P0FSCR_DTIDA_SHIFT |
-				DCMIPP_P0FSCR_DTMODE_DTIDA);
-
 		dcmipp_byteproc_configure_framerate(byteproc);
 
 		ret = dcmipp_byteproc_configure_scale_crop(byteproc);
-
-		/*
-		 * In case of the subdev is the last one before the csi bridge
-		 * the ent.bus.bus_type will be set to V4L2_MBUS_CSI2_DPHY,
-		 * in which case we need to enable the CSI input of the DCMIPP
-		 * TODO: to will have to reworked to avoid duplication between
-		 * subdeves
-		 */
-		if (byteproc->ved.bus_type == V4L2_MBUS_CSI2_DPHY)
-			reg_write(byteproc, DCMIPP_CMCR, DCMIPP_CMCR_INSEL);
 	}
 	mutex_unlock(&byteproc->lock);
 

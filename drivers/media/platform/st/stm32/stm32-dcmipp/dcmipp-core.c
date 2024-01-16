@@ -102,7 +102,7 @@ struct dcmipp_pipeline_config {
 
 static const struct dcmipp_ent_config stm32mp13_ent_config[] = {
 	{
-		.name = "dcmipp_parallel",
+		.name = "dcmipp_input",
 		.init = dcmipp_par_ent_init,
 		.release = dcmipp_par_ent_release,
 	},
@@ -118,12 +118,12 @@ static const struct dcmipp_ent_config stm32mp13_ent_config[] = {
 	},
 };
 
-#define ID_PARALLEL 0
+#define ID_INPUT 0
 #define ID_DUMP_BYTEPROC 1
 #define ID_DUMP_CAPTURE 2
 
 static const struct dcmipp_ent_link stm32mp13_ent_links[] = {
-	DCMIPP_ENT_LINK(ID_PARALLEL,      1, ID_DUMP_BYTEPROC, 0,
+	DCMIPP_ENT_LINK(ID_INPUT,	  1, ID_DUMP_BYTEPROC, 0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 	DCMIPP_ENT_LINK(ID_DUMP_BYTEPROC, 1, ID_DUMP_CAPTURE,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
@@ -144,7 +144,7 @@ static const struct dcmipp_pipeline_config stm32mp13_pipe_cfg = {
 #define	ID_ISP_STAT_CAPTURE 8
 static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
 	{
-		.name = "dcmipp_parallel",
+		.name = "dcmipp_input",
 		.init = dcmipp_par_ent_init,
 		.release = dcmipp_par_ent_release,
 	},
@@ -191,16 +191,18 @@ static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
 };
 
 static const struct dcmipp_ent_link stm32mp25_ent_links[] = {
-	DCMIPP_ENT_LINK(ID_PARALLEL,      1, ID_DUMP_BYTEPROC, 0, 0),
+	DCMIPP_ENT_LINK(ID_INPUT,	  1, ID_DUMP_BYTEPROC, 0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 	DCMIPP_ENT_LINK(ID_DUMP_BYTEPROC, 1, ID_DUMP_CAPTURE,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
-	DCMIPP_ENT_LINK(ID_PARALLEL,	1, ID_MAIN_ISP,  0, 0),
+	DCMIPP_ENT_LINK(ID_INPUT,	2, ID_MAIN_ISP,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 	DCMIPP_ENT_LINK(ID_MAIN_ISP,	1, ID_MAIN_POSTPROC,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 	DCMIPP_ENT_LINK(ID_MAIN_ISP,	2, ID_AUX_POSTPROC,  0, 0),
 	DCMIPP_ENT_LINK(ID_MAIN_POSTPROC,	1, ID_MAIN_CAPTURE,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
-	DCMIPP_ENT_LINK(ID_PARALLEL,	1, ID_AUX_POSTPROC,  0, 0),
+	DCMIPP_ENT_LINK(ID_INPUT,	3, ID_AUX_POSTPROC,  0, 0),
 	DCMIPP_ENT_LINK(ID_AUX_POSTPROC,	1, ID_AUX_CAPTURE,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 	DCMIPP_ENT_LINK(ID_MAIN_ISP,	3, ID_ISP_STAT_CAPTURE,  0,
@@ -388,125 +390,26 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 	struct dcmipp_device *dcmipp = notifier_to_dcmipp(notifier);
 	unsigned int ret;
 	int src_pad;
-	struct dcmipp_ent_device *sink;
-	struct device_node *np = dcmipp->dev->of_node;
-	struct v4l2_fwnode_endpoint ep = { .bus_type = 0 };
-	struct device_node *_np = dcmipp->dev->of_node;//FIXME _np/_ep...
-	struct device_node *_ep;
-	struct media_link *link;
-	u32 flags = MEDIA_LNK_FL_ENABLED;
 
 	dev_dbg(dcmipp->dev, "Subdev \"%s\" bound\n", subdev->name);
 
-	/*
-	 * Link this sub-device to DCMIPP, it could be
-	 * a parallel camera sensor or a CSI-2 to parallel bridge
-	 */
-
+	/* Link this sub-device to DCMIPP input subdev */
 	src_pad = media_entity_get_fwnode_pad(&subdev->entity,
 					      subdev->fwnode,
 					      MEDIA_PAD_FL_SOURCE);
 
-	/* Get bus characteristics from devicetree */
-	np = of_graph_get_next_endpoint(np, NULL);
-	if (!np) {
-		dev_err(dcmipp->dev, "Could not find the endpoint\n");
-		of_node_put(np);
-		return -ENODEV;
-	}
+	ret = media_create_pad_link(&subdev->entity, src_pad,
+				    dcmipp->entity[ID_INPUT]->ent, 0,
+				    MEDIA_LNK_FL_IMMUTABLE |
+				    MEDIA_LNK_FL_ENABLED);
+	if (ret)
+		dev_err(dcmipp->dev, "Failed to create media pad link with subdev \"%s\"\n",
+			subdev->name);
+	else
+		dev_dbg(dcmipp->dev, "DCMIPP is now linked to \"%s\"\n",
+			subdev->name);
 
-	ret = v4l2_fwnode_endpoint_parse(of_fwnode_handle(np), &ep);
-	of_node_put(np);
-	if (ret) {
-		dev_err(dcmipp->dev, "Could not parse the endpoint\n");
-		return ret;
-	}
-
-	if ((ep.bus_type == V4L2_MBUS_PARALLEL ||
-	     ep.bus_type == V4L2_MBUS_BT656) &&
-	     ep.bus.parallel.bus_width > 0) {
-		/* Only 8 bits bus width supported with BT656 bus */
-		if (ep.bus_type == V4L2_MBUS_BT656 &&
-		    ep.bus.parallel.bus_width != 8) {
-			dev_err(dcmipp->dev, "BT656 bus conflicts with %u bits bus width (8 bits required)\n",
-				ep.bus.parallel.bus_width);
-			return -ENODEV;
-		}
-
-		/*
-		 * Parallel input device detected
-		 * Connect it to parallel subdev
-		 */
-		sink = dcmipp->entity[ID_PARALLEL];
-		sink->bus.flags = ep.bus.parallel.flags;
-		sink->bus.bus_width = ep.bus.parallel.bus_width;
-		sink->bus.data_shift = ep.bus.parallel.data_shift;
-		sink->bus_type = ep.bus_type;
-		ret = media_create_pad_link(&subdev->entity, src_pad,
-					    sink->ent, 0,
-					    MEDIA_LNK_FL_IMMUTABLE |
-					    MEDIA_LNK_FL_ENABLED);
-		if (ret)
-			dev_err(dcmipp->dev, "Failed to create media pad link with subdev \"%s\"\n",
-				subdev->name);
-		else
-			dev_dbg(dcmipp->dev, "DCMIPP is now linked to \"%s\"\n",
-				subdev->name);
-
-		/* Enable all links from the parallel subdev */
-		list_for_each_entry(link, &sink->ent->links, list) {
-			/* Only enable link starting from the parallel subdev */
-			if (link->source->entity == sink->ent &&
-			    !(link->flags & MEDIA_LNK_FL_IMMUTABLE)) {
-				ret = media_entity_setup_link(link, MEDIA_LNK_FL_ENABLED);
-				if (ret)
-					dev_err(dcmipp->dev, "Failed to setup link (%d)\n", ret);
-			}
-		}
-
-		return 0;
-	}
-
-	/*
-	 * CSI-2 receiver
-	 * Connect all of its channels to the DCMIPP pipes
-	 */
-	for_each_endpoint_of_node(_np, _ep) {
-		struct of_endpoint endpoint;
-		unsigned int sink_ids[3] = {ID_DUMP_BYTEPROC, ID_MAIN_ISP, ID_AUX_POSTPROC};
-		unsigned int i;
-
-		of_graph_parse_endpoint(_ep, &endpoint);
-		dev_info(dcmipp->dev, "endpoint.port=%d\n", endpoint.port);
-//FIXME check	if ((src_pad + endpoint.port) > subdev->entity.num_pads)
-
-		for (i = 0; i < ARRAY_SIZE(sink_ids); i++) {
-			sink = dcmipp->entity[sink_ids[i]];
-			sink->bus_type = V4L2_MBUS_CSI2_DPHY;
-			ret = media_create_pad_link(&subdev->entity, src_pad + endpoint.port,
-						    sink->ent, 0,
-						    flags);
-			if (ret)
-				dev_err(dcmipp->dev, "Failed to create link \"%s\":%d -> %d:\"%s\" [%s]\n",
-					subdev->name, src_pad + endpoint.port,
-					0, sink->ent->name,
-					LINK_FLAG_TO_STR(flags));
-			else
-				dev_dbg(dcmipp->dev, "Create link \"%s\":%d -> %d:\"%s\" [%s]\n",
-					subdev->name, src_pad + endpoint.port,
-					0, sink->ent->name,
-					LINK_FLAG_TO_STR(flags));
-		}
-
-		/*
-		 * Enable media link of first port connection by default,
-		 * Let the other connections disabled, they could be enabled
-		 * later on using MC
-		 */
-		flags = 0;
-	}
-
-	return ret;
+	return 0;
 }
 
 static const struct v4l2_async_notifier_operations dcmipp_graph_notify_ops = {
