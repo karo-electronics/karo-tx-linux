@@ -5,6 +5,7 @@
  */
 
 #include <linux/mtd/cfi.h>
+#include <linux/mtd/sfdp.h>
 #include <memory/stm32-omi.h>
 
 #define STM32_AUTOSUSPEND_DELAY -1
@@ -119,8 +120,13 @@ static int stm32_hyperbus_check_transfert(struct stm32_omi *omi)
 	cfi.interleave = 1;
 	cfi.device_type = CFI_DEVICETYPE_X16;
 
-	ret = cfi_qry_mode_on(0, map, &cfi);
-	cfi_qry_mode_off(0, map, &cfi);
+	if (omi->jedec_flash) {
+		ret = hyperbus_sfdp_mode_on(0, map, &cfi);
+		hyperbus_sfdp_mode_off(0, map, &cfi);
+	} else {
+		ret = cfi_qry_mode_on(0, map, &cfi);
+		cfi_qry_mode_off(0, map, &cfi);
+	}
 
 	return !ret;
 }
