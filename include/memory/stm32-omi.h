@@ -175,6 +175,7 @@ struct stm32_omi {
 	u32 dlyb_base;
 	int irq;
 	bool calibration;
+	bool jedec_flash;
 
 	int (*check_transfer)(struct stm32_omi *omi);
 };

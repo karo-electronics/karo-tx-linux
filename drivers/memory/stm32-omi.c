@@ -435,6 +435,7 @@ static int stm32_omi_probe(struct platform_device *pdev)
 	u8 spi_flash_count = 0;
 	u8 child_count = 0;
 	int ret;
+	bool jedec_flash = false;
 
 	/*
 	 * Flash subnodes sanity check:
@@ -445,6 +446,11 @@ static int stm32_omi_probe(struct platform_device *pdev)
 	for_each_available_child_of_node(dev->of_node, child) {
 		if (of_device_is_compatible(child, "cfi-flash"))
 			hyperflash_count++;
+
+		if (of_device_is_compatible(child, "jedec-flash")) {
+			hyperflash_count++;
+			jedec_flash = true;
+		}
 
 		if (of_device_is_compatible(child, "jedec,spi-nor") ||
 		    of_device_is_compatible(child, "spi-nand") ||
@@ -480,6 +486,7 @@ static int stm32_omi_probe(struct platform_device *pdev)
 	if (!omi)
 		return -ENOMEM;
 
+	omi->jedec_flash = jedec_flash;
 	omi->regs_base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
 	if (IS_ERR(omi->regs_base))
 		return PTR_ERR(omi->regs_base);
