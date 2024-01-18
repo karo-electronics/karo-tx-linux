@@ -81,7 +81,7 @@ struct stm32_usb2phy {
 	struct regulator *vdd33, *vdda18;
 	enum phy_mode mode;
 	u32 mask_trim1, value_trim1, mask_trim2, value_trim2;
-	bool internal_vbus_comp;
+	bool internal_vbus_comp, is_init;
 	struct clk_hw clk48_hw;
 	atomic_t en_refcnt;
 	const struct stm32mp2_usb2phy_hw_data *hw_data;
@@ -294,6 +294,48 @@ static int stm32_usb2phy_disable(struct stm32_usb2phy *phy_dev)
 	return 0;
 }
 
+static int stm32_usb2phy_suspend(struct device *dev)
+{
+	struct stm32_usb2phy *phy_dev = dev_get_drvdata(dev);
+	int ret;
+
+	/*
+	 * Fempto-phy should be turned off since it is not needed for
+	 * wakeup capability. In case usb-remote wakeup is not enabled,
+	 * usb2-phy is already turned off by HCD driver using exit callback
+	 */
+	if (phy_dev->is_init) {
+		ret = stm32_usb2phy_disable(phy_dev);
+		if (ret) {
+			dev_err(dev, "can't disable usb2phy (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+static int stm32_usb2phy_resume(struct device *dev)
+{
+	struct stm32_usb2phy *phy_dev = dev_get_drvdata(dev);
+	int ret;
+
+	/*
+	 * If fempto-phy was turned off by suspend call for wakeup then needs
+	 * to be turned back ON in resume. In case usb-remote wakeup is not
+	 * enabled, usb2-phy is already turned ON by HCD driver using init callback
+	 */
+	if (phy_dev->is_init) {
+		ret = stm32_usb2phy_enable(phy_dev);
+		if (ret) {
+			dev_err(dev, "can't enable usb2phy (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submode)
 {
 	int ret;
@@ -397,6 +439,8 @@ static int stm32_usb2phy_init(struct phy *phy)
 		}
 	}
 
+	phy_dev->is_init = true;
+
 	return 0;
 
 error_disable:
@@ -412,9 +456,11 @@ static int stm32_usb2phy_exit(struct phy *phy)
 
 	ret = stm32_usb2phy_disable(phy_dev);
 	if (ret) {
-		dev_err(phy_dev->dev, "can't disable usb2 (%d)\n", ret);
+		dev_err(phy_dev->dev, "can't disable usb2phy (%d)\n", ret);
 		return ret;
 	}
+
+	phy_dev->is_init = false;
 
 	return 0;
 }
@@ -478,7 +524,6 @@ static int stm32_usb2phy_clk48_register(struct stm32_usb2phy *phy_dev)
 
 	return ret;
 }
-
 
 static int stm32_usb2phy_tuning(struct phy *phy)
 {
@@ -665,7 +710,7 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 
 	phy_dev->rstc = devm_reset_control_get(dev, NULL);
 	if (IS_ERR(phy_dev->rstc))
-		return dev_err_probe(dev, PTR_ERR(phy_dev->rstc), "failed to get femtoPHY reset\n");
+		return dev_err_probe(dev, PTR_ERR(phy_dev->rstc), "failed to get USB2PHY reset\n");
 
 	phy_dev->phyref = devm_clk_get(dev, NULL);
 	if (IS_ERR(phy_dev->phyref))
@@ -701,14 +746,14 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 
 	phy = devm_phy_create(dev, NULL, &stm32_usb2phy_data);
 	if (IS_ERR(phy))
-		return dev_err_probe(dev, PTR_ERR(phy), "failed to create usb2 femto-PHY\n");
+		return dev_err_probe(dev, PTR_ERR(phy), "failed to create USB2-PHY\n");
 
 	phy_dev->phy = phy;
 	phy_set_drvdata(phy, phy_dev);
 
 	if (phy_dev->hw_data->valid_mode != USB2_MODE_HOST_ONLY) {
 		phy_dev->internal_vbus_comp = of_property_read_bool(np, "st,internal-vbus-comp");
-		dev_dbg(dev, "Using Femtophy %s VBUS Comparator\n",
+		dev_dbg(dev, "Using USB2PHY %s VBUS Comparator\n",
 			phy_dev->internal_vbus_comp ? "Internal" : "External");
 	}
 
@@ -731,6 +776,9 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 	return 0;
 }
 
+static DEFINE_SIMPLE_DEV_PM_OPS(stm32_usb2phy_pm_ops, stm32_usb2phy_suspend,
+				stm32_usb2phy_resume);
+
 static const struct of_device_id stm32_usb2phy_of_match[] = {
 	{ .compatible = "st,stm32mp25-usb2phy" },
 	{ /* sentinel */ },
@@ -740,13 +788,14 @@ MODULE_DEVICE_TABLE(of, stm32_usb2phy_of_match);
 static struct platform_driver stm32_usb2phy_driver = {
 	.probe = stm32_usb2phy_probe,
 	.driver = {
-		.name = "stm32-usb-femtophy",
-		.of_match_table = stm32_usb2phy_of_match
+		.name = "stm32-usb2phy",
+		.of_match_table = stm32_usb2phy_of_match,
+		.pm = pm_sleep_ptr(&stm32_usb2phy_pm_ops)
 	}
 };
 
 module_platform_driver(stm32_usb2phy_driver);
 
 MODULE_AUTHOR("Pankaj Dev <pankaj.dev@st.com>");
-MODULE_DESCRIPTION("STMicroelectronics Generic femtoPHY driver for stm32");
+MODULE_DESCRIPTION("STMicroelectronics Generic USB2PHY driver for stm32");
 MODULE_LICENSE("GPL v2");
