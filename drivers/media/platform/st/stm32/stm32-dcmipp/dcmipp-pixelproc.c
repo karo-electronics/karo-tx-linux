@@ -552,6 +552,7 @@ static int dcmipp_pixelproc_set_selection(struct v4l2_subdev *sd,
 {
 	struct dcmipp_pixelproc_device *pixelproc = v4l2_get_subdevdata(sd);
 	struct v4l2_mbus_framefmt *sink_fmt;
+	struct v4l2_mbus_framefmt *src_fmt;
 	struct v4l2_rect *crop, *compose;
 
 	if (IS_SRC(s->pad))
@@ -559,10 +560,12 @@ static int dcmipp_pixelproc_set_selection(struct v4l2_subdev *sd,
 
 	if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
 		sink_fmt = &pixelproc->sink_fmt;
+		src_fmt = &pixelproc->src_fmt;
 		crop = &pixelproc->crop;
 		compose = &pixelproc->compose;
 	} else {
 		sink_fmt = v4l2_subdev_get_try_format(sd, state, s->pad);
+		src_fmt = v4l2_subdev_get_try_format(sd, state, 1);
 		crop = v4l2_subdev_get_try_crop(sd, state, s->pad);
 		compose = v4l2_subdev_get_try_compose(sd, state, s->pad);
 	}
@@ -575,18 +578,6 @@ static int dcmipp_pixelproc_set_selection(struct v4l2_subdev *sd,
 
 		/* Setting the crop also set the compose identically */
 		*compose = *crop;
-
-		/*
-		 * In case of setting the crop with ACTIVE set, we need to
-		 * update the source pad size
-		 */
-		if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-			pixelproc->src_fmt.width = s->r.width;
-			pixelproc->src_fmt.height = s->r.height;
-		}
-		/* TODO - when not in format active, we should also update the
-		 * try src pad format
-		 */
 
 		dev_dbg(pixelproc->dev, "s_selection: crop %ux%u@(%u,%u)\n",
 			crop->width, crop->height, crop->left, crop->top);
@@ -606,24 +597,16 @@ static int dcmipp_pixelproc_set_selection(struct v4l2_subdev *sd,
 
 		*compose = s->r;
 
-		/*
-		 * In case of setting the compose with ACTIVE set, we need to
-		 * update the source pad size
-		 */
-		if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-			pixelproc->src_fmt.width = s->r.width;
-			pixelproc->src_fmt.height = s->r.height;
-		}
-		/* TODO - when not in format active, we should also update the
-		 * try src pad format
-		 */
-
 		dev_dbg(pixelproc->dev, "s_selection: compose %ux%u@(%u,%u)\n",
 			s->r.width, s->r.height, s->r.left, s->r.top);
 		break;
 	default:
 		return -EINVAL;
 	}
+
+	/* Update the source pad size */
+	src_fmt->width = s->r.width;
+	src_fmt->height = s->r.height;
 
 	return 0;
 }
