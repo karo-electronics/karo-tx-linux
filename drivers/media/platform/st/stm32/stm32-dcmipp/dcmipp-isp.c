@@ -927,6 +927,24 @@ static int dcmipp_isp_colorconv_user(struct dcmipp_isp_device *isp)
 	return dcmipp_isp_colorconv_set(isp, &ccconf);
 }
 
+static bool dcmipp_isp_is_aux_output_enabled(struct dcmipp_isp_device *isp)
+{
+	struct media_link *link;
+
+	for_each_media_entity_data_link(isp->ved.ent, link) {
+		if (link->source != &isp->ved.pads[1])
+			continue;
+
+		if (!(link->flags & MEDIA_LNK_FL_ENABLED))
+			continue;
+
+		if (!strcmp(link->sink->entity->name, "dcmipp_aux_postproc"))
+			return true;
+	}
+
+	return false;
+}
+
 static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
@@ -935,7 +953,7 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 	mutex_lock(&isp->lock);
 	if (enable) {
 		/* Check if link between ISP & Pipe2 postproc is enabled */
-		if (media_pad_remote_pad_first(&sd->entity.pads[2]))
+		if (dcmipp_isp_is_aux_output_enabled(isp))
 			reg_clear(isp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
 		else
 			reg_set(isp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
@@ -1117,10 +1135,9 @@ struct dcmipp_ent_device *dcmipp_isp_ent_init(struct device *dev,
 	ret = dcmipp_ent_sd_register(&isp->ved, &isp->sd,
 				     v4l2_dev,
 				     entity_name,
-				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 4,
-				     (const unsigned long[4]) {
+				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 3,
+				     (const unsigned long[3]) {
 				     MEDIA_PAD_FL_SINK,
-				     MEDIA_PAD_FL_SOURCE,
 				     MEDIA_PAD_FL_SOURCE,
 				     MEDIA_PAD_FL_SOURCE,
 				     },
