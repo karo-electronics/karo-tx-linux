@@ -325,12 +325,13 @@ static int dcmipp_pixelcap_try_fmt_vid_cap(struct file *file, void *priv,
 	/* Adjust width & height */
 	in_w = format->width;
 	in_h = format->height;
-	v4l_bound_align_image(&format->width,
-			      DCMIPP_FRAME_MIN_WIDTH, DCMIPP_FRAME_MAX_WIDTH,
-			      hdw_pixel_alignment(format->pixelformat),
-			      &format->height,
-			      DCMIPP_FRAME_MIN_HEIGHT, DCMIPP_FRAME_MAX_HEIGHT,
-			      0, 0);
+	format->width = clamp_t(u32, format->width, DCMIPP_FRAME_MIN_WIDTH,
+				DCMIPP_FRAME_MAX_WIDTH);
+	format->width = round_up(format->width,
+				 1 << hdw_pixel_alignment(format->pixelformat));
+	format->height = clamp_t(u32, format->height,
+				 DCMIPP_FRAME_MIN_HEIGHT,
+				 DCMIPP_FRAME_MAX_HEIGHT);
 	if (format->width != in_w || format->height != in_h)
 		dev_dbg(vcap->dev,
 			"resolution updated: %dx%d -> %dx%d\n",
