@@ -335,7 +335,7 @@ static void dcmipp_pixelproc_adjust_fmt(struct v4l2_mbus_framefmt *fmt, u32 pad)
 					  PIXELPROC_MEDIA_BUS_SINK_FMT_DEFAULT;
 
 	fmt->width = clamp_t(u32, fmt->width, DCMIPP_FRAME_MIN_WIDTH,
-			     DCMIPP_FRAME_MAX_WIDTH) & ~1;
+			     DCMIPP_FRAME_MAX_WIDTH);
 	fmt->height = clamp_t(u32, fmt->height, DCMIPP_FRAME_MIN_HEIGHT,
 			      DCMIPP_FRAME_MAX_HEIGHT);
 
