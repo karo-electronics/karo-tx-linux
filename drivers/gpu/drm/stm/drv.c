@@ -156,9 +156,10 @@ static __maybe_unused int drv_resume(struct device *dev)
 static __maybe_unused int drv_runtime_suspend(struct device *dev)
 {
 	struct drm_device *ddev = dev_get_drvdata(dev);
+	struct ltdc_device *ldev = ddev->dev_private;
 
 	DRM_DEBUG_DRIVER("\n");
-	ltdc_suspend(ddev);
+	ltdc_suspend(ldev);
 
 	return 0;
 }
@@ -166,9 +167,10 @@ static __maybe_unused int drv_runtime_suspend(struct device *dev)
 static __maybe_unused int drv_runtime_resume(struct device *dev)
 {
 	struct drm_device *ddev = dev_get_drvdata(dev);
+	struct ltdc_device *ldev = ddev->dev_private;
 
 	DRM_DEBUG_DRIVER("\n");
-	return ltdc_resume(ddev);
+	return ltdc_resume(ldev);
 }
 
 static const struct dev_pm_ops drv_pm_ops = {

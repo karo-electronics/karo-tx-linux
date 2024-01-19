@@ -2207,19 +2207,17 @@ static int ltdc_get_caps(struct drm_device *ddev)
 	return 0;
 }
 
-void ltdc_suspend(struct drm_device *ddev)
+void ltdc_suspend(struct ltdc_device *ldev)
 {
-	struct ltdc_device *ldev = ddev->dev_private;
-
 	DRM_DEBUG_DRIVER("\n");
+
 	clk_disable_unprepare(ldev->pixel_clk);
 	if (ldev->bus_clk)
 		clk_disable_unprepare(ldev->bus_clk);
 }
 
-int ltdc_resume(struct drm_device *ddev)
+int ltdc_resume(struct ltdc_device *ldev)
 {
-	struct ltdc_device *ldev = ddev->dev_private;
 	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
