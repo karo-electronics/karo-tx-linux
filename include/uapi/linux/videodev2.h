@@ -809,6 +809,10 @@ struct v4l2_pix_format {
 #define V4L2_META_FMT_RK_ISP1_PARAMS	v4l2_fourcc('R', 'K', '1', 'P') /* Rockchip ISP1 3A Parameters */
 #define V4L2_META_FMT_RK_ISP1_STAT_3A	v4l2_fourcc('R', 'K', '1', 'S') /* Rockchip ISP1 3A Statistics */
 
+/* Vendor specific - used for STM32_DCMIPP camera sub-system */
+#define V4L2_META_FMT_ST_DCMIPP_ISP_PARAMS	v4l2_fourcc('S', 'T', 'I', 'P') /* STM32 DCMIPP ISP Parameters */
+#define V4L2_META_FMT_ST_DCMIPP_ISP_STAT	v4l2_fourcc('S', 'T', 'I', 'S') /* STM32 DCMIPP ISP Statistics */
+
 /* priv field value to indicates that subsequent fields are valid. */
 #define V4L2_PIX_FMT_PRIV_MAGIC		0xfeedcafe
 
