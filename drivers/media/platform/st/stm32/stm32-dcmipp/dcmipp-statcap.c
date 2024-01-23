@@ -29,6 +29,9 @@
 
 #define DCMIPP_CMSR2_P1VSYNCF BIT(18)
 
+#define DCMIPP_P1BPRSR (0x828)
+#define DCMIPP_P1BPRSR_BADCNT_MASK GENMASK(11, 0)
+
 #define DCMIPP_P1STXCR(a)	(0x850 + ((a) * 0x4))
 #define DCMIPP_P1STXCR_ENABLE		BIT(0)
 #define DCMIPP_P1STXCR_BINS_SHIFT	2
@@ -719,6 +722,10 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 		return IRQ_HANDLED;
 
 	spin_lock_irq(&vcap->irqlock);
+
+	/* Read the bad pixel count stat and store it locally */
+	vcap->local_buf.bad_pixel_count = reg_read(vcap, DCMIPP_P1BPRSR) &
+						DCMIPP_P1BPRSR_BADCNT_MASK;
 
 	/*
 	 * This is the core function for statistic extraction, within the
