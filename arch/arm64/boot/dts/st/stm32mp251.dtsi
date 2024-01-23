@@ -2274,6 +2274,8 @@
 				ranges = <0x48300000 0x48300000 0x100000>;
 				feature-domains = <&rifsc STM32MP25_RIFSC_USB3DR_ID>;
 				power-domains = <&CLUSTER_PD>;
+				wakeup-source;
+				interrupts-extended = <&exti1 44 IRQ_TYPE_EDGE_RISING>;
 				status = "disabled";
 
 				dwc3: usb@48300000 {
@@ -2286,6 +2288,7 @@
 					resets = <&rcc USB3DR_R>;
 					phys = <&usb2_phy2>;
 					phy-names = "usb2-phy";
+					wakeup-source;
 				};
 			};
 
