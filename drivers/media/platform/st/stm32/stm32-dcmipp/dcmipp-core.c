@@ -103,8 +103,8 @@ struct dcmipp_pipeline_config {
 static const struct dcmipp_ent_config stm32mp13_ent_config[] = {
 	{
 		.name = "dcmipp_input",
-		.init = dcmipp_par_ent_init,
-		.release = dcmipp_par_ent_release,
+		.init = dcmipp_inp_ent_init,
+		.release = dcmipp_inp_ent_release,
 	},
 	{
 		.name = "dcmipp_dump_postproc",
@@ -145,8 +145,8 @@ static const struct dcmipp_pipeline_config stm32mp13_pipe_cfg = {
 static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
 	{
 		.name = "dcmipp_input",
-		.init = dcmipp_par_ent_init,
-		.release = dcmipp_par_ent_release,
+		.init = dcmipp_inp_ent_init,
+		.release = dcmipp_inp_ent_release,
 	},
 	{
 		.name = "dcmipp_dump_postproc",

@@ -68,7 +68,7 @@
 
 #define PAR_MEDIA_BUS_FMT_DEFAULT MEDIA_BUS_FMT_RGB565_2X8_LE
 
-struct dcmipp_par_pix_map {
+struct dcmipp_inp_pix_map {
 	unsigned int code_sink;
 	unsigned int code_src;
 	/* Parallel related information */
@@ -87,7 +87,7 @@ struct dcmipp_par_pix_map {
 			.prcr_swapcycles = swap,		\
 			.dt = data_type,			\
 		}
-static const struct dcmipp_par_pix_map dcmipp_par_pix_map_list[] = {
+static const struct dcmipp_inp_pix_map dcmipp_inp_pix_map_list[] = {
 	/* RGB565 */
 	PIXMAP_SINK_SRC_PRCR_SWAP(RGB565_2X8_LE, RGB565_2X8_LE, RGB565, 1, MIPI_CSI2_DT_RGB565),
 	PIXMAP_SINK_SRC_PRCR_SWAP(RGB565_2X8_BE, RGB565_2X8_LE, RGB565, 0, MIPI_CSI2_DT_RGB565),
@@ -125,12 +125,12 @@ static const struct dcmipp_par_pix_map dcmipp_par_pix_map_list[] = {
  * Search through the pix_map table, skipping two consecutive entry with the
  * same code
  */
-static inline const struct dcmipp_par_pix_map *dcmipp_par_pix_map_by_index
+static inline const struct dcmipp_inp_pix_map *dcmipp_inp_pix_map_by_index
 						(unsigned int index,
 						 unsigned int pad)
 {
-	const struct dcmipp_par_pix_map *l = dcmipp_par_pix_map_list;
-	unsigned int size = ARRAY_SIZE(dcmipp_par_pix_map_list);
+	const struct dcmipp_inp_pix_map *l = dcmipp_inp_pix_map_list;
+	unsigned int size = ARRAY_SIZE(dcmipp_inp_pix_map_list);
 	unsigned int i = 0;
 	u32 prev_code = 0, cur_code;
 
@@ -159,11 +159,11 @@ static inline const struct dcmipp_par_pix_map *dcmipp_par_pix_map_by_index
 	return &l[i];
 }
 
-static inline const struct dcmipp_par_pix_map *dcmipp_par_pix_map_by_code
+static inline const struct dcmipp_inp_pix_map *dcmipp_inp_pix_map_by_code
 					(u32 code_sink, u32 code_src)
 {
-	const struct dcmipp_par_pix_map *l = dcmipp_par_pix_map_list;
-	unsigned int size = ARRAY_SIZE(dcmipp_par_pix_map_list);
+	const struct dcmipp_inp_pix_map *l = dcmipp_inp_pix_map_list;
+	unsigned int size = ARRAY_SIZE(dcmipp_inp_pix_map_list);
 	unsigned int i;
 
 	for (i = 0; i < size; i++) {
@@ -176,7 +176,7 @@ static inline const struct dcmipp_par_pix_map *dcmipp_par_pix_map_by_code
 	return NULL;
 }
 
-struct dcmipp_par_device {
+struct dcmipp_inp_device {
 	struct dcmipp_ent_device ved;
 	struct v4l2_subdev sd;
 	struct device *dev;
@@ -198,7 +198,7 @@ static const struct v4l2_mbus_framefmt fmt_default = {
 	.xfer_func = DCMIPP_XFER_FUNC_DEFAULT,
 };
 
-static int dcmipp_par_init_cfg(struct v4l2_subdev *sd,
+static int dcmipp_inp_init_cfg(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_state *sd_state)
 {
 	unsigned int i;
@@ -213,12 +213,12 @@ static int dcmipp_par_init_cfg(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int dcmipp_par_enum_mbus_code(struct v4l2_subdev *sd,
+static int dcmipp_inp_enum_mbus_code(struct v4l2_subdev *sd,
 				     struct v4l2_subdev_state *sd_state,
 				     struct v4l2_subdev_mbus_code_enum *code)
 {
-	const struct dcmipp_par_pix_map *vpix =
-		dcmipp_par_pix_map_by_index(code->index, code->pad);
+	const struct dcmipp_inp_pix_map *vpix =
+		dcmipp_inp_pix_map_by_index(code->index, code->pad);
 
 	if (!vpix)
 		return -EINVAL;
@@ -228,17 +228,17 @@ static int dcmipp_par_enum_mbus_code(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int dcmipp_par_enum_frame_size(struct v4l2_subdev *sd,
+static int dcmipp_inp_enum_frame_size(struct v4l2_subdev *sd,
 				      struct v4l2_subdev_state *sd_state,
 				      struct v4l2_subdev_frame_size_enum *fse)
 {
-	const struct dcmipp_par_pix_map *vpix;
+	const struct dcmipp_inp_pix_map *vpix;
 
 	if (fse->index)
 		return -EINVAL;
 
 	/* Only accept code in the pix map table */
-	vpix = dcmipp_par_pix_map_by_code(IS_SINK(fse->pad) ? fse->code : 0,
+	vpix = dcmipp_inp_pix_map_by_code(IS_SINK(fse->pad) ? fse->code : 0,
 					  IS_SRC(fse->pad) ? fse->code : 0);
 	if (!vpix)
 		return -EINVAL;
@@ -251,12 +251,12 @@ static int dcmipp_par_enum_frame_size(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int dcmipp_par_get_fmt(struct v4l2_subdev *sd,
+static int dcmipp_inp_get_fmt(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_state *sd_state,
 			      struct v4l2_subdev_format *fmt)
 {
-	struct dcmipp_par_device *par =
-				container_of(sd, struct dcmipp_par_device, sd);
+	struct dcmipp_inp_device *par =
+				container_of(sd, struct dcmipp_inp_device, sd);
 
 	fmt->format = fmt->which == V4L2_SUBDEV_FORMAT_TRY ?
 		      *v4l2_subdev_get_try_format(sd, sd_state, fmt->pad) :
@@ -265,13 +265,13 @@ static int dcmipp_par_get_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static void dcmipp_par_adjust_fmt(struct dcmipp_par_device *par,
+static void dcmipp_inp_adjust_fmt(struct dcmipp_inp_device *par,
 				  struct v4l2_mbus_framefmt *fmt, __u32 pad)
 {
-	const struct dcmipp_par_pix_map *vpix;
+	const struct dcmipp_inp_pix_map *vpix;
 
 	/* Only accept code in the pix map table */
-	vpix = dcmipp_par_pix_map_by_code(IS_SINK(pad) ? fmt->code : 0,
+	vpix = dcmipp_inp_pix_map_by_code(IS_SINK(pad) ? fmt->code : 0,
 					  IS_SRC(pad) ? fmt->code : 0);
 	if (!vpix)
 		fmt->code = fmt_default.code;
@@ -292,11 +292,11 @@ static void dcmipp_par_adjust_fmt(struct dcmipp_par_device *par,
 	dcmipp_colorimetry_clamp(fmt);
 }
 
-static int dcmipp_par_set_fmt(struct v4l2_subdev *sd,
+static int dcmipp_inp_set_fmt(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_state *sd_state,
 			      struct v4l2_subdev_format *fmt)
 {
-	struct dcmipp_par_device *par = v4l2_get_subdevdata(sd);
+	struct dcmipp_inp_device *par = v4l2_get_subdevdata(sd);
 	struct v4l2_mbus_framefmt *mf;
 
 	if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
@@ -310,7 +310,7 @@ static int dcmipp_par_set_fmt(struct v4l2_subdev *sd,
 	}
 
 	/* Set the new format */
-	dcmipp_par_adjust_fmt(par, &fmt->format, fmt->pad);
+	dcmipp_inp_adjust_fmt(par, &fmt->format, fmt->pad);
 
 	dev_dbg(par->dev, "%s: format update: old:%dx%d (0x%x, %d, %d, %d, %d) new:%dx%d (0x%x, %d, %d, %d, %d)\n",
 		par->sd.name,
@@ -332,19 +332,19 @@ static int dcmipp_par_set_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static const struct v4l2_subdev_pad_ops dcmipp_par_pad_ops = {
-	.init_cfg		= dcmipp_par_init_cfg,
-	.enum_mbus_code		= dcmipp_par_enum_mbus_code,
-	.enum_frame_size	= dcmipp_par_enum_frame_size,
-	.get_fmt		= dcmipp_par_get_fmt,
-	.set_fmt		= dcmipp_par_set_fmt,
+static const struct v4l2_subdev_pad_ops dcmipp_inp_pad_ops = {
+	.init_cfg		= dcmipp_inp_init_cfg,
+	.enum_mbus_code		= dcmipp_inp_enum_mbus_code,
+	.enum_frame_size	= dcmipp_inp_enum_frame_size,
+	.get_fmt		= dcmipp_inp_get_fmt,
+	.set_fmt		= dcmipp_inp_set_fmt,
 };
 
-static int dcmipp_par_configure_parallel(struct dcmipp_par_device *par,
+static int dcmipp_inp_configure_parallel(struct dcmipp_inp_device *par,
 					 int enable)
 {
 	u32 val = 0;
-	const struct dcmipp_par_pix_map *vpix;
+	const struct dcmipp_inp_pix_map *vpix;
 
 	if (!enable) {
 		/* Disable parallel interface */
@@ -383,7 +383,7 @@ static int dcmipp_par_configure_parallel(struct dcmipp_par_device *par,
 	}
 
 	/* Set format */
-	vpix = dcmipp_par_pix_map_by_code(par->sink_format.code,
+	vpix = dcmipp_inp_pix_map_by_code(par->sink_format.code,
 					  par->src_format.code);
 	if (!vpix) {
 		dev_err(par->dev, "Invalid sink/src format configuration\n");
@@ -411,15 +411,15 @@ static int dcmipp_par_configure_parallel(struct dcmipp_par_device *par,
 	return 0;
 }
 
-static int dcmipp_par_configure_csi(struct dcmipp_par_device *par, int enable)
+static int dcmipp_inp_configure_csi(struct dcmipp_inp_device *par, int enable)
 {
-	const struct dcmipp_par_pix_map *vpix;
+	const struct dcmipp_inp_pix_map *vpix;
 
 	if (!enable)
 		return 0;
 
 	/* Get format information */
-	vpix = dcmipp_par_pix_map_by_code(par->sink_format.code,
+	vpix = dcmipp_inp_pix_map_by_code(par->sink_format.code,
 					  par->src_format.code);
 	if (!vpix) {
 		dev_err(par->dev, "Invalid sink/src format configuration\n");
@@ -464,17 +464,17 @@ static int dcmipp_par_configure_csi(struct dcmipp_par_device *par, int enable)
 	return 0;
 }
 
-static int dcmipp_par_s_stream(struct v4l2_subdev *sd, int enable)
+static int dcmipp_inp_s_stream(struct v4l2_subdev *sd, int enable)
 {
-	struct dcmipp_par_device *par =
-				container_of(sd, struct dcmipp_par_device, sd);
+	struct dcmipp_inp_device *par =
+				container_of(sd, struct dcmipp_inp_device, sd);
 	int ret = 0;
 
 	if (par->ved.bus_type == V4L2_MBUS_PARALLEL ||
 	    par->ved.bus_type == V4L2_MBUS_BT656) {
-		ret = dcmipp_par_configure_parallel(par, enable);
+		ret = dcmipp_inp_configure_parallel(par, enable);
 	} else if (par->ved.bus_type == V4L2_MBUS_CSI2_DPHY) {
-		ret = dcmipp_par_configure_csi(par, enable);
+		ret = dcmipp_inp_configure_csi(par, enable);
 	} else {
 		dev_err(par->dev, "Invalid bus_type: 0x%x, aborted\n",
 			par->ved.bus_type);
@@ -487,36 +487,36 @@ static int dcmipp_par_s_stream(struct v4l2_subdev *sd, int enable)
 	return ret;
 }
 
-static const struct v4l2_subdev_video_ops dcmipp_par_video_ops = {
-	.s_stream = dcmipp_par_s_stream,
+static const struct v4l2_subdev_video_ops dcmipp_inp_video_ops = {
+	.s_stream = dcmipp_inp_s_stream,
 };
 
-static const struct v4l2_subdev_ops dcmipp_par_ops = {
-	.pad = &dcmipp_par_pad_ops,
-	.video = &dcmipp_par_video_ops,
+static const struct v4l2_subdev_ops dcmipp_inp_ops = {
+	.pad = &dcmipp_inp_pad_ops,
+	.video = &dcmipp_inp_video_ops,
 };
 
-static void dcmipp_par_release(struct v4l2_subdev *sd)
+static void dcmipp_inp_release(struct v4l2_subdev *sd)
 {
-	struct dcmipp_par_device *par =
-				container_of(sd, struct dcmipp_par_device, sd);
+	struct dcmipp_inp_device *par =
+				container_of(sd, struct dcmipp_inp_device, sd);
 
 	kfree(par);
 }
 
-static const struct v4l2_subdev_internal_ops dcmipp_par_int_ops = {
-	.release = dcmipp_par_release,
+static const struct v4l2_subdev_internal_ops dcmipp_inp_int_ops = {
+	.release = dcmipp_inp_release,
 };
 
-void dcmipp_par_ent_release(struct dcmipp_ent_device *ved)
+void dcmipp_inp_ent_release(struct dcmipp_ent_device *ved)
 {
-	struct dcmipp_par_device *par =
-			container_of(ved, struct dcmipp_par_device, ved);
+	struct dcmipp_inp_device *par =
+			container_of(ved, struct dcmipp_inp_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &par->sd);
 }
 
-static int dcmipp_par_get_input_bus_type(struct dcmipp_par_device *par)
+static int dcmipp_inp_get_input_bus_type(struct dcmipp_inp_device *par)
 {
 	struct device_node *np = par->dev->of_node;
 	struct v4l2_fwnode_endpoint ep = { .bus_type = 0 };
@@ -561,12 +561,12 @@ static int dcmipp_par_get_input_bus_type(struct dcmipp_par_device *par)
 
 #define DCMIPP_INP_SINK_PAD_NB_MP13	1
 #define DCMIPP_INP_SINK_PAD_NB_MP25	3
-struct dcmipp_ent_device *dcmipp_par_ent_init(struct device *dev,
+struct dcmipp_ent_device *dcmipp_inp_ent_init(struct device *dev,
 					      const char *entity_name,
 					      struct v4l2_device *v4l2_dev,
 					      void __iomem *regs)
 {
-	struct dcmipp_par_device *par;
+	struct dcmipp_inp_device *par;
 	const unsigned long pads_stm32mp25[DCMIPP_INP_SINK_PAD_NB_MP25 + 1] = {
 		MEDIA_PAD_FL_SINK, MEDIA_PAD_FL_SOURCE,
 		MEDIA_PAD_FL_SOURCE, MEDIA_PAD_FL_SOURCE,
@@ -592,7 +592,7 @@ struct dcmipp_ent_device *dcmipp_par_ent_init(struct device *dev,
 		 entity_name,
 		 MEDIA_ENT_F_VID_IF_BRIDGE, pads_nb,
 		 pads_stm32mp25,
-		 &dcmipp_par_int_ops, &dcmipp_par_ops,
+		 &dcmipp_inp_int_ops, &dcmipp_inp_ops,
 		 NULL, NULL);
 	if (ret)
 		goto err_free_hdl;
@@ -600,7 +600,7 @@ struct dcmipp_ent_device *dcmipp_par_ent_init(struct device *dev,
 	par->dev = dev;
 
 	/* Retrieve and store the bus-type within the ent structure */
-	ret = dcmipp_par_get_input_bus_type(par);
+	ret = dcmipp_inp_get_input_bus_type(par);
 	if (ret)
 		goto err_free_hdl;
 
