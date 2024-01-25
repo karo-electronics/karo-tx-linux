@@ -234,8 +234,9 @@ static inline int hdw_pixel_alignment(u32 format)
 	case V4L2_PIX_FMT_YVYU:
 	case V4L2_PIX_FMT_UYVY:
 	case V4L2_PIX_FMT_VYUY:
-	case V4L2_PIX_FMT_RGB24:
 		return 3;/* 2^3  = 8 pixels = 16 bytes */
+	case V4L2_PIX_FMT_RGB24:
+		return 4;/* 2^4 = 16 pixels = 48 bytes */
 	case V4L2_PIX_FMT_ARGB32:
 		return 2;/* 2^2  = 4 pixels = 16 bytes */
 	default:
