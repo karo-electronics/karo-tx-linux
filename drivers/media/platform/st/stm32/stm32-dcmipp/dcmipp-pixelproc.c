@@ -268,8 +268,6 @@ static int dcmipp_pixelproc_s_ctrl(struct v4l2_ctrl *ctrl)
 	if (pm_runtime_get_if_in_use(pixelproc->dev) == 0)
 		return 0;
 
-	mutex_lock(&pixelproc->lock);
-
 	switch (ctrl->id) {
 	case V4L2_CID_PIXELPROC_GAMMA_CORRECTION:
 		reg_write(pixelproc, DCMIPP_PxGMCR(pixelproc->pipe_id),
@@ -277,7 +275,6 @@ static int dcmipp_pixelproc_s_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	}
 
-	mutex_unlock(&pixelproc->lock);
 	pm_runtime_put(pixelproc->dev);
 
 	return ret;
@@ -877,6 +874,9 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 		val |= DCMIPP_PxPPCR_SWAPRB;
 
 	reg_write(pixelproc, DCMIPP_PxPPCR(pixelproc->pipe_id), val);
+
+	/* Apply customized values from user when stream starts. */
+	ret = v4l2_ctrl_handler_setup(pixelproc->sd.ctrl_handler);
 
 out:
 	mutex_unlock(&pixelproc->lock);
