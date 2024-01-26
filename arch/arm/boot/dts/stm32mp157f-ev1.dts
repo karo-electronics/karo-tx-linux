@@ -28,7 +28,7 @@
 
 		framebuffer {
 			compatible = "simple-framebuffer";
-			clocks = <&rcc LTDC_PX>;
+			clocks = <&rcc LTDC_PX>, <&rcc DSI>, <&rcc DSI_PX>;
 			status = "disabled";
 		};
 	};
@@ -129,6 +129,7 @@
 		compatible = "gpio-backlight";
 		gpios = <&gpiod 13 GPIO_ACTIVE_LOW>;
 		default-on;
+		default-brightness-level = <1>;
 		status = "okay";
 	};
 
@@ -313,6 +314,7 @@
 &dsi {
 	#address-cells = <1>;
 	#size-cells = <0>;
+	default-on;
 	status = "okay";
 
 	ports {
@@ -527,6 +529,7 @@
 };
 
 &ltdc {
+	default-on;
 	status = "okay";
 
 	port {
