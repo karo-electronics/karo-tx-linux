@@ -2256,6 +2256,7 @@ int ltdc_load(struct drm_device *ddev)
 	int irq, i, nb_endpoints;
 	int ret = -ENODEV;
 	u32 mbl;
+	bool def_value;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -2310,10 +2311,18 @@ int ltdc_load(struct drm_device *ddev)
 
 	mutex_init(&ldev->err_lock);
 
-	if (!IS_ERR(rstc)) {
-		reset_control_assert(rstc);
-		usleep_range(10, 20);
-		reset_control_deassert(rstc);
+	def_value = device_property_read_bool(dev, "default-on");
+
+	/*
+	 * To obtain a continuous display after the probe, the clocks must
+	 * remain activated and reset shouldn't be done
+	 */
+	if (!def_value) {
+		if (!IS_ERR(rstc)) {
+			reset_control_assert(rstc);
+			usleep_range(10, 20);
+			reset_control_deassert(rstc);
+		}
 	}
 
 	ldev->regs = devm_platform_ioremap_resource(pdev, 0);
@@ -2384,9 +2393,16 @@ int ltdc_load(struct drm_device *ddev)
 		goto err;
 	}
 
-	pinctrl_pm_select_sleep_state(ddev->dev);
-
+	pm_runtime_set_active(ddev->dev);
 	pm_runtime_enable(ddev->dev);
+
+	if (def_value) {
+		/* keep runtime active after the probe */
+		pm_runtime_get_sync(ddev->dev);
+	} else {
+		/* set to sleep state the pinctrl to stop data trasfert */
+		pinctrl_pm_select_sleep_state(ddev->dev);
+	}
 
 	/* Get the secure rotation buffer memory resource */
 	np = of_parse_phandle(dev->of_node, "rotation-memory", 0);
