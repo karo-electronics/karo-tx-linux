@@ -47,7 +47,8 @@ struct ltdc_device {
 	struct regmap *regmap;
 	struct clk *pixel_clk;	/* lcd pixel clock */
 	struct clk *bus_clk;	/* bus clock */
-	struct clk *lb_clk;	/* loopback clock */
+	struct clk *ltdc_clk;	/* kernel clock */
+	struct clk *lvds_clk;	/* lvds clock */
 	struct mutex err_lock;	/* protecting error_status */
 	struct ltdc_caps caps;
 	u32 irq_status;
