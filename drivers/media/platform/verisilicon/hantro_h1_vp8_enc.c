@@ -1208,7 +1208,7 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 	u32 deq;
 	u32 tmp;
 	u32 reg;
-	s32 inter_favor;
+	s16 inter_favor;
 
 	vepu_write_relaxed(vpu, 0, H1_REG_STR_HDR_REM_MSB);
 	vepu_write_relaxed(vpu, 0, H1_REG_STR_HDR_REM_LSB);
@@ -1220,7 +1220,12 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 
 	inter_favor = 128 - ctx->vp8_enc.prob_intra;
 	if (inter_favor >= 0)
-		inter_favor = max(0, (int32_t)(qp * 2 - 40));
+		/*
+		 * It seems that hardware expects a negative s16 non-0 value
+		 * for inter_favor otherwise P frames have pink artefacts...
+		 */
+		/*inter_favor = max(0, (int32_t)(qp * 2 - 40));*/
+		inter_favor = -max(1, (int32_t)(qp * 2 - 40));
 
 	reg |= H1_REG_ENC_CTRL2_INTRA16X16_MODE(qp * 1024 / 128);
 	vepu_write_relaxed(vpu, reg, H1_REG_ENC_CTRL2);//in VEPU_REG_INTRA_INTER_MODE
@@ -1515,7 +1520,6 @@ int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
 	/* Start the hardware. */
 	reg =     H1_REG_ENC_CTRL_TIMEOUT_EN
 		| H1_REG_ENC_CTRL_MV_WRITE //for VEPU_REG_MV_WRITE_EN in VEPU_REG_INTERRUPT
-		| H1_REG_ENC_REC_WRITE_DISABLE//FIXME needed to have visually correct P frames
 		| H1_REG_ENC_CTRL_WIDTH(MB_WIDTH(ctx->src_fmt.width))
 		| H1_REG_ENC_CTRL_HEIGHT(MB_HEIGHT(ctx->src_fmt.height))
 		| H1_REG_ENC_CTRL_ENC_MODE_VP8
