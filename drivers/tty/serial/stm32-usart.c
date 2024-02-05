@@ -1041,8 +1041,7 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 	struct tty_port *tport = &port->state->port;
 	struct stm32_port *stm32_port = to_stm32_port(port);
 	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
-	u32 sr;
-	u32 cr3;
+	u32 sr, cr3;
 	unsigned int size;
 
 	sr = readl_relaxed(port->membase + ofs->isr);
