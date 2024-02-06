@@ -144,6 +144,10 @@ properties:
     maximum: 1
     default: 0
 
+  "#clock-cells":
+    description: number of clock cells for ck_usb2phyXXXX_48m consumer
+    const: 0
+
 required:
   - compatible
   - "#phy-cells"
@@ -151,6 +155,7 @@ required:
   - resets
   - vdd33-supply
   - st,syscfg
+  - "#clock-cells"
 
 additionalProperties: false
 
@@ -163,6 +168,7 @@ examples:
     usb2_phy2: usb-phy {
         compatible      = "st,stm32mp25-usb2phy";
         #phy-cells      = <0>;
+        #clock-cells    = <0>;
         st,syscfg       = <&syscfg 0x2800>;
         clocks          = <&rcc CK_KER_USB2PHY2>;
         resets          = <&rcc USB2PHY2_R>;
