@@ -2060,20 +2060,6 @@
 				status = "disabled";
 			};
 
-			dsi: dsi@48000000 {
-				compatible = "st,stm32mp25-dsi";
-				reg = <0x48000000 0x800>;
-				#clock-cells = <0>;
-				clocks = <&rcc CK_BUS_DSI>, <&rcc CK_KER_DSIPHY>,
-					 <&rcc CK_KER_LTDC>;
-				clock-names = "pclk", "ref", "px_clk";
-				resets = <&rcc DSI_R>;
-				reset-names = "apb";
-				feature-domains = <&rifsc STM32MP25_RIFSC_DSI_CMN_ID>;
-				power-domains = <&CLUSTER_PD>;
-				status = "disabled";
-			};
-
 			ltdc: display-controller@48010000 {
 				compatible = "st,stm32mp25-ltdc";
 				reg = <0x48010000 0x400>;

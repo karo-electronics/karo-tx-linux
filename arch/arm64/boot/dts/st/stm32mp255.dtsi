@@ -8,6 +8,20 @@
 / {
 	soc@0 {
 		rifsc: rifsc@42080000 {
+			dsi: dsi@48000000 {
+				compatible = "st,stm32mp25-dsi";
+				reg = <0x48000000 0x800>;
+				#clock-cells = <0>;
+				clocks = <&rcc CK_BUS_DSI>, <&rcc CK_KER_DSIPHY>,
+					 <&rcc CK_KER_LTDC>;
+				clock-names = "pclk", "ref", "px_clk";
+				resets = <&rcc DSI_R>;
+				reset-names = "apb";
+				feature-domains = <&rifsc STM32MP25_RIFSC_DSI_CMN_ID>;
+				power-domains = <&CLUSTER_PD>;
+				status = "disabled";
+			};
+
 			vdec: vdec@480d0000 {
 				compatible = "st,stm32mp25-vdec";
 				reg = <0x480d0000 0x3c8>;
