@@ -2061,7 +2061,7 @@
 			};
 
 			dsi: dsi@48000000 {
-				compatible = "st,stm32-dsi";
+				compatible = "st,stm32mp25-dsi";
 				reg = <0x48000000 0x800>;
 				#clock-cells = <0>;
 				clocks = <&rcc CK_BUS_DSI>, <&rcc CK_KER_DSIPHY>,
@@ -2075,7 +2075,7 @@
 			};
 
 			ltdc: display-controller@48010000 {
-				compatible = "st,stm32-ltdc";
+				compatible = "st,stm32mp25-ltdc";
 				reg = <0x48010000 0x400>;
 				st,syscon = <&syscfg>;
 				interrupts = <GIC_SPI 158 IRQ_TYPE_LEVEL_HIGH>,
