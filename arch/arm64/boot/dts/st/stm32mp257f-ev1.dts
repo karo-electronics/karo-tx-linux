@@ -206,7 +206,7 @@
 };
 
 &dsi {
-	phy-dsi-supply =  <&scmi_vddcore>;
+	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
 	status = "disabled";
 
