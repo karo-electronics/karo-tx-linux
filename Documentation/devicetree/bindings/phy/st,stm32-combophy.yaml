@@ -69,6 +69,13 @@ properties:
       A boolean property whose presence indicates that the SSC for common clock
       needs to be set.
 
+  st,rx_equalizer:
+    minimum: 0
+    maximum: 7
+    default: 2
+    description:
+      A 3 bit value describing internal filter settings for the RX equalizer.
+
   st,output-micro-ohms:
     minimum: 3999000
     maximum: 6090000
