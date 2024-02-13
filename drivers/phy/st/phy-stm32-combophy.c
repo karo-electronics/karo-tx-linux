@@ -22,6 +22,7 @@
 
 #define SYSCFG_COMBOPHY_CR1 0x4C00
 #define SYSCFG_COMBOPHY_CR2 0x4C04
+#define SYSCFG_COMBOPHY_CR4 0x4C0C
 #define SYSCFG_COMBOPHY_CR5 0x4C10
 #define SYSCFG_COMBOPHY_SR  0x4C14
 #define SYSCFG_PCIEPRGCR    0x6080
@@ -41,6 +42,9 @@
 #define SYSCFG_COMBOPHY_CR1_REFCLKDIV2 BIT(17)
 #define SYSCFG_COMBOPHY_CR1_REFSSPEN BIT(18)
 #define SYSCFG_COMBOPHY_CR1_SSCEN BIT(19)
+
+/* SYSCFG CR4 */
+#define SYSCFG_COMBOPHY_CR4_RX0_EQ GENMASK(2, 0)
 
 #define MPLLMULT_19_2 (0x02u << 1)
 #define MPLLMULT_20   (0x7Du << 1)
@@ -194,6 +198,17 @@ static int stm32_combophy_pll_init(struct stm32_combophy *combophy)
 		dev_dbg(combophy->dev, "Enabling clock with SSC\n");
 		regmap_update_bits(combophy->regmap, SYSCFG_COMBOPHY_CR1,
 				   SYSCFG_COMBOPHY_CR1_SSCEN, SYSCFG_COMBOPHY_CR1_SSCEN);
+	}
+
+	if (!of_property_read_u32(combophy->dev->of_node, "st,rx_equalizer", &val)) {
+		dev_dbg(combophy->dev, "Set RX equalizer %u\n", val);
+		if (val > SYSCFG_COMBOPHY_CR4_RX0_EQ) {
+			dev_err(combophy->dev, "Invalid value %u for rx0 equalizer\n", val);
+			return -EINVAL;
+		}
+
+		regmap_update_bits(combophy->regmap, SYSCFG_COMBOPHY_CR4,
+			   SYSCFG_COMBOPHY_CR4_RX0_EQ, val);
 	}
 
 	if (combophy->type == PHY_TYPE_PCIE) {
