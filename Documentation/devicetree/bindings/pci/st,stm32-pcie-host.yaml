@@ -102,6 +102,10 @@ then:
   required:
      - wake-gpios
 
+  st,limit_mrrs:
+    type: boolean
+    description: If present limit downstream MRRS to 256B
+
 required:
   - st,syscfg
   - interrupt-map
