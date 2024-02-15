@@ -181,6 +181,10 @@
 	status = "okay";
 };
 
+&crc {
+	status = "okay";
+};
+
 &csi2host {
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
