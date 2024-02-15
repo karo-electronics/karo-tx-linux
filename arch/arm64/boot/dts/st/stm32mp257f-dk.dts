@@ -185,6 +185,10 @@
 	status = "okay";
 };
 
+&cryp1 {
+	status = "okay";
+};
+
 &csi2host {
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
