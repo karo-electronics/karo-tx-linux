@@ -81,6 +81,7 @@ struct stm32_combophy {
 	struct clk *pad_clk;
 	struct clk *ker_clk;
 	unsigned int type;
+	bool is_init;
 };
 
 struct clk_impedance  {
@@ -375,9 +376,53 @@ static void stm32_combophy_disable_clocks(struct stm32_combophy *combophy)
 	clk_disable_unprepare(combophy->phy_clk);
 }
 
+static int stm32_combophy_suspend_noirq(struct device *dev)
+{
+	struct stm32_combophy *combophy = dev_get_drvdata(dev);
+
+	/*
+	 * Clocks should be turned off since it is not needed for
+	 * wakeup capability. In case usb-remote wakeup is not enabled,
+	 * combo-phy is already turned off by HCD driver using exit callback
+	 */
+	if (combophy->is_init)
+		stm32_combophy_disable_clocks(combophy);
+
+	return pm_runtime_force_suspend(dev);
+}
+
+static int stm32_combophy_resume_noirq(struct device *dev)
+{
+	struct stm32_combophy *combophy = dev_get_drvdata(dev);
+	int ret;
+
+	ret = pm_runtime_force_resume(dev);
+	if (ret) {
+		dev_err(dev, "can't runtime resume (%d)\n", ret);
+		return ret;
+	}
+
+	/*
+	 * If clocks was turned off by suspend call for wakeup then needs
+	 * to be turned back ON in resume. In case usb-remote wakeup is not
+	 * enabled, clocks already turned ON by HCD driver using init callback
+	 */
+	if (combophy->is_init) {
+		ret = stm32_combophy_enable_clocks(combophy);
+		if (ret) {
+			dev_err(dev, "can't enable clocks (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 static int stm32_combophy_exit(struct phy *phy)
 {
 	struct stm32_combophy *combophy = phy_get_drvdata(phy);
+
+	combophy->is_init = false;
 
 	if (combophy->type == PHY_TYPE_PCIE && !combophy->pad_clk)
 		regmap_update_bits(combophy->regmap, SYSCFG_PCIEPRGCR,
@@ -428,6 +473,8 @@ static int stm32_combophy_init(struct phy *phy)
 		stm32_combophy_disable_clocks(combophy);
 		pm_runtime_put_sync(combophy->dev);
 	}
+
+	combophy->is_init = true;
 
 	return ret;
 }
@@ -499,6 +546,11 @@ static int stm32_combophy_probe(struct platform_device *pdev)
 	return PTR_ERR_OR_ZERO(phy_provider);
 }
 
+static const struct dev_pm_ops stm32_combophy_pm_ops = {
+	NOIRQ_SYSTEM_SLEEP_PM_OPS(stm32_combophy_suspend_noirq,
+				  stm32_combophy_resume_noirq)
+};
+
 static const struct of_device_id stm32_combophy_of_match[] = {
 	{ .compatible = "st,stm32mp25-combophy", },
 	{ },
@@ -510,6 +562,7 @@ static struct platform_driver stm32_combophy_driver = {
 	.driver = {
 		   .name = "stm32-combophy",
 		   .of_match_table = stm32_combophy_of_match,
+		   .pm = pm_sleep_ptr(&stm32_combophy_pm_ops)
 	}
 };
 
