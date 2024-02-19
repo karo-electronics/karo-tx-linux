@@ -177,9 +177,30 @@ static int stm_drm_platform_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct drm_device *ddev;
 	struct ltdc_device *ldev;
-	int ret;
+	struct device *sfdev;
+	struct device_node *node;
+	int ret = 0;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	/*
+	 * To avoid conflicts between the simple-framebuffer and the display-controller,
+	 * a check was added concerning the state of the simple-framebuffer (must be probed).
+	 */
+	node = of_find_compatible_node(NULL, NULL, "simple-framebuffer");
+	if (!IS_ERR(node)) {
+		if (of_device_is_available(node)) {
+			sfdev = bus_find_device_by_of_node(&platform_bus_type, node);
+			if (sfdev) {
+				if (!device_is_bound(sfdev))
+					ret = -EPROBE_DEFER;
+				put_device(sfdev);
+			}
+		}
+		of_node_put(node);
+		if (ret)
+			return ret;
+	}
 
 	ldev = devm_kzalloc(dev, sizeof(*ldev), GFP_KERNEL);
 	if (!ldev)
