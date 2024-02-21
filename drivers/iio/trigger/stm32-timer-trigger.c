@@ -433,10 +433,8 @@ static int stm32_register_iio_triggers(struct stm32_timer_trigger *priv)
 		iio_trigger_set_drvdata(trig, priv);
 
 		ret = iio_trigger_register(trig);
-		if (ret) {
-			stm32_unregister_iio_triggers(priv);
+		if (ret)
 			return ret;
-		}
 
 		list_add_tail(&trig->alloc_list, &priv->tr_list);
 		cur++;
@@ -805,8 +803,10 @@ static int stm32_timer_trigger_probe(struct platform_device *pdev)
 	mutex_init(&priv->lock);
 
 	ret = stm32_register_iio_triggers(priv);
-	if (ret)
+	if (ret) {
+		stm32_unregister_iio_triggers(priv);
 		return ret;
+	}
 
 	platform_set_drvdata(pdev, priv);
 
