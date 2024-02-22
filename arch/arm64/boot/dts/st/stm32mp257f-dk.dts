@@ -458,7 +458,8 @@
 	mbox-names = "vq0", "vq1", "shutdown";
 	memory-region = <&cm33_cube_fw>, <&cm33_cube_data>,
 			<&ipc_shmem_1>, <&vdev0vring0>,
-			<&vdev0vring1>, <&vdev0buffer>;
+			<&vdev0vring1>, <&vdev0buffer>,
+			<&cm33_sram2>;
 	st,syscfg-nsvtor = <&a35ss_syscfg 0xa8 0xffffff80>;
 	status = "okay";
 };
