@@ -15,6 +15,7 @@
 #include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
+#include <linux/of_device.h>
 #include <linux/of_graph.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/pinctrl/consumer.h>
@@ -1514,6 +1515,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 {
 	struct ltdc_device *ldev = plane_to_ltdc(plane);
 	struct drm_device *ddev = plane->dev;
+	struct device *dev = ddev->dev;
 	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state,
 									  plane);
 	struct drm_framebuffer *fb = newstate->fb;
@@ -1787,7 +1789,8 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	}
 
 	/* Configure burst length */
-	regmap_write(ldev->regmap, LTDC_L1BLCR + lofs, ldev->max_burst_length);
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc"))
+		regmap_write(ldev->regmap, LTDC_L1BLCR + lofs, ldev->max_burst_length);
 
 	/* set color look-up table */
 	if (fb->format->format == DRM_FORMAT_C8)
@@ -2126,6 +2129,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 {
 	struct ltdc_device *ldev = ddev->dev_private;
 	u32 bus_width_log2, lcr, gc2r, lxc1r;
+	const struct ltdc_plat_data *pdata = of_device_get_match_data(ddev->dev);
 
 	/*
 	 * at least 1 layer must be managed & the number of layers
@@ -2140,6 +2144,8 @@ static int ltdc_get_caps(struct drm_device *ddev)
 	bus_width_log2 = (gc2r & GC2R_BW) >> 4;
 	ldev->caps.bus_width = 8 << bus_width_log2;
 	regmap_read(ldev->regmap, LTDC_IDR, &ldev->caps.hw_version);
+
+	ldev->caps.pad_max_freq_hz = pdata->pad_max_freq_hz;
 
 	switch (ldev->caps.hw_version) {
 	case HWVER_10200:
@@ -2158,7 +2164,6 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		 * does not work on 2nd layer.
 		 */
 		ldev->caps.non_alpha_only_l1 = true;
-		ldev->caps.pad_max_freq_hz = 90000000;
 		if (ldev->caps.hw_version == HWVER_10200)
 			ldev->caps.pad_max_freq_hz = 65000000;
 		ldev->caps.nb_irq = 2;
@@ -2199,11 +2204,6 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		ldev->caps.pix_fmt_nb = ARRAY_SIZE(ltdc_drm_fmt_a2);
 		ldev->caps.pix_fmt_flex = true;
 		ldev->caps.non_alpha_only_l1 = false;
-		/* Need a pad max frequency of 150MHz for 3 layers */
-		if (lcr == 3)
-			ldev->caps.pad_max_freq_hz = 150000000;
-		else
-			ldev->caps.pad_max_freq_hz = 90000000;
 		ldev->caps.nb_irq = 2;
 		ldev->caps.ycbcr_input = true;
 		ldev->caps.ycbcr_output = true;
@@ -2287,13 +2287,15 @@ int ltdc_load(struct drm_device *ddev)
 	if (!nb_endpoints)
 		return -ENODEV;
 
-	/* Get LTDC max burst length */
-	ret = of_property_read_u32(np, "st,burstlen", &mbl);
-	if (ret)
-		/* set to max burst length value */
-		ldev->max_burst_length = 0;
-	else
-		ldev->max_burst_length = mbl / 8;
+	if (of_device_is_compatible(np, "st,stm32mp25-ltdc")) {
+		/* Get max burst length */
+		ret = of_property_read_u32(np, "st,burstlen", &mbl);
+		if (ret)
+			/* set to max burst length value */
+			ldev->max_burst_length = 0;
+		else
+			ldev->max_burst_length = mbl / 8;
+	}
 
 	/* Get endpoints if any */
 	for (i = 0; i < nb_endpoints; i++) {
@@ -2447,7 +2449,6 @@ err:
 	for (i = 0; i < nb_endpoints; i++)
 		drm_of_panel_bridge_remove(ddev->dev->of_node, 0, i);
 
-
 	return ret;
 }
 
@@ -2512,35 +2513,33 @@ int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 		return PTR_ERR(ldev->pixel_clk);
 	}
 
-	ldev->bus_clk = devm_clk_get(dev, "bus");
-	if (IS_ERR(ldev->bus_clk)) {
-		if (PTR_ERR(ldev->bus_clk) != -EPROBE_DEFER)
-			DRM_DEBUG_DRIVER("Unable to get bus clock\n");
-		ldev->bus_clk = NULL;
-	}
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+		ldev->bus_clk = devm_clk_get(dev, "bus");
+		if (IS_ERR(ldev->bus_clk))
+			return dev_err_probe(dev, PTR_ERR(ldev->bus_clk),
+					     "Unable to get bus clock\n");
 
-	ldev->ltdc_clk = devm_clk_get(dev, "ref");
-	if (IS_ERR(ldev->ltdc_clk)) {
-		if (PTR_ERR(ldev->ltdc_clk) != -EPROBE_DEFER)
-			DRM_DEBUG_DRIVER("Unable to get ltdc clock\n");
-		ldev->ltdc_clk = NULL;
-	}
+		ldev->ltdc_clk = devm_clk_get(dev, "ref");
+		if (IS_ERR(ldev->ltdc_clk))
+			return dev_err_probe(dev, PTR_ERR(ldev->ltdc_clk),
+					     "Unable to get ltdc clock\n");
 
-	/*
-	 * The lvds output clock is not available if the lvds is not probed.
-	 * This is a usual case, it is necessary to check the node to avoid
+		/*
+		 * The lvds output clock is not available if the lvds is not probed.
+		 * This is a usual case, it is necessary to check the node to avoid
 	 * looking for a clock that will never be available.
-	 */
-	node = of_find_compatible_node(NULL, NULL, "st,stm32mp25-lvds");
-	if (!IS_ERR(node)) {
-		if (of_device_is_available(node)) {
-			ldev->lvds_clk = devm_clk_get(dev, "lvds");
-			if (IS_ERR(ldev->lvds_clk)) {
-				return dev_err_probe(dev, PTR_ERR(ldev->lvds_clk),
-						     "Unable to get lvds clock\n");
+		 */
+		node = of_find_compatible_node(NULL, NULL, "st,stm32mp25-lvds");
+		if (!IS_ERR(node)) {
+			if (of_device_is_available(node)) {
+				ldev->lvds_clk = devm_clk_get(dev, "lvds");
+				if (IS_ERR(ldev->lvds_clk)) {
+					return dev_err_probe(dev, PTR_ERR(ldev->lvds_clk),
+							     "Unable to get lvds clock\n");
+				}
 			}
+			of_node_put(node);
 		}
-		of_node_put(node);
 	}
 
 	return 0;
