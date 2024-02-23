@@ -13,7 +13,8 @@
 struct stm32_ospi_flash {
 	struct spi_device *spi;
 	u32 presc;
-	u32 dlyb_cr;
+	u32 dlyb_cr_str;
+	u32 dlyb_cr_dtr;
 	u32 dcr_reg;
 	u64 str_idcode;
 	u64 dtr_idcode;
@@ -21,9 +22,10 @@ struct stm32_ospi_flash {
 	bool octal_dtr;
 	bool is_str_calibration;
 	bool dtr_calibration_done_once;
-	bool is_calibrated;
 	bool sample_later;
+	bool str_sample_later;
 	bool is_octal_bus;
+	bool dtr_mode;
 };
 
 struct stm32_ospi {
@@ -520,7 +522,7 @@ static int stm32_ospi_str_calibration(struct stm32_ospi *ospi)
 		 * Save flash delay block configuration, will be restored
 		 * each time this flash is addressed
 		 */
-		stm32_omi_dlyb_get_cr(omi, &flash->dlyb_cr);
+		stm32_omi_dlyb_get_cr(omi, &flash->dlyb_cr_str);
 
 	stm32_omi_dlyb_stop(omi);
 	ret = stm32_omi_dlyb_init(omi, false, 0);
@@ -538,14 +540,14 @@ static int stm32_ospi_str_calibration(struct stm32_ospi *ospi)
 		flash->sample_later = false;
 		stm32_omi_dlyb_stop(omi);
 
-		ret = stm32_omi_dlyb_set_cr(omi, flash->dlyb_cr);
+		ret = stm32_omi_dlyb_set_cr(omi, flash->dlyb_cr_str);
 		if (ret)
 			return ret;
 	} else {
-		stm32_omi_dlyb_get_cr(omi, &flash->dlyb_cr);
+		stm32_omi_dlyb_get_cr(omi, &flash->dlyb_cr_str);
 	}
 
-	flash->is_calibrated = true;
+	flash->str_sample_later = flash->sample_later;
 
 	return 0;
 }
@@ -595,8 +597,8 @@ static int stm32_ospi_dtr_calibration(struct stm32_ospi *ospi)
 			/* Stop delay block when configured in lock mode */
 			stm32_omi_dlyb_stop(omi);
 	} else {
-		stm32_omi_dlyb_get_cr(omi, &flash->dlyb_cr);
-		flash->is_calibrated = true;
+		stm32_omi_dlyb_get_cr(omi, &flash->dlyb_cr_dtr);
+		flash->dtr_calibration_done_once = true;
 	}
 
 	return ret;
@@ -609,19 +611,15 @@ static int stm32_ospi_prepare_to_send(struct spi_device *spi,
 	struct stm32_ospi_flash *flash = &ospi->flash[spi->chip_select];
 	struct stm32_omi *omi = ospi->omi;
 	int ret = 0;
+	bool set_dlyb = false;
 
 	if (ospi->last_cs != spi->chip_select) {
 		ospi->last_cs = spi->chip_select;
 
 		stm32_omi_dlyb_stop(omi);
 		stm32_ospi_set_prescaler(ospi, flash->presc);
-
-		if (flash->is_calibrated) {
-			ret = stm32_omi_dlyb_set_cr(omi, flash->dlyb_cr);
-			if (ret)
-				return ret;
-		}
-	}
+		set_dlyb = true;
+	};
 
 	if (op->cmd.dtr && !flash->dtr_calibration_done_once) {
 		stm32_omi_dlyb_stop(omi);
@@ -632,7 +630,34 @@ static int stm32_ospi_prepare_to_send(struct spi_device *spi,
 		if (ret)
 			return ret;
 
-		flash->dtr_calibration_done_once = true;
+		flash->dtr_mode = true;
+	}
+
+	/*
+	 * if flash is switched from DTR to STR or from STR to DTR
+	 * restore the correct calibration value
+	 */
+	if ((flash->dtr_mode && !op->cmd.dtr) ||
+	    (!flash->dtr_mode && op->cmd.dtr)) {
+		flash->dtr_mode = !flash->dtr_mode;
+		stm32_omi_dlyb_stop(omi);
+		set_dlyb = true;
+	}
+
+	/*
+	 * restore DLYB CR register depending on simple or
+	 * double transfer rate
+	 */
+	if (set_dlyb) {
+		if (op->cmd.dtr) {
+			ret = stm32_omi_dlyb_set_cr(omi, flash->dlyb_cr_dtr);
+			flash->sample_later = false;
+			flash->octal_dtr = (op->cmd.nbytes == 2);
+		} else {
+			ret = stm32_omi_dlyb_set_cr(omi, flash->dlyb_cr_str);
+			flash->sample_later = flash->str_sample_later;
+			flash->octal_dtr = false;
+		}
 	}
 
 	return ret;
