@@ -20,7 +20,7 @@ properties:
     const: 0
 
   compatible:
-    const: st,stm32-lvds
+    const: st,stm32mp25-lvds
 
   reg:
     maxItems: 1
