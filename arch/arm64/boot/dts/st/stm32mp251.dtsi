@@ -2122,6 +2122,8 @@
 				st,syscfg = <&syscfg>;
 				feature-domains = <&rifsc STM32MP25_RIFSC_COMBOPHY_ID>;
 				power-domains = <&CLUSTER_PD>;
+				wakeup-source;
+				interrupts-extended = <&exti1 45 IRQ_TYPE_EDGE_FALLING>;
 				status = "disabled";
 			};
 
