@@ -1303,7 +1303,7 @@ static int __maybe_unused lvds_runtime_resume(struct device *dev)
 
 static const struct of_device_id lvds_dt_ids[] = {
 	{
-		.compatible = "st,stm32-lvds",
+		.compatible = "st,stm32mp25-lvds",
 		.data = NULL
 	},
 	{ /* sentinel */ }
