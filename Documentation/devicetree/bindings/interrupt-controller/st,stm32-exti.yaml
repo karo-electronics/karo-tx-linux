@@ -30,8 +30,6 @@ properties:
 
   "#interrupt-cells":
     const: 2
-  "#address-cells":
-    const: 0
 
   reg:
     maxItems: 1
@@ -50,21 +48,6 @@ properties:
       Interrupts references to primary interrupt controller
 
   wakeup-parent: true
-
-  exti-interrupt-map:
-    type: object
-    properties:
-      interrupt-map: true
-      interrupt-map-mask: true
-      "#interrupt-cells":
-        const: 2
-      "#address-cells":
-        const: 0
-
-    required:
-      - interrupt-map
-      - "#interrupt-cells"
-      - "#address-cells"
 
 required:
   - "#interrupt-cells"
@@ -122,15 +105,11 @@ examples:
         #interrupt-cells = <2>;
         reg = <0x5000d000 0x400>;
         wakeup-parent = <&pwr_irq>;
-        exti-interrupt-map {
-            #address-cells = <0>;
-            #interrupt-cells = <2>;
-            interrupt-map-mask = <0xffffffff 0>;
-            interrupt-map =
-                <0 0 &intc GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>,
-                <3 0 &intc GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>,
-                <55 0 &pwr_irq 0 IRQ_TYPE_EDGE_FALLING 0>;
-        };
+        interrupts-extended =
+            <&intc GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>,
+            <0>,
+            <&pwr_irq 0 IRQ_TYPE_EDGE_FALLING 0>,
+            <&intc GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>;
     };
 
   - |
