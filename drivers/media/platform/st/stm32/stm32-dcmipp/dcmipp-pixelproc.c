@@ -705,12 +705,12 @@ dcmipp_pixelproc_set_downscale(struct dcmipp_pixelproc_device *pixelproc)
 	}
 
 	/* Compute downsize factor */
-	hratio = (h_post_dec - 1) * DCMIPP_PIXELPROC_HVRATIO_CONS /
-		 (pixelproc->compose.width - 1);
+	hratio = h_post_dec * DCMIPP_PIXELPROC_HVRATIO_CONS /
+		 pixelproc->compose.width;
 	if (hratio > DCMIPP_PIXELPROC_HVRATIO_MAX)
 		hratio = DCMIPP_PIXELPROC_HVRATIO_MAX;
-	vratio = (v_post_dec - 1) * DCMIPP_PIXELPROC_HVRATIO_CONS /
-		 (pixelproc->compose.height - 1);
+	vratio = v_post_dec * DCMIPP_PIXELPROC_HVRATIO_CONS /
+		 pixelproc->compose.height;
 	if (vratio > DCMIPP_PIXELPROC_HVRATIO_MAX)
 		vratio = DCMIPP_PIXELPROC_HVRATIO_MAX;
 	hdiv = (DCMIPP_PIXELPROC_HVDIV_CONS * pixelproc->compose.width) /
