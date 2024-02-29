@@ -223,7 +223,18 @@ static int stm_drm_platform_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_suspend;
 
-	dma_set_coherent_mask(dev, DMA_BIT_MASK(32));
+	/* Configure the DMA segment size to make sure we get contiguous & coherent memory */
+	ret = dma_set_coherent_mask(dev, DMA_BIT_MASK(32));
+	if (ret) {
+		dev_err(dev, "Failed to set DMA segment mask\n");
+		goto err_suspend;
+	}
+
+	ret = dma_set_max_seg_size(dev, DMA_BIT_MASK(32));
+	if (ret) {
+		dev_err(dev, "Failed to set DMA segment size\n");
+		goto err_suspend;
+	}
 
 	ddev = drm_dev_alloc(&drv_driver, dev);
 	if (IS_ERR(ddev)) {
