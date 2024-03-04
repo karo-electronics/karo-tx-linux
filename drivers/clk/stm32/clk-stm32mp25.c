@@ -1401,6 +1401,16 @@ static unsigned long clk_summary_div_recalc_rate(struct clk_stm32_clock_data *da
 	.div_id		= NO_STM32_DIV,\
 }
 
+#define CS_GATEDIV(_name, _parent, _gate, _div) \
+{\
+	.name		= _name,\
+	.nb_parents	= 1,\
+	.parent_names	= PARENT(_parent),\
+	.gate_id	= _gate,\
+	.mux_id		= NO_STM32_MUX,\
+	.div_id		= _div,\
+}
+
 static unsigned long clk_summary_clk_recalc_rate(struct clk_stm32_clock_data *data,
 						 struct clk_summary *c,
 						 unsigned long parent_rate)
@@ -1763,7 +1773,7 @@ static struct clk_summary stm32mp25_clock_summary[] = {
 	CS_DIV("ck_icn_apb2", "ck_icn_ls_mcu", DIV_APB2),
 	CS_DIV("ck_icn_apb3", "ck_icn_ls_mcu", DIV_APB3),
 	CS_DIV("ck_icn_apb4", "ck_icn_ls_mcu", DIV_APB4),
-	CS_DIV("ck_icn_apbdbg", "ck_icn_ls_mcu", DIV_APBDBG),
+	CS_GATEDIV("ck_icn_apbdbg", "ck_icn_ls_mcu", GATE_DBG, DIV_APBDBG),
 
 	CS_STM32_TIMER("ck_timg1", "ck_icn_apb1", RCC_APB1DIVR, RCC_TIMG1PRER),
 	CS_STM32_TIMER("ck_timg2", "ck_icn_apb2", RCC_APB2DIVR, RCC_TIMG2PRER),
@@ -1915,6 +1925,8 @@ static struct clk_summary stm32mp25_clock_summary[] = {
 	CS_GATE("ck_icn_p_vdec", "ck_icn_apb4", GATE_VDEC),
 	CS_GATE("ck_icn_p_venc", "ck_icn_apb4", GATE_VENC),
 	CS_GATE("ck_sys_dbg", "ck_icn_apbdbg", GATE_DBG),
+	CS_GATE("ck_icn_p_stm", "ck_icn_apbdbg", GATE_STM),
+	CS_GATE("ck_icn_p_etr", "ck_icn_apbdbg", GATE_ETR),
 	CS_GATE("ck_ker_tim2", "ck_timg1", GATE_TIM2),
 	CS_GATE("ck_ker_tim3", "ck_timg1", GATE_TIM3),
 	CS_GATE("ck_ker_tim4", "ck_timg1", GATE_TIM4),
