@@ -82,6 +82,7 @@ struct stm32_combophy {
 	struct clk *ker_clk;
 	unsigned int type;
 	bool is_init;
+	int irq_wakeup;
 };
 
 struct clk_impedance  {
@@ -385,8 +386,12 @@ static int stm32_combophy_suspend_noirq(struct device *dev)
 	 * wakeup capability. In case usb-remote wakeup is not enabled,
 	 * combo-phy is already turned off by HCD driver using exit callback
 	 */
-	if (combophy->is_init)
+	if (combophy->is_init) {
 		stm32_combophy_disable_clocks(combophy);
+
+		/* since wakeup is enabled for ctrl */
+		enable_irq_wake(combophy->irq_wakeup);
+	}
 
 	return pm_runtime_force_suspend(dev);
 }
@@ -408,6 +413,9 @@ static int stm32_combophy_resume_noirq(struct device *dev)
 	 * enabled, clocks already turned ON by HCD driver using init callback
 	 */
 	if (combophy->is_init) {
+		/* since wakeup was enabled for ctrl */
+		disable_irq_wake(combophy->irq_wakeup);
+
 		ret = stm32_combophy_enable_clocks(combophy);
 		if (ret) {
 			dev_err(dev, "can't enable clocks (%d)\n", ret);
@@ -485,13 +493,18 @@ static const struct phy_ops stm32_combophy_phy_data = {
 	.owner = THIS_MODULE
 };
 
+static irqreturn_t stm32_combophy_irq_wakeup_handler(int irq, void *dev_id)
+{
+	return IRQ_HANDLED;
+}
+
 static int stm32_combophy_probe(struct platform_device *pdev)
 {
 	struct stm32_combophy *combophy;
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
 	struct phy_provider *phy_provider;
-	int ret;
+	int ret, irq;
 
 	combophy = devm_kzalloc(dev, sizeof(*combophy), GFP_KERNEL);
 	if (!combophy)
@@ -534,6 +547,20 @@ static int stm32_combophy_probe(struct platform_device *pdev)
 	if (IS_ERR(combophy->phy))
 		return dev_err_probe(dev, PTR_ERR(combophy->phy),
 				     "failed to create PCIe/USB3 ComboPHY\n");
+
+	if (device_property_read_bool(dev, "wakeup-source")) {
+		irq = platform_get_irq(pdev, 0);
+		if (irq < 0)
+			return dev_err_probe(dev, irq, "failed to get IRQ\n");
+		combophy->irq_wakeup = irq;
+
+		ret = devm_request_threaded_irq(dev, combophy->irq_wakeup, NULL,
+						stm32_combophy_irq_wakeup_handler, IRQF_ONESHOT,
+						NULL, NULL);
+		if (ret)
+			return dev_err_probe(dev, ret, "unable to request wake IRQ %d\n",
+						 combophy->irq_wakeup);
+	}
 
 	ret = devm_pm_runtime_enable(dev);
 	if (ret)
