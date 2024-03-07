@@ -27,6 +27,8 @@ struct stm32_pcie {
 	struct phy *phy;
 	struct clk *clk;
 	struct gpio_desc *reset_gpio;
+	struct gpio_desc *wake_gpio;
+	unsigned int wake_irq;
 	int aer_irq;
 	int pme_irq;
 	u32 max_payload;
@@ -106,13 +108,35 @@ static void stm32_pcie_stop_link(struct dw_pcie *pci)
 		gpiod_set_value(stm32_pcie->reset_gpio, 1);
 }
 
+static int stm32_pcie_suspend(struct device *dev)
+{
+	struct stm32_pcie *stm32_pcie = dev_get_drvdata(dev);
+
+	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+		enable_irq_wake(stm32_pcie->wake_irq);
+
+	return 0;
+}
+
+static int stm32_pcie_resume(struct device *dev)
+{
+	struct stm32_pcie *stm32_pcie = dev_get_drvdata(dev);
+
+	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+		disable_irq_wake(stm32_pcie->wake_irq);
+
+	return 0;
+}
+
 static int stm32_pcie_suspend_noirq(struct device *dev)
 {
 	struct stm32_pcie *stm32_pcie = dev_get_drvdata(dev);
 
 	stm32_pcie_stop_link(stm32_pcie->pci);
 	clk_disable_unprepare(stm32_pcie->clk);
-	phy_exit(stm32_pcie->phy);
+
+	if (!device_may_wakeup(dev) && !device_wakeup_path(dev))
+		phy_exit(stm32_pcie->phy);
 
 	return pinctrl_pm_select_sleep_state(dev);
 }
@@ -135,10 +159,12 @@ static int stm32_pcie_resume_noirq(struct device *dev)
 		return ret;
 	}
 
-	ret = phy_init(stm32_pcie->phy);
-	if (ret) {
-		pinctrl_pm_select_default_state(dev);
-		return ret;
+	if (!device_may_wakeup(dev) && !device_wakeup_path(dev)) {
+		ret = phy_init(stm32_pcie->phy);
+		if (ret) {
+			pinctrl_pm_select_default_state(dev);
+			return ret;
+		}
 	}
 
 	ret = clk_prepare_enable(stm32_pcie->clk);
@@ -178,6 +204,7 @@ clk_err:
 static const struct dev_pm_ops stm32_pcie_pm_ops = {
 	NOIRQ_SYSTEM_SLEEP_PM_OPS(stm32_pcie_suspend_noirq,
 				  stm32_pcie_resume_noirq)
+	SYSTEM_SLEEP_PM_OPS(stm32_pcie_suspend, stm32_pcie_resume)
 };
 
 static const struct dw_pcie_host_ops stm32_pcie_host_ops = {
@@ -209,6 +236,20 @@ static irqreturn_t stm32_pcie_aer_msi_irq_handler(int irq, void *priv)
 
 	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEAERRCMSICR, 1);
 	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEAERRCMSICR, 0);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t stm32_pcie_wake_irq_handler(int irq, void *priv)
+{
+	struct stm32_pcie *stm32_pcie = priv;
+	struct device *dev = stm32_pcie->pci->dev;
+
+	dev_dbg(dev, "PCIE host wakeup by EP");
+
+	/* Notify PM core we are wakeup source */
+	pm_wakeup_event(dev, 0);
+	pm_system_wakeup();
 
 	return IRQ_HANDLED;
 }
@@ -387,6 +428,25 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, stm32_pcie);
 
+	if (device_property_read_bool(dev, "wakeup-source")) {
+		stm32_pcie->wake_gpio = devm_gpiod_get_optional(dev, "wake", GPIOD_IN);
+		if (IS_ERR(stm32_pcie->wake_gpio))
+			return dev_err_probe(dev, PTR_ERR(stm32_pcie->wake_gpio),
+					     "Failed to get wake GPIO\n");
+	}
+
+	if (stm32_pcie->wake_gpio) {
+		stm32_pcie->wake_irq = gpiod_to_irq(stm32_pcie->wake_gpio);
+
+		ret = devm_request_threaded_irq(&pdev->dev, stm32_pcie->wake_irq, NULL,
+						stm32_pcie_wake_irq_handler,
+						IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+						"wake_irq", stm32_pcie);
+
+		if (ret)
+			return dev_err_probe(dev, ret, "Failed to request WAKE IRQ: %d\n", ret);
+	}
+
 	ret = devm_pm_runtime_enable(dev);
 	if (ret < 0) {
 		dev_err(dev, "Failed to enable pm runtime %d\n", ret);
@@ -405,6 +465,9 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	if (stm32_pcie->wake_gpio)
+		device_set_wakeup_capable(dev, true);
+
 	return 0;
 }
 
@@ -412,6 +475,9 @@ static int stm32_pcie_remove(struct platform_device *pdev)
 {
 	struct stm32_pcie *stm32_pcie = platform_get_drvdata(pdev);
 	struct dw_pcie_rp *pp = &stm32_pcie->pci->pp;
+
+	if (stm32_pcie->wake_gpio)
+		device_init_wakeup(&pdev->dev, false);
 
 	dw_pcie_host_deinit(pp);
 	clk_disable_unprepare(stm32_pcie->clk);
