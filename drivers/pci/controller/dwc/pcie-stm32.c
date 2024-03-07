@@ -290,21 +290,29 @@ static int stm32_add_pcie_port(struct stm32_pcie *stm32_pcie,
 	if (stm32_pcie->pme_irq || stm32_pcie->aer_irq)
 		pcie_port_irqs_hook = stm32_pcie_port_irqs;
 
+	ret = phy_set_mode(stm32_pcie->phy, PHY_MODE_PCIE);
+	if (ret)
+		return ret;
+
+	ret = phy_init(stm32_pcie->phy);
+	if (ret)
+		return ret;
+
 	ret = regmap_update_bits(stm32_pcie->regmap, SYSCFG_PCIECR,
 				 STM32MP25_PCIECR_TYPE_MASK, STM32MP25_PCIECR_RC);
 	if (ret)
-		return ret;
+		goto phy_disable;
 
 	ret = reset_control_reset(stm32_pcie->rst);
 	if (ret) {
 		dev_err(dev, "Core reset failed %d\n", ret);
-		return ret;
+		goto phy_disable;
 	}
 
 	ret = clk_prepare_enable(stm32_pcie->clk);
 	if (ret) {
 		dev_err(dev, "Core clock enable failed %d\n", ret);
-		return ret;
+		goto phy_disable;
 	}
 
 	pp->ops = &stm32_pcie_host_ops;
@@ -312,10 +320,15 @@ static int stm32_add_pcie_port(struct stm32_pcie *stm32_pcie,
 	if (ret) {
 		dev_err(dev, "failed to initialize host: %d\n", ret);
 		clk_disable_unprepare(stm32_pcie->clk);
-		return ret;
+		goto phy_disable;
 	}
 
 	return 0;
+
+phy_disable:
+	phy_exit(stm32_pcie->phy);
+
+	return ret;
 }
 
 static int stm32_pcie_probe(struct platform_device *pdev)
@@ -372,41 +385,27 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, PTR_ERR(stm32_pcie->reset_gpio),
 				     "Failed to get reset GPIO\n");
 
-	ret = phy_set_mode(stm32_pcie->phy, PHY_MODE_PCIE);
-	if (ret)
-		return ret;
-
-	ret = phy_init(stm32_pcie->phy);
-	if (ret)
-		return ret;
-
 	platform_set_drvdata(pdev, stm32_pcie);
 
 	ret = devm_pm_runtime_enable(dev);
 	if (ret < 0) {
 		dev_err(dev, "Failed to enable pm runtime %d\n", ret);
-		goto phy_disable;
+		return ret;
 	}
 
 	ret = pm_runtime_resume_and_get(dev);
 	if (ret < 0) {
 		dev_err(dev, "pm runtime resume failed: %d\n", ret);
-		goto phy_disable;
+		return ret;
 	}
 
 	ret = stm32_add_pcie_port(stm32_pcie, pdev);
-	if (ret)
-		goto sync_disable;
+	if (ret)  {
+		pm_runtime_put_sync(&pdev->dev);
+		return ret;
+	}
 
 	return 0;
-
-sync_disable:
-	pm_runtime_put_sync(dev);
-
-phy_disable:
-	phy_exit(stm32_pcie->phy);
-
-	return ret;
 }
 
 static int stm32_pcie_remove(struct platform_device *pdev)
@@ -418,9 +417,9 @@ static int stm32_pcie_remove(struct platform_device *pdev)
 	clk_disable_unprepare(stm32_pcie->clk);
 	pcie_port_irqs_hook = NULL;
 
-	pm_runtime_put_sync(&pdev->dev);
-
 	phy_exit(stm32_pcie->phy);
+
+	pm_runtime_put_sync(&pdev->dev);
 
 	return 0;
 }
