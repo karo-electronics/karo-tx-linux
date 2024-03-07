@@ -321,24 +321,7 @@ static int stm32_add_pcie_ep(struct stm32_pcie *stm32_pcie,
 		return ret;
 	}
 
-	stm32_pcie->perst_irq = gpiod_to_irq(stm32_pcie->reset_gpio);
-
-	/* Will be enabled in start_link when device is initialized. */
-	irq_set_status_flags(stm32_pcie->perst_irq, IRQ_NOAUTOEN);
-
-	ret = devm_request_threaded_irq(dev, stm32_pcie->perst_irq, NULL,
-					stm32_pcie_ep_perst_irq_thread,
-					IRQF_TRIGGER_RISING |
-					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-					"perst_irq", stm32_pcie);
-	if (ret) {
-		dev_err(dev, "Failed to request PERST IRQ: %d\n", ret);
-		dw_pcie_ep_exit(ep);
-		stm32_pcie_disable_resources(stm32_pcie);
-		pm_runtime_put_sync(dev);
-	}
-
-	return ret;
+	return 0;
 }
 
 static int stm32_pcie_probe(struct platform_device *pdev)
@@ -396,6 +379,21 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 	ret = devm_pm_runtime_enable(dev);
 	if (ret < 0) {
 		dev_err(dev, "Failed to enable pm runtime %d\n", ret);
+		return ret;
+	}
+
+	stm32_pcie->perst_irq = gpiod_to_irq(stm32_pcie->reset_gpio);
+
+	/* Will be enabled in start_link when device is initialized. */
+	irq_set_status_flags(stm32_pcie->perst_irq, IRQ_NOAUTOEN);
+
+	ret = devm_request_threaded_irq(dev, stm32_pcie->perst_irq, NULL,
+					stm32_pcie_ep_perst_irq_thread,
+					IRQF_TRIGGER_RISING |
+					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					"perst_irq", stm32_pcie);
+	if (ret) {
+		dev_err(dev, "Failed to request PERST IRQ: %d\n", ret);
 		return ret;
 	}
 
