@@ -621,7 +621,8 @@ static int stmfx_pinctrl_probe(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	struct stmfx_pinctrl *pctl;
 	struct gpio_irq_chip *girq;
-	int irq, ret;
+	int irq, i, ret;
+	const char **names;
 
 	pctl = devm_kzalloc(stmfx->dev, sizeof(*pctl), GFP_KERNEL);
 	if (!pctl)
@@ -677,6 +678,14 @@ static int stmfx_pinctrl_probe(struct platform_device *pdev)
 	pctl->gpio_chip.base = -1;
 	pctl->gpio_chip.ngpio = pctl->pctl_desc.npins;
 	pctl->gpio_chip.can_sleep = true;
+
+	names = devm_kcalloc(pctl->dev, ARRAY_SIZE(stmfx_pins), sizeof(char *), GFP_KERNEL);
+	if (names) {
+		for (i = 0; i < ARRAY_SIZE(stmfx_pins); i++)
+			names[i] = stmfx_pins[i].name;
+
+		pctl->gpio_chip.names = names;
+	}
 
 	pctl->irq_chip.name = dev_name(pctl->dev);
 	pctl->irq_chip.irq_mask = stmfx_pinctrl_irq_mask;
