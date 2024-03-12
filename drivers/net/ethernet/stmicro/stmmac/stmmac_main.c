@@ -882,12 +882,16 @@ EXPORT_SYMBOL_GPL(stmmac_init_tstamp_counter);
 static int stmmac_init_ptp(struct stmmac_priv *priv)
 {
 	bool xmac = priv->plat->has_gmac4 || priv->plat->has_xgmac;
+	u32 hwts_active = STMMAC_HWTS_ACTIVE;
 	int ret;
 
 	if (priv->plat->ptp_clk_freq_config)
 		priv->plat->ptp_clk_freq_config(priv);
 
-	ret = stmmac_init_tstamp_counter(priv, STMMAC_HWTS_ACTIVE);
+	if (priv->plat->ext_systime)
+		hwts_active |= PTP_TCR_ESTI;
+
+	ret = stmmac_init_tstamp_counter(priv, hwts_active);
 	if (ret)
 		return ret;
 

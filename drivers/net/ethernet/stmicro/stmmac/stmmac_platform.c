@@ -434,6 +434,10 @@ stmmac_probe_config_dt(struct platform_device *pdev, u8 *mac)
 	of_property_read_u32(np, "max-speed", &plat->max_speed);
 
 	plat->bus_id = of_alias_get_id(np, "ethernet");
+
+	/* Get external system time state from device tree */
+	plat->ext_systime = of_property_read_bool(np, "snps,ext-systime");
+
 	if (plat->bus_id < 0)
 		plat->bus_id = 0;
 
