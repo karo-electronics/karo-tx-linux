@@ -239,6 +239,7 @@
 	max-speed = <1000>;
 	phy-handle = <&phy1_eth1>;
 	st,eth-clk-sel;
+	snps,ext-systime;
 
 	mdio1 {
 		#address-cells = <1>;
