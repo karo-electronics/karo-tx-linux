@@ -398,7 +398,7 @@
 		};
 	};
 
-	ospi1_clk_pins_a: ospi1-clk-0 {
+	ospi_port1_clk_pins_a: ospi-port1-clk-0 {
 		pins {
 			pinmux = <STM32_PINMUX('D', 0, AF10)>; /* OSPI1_CLK */
 			bias-disable;
@@ -407,13 +407,13 @@
 		};
 	};
 
-	ospi1_clk_sleep_pins_a: ospi1-clk-sleep-0 {
+	ospi_port1_clk_sleep_pins_a: ospi-port1-clk-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('D', 0, ANALOG)>; /* OSPI1_CLK */
 		};
 	};
 
-	ospi1_cs0_pins_a: ospi1-cs0-0 {
+	ospi_port1_cs0_pins_a: ospi-port1-cs0-0 {
 		pins {
 			pinmux = <STM32_PINMUX('D', 3, AF10)>; /* OSPI_NCS0 */
 			bias-pull-up;
@@ -422,13 +422,13 @@
 		};
 	};
 
-	ospi1_cs0_sleep_pins_a: ospi1-cs0-sleep-0 {
+	ospi_port1_cs0_sleep_pins_a: ospi-port1-cs0-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('D', 3, ANALOG)>; /* OSPI_NCS0 */
 		};
 	};
 
-	ospi1_io03_pins_a: ospi1-io03-0 {
+	ospi_port1_io03_pins_a: ospi-port1-io03-0 {
 		pins {
 			pinmux = <STM32_PINMUX('D', 4, AF10)>, /* OSPI_IO0 */
 				 <STM32_PINMUX('D', 5, AF10)>, /* OSPI_IO1 */
@@ -440,7 +440,7 @@
 		};
 	};
 
-	ospi1_io03_sleep_pins_a: ospi1-io03-sleep-0 {
+	ospi_port1_io03_sleep_pins_a: ospi-port1-io03-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('D', 4, ANALOG)>, /* OSPI_IO0 */
 				 <STM32_PINMUX('D', 5, ANALOG)>, /* OSPI_IO1 */
