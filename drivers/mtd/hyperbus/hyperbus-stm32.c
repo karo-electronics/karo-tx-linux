@@ -329,7 +329,7 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 
 	ret = pm_runtime_resume_and_get(omi->dev);
 	if (ret < 0)
-		return ret;
+		goto err_pm_disable;
 
 	if (omi->rstc) {
 		reset_control_assert(omi->rstc);
@@ -340,19 +340,19 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 	flash = of_get_next_child(parent->of_node, NULL);
 	if (!flash) {
 		dev_warn(&pdev->dev, "No flash node found\n");
-		goto err_pm_disable;
+		goto err_pm_resume;
 	}
 
 	ret = of_property_read_u32(flash, "reg", &hyperbus->cs);
 	if (ret) {
 		dev_err(&pdev->dev, "Can't find reg property\n");
-		goto err_pm_disable;
+		goto err_pm_resume;
 	}
 
 	ret = of_property_read_u32(flash, "st,max-frequency", &value);
 	if (ret) {
 		dev_err(&pdev->dev, "Can't find st,max-frequency property\n");
-		goto err_pm_disable;
+		goto err_pm_resume;
 	}
 	hyperbus->flash_freq = value;
 
@@ -377,7 +377,7 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 	if (ret) {
 		/* disable ospi */
 		writel_relaxed(0, omi->regs_base + OSPI_CR);
-		goto err_pm_disable;
+		goto err_pm_resume;
 	}
 
 	pm_runtime_mark_last_busy(omi->dev);
@@ -385,9 +385,11 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 
 	return ret;
 
-err_pm_disable:
+err_pm_resume:
 	pm_runtime_put_sync_suspend(omi->dev);
-	pm_runtime_disable(omi->dev);
+
+err_pm_disable:
+	pm_runtime_force_suspend(omi->dev);
 
 	return ret;
 }
@@ -407,7 +409,7 @@ static int stm32_hyperbus_remove(struct platform_device *pdev)
 	stm32_omi_dlyb_stop(omi);
 
 	pm_runtime_put_sync_suspend(omi->dev);
-	pm_runtime_disable(omi->dev);
+	pm_runtime_force_suspend(omi->dev);
 
 	return 0;
 }
