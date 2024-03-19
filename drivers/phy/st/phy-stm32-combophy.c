@@ -15,7 +15,6 @@
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/phy/phy.h>
-#include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include <dt-bindings/phy/phy.h>
@@ -408,19 +407,13 @@ static int stm32_combophy_suspend_noirq(struct device *dev)
 		enable_irq_wake(combophy->irq_wakeup);
 	}
 
-	return pm_runtime_force_suspend(dev);
+	return 0;
 }
 
 static int stm32_combophy_resume_noirq(struct device *dev)
 {
 	struct stm32_combophy *combophy = dev_get_drvdata(dev);
 	int ret;
-
-	ret = pm_runtime_force_resume(dev);
-	if (ret) {
-		dev_err(dev, "can't runtime resume (%d)\n", ret);
-		return ret;
-	}
 
 	/*
 	 * If clocks was turned off by suspend call for wakeup then needs
@@ -460,8 +453,6 @@ static int stm32_combophy_exit(struct phy *phy)
 
 	stm32_combophy_disable_clocks(combophy);
 
-	pm_runtime_put_sync(combophy->dev);
-
 	return 0;
 }
 
@@ -470,16 +461,9 @@ static int stm32_combophy_init(struct phy *phy)
 	struct stm32_combophy *combophy = phy_get_drvdata(phy);
 	int ret;
 
-	ret = pm_runtime_resume_and_get(combophy->dev);
-	if (ret < 0) {
-		dev_err(combophy->dev, "pm_runtime_resume_and_get failed\n");
-		return ret;
-	}
-
 	ret = stm32_combophy_enable_clocks(combophy);
 	if (ret) {
 		dev_err(combophy->dev, "Clock enable failed %d\n", ret);
-		pm_runtime_put_sync(combophy->dev);
 		return ret;
 	}
 
@@ -487,14 +471,13 @@ static int stm32_combophy_init(struct phy *phy)
 	if (ret) {
 		dev_err(combophy->dev, "combophy mode not set\n");
 		stm32_combophy_disable_clocks(combophy);
-		pm_runtime_put_sync(combophy->dev);
 		return ret;
 	}
 
 	ret = stm32_combophy_pll_init(combophy);
 	if (ret) {
 		stm32_combophy_disable_clocks(combophy);
-		pm_runtime_put_sync(combophy->dev);
+		return ret;
 	}
 
 	combophy->is_init = true;
@@ -576,10 +559,6 @@ static int stm32_combophy_probe(struct platform_device *pdev)
 			return dev_err_probe(dev, ret, "unable to request wake IRQ %d\n",
 						 combophy->irq_wakeup);
 	}
-
-	ret = devm_pm_runtime_enable(dev);
-	if (ret)
-		return dev_err_probe(dev, ret, "Failed to enable pm runtime\n");
 
 	phy_set_drvdata(combophy->phy, combophy);
 
