@@ -392,7 +392,7 @@ static int stm32_omm_probe(struct platform_device *pdev)
 		if (!child_access[i] || !of_device_is_available(omm->child_node[i]))
 			continue;
 
-		vdev = of_platform_device_create(omm->child_node[i], NULL, dev);
+		vdev = of_platform_device_create(omm->child_node[i], NULL, NULL);
 		if (!vdev) {
 			dev_err(dev, "Failed to create Octo Memory Manager child\n");
 			for (j = i; j > 0; --j) {
