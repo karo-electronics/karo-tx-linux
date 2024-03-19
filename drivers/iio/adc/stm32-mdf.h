@@ -305,6 +305,10 @@ struct stm32_mdf {
 int stm32_mdf_core_start_mdf(struct stm32_mdf *mdf);
 int stm32_mdf_core_stop_mdf(struct stm32_mdf *mdf);
 int stm32_mdf_core_trigger(struct stm32_mdf *mdf);
+int stm32_mdf_core_restore_cck(struct stm32_mdf *mdf);
+int stm32_mdf_core_lock_kclk_rate(struct stm32_mdf *mdf);
+void stm32_mdf_core_unlock_kclk_rate(struct stm32_mdf *mdf);
+unsigned long stm32_mdf_core_get_cck(struct stm32_mdf *mdf);
 
 int stm32_mdf_sitf_start(struct stm32_mdf_sitf *sitf);
 int stm32_mdf_sitf_stop(struct stm32_mdf_sitf *sitf);

@@ -650,18 +650,45 @@ err:
 	return -EINVAL;
 }
 
-static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev,
-				 unsigned long sample_freq)
+static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample_freq, int lock)
 {
 	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
 	unsigned int decim_ratio;
 	unsigned long delta, delta_ppm, sck_freq;
+	unsigned long cck_expected_freq;
 	int ret;
+
+	if (lock) {
+		ret = stm32_mdf_core_lock_kclk_rate(adc->mdf);
+		if (ret < 0)
+			return ret;
+	}
 
 	sck_freq = clk_get_rate(adc->sitf->sck);
 	if (!sck_freq) {
 		dev_err(&indio_dev->dev, "Unexpected serial clock frequency: 0Hz\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err;
+	}
+
+	/*
+	 * MDF may share its parent clock with SAI, so kernel clock rate may have been changed.
+	 * The set_rate ops is called implicitly through clk_get_rate() call, and MDF dividers
+	 * may have been updated to keep the expected rate on cck clock. Check if sitf clock
+	 * frequency is still the expected one. If not, try to restore the kernel clock rate
+	 * for audio use case.
+	 */
+	cck_expected_freq = stm32_mdf_core_get_cck(adc->mdf);
+	if (sck_freq != cck_expected_freq) {
+		ret = stm32_mdf_core_restore_cck(adc->mdf);
+		if (ret < 0)
+			goto err;
+
+		sck_freq = clk_get_rate(adc->sitf->sck);
+		if (!sck_freq) {
+			ret = -EINVAL;
+			goto err;
+		}
 	}
 
 	decim_ratio = DIV_ROUND_CLOSEST(sck_freq, sample_freq);
@@ -677,16 +704,22 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev,
 
 	ret = stm32_mdf_adc_set_filters_config(indio_dev, decim_ratio);
 	if (ret < 0)
-		return ret;
+		goto err;
 
 	ret = stm32_mdf_adc_check_clock_config(adc, sck_freq);
 	if (ret < 0)
-		return ret;
+		goto err;
 
 	adc->sample_freq = DIV_ROUND_CLOSEST(sck_freq, decim_ratio);
 	adc->decim_ratio = decim_ratio;
 
 	return 0;
+
+err:
+	if (lock)
+		stm32_mdf_core_unlock_kclk_rate(adc->mdf);
+
+	return ret;
 }
 
 static int stm32_mdf_adc_start_mdf(struct iio_dev *indio_dev)
@@ -735,7 +768,7 @@ static int stm32_mdf_adc_start_conv(struct iio_dev *indio_dev)
 	 * before setting the sampling frequency.
 	 */
 	if (!adc->sample_freq) {
-		ret = mdf_adc_set_samp_freq(indio_dev, MDF_DEFAULT_SAMPLING_FREQ);
+		ret = mdf_adc_set_samp_freq(indio_dev, MDF_DEFAULT_SAMPLING_FREQ, 1);
 		if (ret < 0)
 			goto stop_sitf;
 	}
@@ -1133,7 +1166,7 @@ static int stm32_mdf_adc_write_raw(struct iio_dev *indio_dev, struct iio_chan_sp
 		if (ret)
 			return ret;
 
-		ret = mdf_adc_set_samp_freq(indio_dev, val);
+		ret = mdf_adc_set_samp_freq(indio_dev, val, 0);
 		iio_device_release_direct_mode(indio_dev);
 
 		return ret;

@@ -81,7 +81,10 @@ static const struct regmap_config stm32_mdf_regmap_cfg = {
  * @phys_base: mdf registers base physical address
  * @n_active_ch: number of active channels
  * @lock: lock to manage common resources
- * @cck_freq: output cck clocks frequencies array
+ * @kclk_rate: save kclk rate at probe
+ * @cck_freq: output cck clocks frequency requested in DT
+ * @cck_freq_actual: actual output cck clocks frequency
+ * @exclusive_flg: exclusive rate request flag
  */
 struct stm32_mdf_priv {
 	struct stm32_mdf mdf;
@@ -92,7 +95,10 @@ struct stm32_mdf_priv {
 	phys_addr_t phys_base;
 	atomic_t n_active_ch;
 	spinlock_t lock; /* Manage common resources race conditions */
+	unsigned long kclk_rate;
 	unsigned long cck_freq;
+	unsigned long cck_freq_actual;
+	bool exclusive_flg;
 };
 
 #define STM32_MDF_MAX_CCK 2
@@ -127,6 +133,11 @@ int stm32_mdf_core_start_mdf(struct stm32_mdf *mdf)
 			ret = -EINVAL;
 			dev_err(dev, "MDF clock not active\n");
 			goto pm_put;
+		}
+
+		if (!priv->exclusive_flg) {
+			clk_rate_exclusive_get(priv->kclk);
+			priv->exclusive_flg = true;
 		}
 	}
 
@@ -171,12 +182,72 @@ err:
 }
 EXPORT_SYMBOL_GPL(stm32_mdf_core_trigger);
 
+unsigned long stm32_mdf_core_get_cck(struct stm32_mdf *mdf)
+{
+	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
+
+	return priv->cck_freq_actual;
+}
+EXPORT_SYMBOL_GPL(stm32_mdf_core_get_cck);
+
+int stm32_mdf_core_lock_kclk_rate(struct stm32_mdf *mdf)
+{
+	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
+	int ret;
+
+	if (!atomic_read(&priv->n_active_ch)) {
+		/* Request rate exclusivity on kernel clock right now */
+		ret = clk_rate_exclusive_get(priv->kclk);
+		if (ret < 0)
+			return ret;
+
+		priv->exclusive_flg = true;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(stm32_mdf_core_lock_kclk_rate);
+
+void stm32_mdf_core_unlock_kclk_rate(struct stm32_mdf *mdf)
+{
+	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
+
+	if (!atomic_read(&priv->n_active_ch)) {
+		clk_rate_exclusive_put(priv->kclk);
+		priv->exclusive_flg = false;
+	}
+}
+EXPORT_SYMBOL_GPL(stm32_mdf_core_unlock_kclk_rate);
+
+int stm32_mdf_core_restore_cck(struct stm32_mdf *mdf)
+{
+	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
+	struct device *dev = &priv->pdev->dev;
+	int ret;
+
+	ret = clk_set_rate(priv->kclk, priv->kclk_rate);
+	if (ret) {
+		dev_err(dev, "Changing MDF kernel clock rate returned error %d\n", ret);
+		return ret;
+	}
+
+	dev_dbg(dev, "MDF kernel clock rate changed to [%lu]Kz.\n", priv->kclk_rate);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(stm32_mdf_core_restore_cck);
+
 int stm32_mdf_core_stop_mdf(struct stm32_mdf *mdf)
 {
 	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
 	int ret = 0;
 
 	if (atomic_dec_and_test(&priv->n_active_ch)) {
+		if (priv->exclusive_flg) {
+			clk_rate_exclusive_put(priv->kclk);
+			priv->exclusive_flg = false;
+		}
+
 		ret = regmap_clear_bits(priv->regmap, MDF_CKGCR_REG, MDF_CKG_CKGDEN);
 
 		pm_runtime_put_sync(&priv->pdev->dev);
@@ -185,6 +256,22 @@ int stm32_mdf_core_stop_mdf(struct stm32_mdf *mdf)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(stm32_mdf_core_stop_mdf);
+
+static struct clk_regmap clk_cck;
+
+static struct clk_regmap clk_cck0 = {
+	.data = &(struct clk_regmap_gate_data){
+		.offset = MDF_CKGCR_REG,
+		.bit_idx = 1,
+	},
+};
+
+static struct clk_regmap clk_cck1 = {
+	.data = &(struct clk_regmap_gate_data){
+		.offset = MDF_CKGCR_REG,
+		.bit_idx = 2,
+	},
+};
 
 static int stm32_mdf_core_cck_divider_set_rate(struct platform_device *pdev,
 					       struct stm32_mdf_priv *priv,
@@ -204,13 +291,16 @@ static int stm32_mdf_core_cck_divider_set_rate(struct platform_device *pdev,
 	delta = abs(parent_rate - (ratio * rate));
 
 	delta_ppm = (1000000 * delta) / parent_rate;
-	if (delta_ppm > 1000)
-		/* Warn if frequency deviation is higher than 1000 ppm */
-		dev_warn(dev, "CCK clock deviation [%lu] ppm: [%lu] vs [%lu] Hz\n",
-			 delta_ppm, parent_rate / ratio, rate);
-	else if (delta)
-		dev_dbg(dev, "CCK clock frequency not accurate: [%lu] ppm deviation\n",
-			delta_ppm);
+	priv->cck_freq_actual = DIV_ROUND_CLOSEST(parent_rate, ratio);
+
+	if (delta_ppm > 1000) {
+		/* If frequency deviation is higher than 1000 ppm return error */
+		dev_dbg(dev, "CCK clock deviation [%lu] ppm too large: [%lu] vs [%lu] Hz\n",
+			delta_ppm, priv->cck_freq_actual, rate);
+		return -EINVAL;
+	} else if (delta_ppm) {
+		dev_dbg(dev, "CCK clock frequency not accurate: [%lu] ppm deviation\n", delta_ppm);
+	}
 
 	/*
 	 * The total divider ratio must be split between proc divider and
@@ -228,10 +318,36 @@ static int stm32_mdf_core_cck_divider_set_rate(struct platform_device *pdev,
 	priv->mdf.fproc = DIV_ROUND_CLOSEST(parent_rate, procdiv);
 
 	/* Configure CKGCR register */
+	dev_dbg(dev, "Set MDF dividers: CCKDIV [%d], PROCDIV [%d]\n", cckdiv, procdiv);
 	return regmap_update_bits(priv->regmap, MDF_CKGCR_REG,
 				  MDF_CKG_CCKDIV_MASK | MDF_CKG_PROCDIV_MASK,
 				  MDF_CKG_CCKDIV(cckdiv - 1) |
 				  MDF_CKG_PROCDIV(procdiv - 1));
+}
+
+static int stm32_mdf_core_cck_set_rate(struct clk_hw *hw, unsigned long rate,
+				       unsigned long parent_rate)
+{
+	struct stm32_mdf_priv *priv = (struct stm32_mdf_priv *)clk_cck.data;
+	struct platform_device *pdev = priv->pdev;
+
+	return stm32_mdf_core_cck_divider_set_rate(pdev, priv, parent_rate);
+}
+
+static long stm32_mdf_core_cck_round_rate(struct clk_hw *hw, unsigned long rate,
+					  unsigned long *parent_rate)
+{
+	struct stm32_mdf_priv *priv = (struct stm32_mdf_priv *)clk_cck.data;
+	struct platform_device *pdev = priv->pdev;
+	unsigned long ratio;
+
+	ratio = DIV_ROUND_CLOSEST(*parent_rate, rate);
+	if (!ratio) {
+		dev_err(&pdev->dev, "CCK frequency above kernel frequency\n");
+		return -EINVAL;
+	}
+
+	return DIV_ROUND_CLOSEST(*parent_rate, ratio);
 }
 
 static unsigned long stm32_mdf_core_cck_divider_recalc_rate(struct clk_hw *hw,
@@ -255,22 +371,8 @@ static unsigned long stm32_mdf_core_cck_divider_recalc_rate(struct clk_hw *hw,
 
 static const struct clk_ops clk_cck_ops = {
 	.recalc_rate = stm32_mdf_core_cck_divider_recalc_rate,
-};
-
-static struct clk_regmap clk_cck;
-
-static struct clk_regmap clk_cck0 = {
-	.data = &(struct clk_regmap_gate_data){
-		.offset = MDF_CKGCR_REG,
-		.bit_idx = 1,
-	},
-};
-
-static struct clk_regmap clk_cck1 = {
-	.data = &(struct clk_regmap_gate_data){
-		.offset = MDF_CKGCR_REG,
-		.bit_idx = 2,
-	},
+	.set_rate = stm32_mdf_core_cck_set_rate,
+	.round_rate = stm32_mdf_core_cck_round_rate,
 };
 
 static int stm32_mdf_core_register_clock_provider(struct platform_device *pdev,
@@ -287,8 +389,10 @@ static int stm32_mdf_core_register_clock_provider(struct platform_device *pdev,
 	struct clk_hw *mdf_hw[] = { &clk_cck0.hw, &clk_cck1.hw };
 
 	clk_cck.hw.init = CLK_HW_INIT_FW_NAME("clk_cck", "ker_ck", &clk_cck_ops, 0);
-	clk_cck0.hw.init = CLK_HW_INIT_HW(STM32_MDF_CCK0, &clk_cck.hw, &clk_regmap_gate_ops, 0);
-	clk_cck1.hw.init = CLK_HW_INIT_HW(STM32_MDF_CCK1, &clk_cck.hw, &clk_regmap_gate_ops, 0);
+	clk_cck0.hw.init = CLK_HW_INIT_HW(STM32_MDF_CCK0, &clk_cck.hw,
+					  &clk_regmap_gate_ops, CLK_SET_RATE_PARENT);
+	clk_cck1.hw.init = CLK_HW_INIT_HW(STM32_MDF_CCK1, &clk_cck.hw,
+					  &clk_regmap_gate_ops, CLK_SET_RATE_PARENT);
 
 	clk_cck.data = priv;
 
@@ -380,15 +484,13 @@ static int stm32_mdf_core_parse_clocks(struct platform_device *pdev, struct stm3
 	struct device *dev = &pdev->dev;
 	struct clk *kclk;
 	int ret;
-	unsigned long kclk_rate;
 
 	kclk = devm_clk_get(dev, "ker_ck");
 	if (IS_ERR(kclk))
 		return dev_err_probe(dev, PTR_ERR(kclk), "Failed to get kernel clock\n");
 
 	priv->kclk = kclk;
-
-	kclk_rate = clk_get_rate(kclk);
+	priv->kclk_rate = clk_get_rate(kclk);
 
 	/* CCK0 and CCK1 clocks are optional. Used only in SPI master modes. */
 	ret = stm32_mdf_core_of_cck_get(pdev, priv);
@@ -396,7 +498,7 @@ static int stm32_mdf_core_parse_clocks(struct platform_device *pdev, struct stm3
 		return ret;
 
 	if (priv->cck_freq) {
-		ret = stm32_mdf_core_cck_divider_set_rate(pdev, priv, kclk_rate);
+		ret = stm32_mdf_core_cck_divider_set_rate(pdev, priv, priv->kclk_rate);
 		if (ret) {
 			dev_err(dev, "Failed to set cck rate: %d\n", ret);
 			return ret;
