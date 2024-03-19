@@ -1074,7 +1074,7 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 
 	ret = pm_runtime_resume_and_get(omi->dev);
 	if (ret < 0)
-		return ret;
+		goto err_pm_enable;
 
 	if (omi->rstc) {
 		reset_control_assert(omi->rstc);
@@ -1091,13 +1091,14 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 			dev_err(ospi->dev, "could not retrieve reg property: %d\n",
 				ret);
 			of_node_put(child);
-			return ret;
+			goto err_pm_resume;
 		}
 
 		if (cs >= STM32_OMI_MAX_NORCHIP) {
 			dev_err(ospi->dev, "invalid reg value: %d\n", cs);
 			of_node_put(child);
-			return -EINVAL;
+			ret = -EINVAL;
+			goto err_pm_resume;
 		}
 
 		if (of_device_is_compatible(child, "jedec,spi-nor")) {
@@ -1114,19 +1115,23 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 	}
 
 	ret = spi_register_master(ctrl);
-	if (ret)
-		goto err_spi_register;
+	if (ret) {
+		/* Disable ospi */
+		writel_relaxed(0, omi->regs_base + OSPI_CR);
+		goto err_pm_resume;
+	}
 
 	pm_runtime_mark_last_busy(omi->dev);
 	pm_runtime_put_autosuspend(omi->dev);
 
 	return 0;
 
-err_spi_register:
-	/* Disable ospi */
-	writel_relaxed(0, omi->regs_base + OSPI_CR);
-	mutex_destroy(&ospi->lock);
+err_pm_resume:
 	pm_runtime_put_sync_suspend(omi->dev);
+
+err_pm_enable:
+	pm_runtime_force_suspend(omi->dev);
+	mutex_destroy(&ospi->lock);
 
 	return ret;
 }
@@ -1147,7 +1152,7 @@ static int stm32_ospi_remove(struct platform_device *pdev)
 	stm32_omi_dlyb_stop(omi);
 	mutex_destroy(&ospi->lock);
 	pm_runtime_put_sync_suspend(omi->dev);
-	pm_runtime_disable(omi->dev);
+	pm_runtime_force_suspend(omi->dev);
 
 	return 0;
 }
