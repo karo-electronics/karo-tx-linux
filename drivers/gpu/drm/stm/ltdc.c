@@ -900,7 +900,19 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 		}
 	}
 
-	if (ldev->caps.crtc_rotation) {
+	/* check that an output rotation is required */
+	if (ldev->caps.crtc_rotation &&
+	    (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
+	     orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)) {
+		/*
+		 * Size of the rotation buffer must be larger than the size
+		 * of two frames (format RGB24).
+		 */
+		if (ldev->rot_mem->size < mode->hdisplay * mode->vdisplay * 2 * 3) {
+			DRM_WARN("Rotation buffer too small");
+			return;
+		}
+
 		rota0_buf = (u32)ldev->rot_mem->base;
 		rota1_buf = (u32)ldev->rot_mem->base + (ldev->rot_mem->size >> 1);
 
@@ -2064,6 +2076,9 @@ static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 	struct drm_device *ddev = encoder->dev;
 	struct ltdc_device *ldev =  ddev->dev_private;
 	struct device *dev = ddev->dev;
+	struct drm_connector *connector = NULL;
+	struct drm_connector_list_iter iter;
+	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
 	int target = mode->clock * 1000;
 	int target_min = target - CLK_TOLERANCE_HZ;
 	int target_max = target + CLK_TOLERANCE_HZ;
@@ -2079,6 +2094,28 @@ static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 	}
 
 	DRM_DEBUG_DRIVER("clk rate target %d, available %d\n", target, result);
+
+	/* Get the connector from encoder */
+	drm_connector_list_iter_begin(ddev, &iter);
+	drm_for_each_connector_iter(connector, &iter)
+		if (connector->encoder == encoder)
+			break;
+	drm_connector_list_iter_end(&iter);
+
+	if (connector)
+		orientation = connector->display_info.panel_orientation;
+
+	/* check that an output rotation is required */
+	if (ldev->caps.crtc_rotation &&
+	    (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
+	     orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)) {
+		/*
+		 * Size of the rotation buffer must be larger than the size
+		 * of two frames (format RGB24).
+		 */
+		if (ldev->rot_mem->size < mode->hdisplay * mode->vdisplay * 2 * 3)
+			return MODE_MEM;
+	}
 
 	/* Filter modes according to the max frequency supported by the pads */
 	if (result > ldev->caps.pad_max_freq_hz)
