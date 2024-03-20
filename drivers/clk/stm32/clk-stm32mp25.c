@@ -782,7 +782,7 @@ static CLK_STM32_COMPOSITE(ck_mco2, mco2_src, 0, GATE_MCO2, MUX_MCO2, NO_STM32_D
 
 /* MDF */
 static CLK_STM32_GATE(ck_icn_p_mdf1, "ck_icn_ls_mcu", 0, GATE_MDF1);
-static CLK_STM32_GATE(ck_ker_mdf1, "ck_flexgen_23", 0, GATE_MDF1);
+static CLK_STM32_GATE(ck_ker_mdf1, "ck_flexgen_23", CLK_SET_RATE_PARENT, GATE_MDF1);
 
 /* OSPI */
 static CLK_STM32_GATE(ck_icn_p_ospiiom, "ck_icn_ls_mcu", 0, GATE_OSPIIOM);
