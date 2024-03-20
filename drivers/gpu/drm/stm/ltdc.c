@@ -913,6 +913,10 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 			return;
 		}
 
+		/* The width of the framebuffer must not exceed 1366 pixels */
+		if (mode->vdisplay > 1366)
+			return;
+
 		rota0_buf = (u32)ldev->rot_mem->base;
 		rota1_buf = (u32)ldev->rot_mem->base + (ldev->rot_mem->size >> 1);
 
@@ -2115,6 +2119,10 @@ static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 		 */
 		if (ldev->rot_mem->size < mode->hdisplay * mode->vdisplay * 2 * 3)
 			return MODE_MEM;
+
+		/* The width of the framebuffer must not exceed 1366 pixels */
+		if (mode->vdisplay > 1366)
+			return MODE_BAD_WIDTH;
 	}
 
 	/* Filter modes according to the max frequency supported by the pads */
