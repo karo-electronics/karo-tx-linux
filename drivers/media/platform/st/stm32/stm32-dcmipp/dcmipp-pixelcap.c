@@ -107,6 +107,7 @@ static const struct dcmipp_pixelcap_pix_map dcmipp_pixelcap_pix_map_list[] = {
 	PIXMAP_MBUS_PFMT(VYUY8_2X8, VYUY, 1),
 	PIXMAP_MBUS_PFMT(Y8_1X8, GREY, 1),
 	PIXMAP_MBUS_PFMT(RGB888_1X24, RGB24, 1),
+	PIXMAP_MBUS_PFMT(BGR888_1X24, BGR24, 1),
 	PIXMAP_MBUS_PFMT(ARGB8888_1X32, ARGB32, 1),
 	PIXMAP_MBUS_PFMT(AYUV8_1X32, AYUV32, 1),
 
@@ -236,6 +237,7 @@ static inline int hdw_pixel_alignment(u32 format)
 	case V4L2_PIX_FMT_VYUY:
 		return 3;/* 2^3  = 8 pixels = 16 bytes */
 	case V4L2_PIX_FMT_RGB24:
+	case V4L2_PIX_FMT_BGR24:
 		return 4;/* 2^4 = 16 pixels = 48 bytes */
 	case V4L2_PIX_FMT_ARGB32:
 		return 2;/* 2^2  = 4 pixels = 16 bytes */
