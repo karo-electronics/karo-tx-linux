@@ -494,18 +494,27 @@ static int panel_dpi_probe(struct device *dev,
 	of_property_read_u32(np, "height-mm", &desc->size.height);
 
 	of_property_read_string(np, "data-mapping", &mapping);
-	if (!strcmp(mapping, "rgb24")) {
+
+	if (mapping) {
+		if (!strcmp(mapping, "rgb24")) {
+			desc->bus_format = MEDIA_BUS_FMT_RGB888_1X24;
+			desc->bpc = 8;
+		} else if (!strcmp(mapping, "rgb565")) {
+			desc->bus_format = MEDIA_BUS_FMT_RGB565_1X16;
+			desc->bpc = 6;
+		} else if (!strcmp(mapping, "bgr666")) {
+			desc->bus_format = MEDIA_BUS_FMT_RGB666_1X18;
+			desc->bpc = 6;
+		} else if (!strcmp(mapping, "lvds666")) {
+			desc->bus_format = MEDIA_BUS_FMT_RGB666_1X24_CPADHI;
+			desc->bpc = 6;
+		}
+	} else {
+		/* No data-mapping node found, set by default bus format & bpc */
+		dev_warn(dev, "%pOF: no data-mapping node found for \"panel-dpi\" binding\n",
+			np);
 		desc->bus_format = MEDIA_BUS_FMT_RGB888_1X24;
 		desc->bpc = 8;
-	} else if (!strcmp(mapping, "rgb565")) {
-		desc->bus_format = MEDIA_BUS_FMT_RGB565_1X16;
-		desc->bpc = 6;
-	} else if (!strcmp(mapping, "bgr666")) {
-		desc->bus_format = MEDIA_BUS_FMT_RGB666_1X18;
-		desc->bpc = 6;
-	} else if (!strcmp(mapping, "lvds666")) {
-		desc->bus_format = MEDIA_BUS_FMT_RGB666_1X24_CPADHI;
-		desc->bpc = 6;
 	}
 
 	/* Extract bus_flags from display_timing */
