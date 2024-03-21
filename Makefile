@@ -1486,7 +1486,7 @@ KBUILD_EXTDTB := $(or $(and $(wildcard $(KBUILD_EXTDTS)), 1), 0)
 	test ! -e $(dtstree)/$@ -a $(KBUILD_EXTDTB) -eq 1  && ( \
 		echo "Looking for $(patsubst st/%.dtb,%.dtb,$@) into $(KBUILD_EXTDTS)"; \
 		$(MAKE) $(build)=$(stdtstree) src=$(KBUILD_EXTDTS) $(dtstree)/$@ || \
-		/bin/true) || /bin/true)
+		/bin/false) || /bin/false)
 
 %.dtbo: dtbs_prepare
 	$(Q)$(MAKE) $(build)=$(dtstree) $(dtstree)/$@
@@ -1494,10 +1494,9 @@ KBUILD_EXTDTB := $(or $(and $(wildcard $(KBUILD_EXTDTS)), 1), 0)
 PHONY += dtbs dtbs_prepare dtbs_install dtbs_check
 dtbs: dtbs_prepare
 	$(Q)$(MAKE) $(build)=$(stdtstree)
-	$(Q)test $(KBUILD_EXTDTB) -eq 1 && ( \
+	$(Q)test $(KBUILD_EXTDTB) -eq 0 || ( \
 		echo "Looking for device trees into $(KBUILD_EXTDTS)"; \
-		$(MAKE) $(build)=$(stdtstree) src=$(KBUILD_EXTDTS) || \
-		/bin/true) || /bin/true
+		$(MAKE) $(build)=$(stdtstree) src=$(KBUILD_EXTDTS) || /bin/false)
 
 # include/config/kernel.release is actually needed when installing DTBs because
 # INSTALL_DTBS_PATH contains $(KERNELRELEASE). However, we do not want to make
