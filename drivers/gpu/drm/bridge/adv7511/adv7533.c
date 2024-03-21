@@ -172,7 +172,7 @@ int adv7533_attach_dsi(struct adv7511 *adv)
 
 	host = of_find_mipi_dsi_host_by_node(adv->host_node);
 	if (!host) {
-		dev_err(dev, "failed to find dsi host\n");
+		dev_dbg(dev, "failed to find dsi host\n");
 		return -EPROBE_DEFER;
 	}
 
