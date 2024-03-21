@@ -403,7 +403,7 @@
 			pinmux = <STM32_PINMUX('D', 0, AF10)>; /* OSPI1_CLK */
 			bias-disable;
 			drive-push-pull;
-			slew-rate = <3>;
+			slew-rate = <2>;
 		};
 	};
 
@@ -436,7 +436,7 @@
 				 <STM32_PINMUX('D', 7, AF10)>; /* OSPI_IO3 */
 			bias-disable;
 			drive-push-pull;
-			slew-rate = <1>;
+			slew-rate = <0>;
 		};
 	};
 
