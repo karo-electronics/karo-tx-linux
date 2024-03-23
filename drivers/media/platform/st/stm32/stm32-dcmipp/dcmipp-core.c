@@ -21,6 +21,7 @@
 #include <media/media-device.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-fwnode.h>
+#include <media/v4l2-mc.h>
 
 #include "dcmipp-common.h"
 
@@ -463,6 +464,10 @@ static int dcmipp_graph_init(struct dcmipp_device *dcmipp)
 	return 0;
 }
 
+static const struct media_device_ops dcmipp_media_ops = {
+	.link_notify = v4l2_pipeline_link_notify,
+};
+
 static int dcmipp_probe(struct platform_device *pdev)
 {
 	struct dcmipp_device *dcmipp;
@@ -571,6 +576,7 @@ static int dcmipp_probe(struct platform_device *pdev)
 	snprintf(dcmipp->mdev.bus_info, sizeof(dcmipp->mdev.bus_info),
 		 "platform:%s", DCMIPP_PDEV_NAME);
 	dcmipp->mdev.dev = &pdev->dev;
+	dcmipp->mdev.ops = &dcmipp_media_ops;
 	media_device_init(&dcmipp->mdev);
 
 	pm_runtime_enable(dcmipp->dev);

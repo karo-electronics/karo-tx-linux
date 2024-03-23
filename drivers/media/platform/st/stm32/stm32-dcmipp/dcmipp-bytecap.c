@@ -331,7 +331,6 @@ static int dcmipp_bytecap_enum_framesizes(struct file *file, void *fh,
 	return 0;
 }
 
-/* TODO - based on the explanation text, should also use v4l2_pipeline_link_notify */
 static int dcmipp_bytecap_open(struct file *file)
 {
 	struct dcmipp_bytecap_device *vcap = video_drvdata(file);
