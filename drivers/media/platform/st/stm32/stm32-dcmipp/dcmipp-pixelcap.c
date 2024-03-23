@@ -25,9 +25,6 @@
 #define DCMIPP_PIXELCAP_DRV_NAME "dcmipp-pixelcap"
 
 #define DCMIPP_PRSR (0x1F8)
-/* TODO - CMIER configuration should be done in a common place since it is
- * common to all pipes and thus should be in core with a dedicated mutex
- */
 #define DCMIPP_CMIER (0x3F0)
 #define DCMIPP_CMIER_P1FRAMEIE BIT(17)
 #define DCMIPP_CMIER_P1VSYNCIE BIT(18)
@@ -650,12 +647,11 @@ static int dcmipp_pixelcap_start_streaming(struct vb2_queue *vq,
 	if (ret)
 		goto err_media_pipeline_stop;
 
-/* TODO - CMIER configuration should be done in a common place since it is
- * common to all pipes and thus should be in core with a dedicated mutex
- */
 	/* Enable interruptions */
 	vcap->cmier |= DCMIPP_CMIER_PxALL(vcap->pipe_id);
+	spin_lock(&vcap->vdev.v4l2_dev->lock);
 	reg_set(vcap, DCMIPP_CMIER, vcap->cmier);
+	spin_unlock(&vcap->vdev.v4l2_dev->lock);
 
 	/* Enable pipe at the end of programming */
 	reg_set(vcap, DCMIPP_PxFSCR(vcap->pipe_id), DCMIPP_PxFSCR_PIPEN);
@@ -729,12 +725,10 @@ static void dcmipp_pixelcap_stop_streaming(struct vb2_queue *vq)
 	/* Stop the media pipeline */
 	media_pipeline_stop(vcap->vdev.entity.pads);
 
-/* TODO - CMIER configuration should be done in a common place since it is
- * common to all pipes and thus should be in core with a dedicated mutex
- */
-
 	/* Disable interruptions */
+	spin_lock(&vcap->vdev.v4l2_dev->lock);
 	reg_clear(vcap, DCMIPP_CMIER, vcap->cmier);
+	spin_unlock(&vcap->vdev.v4l2_dev->lock);
 
 	/* Stop capture */
 	reg_clear(vcap, DCMIPP_PxFCTCR(vcap->pipe_id), DCMIPP_PxFCTCR_CPTREQ);
