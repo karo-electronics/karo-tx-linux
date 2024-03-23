@@ -536,7 +536,6 @@ static int dcmipp_pixelproc_get_selection(struct v4l2_subdev *sd,
 	case V4L2_SEL_TGT_COMPOSE:
 		s->r = *compose;
 		break;
-	/* TODO - not sure how to define BOUND here */
 	default:
 		return -EINVAL;
 	}
