@@ -465,7 +465,7 @@ static int dcmipp_isp_set_selection(struct v4l2_subdev *sd,
 				    struct v4l2_subdev_selection *s)
 {
 	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
-	struct v4l2_mbus_framefmt *sink_fmt;
+	struct v4l2_mbus_framefmt *sink_fmt, *src_fmt;
 	struct v4l2_rect *crop, *compose;
 	unsigned int dec;
 
@@ -474,10 +474,12 @@ static int dcmipp_isp_set_selection(struct v4l2_subdev *sd,
 
 	if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
 		sink_fmt = &isp->sink_fmt;
+		src_fmt = &isp->src_fmt;
 		crop = &isp->crop;
 		compose = &isp->compose;
 	} else {
 		sink_fmt = v4l2_subdev_get_try_format(sd, state, s->pad);
+		src_fmt = v4l2_subdev_get_try_format(sd, state, 1);
 		crop = v4l2_subdev_get_try_crop(sd, state, s->pad);
 		compose = v4l2_subdev_get_try_compose(sd, state, s->pad);
 	}
@@ -490,20 +492,12 @@ static int dcmipp_isp_set_selection(struct v4l2_subdev *sd,
 
 		/* When we set the crop, this impact as well the compose */
 		*compose = s->r;
-		isp->decimation = 0;
 
-		/*
-		 * In case of setting the crop with ACTIVE set, we need to
-		 * update the source pad size
-		 */
-		if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-			isp->src_fmt.width = s->r.width;
-			isp->src_fmt.height = s->r.height;
-		}
+		src_fmt->width = s->r.width;
+		src_fmt->height = s->r.height;
 
-		/* TODO - when not in format active, we should also update the
-		 * try src pad format
-		 */
+		if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE)
+			isp->decimation = 0;
 
 		dev_dbg(isp->dev, "s_selection: crop %ux%u@(%u,%u)\n",
 			crop->width, crop->height, crop->left, crop->top);
@@ -533,17 +527,8 @@ static int dcmipp_isp_set_selection(struct v4l2_subdev *sd,
 
 		*compose = s->r;
 
-		/*
-		 * In case of setting the compose with ACTIVE set, we need to
-		 * update the source pad size
-		 */
-		if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-			isp->src_fmt.width = s->r.width;
-			isp->src_fmt.height = s->r.height;
-		}
-		/* TODO - when not in format active, we should also update the
-		 * try src pad format
-		 */
+		src_fmt->width = s->r.width;
+		src_fmt->height = s->r.height;
 
 		dev_dbg(isp->dev, "s_selection: compose %ux%u@(%u,%u)\n",
 			s->r.width, s->r.height, s->r.left, s->r.top);
