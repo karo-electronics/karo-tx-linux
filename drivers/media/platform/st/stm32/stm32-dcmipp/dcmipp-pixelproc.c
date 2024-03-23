@@ -589,7 +589,7 @@ static int dcmipp_pixelproc_set_selection(struct v4l2_subdev *sd,
 		if (s->r.height > crop->height)
 			s->r.height = crop->height;
 		else if (s->r.height < (crop->height / DCMIPP_MAX_DOWNSCALE_RATIO))
-			s->r.height = crop->width / DCMIPP_MAX_DOWNSCALE_RATIO;
+			s->r.height = crop->height / DCMIPP_MAX_DOWNSCALE_RATIO;
 		s->r.top = 0;
 		s->r.left = 0;
 
