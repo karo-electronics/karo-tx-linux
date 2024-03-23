@@ -75,58 +75,48 @@
 #define ISP_MEDIA_BUS_SINK_FMT_DEFAULT MEDIA_BUS_FMT_RGB565_2X8_LE
 #define ISP_MEDIA_BUS_SRC_FMT_DEFAULT MEDIA_BUS_FMT_RGB888_1X24
 
-struct dcmipp_isp_pix_map {
-	unsigned int code;
-	unsigned int dt;
-};
-
-#define PIXMAP_MBUS(mbus, datatype) \
-		{						\
-			.code = MEDIA_BUS_FMT_##mbus,		\
-			.dt = datatype,		\
-		}
-static const struct dcmipp_isp_pix_map dcmipp_isp_sink_pix_map_list[] = {
+static const unsigned int dcmipp_isp_sink_pix_map_list[] = {
 	/* RGB565 */
-	PIXMAP_MBUS(RGB565_2X8_LE, MIPI_CSI2_DT_RGB565),
+	MEDIA_BUS_FMT_RGB565_2X8_LE,
 	/* YUV422 */
-	PIXMAP_MBUS(YUYV8_2X8, MIPI_CSI2_DT_YUV422_8B),
-	PIXMAP_MBUS(UYVY8_2X8, MIPI_CSI2_DT_YUV422_8B),
-	PIXMAP_MBUS(YVYU8_2X8, MIPI_CSI2_DT_YUV422_8B),
-	PIXMAP_MBUS(VYUY8_2X8, MIPI_CSI2_DT_YUV422_8B),
+	MEDIA_BUS_FMT_YUYV8_2X8,
+	MEDIA_BUS_FMT_UYVY8_2X8,
+	MEDIA_BUS_FMT_YVYU8_2X8,
+	MEDIA_BUS_FMT_VYUY8_2X8,
 	/* GREY */
-	PIXMAP_MBUS(Y8_1X8, 0x00), /* TODO - DT value to be fixed */
+	MEDIA_BUS_FMT_Y8_1X8,
 	/* Raw Bayer */
 	/* Raw 8 */
-	PIXMAP_MBUS(SBGGR8_1X8, MIPI_CSI2_DT_RAW8),
-	PIXMAP_MBUS(SGBRG8_1X8, MIPI_CSI2_DT_RAW8),
-	PIXMAP_MBUS(SGRBG8_1X8, MIPI_CSI2_DT_RAW8),
-	PIXMAP_MBUS(SRGGB8_1X8, MIPI_CSI2_DT_RAW8),
+	MEDIA_BUS_FMT_SBGGR8_1X8,
+	MEDIA_BUS_FMT_SGBRG8_1X8,
+	MEDIA_BUS_FMT_SGRBG8_1X8,
+	MEDIA_BUS_FMT_SRGGB8_1X8,
 	/* Raw 10 */
-	PIXMAP_MBUS(SBGGR10_1X10, MIPI_CSI2_DT_RAW10),
-	PIXMAP_MBUS(SGBRG10_1X10, MIPI_CSI2_DT_RAW10),
-	PIXMAP_MBUS(SGRBG10_1X10, MIPI_CSI2_DT_RAW10),
-	PIXMAP_MBUS(SRGGB10_1X10, MIPI_CSI2_DT_RAW10),
+	MEDIA_BUS_FMT_SBGGR10_1X10,
+	MEDIA_BUS_FMT_SGBRG10_1X10,
+	MEDIA_BUS_FMT_SGRBG10_1X10,
+	MEDIA_BUS_FMT_SRGGB10_1X10,
 	/* Raw 12 */
-	PIXMAP_MBUS(SBGGR12_1X12, MIPI_CSI2_DT_RAW12),
-	PIXMAP_MBUS(SGBRG12_1X12, MIPI_CSI2_DT_RAW12),
-	PIXMAP_MBUS(SGRBG12_1X12, MIPI_CSI2_DT_RAW12),
-	PIXMAP_MBUS(SRGGB12_1X12, MIPI_CSI2_DT_RAW12),
+	MEDIA_BUS_FMT_SBGGR12_1X12,
+	MEDIA_BUS_FMT_SGBRG12_1X12,
+	MEDIA_BUS_FMT_SGRBG12_1X12,
+	MEDIA_BUS_FMT_SRGGB12_1X12,
 	/* Raw 14 */
-	PIXMAP_MBUS(SBGGR14_1X14, MIPI_CSI2_DT_RAW14),
-	PIXMAP_MBUS(SGBRG14_1X14, MIPI_CSI2_DT_RAW14),
-	PIXMAP_MBUS(SGRBG14_1X14, MIPI_CSI2_DT_RAW14),
-	PIXMAP_MBUS(SRGGB14_1X14, MIPI_CSI2_DT_RAW14),
+	MEDIA_BUS_FMT_SBGGR14_1X14,
+	MEDIA_BUS_FMT_SGBRG14_1X14,
+	MEDIA_BUS_FMT_SGRBG14_1X14,
+	MEDIA_BUS_FMT_SRGGB14_1X14,
 };
 
-static const struct dcmipp_isp_pix_map dcmipp_isp_src_pix_map_list[] = {
-	PIXMAP_MBUS(RGB888_1X24, 0),
-	PIXMAP_MBUS(YUV8_1X24, 0),
+static const unsigned int dcmipp_isp_src_pix_map_list[] = {
+	MEDIA_BUS_FMT_RGB888_1X24,
+	MEDIA_BUS_FMT_YUV8_1X24,
 };
 
-static const struct dcmipp_isp_pix_map *
+static unsigned int
 dcmipp_isp_pix_map_by_index(unsigned int i, unsigned int pad)
 {
-	const struct dcmipp_isp_pix_map *l;
+	const unsigned int *l;
 	unsigned int size;
 
 	if (IS_SRC(pad)) {
@@ -138,15 +128,15 @@ dcmipp_isp_pix_map_by_index(unsigned int i, unsigned int pad)
 	}
 
 	if (i >= size)
-		return NULL;
+		return 0;
 
-	return &l[i];
+	return l[i];
 }
 
-static const struct dcmipp_isp_pix_map *
+static unsigned int
 dcmipp_isp_pix_map_by_code(u32 code, unsigned int pad)
 {
-	const struct dcmipp_isp_pix_map *l;
+	const unsigned int *l;
 	unsigned int size;
 	unsigned int i;
 
@@ -159,11 +149,11 @@ dcmipp_isp_pix_map_by_code(u32 code, unsigned int pad)
 	}
 
 	for (i = 0; i < size; i++) {
-		if (l[i].code == code)
-			return &l[i];
+		if (l[i] == code)
+			return code;
 	}
 
-	return NULL;
+	return 0;
 }
 
 struct dcmipp_isp_device {
@@ -208,11 +198,8 @@ static inline unsigned int dcmipp_isp_compute_decimation(unsigned int orig,
 
 static void dcmipp_isp_adjust_fmt(struct v4l2_mbus_framefmt *fmt, u32 pad)
 {
-	const struct dcmipp_isp_pix_map *vpix;
-
 	/* Only accept code in the pix map table */
-	vpix = dcmipp_isp_pix_map_by_code(fmt->code, pad);
-	if (!vpix)
+	if (!dcmipp_isp_pix_map_by_code(fmt->code, pad))
 		fmt->code = IS_SRC(pad) ? ISP_MEDIA_BUS_SRC_FMT_DEFAULT :
 					  ISP_MEDIA_BUS_SINK_FMT_DEFAULT;
 
@@ -248,13 +235,13 @@ static int dcmipp_isp_enum_mbus_code(struct v4l2_subdev *sd,
 				     struct v4l2_subdev_state *state,
 				     struct v4l2_subdev_mbus_code_enum *code)
 {
-	const struct dcmipp_isp_pix_map *vpix;
+	unsigned int pix_code;
 
-	vpix = dcmipp_isp_pix_map_by_index(code->index, code->pad);
-	if (!vpix)
+	pix_code = dcmipp_isp_pix_map_by_index(code->index, code->pad);
+	if (!pix_code)
 		return -EINVAL;
 
-	code->code = vpix->code;
+	code->code = pix_code;
 
 	return 0;
 }
@@ -263,14 +250,11 @@ static int dcmipp_isp_enum_frame_size(struct v4l2_subdev *sd,
 				      struct v4l2_subdev_state *state,
 				      struct v4l2_subdev_frame_size_enum *fse)
 {
-	const struct dcmipp_isp_pix_map *vpix;
-
 	if (fse->index)
 		return -EINVAL;
 
 	/* Only accept code in the pix map table */
-	vpix = dcmipp_isp_pix_map_by_code(fse->code, fse->pad);
-	if (!vpix)
+	if (!dcmipp_isp_pix_map_by_code(fse->code, fse->pad))
 		return -EINVAL;
 
 	fse->min_width = DCMIPP_FRAME_MIN_WIDTH;
@@ -551,35 +535,33 @@ static const struct v4l2_subdev_pad_ops dcmipp_isp_pad_ops = {
 
 static void dcmipp_isp_config_demosaicing(struct dcmipp_isp_device *isp)
 {
-	const struct dcmipp_isp_pix_map *vpix =
-		dcmipp_isp_pix_map_by_code(isp->sink_fmt.code, 0);
-	unsigned int val = 0;
+	unsigned int pix_code = isp->sink_fmt.code, val = 0;
 
 	/* Disable demosaicing */
 	reg_clear(isp, DCMIPP_P1DMCR, DCMIPP_P1DMCR_ENABLE | DCMIPP_P1DMCR_TYPE_MASK);
 
-	if (vpix->code >= 0x3000 && vpix->code < 0x4000) {
+	if (pix_code >= 0x3000 && pix_code < 0x4000) {
 		dev_dbg(isp->dev, "Input is RawBayer, enable Demosaicing\n");
 
-		if (vpix->code == MEDIA_BUS_FMT_SBGGR8_1X8 ||
-		    vpix->code == MEDIA_BUS_FMT_SBGGR10_1X10 ||
-		    vpix->code == MEDIA_BUS_FMT_SBGGR12_1X12 ||
-		    vpix->code == MEDIA_BUS_FMT_SBGGR14_1X14)
+		if (pix_code == MEDIA_BUS_FMT_SBGGR8_1X8 ||
+		    pix_code == MEDIA_BUS_FMT_SBGGR10_1X10 ||
+		    pix_code == MEDIA_BUS_FMT_SBGGR12_1X12 ||
+		    pix_code == MEDIA_BUS_FMT_SBGGR14_1X14)
 			val = DCMIPP_P1DMCR_TYPE_BGGR << DCMIPP_P1DMCR_TYPE_SHIFT;
-		else if (vpix->code == MEDIA_BUS_FMT_SGBRG8_1X8 ||
-			 vpix->code == MEDIA_BUS_FMT_SGBRG10_1X10 ||
-			 vpix->code == MEDIA_BUS_FMT_SGBRG12_1X12 ||
-			 vpix->code == MEDIA_BUS_FMT_SGBRG14_1X14)
+		else if (pix_code == MEDIA_BUS_FMT_SGBRG8_1X8 ||
+			 pix_code == MEDIA_BUS_FMT_SGBRG10_1X10 ||
+			 pix_code == MEDIA_BUS_FMT_SGBRG12_1X12 ||
+			 pix_code == MEDIA_BUS_FMT_SGBRG14_1X14)
 			val = DCMIPP_P1DMCR_TYPE_GBRG << DCMIPP_P1DMCR_TYPE_SHIFT;
-		else if (vpix->code == MEDIA_BUS_FMT_SGRBG8_1X8 ||
-			 vpix->code == MEDIA_BUS_FMT_SGRBG10_1X10 ||
-			 vpix->code == MEDIA_BUS_FMT_SGRBG12_1X12 ||
-			 vpix->code == MEDIA_BUS_FMT_SGRBG14_1X14)
+		else if (pix_code == MEDIA_BUS_FMT_SGRBG8_1X8 ||
+			 pix_code == MEDIA_BUS_FMT_SGRBG10_1X10 ||
+			 pix_code == MEDIA_BUS_FMT_SGRBG12_1X12 ||
+			 pix_code == MEDIA_BUS_FMT_SGRBG14_1X14)
 			val = DCMIPP_P1DMCR_TYPE_GRBG << DCMIPP_P1DMCR_TYPE_SHIFT;
-		else if (vpix->code == MEDIA_BUS_FMT_SRGGB8_1X8 ||
-			 vpix->code == MEDIA_BUS_FMT_SRGGB10_1X10 ||
-			 vpix->code == MEDIA_BUS_FMT_SRGGB12_1X12 ||
-			 vpix->code == MEDIA_BUS_FMT_SRGGB14_1X14)
+		else if (pix_code == MEDIA_BUS_FMT_SRGGB8_1X8 ||
+			 pix_code == MEDIA_BUS_FMT_SRGGB10_1X10 ||
+			 pix_code == MEDIA_BUS_FMT_SRGGB12_1X12 ||
+			 pix_code == MEDIA_BUS_FMT_SRGGB14_1X14)
 			val = DCMIPP_P1DMCR_TYPE_RGGB << DCMIPP_P1DMCR_TYPE_SHIFT;
 
 		val |= DCMIPP_P1DMCR_ENABLE;
