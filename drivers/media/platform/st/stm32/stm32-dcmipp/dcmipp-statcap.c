@@ -36,6 +36,8 @@
 #define DCMIPP_P1STXCR_ENABLE		BIT(0)
 #define DCMIPP_P1STXCR_BINS_SHIFT	2
 #define DCMIPP_P1STXCR_SRC_COMP_SHIFT	4
+#define DCMIPP_P1STXCR_SRC_LOC_PRE	0
+#define DCMIPP_P1STXCR_SRC_LOC_POST	1
 #define DCMIPP_P1STXCR_SRC_LOC_SHIFT	6
 #define DCMIPP_P1STXCR_MODE_AVERAGE	0
 #define DCMIPP_P1STXCR_MODE_BINS	BIT(7)
@@ -100,7 +102,6 @@ struct dcmipp_statcap_device {
 	struct media_pipeline pipe;
 	u32 frame_format;
 	struct v4l2_rect stat_region;
-	enum v4l2_isp_stat_location location;
 	enum v4l2_isp_stat_avg_filter avg_filter;
 	enum v4l2_isp_stat_bin_comp bin_comp;
 	struct v4l2_subdev *s_subdev;
@@ -585,9 +586,6 @@ static int dcmipp_statcap_s_ctrl(struct v4l2_ctrl *ctrl)
 			DCMIPP_P1STSZR_ENABLE);
 		spin_unlock_irq(&vcap->irqlock);
 		break;
-	case V4L2_CID_ISP_STAT_LOCATION:
-		vcap->location = ctrl->val;
-		break;
 	case V4L2_CID_ISP_STAT_AVG_FILTER:
 		vcap->avg_filter = ctrl->val;
 		break;
@@ -609,16 +607,6 @@ static const struct v4l2_ctrl_config dcmipp_statcap_ctrls[] = {
 		.id	= V4L2_CID_ISP_STAT_REGION,
 		.type	= V4L2_CTRL_TYPE_ISP_STAT_REGION,
 		.name	= "ISP stat region control",
-	}, {
-		.ops	= &dcmipp_statcap_ctrl_ops,
-		.id	= V4L2_CID_ISP_STAT_LOCATION,
-		.type	= V4L2_CTRL_TYPE_INTEGER,
-		.name	= "ISP stat location control",
-		.min	= 0,
-		.max	= V4L2_STAT_LOCATION_AFTER_DEMO,
-		.step	= 1,
-		.def	= 0,
-		.flags	= 0,
 	}, {
 		.ops	= &dcmipp_statcap_ctrl_ops,
 		.id	= V4L2_CID_ISP_STAT_AVG_FILTER,
@@ -684,7 +672,7 @@ static void dcmipp_statcap_buffer_done(struct dcmipp_statcap_device *vcap)
 	vb2_buffer_done(&cur_buf->vb.vb2_buf, VB2_BUF_STATE_DONE);
 }
 
-static u32 dcmipp_statcap_get_src(enum v4l2_isp_stat_location location,
+static u32 dcmipp_statcap_get_src(u32 location,
 				  enum v4l2_isp_stat_bin_comp comp)
 {
 	return (location << DCMIPP_P1STXCR_SRC_LOC_SHIFT) | (comp << DCMIPP_P1STXCR_SRC_COMP_SHIFT);
@@ -695,6 +683,10 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 	struct dcmipp_statcap_device *vcap =
 			container_of(arg, struct dcmipp_statcap_device, ved);
 	struct dcmipp_ent_device *ved = arg;
+	static u32 location = DCMIPP_P1STXCR_SRC_LOC_PRE;
+	struct stm32_dcmipp_stat_avr_bins *avr_bins =
+		location == DCMIPP_P1STXCR_SRC_LOC_PRE ? &vcap->local_buf.pre :
+							 &vcap->local_buf.post;
 	static bool stat_ready;
 	int i;
 
@@ -724,6 +716,7 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 	switch (vcap->capture_state) {
 	case COLD_START:
 		stat_ready = false;
+		location = DCMIPP_P1STXCR_SRC_LOC_PRE;
 		/*
 		 * We've just started, set control registers to capture
 		 * AVERAGES (RGB) and leave
@@ -731,7 +724,7 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 		for (i = 0; i < 3; i++)
 			reg_write(vcap, DCMIPP_P1STXCR(i),
 				  DCMIPP_P1STXCR_MODE_AVERAGE |
-				  dcmipp_statcap_get_src(vcap->location, i) |
+				  dcmipp_statcap_get_src(location, i) |
 				  vcap->avg_filter << DCMIPP_P1STXCR_BINS_SHIFT |
 				  DCMIPP_P1STXCR_ENABLE);
 		break;
@@ -741,14 +734,14 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 		for (i = 0; i < 3; i++)
 			reg_write(vcap, DCMIPP_P1STXCR(i),
 				  DCMIPP_P1STXCR_MODE_BINS |
-				  dcmipp_statcap_get_src(vcap->location, vcap->bin_comp) |
+				  dcmipp_statcap_get_src(location, vcap->bin_comp) |
 				  0 << DCMIPP_P1STXCR_BINS_SHIFT |
 				  DCMIPP_P1STXCR_ENABLE);
 
 		if (vcap->prev_capture_state == PHY_BIN_3_SHA_AV_RGB) {
 			/* Accumulators contains the 4th set of BINS */
 			for (i = 0; i < 3; i++)
-				vcap->local_buf.bins[i + 9] = reg_read(vcap, DCMIPP_P1STXSR(i));
+				avr_bins->bins[i + 9] = reg_read(vcap, DCMIPP_P1STXSR(i));
 		}
 		break;
 
@@ -757,29 +750,29 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 		for (i = 0; i < 3; i++)
 			reg_write(vcap, DCMIPP_P1STXCR(i),
 				  DCMIPP_P1STXCR_MODE_BINS |
-				  dcmipp_statcap_get_src(vcap->location, vcap->bin_comp) |
+				  dcmipp_statcap_get_src(location, vcap->bin_comp) |
 				  1 << DCMIPP_P1STXCR_BINS_SHIFT |
 				  DCMIPP_P1STXCR_ENABLE);
 
 		/* Accumulators contains the AVERAGES (RGB) */
-		for (i = 0; i < ARRAY_SIZE(vcap->local_buf.average_RGB); i++) {
-			vcap->local_buf.average_RGB[i] = reg_read(vcap, DCMIPP_P1STXSR(i));
+		for (i = 0; i < ARRAY_SIZE(vcap->local_buf.pre.average_RGB); i++) {
+			avr_bins->average_RGB[i] = reg_read(vcap, DCMIPP_P1STXSR(i));
 			/* Normalize values */
-			vcap->local_buf.average_RGB[i] <<= 8;
+			avr_bins->average_RGB[i] <<= 8;
 
 			/* Depending on the position & component, need to adjust in case of Bayer */
-			if (vcap->location == V4L2_STAT_LOCATION_BEFORE_PROC &&
+			if (location == DCMIPP_P1STXCR_SRC_LOC_PRE &&
 			    vcap->frame_format >= MEDIA_BUS_FMT_SBGGR8_1X8 &&
 			    vcap->frame_format <= MEDIA_BUS_FMT_SRGGB16_1X16) {
 				/* raw bayer: RGB component not present for all pixels */
 				if (i == COMP_RED || i == COMP_BLUE)
-					vcap->local_buf.average_RGB[i] *= 4;
+					avr_bins->average_RGB[i] *= 4;
 				else if (i == COMP_GREEN)
-					vcap->local_buf.average_RGB[i] *= 2;
+					avr_bins->average_RGB[i] *= 2;
 			}
 
 			/* Divide by number of pixels */
-			vcap->local_buf.average_RGB[i] /=
+			avr_bins->average_RGB[i] /=
 				(vcap->stat_region.width * vcap->stat_region.height);
 		}
 		break;
@@ -789,13 +782,13 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 		for (i = 0; i < 3; i++)
 			reg_write(vcap, DCMIPP_P1STXCR(i),
 				  DCMIPP_P1STXCR_MODE_BINS |
-				  dcmipp_statcap_get_src(vcap->location, vcap->bin_comp) |
+				  dcmipp_statcap_get_src(location, vcap->bin_comp) |
 				  2 << DCMIPP_P1STXCR_BINS_SHIFT |
 				  DCMIPP_P1STXCR_ENABLE);
 
 		/* Accumulators contains the 1st set of BINS */
 		for (i = 0; i < 3; i++)
-			vcap->local_buf.bins[i] = reg_read(vcap, DCMIPP_P1STXSR(i));
+			avr_bins->bins[i] = reg_read(vcap, DCMIPP_P1STXSR(i));
 		break;
 
 	case PHY_BIN_2_SHA_BIN_3:
@@ -803,27 +796,28 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 		for (i = 0; i < 3; i++)
 			reg_write(vcap, DCMIPP_P1STXCR(i),
 				  DCMIPP_P1STXCR_MODE_BINS |
-				  dcmipp_statcap_get_src(vcap->location, vcap->bin_comp) |
+				  dcmipp_statcap_get_src(location, vcap->bin_comp) |
 				  3 << DCMIPP_P1STXCR_BINS_SHIFT |
 				  DCMIPP_P1STXCR_ENABLE);
 
 		/* Accumulators contains the 2nd set of BINS */
 		for (i = 0; i < 3; i++)
-			vcap->local_buf.bins[i + 3] = reg_read(vcap, DCMIPP_P1STXSR(i));
+			avr_bins->bins[i + 3] = reg_read(vcap, DCMIPP_P1STXSR(i));
 		break;
 
 	case PHY_BIN_3_SHA_AV_RGB:
 		/* Set control registers to capture the AVERAGES (RGB) */
 		for (i = 0; i < 3; i++)
+			/* Usage of !location is on purpose to switch to the other location */
 			reg_write(vcap, DCMIPP_P1STXCR(i),
 				  DCMIPP_P1STXCR_MODE_AVERAGE |
-				  dcmipp_statcap_get_src(vcap->location, i) |
+				  dcmipp_statcap_get_src(!location, i) |
 				  vcap->avg_filter << DCMIPP_P1STXCR_BINS_SHIFT |
 				  DCMIPP_P1STXCR_ENABLE);
 
 		/* Accumulators contains the 3rd set of BINS */
 		for (i = 0; i < 3; i++)
-			vcap->local_buf.bins[i + 6] = reg_read(vcap, DCMIPP_P1STXSR(i));
+			avr_bins->bins[i + 6] = reg_read(vcap, DCMIPP_P1STXSR(i));
 		break;
 	}
 
@@ -838,8 +832,10 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 	if (vcap->capture_state < PHY_BIN_3_SHA_AV_RGB) {
 		vcap->capture_state++;
 	} else {
+		if (location == DCMIPP_P1STXCR_SRC_LOC_POST)
+			stat_ready = true;
+		location = !location;
 		vcap->capture_state = PHY_AV_RGB_SHA_BIN_0;
-		stat_ready = true;
 	}
 
 	return IRQ_HANDLED;

@@ -168,21 +168,26 @@ struct stm32_dcmipp_params_cfg {
 };
 
 /**
- * struct stm32_dcmipp_stat_buf - statistics buffer
+ * struct stm32_dcmipp_stat_avr_bins - average & bins statistics
  *
  * @average_rgb[3]: average value of R/G/B components
  * @bins[12]: 12 values histogram
  */
-struct stm32_dcmipp_stat_buf {
-	/*
-	 * TODO - we should have a field indicating which data is the
-	 * latest, and also maybe all valid fields.  Another idea could be
-	 * to avoid output of the buffer until we have performed a first loop
-	 * on the capture state so that we are sure we have a valid value
-	 * for all statistics
-	 */
+struct stm32_dcmipp_stat_avr_bins {
 	__u32 average_RGB[3];
 	__u32 bins[12];
+};
+
+/**
+ * struct stm32_dcmipp_stat_buf - statistics buffer
+ *
+ * @pre: average & bins statistics at pre-demosaicing location
+ * @post: average & bins statistics at post-demosaicing location
+ * @bad_pixel_count: number of bad pixels detected in the frame
+ */
+struct stm32_dcmipp_stat_buf {
+	struct stm32_dcmipp_stat_avr_bins pre;
+	struct stm32_dcmipp_stat_avr_bins post;
 	__u32 bad_pixel_count;
 };
 
