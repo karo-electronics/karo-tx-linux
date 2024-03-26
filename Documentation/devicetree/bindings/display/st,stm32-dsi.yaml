@@ -43,6 +43,9 @@ properties:
     items:
       - const: apb
 
+  power-domains:
+    maxItems: 1
+
   ports:
     $ref: /schemas/graph.yaml#/properties/ports
 
