@@ -374,8 +374,6 @@ static int dcmipp_statcap_start_streaming(struct vb2_queue *vq,
 		goto err_media_pipeline_stop;
 	}
 
-	/* FIXME - Restart the sequence of statistics capture */
-
 	return 0;
 
 err_media_pipeline_stop:
@@ -684,7 +682,7 @@ static void dcmipp_statcap_buffer_done(struct dcmipp_statcap_device *vcap)
 	/* Send buffer */
 	vb2_set_plane_payload(&cur_buf->vb.vb2_buf, 0,
 			      sizeof(struct stm32_dcmipp_stat_buf));
-	cur_buf->vb.sequence = 0;
+	cur_buf->vb.sequence = vcap->sequence++;
 	cur_buf->vb.vb2_buf.timestamp = ktime_get_ns();
 	vb2_buffer_done(&cur_buf->vb.vb2_buf, VB2_BUF_STATE_DONE);
 }
