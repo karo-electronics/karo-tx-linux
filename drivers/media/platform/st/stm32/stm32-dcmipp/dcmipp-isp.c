@@ -671,24 +671,14 @@ static const struct v4l2_subdev_ops dcmipp_isp_ops = {
 	.video = &dcmipp_isp_video_ops,
 };
 
-/* FIXME */
-static void dcmipp_isp_release(struct v4l2_subdev *sd)
-{
-	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
-
-	kfree(isp);
-}
-
-static const struct v4l2_subdev_internal_ops dcmipp_isp_int_ops = {
-	.release = dcmipp_isp_release,
-};
-
 void dcmipp_isp_ent_release(struct dcmipp_ent_device *ved)
 {
 	struct dcmipp_isp_device *isp =
 			container_of(ved, struct dcmipp_isp_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &isp->sd);
+	mutex_destroy(&isp->lock);
+	kfree(isp);
 }
 
 struct dcmipp_ent_device *dcmipp_isp_ent_init(struct device *dev,
@@ -727,7 +717,7 @@ struct dcmipp_ent_device *dcmipp_isp_ent_init(struct device *dev,
 				     MEDIA_PAD_FL_SINK,
 				     MEDIA_PAD_FL_SOURCE,
 				     },
-				     &dcmipp_isp_int_ops, &dcmipp_isp_ops,
+				     NULL, &dcmipp_isp_ops,
 				     NULL, NULL);
 	if (ret) {
 		mutex_destroy(&isp->lock);

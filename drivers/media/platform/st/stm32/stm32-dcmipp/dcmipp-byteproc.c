@@ -692,24 +692,14 @@ static const struct v4l2_subdev_ops dcmipp_byteproc_ops = {
 	.video = &dcmipp_byteproc_video_ops,
 };
 
-/* FIXME */
-static void dcmipp_byteproc_release(struct v4l2_subdev *sd)
-{
-	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
-
-	kfree(byteproc);
-}
-
-static const struct v4l2_subdev_internal_ops dcmipp_byteproc_int_ops = {
-	.release = dcmipp_byteproc_release,
-};
-
 void dcmipp_byteproc_ent_release(struct dcmipp_ent_device *ved)
 {
 	struct dcmipp_byteproc_device *byteproc =
 			container_of(ved, struct dcmipp_byteproc_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &byteproc->sd);
+	mutex_destroy(&byteproc->lock);
+	kfree(byteproc);
 }
 
 struct dcmipp_ent_device *
@@ -755,10 +745,11 @@ dcmipp_byteproc_ent_init(struct device *dev, const char *entity_name,
 				     MEDIA_PAD_FL_SINK,
 				     MEDIA_PAD_FL_SOURCE,
 				     },
-				     &dcmipp_byteproc_int_ops,
+				     NULL,
 				     &dcmipp_byteproc_ops,
 				     NULL, NULL);
 	if (ret) {
+		mutex_destroy(&byteproc->lock);
 		kfree(byteproc);
 		return ERR_PTR(ret);
 	}

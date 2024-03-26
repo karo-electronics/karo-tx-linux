@@ -901,24 +901,14 @@ static const struct v4l2_subdev_ops dcmipp_pixelproc_ops = {
 	.video = &dcmipp_pixelproc_video_ops,
 };
 
-/* FIXME */
-static void dcmipp_pixelproc_release(struct v4l2_subdev *sd)
-{
-	struct dcmipp_pixelproc_device *pixelproc = v4l2_get_subdevdata(sd);
-
-	kfree(pixelproc);
-}
-
-static const struct v4l2_subdev_internal_ops dcmipp_pixelproc_int_ops = {
-	.release = dcmipp_pixelproc_release,
-};
-
 void dcmipp_pixelproc_ent_release(struct dcmipp_ent_device *ved)
 {
 	struct dcmipp_pixelproc_device *pixelproc =
 			container_of(ved, struct dcmipp_pixelproc_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &pixelproc->sd);
+	mutex_destroy(&pixelproc->lock);
+	kfree(pixelproc);
 }
 
 static int dcmipp_name_to_pipe_id(const char *name)
@@ -1004,7 +994,7 @@ dcmipp_pixelproc_ent_init(struct device *dev, const char *entity_name,
 				     MEDIA_PAD_FL_SINK,
 				     MEDIA_PAD_FL_SOURCE,
 				     },
-				     &dcmipp_pixelproc_int_ops, &dcmipp_pixelproc_ops,
+				     NULL, &dcmipp_pixelproc_ops,
 				     NULL, NULL);
 	if (ret) {
 		mutex_destroy(&pixelproc->lock);

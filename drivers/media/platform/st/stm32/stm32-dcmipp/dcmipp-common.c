@@ -109,4 +109,5 @@ void dcmipp_ent_sd_unregister(struct dcmipp_ent_device *ved, struct v4l2_subdev 
 {
 	media_entity_cleanup(ved->ent);
 	v4l2_device_unregister_subdev(sd);
+	dcmipp_pads_cleanup(ved->pads);
 }

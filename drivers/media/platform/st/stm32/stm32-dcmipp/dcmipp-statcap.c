@@ -659,6 +659,7 @@ void dcmipp_statcap_ent_release(struct dcmipp_ent_device *ved)
 	struct dcmipp_statcap_device *vcap =
 		container_of(ved, struct dcmipp_statcap_device, ved);
 
+	mutex_destroy(&vcap->lock);
 	media_entity_cleanup(ved->ent);
 	vb2_video_unregister_device(&vcap->vdev);
 }
