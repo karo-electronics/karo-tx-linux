@@ -138,11 +138,12 @@ patternProperties:
 
       st,adc-alt-channel:
         description:
-          Must be defined if two sigma delta modulators are
-          connected on same SPI input.
-          If not set, channel n is connected to SPI input n.
-          If set, channel n is connected to SPI input n + 1.
-        type: boolean
+          Must be defined if two sigma delta modulators are connected on same SPI input.
+          - If set to 0 channel n is connected to SPI input n.
+          - If set to 1 channel n is connected to SPI input n + 1.
+        items:
+          enum: [ 0, 1 ]
+        $ref: /schemas/types.yaml#/definitions/uint32-array
 
       st,filter0-sync:
         description:
