@@ -491,11 +491,6 @@ static const struct vb2_ops dcmipp_statcap_qops = {
 	.buf_prepare		= dcmipp_statcap_buf_prepare,
 	.buf_queue		= dcmipp_statcap_buf_queue,
 
-	/*
-	 * TODO - could be great to have a buf_finish, be able to tag
-	 * each buffer getting out
-	 */
-	/* .buf_finish		= dcmipp_statcap_buf_finish, */
 	.queue_setup		= dcmipp_statcap_queue_setup,
 	/*
 	 * Since q->lock is set we can use the standard
