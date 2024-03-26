@@ -1174,12 +1174,6 @@ struct v4l2_ctrl_isp_stat_region {
 	__u32 height[25];
 };
 
-#define V4L2_CID_ISP_STAT_LOCATION		(V4L2_CID_IMAGE_PROC_CLASS_BASE + 11)
-enum v4l2_isp_stat_location {
-	V4L2_STAT_LOCATION_BEFORE_PROC	= 0,
-	V4L2_STAT_LOCATION_AFTER_DEMO	= 1,
-};
-
 #define V4L2_CID_ISP_STAT_AVG_FILTER		(V4L2_CID_IMAGE_PROC_CLASS_BASE + 12)
 enum v4l2_isp_stat_avg_filter {
 	V4L2_STAT_AVG_FILTER_NONE	= 0,
