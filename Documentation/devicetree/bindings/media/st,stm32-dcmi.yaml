@@ -35,7 +35,6 @@ properties:
       - const: tx
       - const: mdma-tx
     minItems: 1
-    maxItems: 2
 
   resets:
     maxItems: 1
