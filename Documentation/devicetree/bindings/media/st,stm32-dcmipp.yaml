@@ -4,7 +4,7 @@
 $id: http://devicetree.org/schemas/media/st,stm32-dcmipp.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: STMicroelectronics STM32 DCMIPP Digital Camera Memory Interface Pixel Processor binding
+title: STMicroelectronics STM32 DCMIPP Digital Camera Memory Interface Pixel Processor
 
 maintainers:
   - Hugues Fruchet <hugues.fruchet@foss.st.com>
@@ -58,6 +58,10 @@ properties:
           pclk-sample: true
           hsync-active: true
           vsync-active: true
+
+          pclk-max-frequency:
+            description:
+              Maximum acceptable pixel clock frequency.
 
         required:
           - pclk-sample
