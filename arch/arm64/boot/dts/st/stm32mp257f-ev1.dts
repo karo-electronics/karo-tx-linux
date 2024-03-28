@@ -72,6 +72,13 @@
 			status = "okay";
 		};
 
+		button-user-2 {
+			label = "User-2";
+			linux,code = <BTN_2>;
+			gpios = <&gpiog 8 GPIO_ACTIVE_HIGH>;
+			status = "okay";
+		};
+
 		button-wake-up {
 			label = "wake-up";
 			linux,code = <KEY_WAKEUP>;
