@@ -44,6 +44,14 @@ static void xhci_priv_plat_start(struct usb_hcd *hcd)
 		priv->plat_start(hcd);
 }
 
+static void xhci_priv_post_plat_start(struct usb_hcd *hcd)
+{
+	struct xhci_plat_priv *priv = hcd_to_xhci_priv(hcd);
+
+	if (priv->post_plat_start)
+		priv->post_plat_start(hcd);
+}
+
 static int xhci_priv_init_quirk(struct usb_hcd *hcd)
 {
 	struct xhci_plat_priv *priv = hcd_to_xhci_priv(hcd);
@@ -101,8 +109,16 @@ static int xhci_plat_setup(struct usb_hcd *hcd)
 
 static int xhci_plat_start(struct usb_hcd *hcd)
 {
+	int ret;
+
 	xhci_priv_plat_start(hcd);
-	return xhci_run(hcd);
+	ret = xhci_run(hcd);
+	if (ret)
+		return ret;
+
+	xhci_priv_post_plat_start(hcd);
+
+	return 0;
 }
 
 #ifdef CONFIG_OF
