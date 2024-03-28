@@ -1003,67 +1003,6 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	mutex_unlock(&ldev->err_lock);
 }
 
-#define CLK_TOLERANCE_HZ 50
-
-static enum drm_mode_status
-ltdc_crtc_mode_valid(struct drm_crtc *crtc,
-		     const struct drm_display_mode *mode)
-{
-	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
-	int target = mode->clock * 1000;
-	int target_min = target - CLK_TOLERANCE_HZ;
-	int target_max = target + CLK_TOLERANCE_HZ;
-	int result;
-
-	result = clk_round_rate(ldev->pixel_clk, target);
-
-	DRM_DEBUG_DRIVER("clk rate target %d, available %d\n", target, result);
-
-	/* Filter modes according to the max frequency supported by the pads */
-	if (result > ldev->caps.pad_max_freq_hz)
-		return MODE_CLOCK_HIGH;
-
-	/*
-	 * Accept all "preferred" modes:
-	 * - this is important for panels because panel clock tolerances are
-	 *   bigger than hdmi ones and there is no reason to not accept them
-	 *   (the fps may vary a little but it is not a problem).
-	 * - the hdmi preferred mode will be accepted too, but userland will
-	 *   be able to use others hdmi "valid" modes if necessary.
-	 */
-	if (mode->type & DRM_MODE_TYPE_PREFERRED)
-		return MODE_OK;
-
-	/*
-	 * Filter modes according to the clock value, particularly useful for
-	 * hdmi modes that require precise pixel clocks.
-	 */
-	if (result < target_min || result > target_max)
-		return MODE_CLOCK_RANGE;
-
-	return MODE_OK;
-}
-
-static bool ltdc_crtc_mode_fixup(struct drm_crtc *crtc,
-				 const struct drm_display_mode *mode,
-				 struct drm_display_mode *adjusted_mode)
-{
-	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
-	int rate = mode->clock * 1000;
-
-	if (clk_set_rate(ldev->pixel_clk, rate) < 0) {
-		DRM_ERROR("Cannot set rate (%dHz) for pixel clk\n", rate);
-		return false;
-	}
-
-	adjusted_mode->clock = clk_get_rate(ldev->pixel_clk) / 1000;
-
-	DRM_DEBUG_DRIVER("requested clock %dkHz, adjusted clock %dkHz\n",
-			 mode->clock, adjusted_mode->clock);
-
-	return true;
-}
-
 static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 {
 	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
@@ -1300,8 +1239,6 @@ static bool ltdc_crtc_get_scanout_position(struct drm_crtc *crtc,
 }
 
 static const struct drm_crtc_helper_funcs ltdc_crtc_helper_funcs = {
-	.mode_valid = ltdc_crtc_mode_valid,
-	.mode_fixup = ltdc_crtc_mode_fixup,
 	.mode_set_nofb = ltdc_crtc_mode_set_nofb,
 	.atomic_flush = ltdc_crtc_atomic_flush,
 	.atomic_enable = ltdc_crtc_atomic_enable,
@@ -2119,6 +2056,81 @@ cleanup:
 	return ret;
 }
 
+#define CLK_TOLERANCE_HZ 50
+
+static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
+						    const struct drm_display_mode *mode)
+{
+	struct drm_device *ddev = encoder->dev;
+	struct ltdc_device *ldev =  ddev->dev_private;
+	struct device *dev = ddev->dev;
+	int target = mode->clock * 1000;
+	int target_min = target - CLK_TOLERANCE_HZ;
+	int target_max = target + CLK_TOLERANCE_HZ;
+	int result;
+
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+		if (encoder->encoder_type == DRM_MODE_ENCODER_LVDS)
+			result = clk_round_rate(ldev->lvds_clk, target);
+		else
+			result = clk_round_rate(ldev->ltdc_clk, target);
+	} else {
+		result = clk_round_rate(ldev->pixel_clk, target);
+	}
+
+	DRM_DEBUG_DRIVER("clk rate target %d, available %d\n", target, result);
+
+	/* Filter modes according to the max frequency supported by the pads */
+	if (result > ldev->caps.pad_max_freq_hz)
+		return MODE_CLOCK_HIGH;
+
+	/*
+	 * Accept all "preferred" modes:
+	 * - this is important for panels because panel clock tolerances are
+	 *   bigger than hdmi ones and there is no reason to not accept them
+	 *   (the fps may vary a little but it is not a problem).
+	 * - the hdmi preferred mode will be accepted too, but userland will
+	 *   be able to use others hdmi "valid" modes if necessary.
+	 */
+	if (mode->type & DRM_MODE_TYPE_PREFERRED)
+		return MODE_OK;
+
+	/*
+	 * Filter modes according to the clock value, particularly useful for
+	 * hdmi modes that require precise pixel clocks.
+	 */
+	if (result < target_min || result > target_max)
+		return MODE_CLOCK_RANGE;
+
+	return MODE_OK;
+}
+
+static bool ltdc_encoder_mode_fixup(struct drm_encoder *encoder,
+				    const struct drm_display_mode *mode,
+				    struct drm_display_mode *adjusted_mode)
+{
+	struct drm_device *ddev = encoder->dev;
+	struct ltdc_device *ldev =  ddev->dev_private;
+	int rate = mode->clock * 1000;
+
+	if (clk_set_rate(ldev->pixel_clk, rate) < 0) {
+		DRM_ERROR("Cannot set rate (%dHz) for pixel clk\n", rate);
+		return false;
+	}
+
+	adjusted_mode->clock = clk_get_rate(ldev->pixel_clk) / 1000;
+
+	DRM_DEBUG_DRIVER("requested clock %dkHz, adjusted clock %dkHz\n",
+			 mode->clock, adjusted_mode->clock);
+
+	return true;
+}
+
+static const struct drm_encoder_helper_funcs ltdc_encoder_helper_funcs = {
+	.mode_fixup = ltdc_encoder_mode_fixup,
+	.mode_valid = ltdc_encoder_mode_valid,
+};
+
 static int ltdc_encoder_init(struct drm_device *ddev, struct drm_bridge *bridge)
 {
 	struct drm_encoder *encoder;
@@ -2132,6 +2144,8 @@ static int ltdc_encoder_init(struct drm_device *ddev, struct drm_bridge *bridge)
 	encoder->possible_clones = 0;	/* No cloning support */
 
 	drm_simple_encoder_init(ddev, encoder, DRM_MODE_ENCODER_DPI);
+
+	drm_encoder_helper_add(encoder, &ltdc_encoder_helper_funcs);
 
 	ret = drm_bridge_attach(encoder, bridge, NULL, 0);
 	if (ret) {
