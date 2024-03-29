@@ -6,6 +6,7 @@
  * Author(s): Amelie Delaunay <amelie.delaunay@st.com>.
  */
 #include <linux/gpio/driver.h>
+#include <linux/i2c.h>
 #include <linux/interrupt.h>
 #include <linux/mfd/stmfx.h>
 #include <linux/module.h>
@@ -615,6 +616,23 @@ static int stmfx_pinctrl_gpio_function_enable(struct stmfx_pinctrl *pctl)
 	return stmfx_function_enable(pctl->stmfx, func);
 }
 
+static int stmfx_pinctrl_irq_set_affinity(struct irq_data *d, const struct cpumask *dest,
+					  bool force)
+{
+	struct gpio_chip *gpio_chip = irq_data_get_irq_chip_data(d);
+	struct stmfx_pinctrl *pctl = gpiochip_get_data(gpio_chip);
+	struct i2c_client *client = to_i2c_client(pctl->stmfx->dev);
+	static DEFINE_RATELIMIT_STATE(rs, DEFAULT_RATELIMIT_INTERVAL * 10, 1);
+
+	if (__ratelimit(&rs))
+		dev_notice(pctl->dev,
+			   "Can't set the affinity, set it for irq %d instead\n", client->irq);
+	if (force)
+		return -EINVAL;
+
+	return 0;
+}
+
 static int stmfx_pinctrl_probe(struct platform_device *pdev)
 {
 	struct stmfx *stmfx = dev_get_drvdata(pdev->dev.parent);
@@ -696,6 +714,8 @@ static int stmfx_pinctrl_probe(struct platform_device *pdev)
 	pctl->irq_chip.irq_request_resources = stmfx_gpio_irq_request_resources;
 	pctl->irq_chip.irq_release_resources = stmfx_gpio_irq_release_resources;
 	pctl->irq_chip.flags = IRQCHIP_IMMUTABLE;
+	pctl->irq_chip.irq_set_affinity = IS_ENABLED(CONFIG_SMP) ? stmfx_pinctrl_irq_set_affinity :
+								   NULL;
 
 	girq = &pctl->gpio_chip.irq;
 	gpio_irq_chip_set_chip(girq, &pctl->irq_chip);
