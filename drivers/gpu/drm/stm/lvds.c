@@ -1090,6 +1090,9 @@ static int lvds_probe(struct platform_device *pdev)
 	struct device_node *port1, *port2, *remote;
 	struct stm_lvds *lvds;
 	struct reset_control *rstc;
+	struct lvds_phy_info *phy;
+	unsigned int pll_in_khz, bdiv, mdiv, ndiv;
+	int multiplier, rate;
 	int ret, dual_link;
 
 	DRM_DEBUG_DRIVER("Probing LVDS driver...\n");
@@ -1229,8 +1232,29 @@ static int lvds_probe(struct platform_device *pdev)
 	 * To obtain a continuous display after the probe,
 	 *  the clocks must remain activated
 	 */
-	if (device_property_read_bool(dev, "default-on"))
+	if (device_property_read_bool(dev, "default-on")) {
 		pm_runtime_get_sync(dev);
+
+		if (lvds->phy_master) {
+			if (lvds_is_dual_link(lvds->config.link_type))
+				multiplier = 2;
+			else
+				multiplier = 1;
+
+			phy = lvds->phy_master;
+			pll_in_khz = clk_get_rate(lvds->pllref_clk) / 1000;
+
+			ndiv = lvds_read(lvds, phy->base + phy->ofs.PxPLLCR2) >> 16;
+			bdiv = lvds_read(lvds, phy->base + phy->ofs.PxPLLCR2) & 0xFFFF;
+			mdiv = lvds_read(lvds, phy->base + phy->ofs.PxPLLSDCR1);
+
+			/* X7 because for each pixel in 1 lane there is 7 bits
+			 * We want pixclk, not bitclk
+			 */
+			rate = pll_get_clkout_khz(pll_in_khz, bdiv, mdiv, ndiv);
+			lvds->pixel_clock_rate = (unsigned long) rate  * 1000 * multiplier / 7;
+		}
+	}
 
 	return 0;
 }
