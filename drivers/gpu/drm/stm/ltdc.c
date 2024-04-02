@@ -42,6 +42,10 @@
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_vblank.h>
 
+/* Temporary (wait to firewall interface) */
+#include <dt-bindings/bus/stm32mp25_sys_bus.h>
+#include "../../../bus/stm32_sys_bus.h"
+
 #include <video/videomode.h>
 
 #include "ltdc.h"
@@ -499,7 +503,7 @@ static const u64 ltdc_format_modifiers[] = {
 	DRM_FORMAT_MOD_INVALID
 };
 
-static const struct regmap_config stm32_ltdc_regmap_cfg = {
+static struct regmap_config stm32_ltdc_regmap_cfg = {
 	.reg_bits = 32,
 	.val_bits = 32,
 	.reg_stride = sizeof(u32),
@@ -2207,8 +2211,10 @@ static int ltdc_encoder_init(struct drm_device *ddev, struct drm_bridge *bridge)
 static int ltdc_get_caps(struct drm_device *ddev)
 {
 	struct ltdc_device *ldev = ddev->dev_private;
+	struct device *dev = ddev->dev;
 	u32 bus_width_log2, lcr, gc2r, lxc1r;
 	const struct ltdc_plat_data *pdata = of_device_get_match_data(ddev->dev);
+	int ret;
 
 	/*
 	 * at least 1 layer must be managed & the number of layers
@@ -2217,6 +2223,17 @@ static int ltdc_get_caps(struct drm_device *ddev)
 	regmap_read(ldev->regmap, LTDC_LCR, &lcr);
 
 	ldev->caps.nb_layers = clamp((int)lcr, 1, LTDC_MAX_LAYER);
+
+	/*
+	 * Check the security of layer 2.
+	 * Do not expose this layer to the user (do not create a plan)
+	 * if this one is reserved for secure application.
+	 */
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+		ret = stm32_rifsc_check_access_by_id(STM32MP25_RIFSC_LTDC_L2_ID);
+		if (ret)
+			ldev->caps.nb_layers--;
+	}
 
 	/* set data bus width */
 	regmap_read(ldev->regmap, LTDC_GC2R, &gc2r);
@@ -2434,6 +2451,17 @@ int ltdc_load(struct drm_device *ddev)
 		DRM_ERROR("Unable to get ltdc registers\n");
 		ret = PTR_ERR(ldev->regs);
 		goto err;
+	}
+
+	/*
+	 * Check the security of layer 2.
+	 * If layer 2 is secure then its registers are not accessible
+	 * (reduce mapping of ltdc registers to common registers and layers 0 and 1 registers).
+	 */
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+		ret = stm32_rifsc_check_access_by_id(STM32MP25_RIFSC_LTDC_L2_ID);
+		if (ret)
+			stm32_ltdc_regmap_cfg.max_register = 0x300;
 	}
 
 	ldev->regmap = devm_regmap_init_mmio(&pdev->dev, ldev->regs, &stm32_ltdc_regmap_cfg);
