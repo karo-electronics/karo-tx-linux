@@ -452,7 +452,7 @@ int hantro_g1_vp8_dec_run(struct hantro_ctx *ctx)
 
 	hantro_vp8_prob_update(ctx, hdr);
 
-	reg = G1_REG_CONFIG_DEC_AXI_RD_ID(0xffu) |
+	reg = G1_REG_CONFIG_DEC_TIMEOUT_E |
 	      G1_REG_CONFIG_DEC_STRENDIAN_E |
 	      G1_REG_CONFIG_DEC_INSWAP32_E |
 	      G1_REG_CONFIG_DEC_STRSWAP32_E |
