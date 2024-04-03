@@ -35,9 +35,13 @@ static int clk_regmap_mux_determine_rate(struct clk_hw *hw,
 #ifdef CONFIG_PM_SLEEP
 static void clk_regmap_mux_pm_restore(struct clk_hw *hw)
 {
-	int index = clk_hw_get_parent_index(hw);
+	struct clk_hw *hwp = clk_hw_get_parent(hw);
+	int index;
 
-	clk_regmap_mux_set_parent(hw, index);
+	if (hwp != NULL) {
+		index = clk_hw_get_parent_index(hw);
+		clk_regmap_mux_set_parent(hw, index);
+	}
 }
 #endif
 
