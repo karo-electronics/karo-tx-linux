@@ -670,7 +670,7 @@
 };
 
 &sram4 {
-	dcmi_pool: dcmi_pool@0 {
+	dcmi_pool: dcmi-pool@0 {
 		reg = <0x0 0x8000>;
 		pool;
 	};
