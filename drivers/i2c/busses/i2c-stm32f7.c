@@ -180,7 +180,12 @@ enum {
 #define STM32F7_SCLH_MAX			BIT(8)
 #define STM32F7_SCLL_MAX			BIT(8)
 
-#define STM32F7_AUTOSUSPEND_DELAY		(HZ / 100)
+/*
+ * This autosuspend delay should be long enough so that a clk client device performing i2c
+ * transfer within its prepare_lock protected handler should be able to perform the whole
+ * handling without having the autosuspend to try to suspend the i2c adapter
+ */
+#define STM32F7_AUTOSUSPEND_DELAY		HZ
 
 /**
  * struct stm32f7_i2c_regs - i2c f7 registers backup
