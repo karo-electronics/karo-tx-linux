@@ -501,7 +501,7 @@
 		VDDIO-supply = <&v3v3>;
 		status = "okay";
 
-		interrupts = <14 IRQ_TYPE_EDGE_RISING>;
+		interrupts = <14 IRQ_TYPE_NONE>;
 		interrupt-parent = <&stmfx_pinctrl>;
 	};
 };
