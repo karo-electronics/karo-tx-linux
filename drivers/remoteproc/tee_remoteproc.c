@@ -342,8 +342,8 @@ static int tee_rproc_probe(struct device *dev)
 	if (IS_ERR(tee_ctx))
 		return PTR_ERR(tee_ctx);
 
-	tee_rproc_ctx = devm_kzalloc(dev, sizeof(*tee_ctx), GFP_KERNEL);
-	if (!tee_ctx) {
+	tee_rproc_ctx = devm_kzalloc(dev, sizeof(*tee_rproc_ctx), GFP_KERNEL);
+	if (!tee_rproc_ctx) {
 		ret = -ENOMEM;
 		goto err;
 	}
