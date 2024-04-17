@@ -65,7 +65,7 @@ struct rpmsg_i2c_dev {
 
 	struct list_head list; /* adapter device list */
 	struct rpmsg_driver rpdrv;
-	struct rpmsg_device_id dev_id;
+	struct rpmsg_device_id dev_id[2];
 	struct device *dev;
 
 	struct rpmsg_device *rpdev;
@@ -258,7 +258,7 @@ static int rpmsg_i2c_probe(struct rpmsg_device *rpdev)
 	mutex_lock(&rpmsg_i2c_lock);
 
 	list_for_each_entry(ri2c_dev, &rpmsg_i2c_list, list) {
-		if (!strcmp(ri2c_dev->dev_id.name, rpdev->id.name)) {
+		if (!strcmp(ri2c_dev->dev_id[0].name, rpdev->id.name)) {
 			if (ri2c_dev->rpdev) {
 				ret = -EBUSY;
 				goto out;
@@ -355,10 +355,10 @@ static int rpmsg_i2c_platform_probe(struct platform_device *pdev)
 		dev_err(dev, "Error, proc-id property is missing: %d\n", ret);
 		return ret;
 	}
-	strncpy(ri2c_dev->dev_id.name, dev_id_name, RPMSG_NAME_SIZE - 1);
+	strncpy(ri2c_dev->dev_id[0].name, dev_id_name, RPMSG_NAME_SIZE - 1);
 
 	ri2c_dev->rpdrv.drv.name = "rpmsg_i2c";
-	ri2c_dev->rpdrv.id_table = &ri2c_dev->dev_id;
+	ri2c_dev->rpdrv.id_table = ri2c_dev->dev_id;
 	ri2c_dev->rpdrv.probe = rpmsg_i2c_probe;
 	ri2c_dev->rpdrv.callback = rpmsg_i2c_cb;
 	ri2c_dev->rpdrv.remove = rpmsg_i2c_remove;
