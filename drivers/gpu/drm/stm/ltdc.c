@@ -2601,6 +2601,7 @@ int ltdc_parse_device_tree(struct device *dev)
 int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 {
 	struct device_node *node;
+	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -2637,6 +2638,18 @@ int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 				}
 			}
 			of_node_put(node);
+		}
+
+		/*
+		 * Parent of the pixel clock should default to the reference clock (rcc clock).
+		 * If the driver has already been started, this action is not necessary and
+		 *  may cause an issue on register reading/writing.
+		 */
+		if (!device_property_read_bool(dev, "default-on")) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
+			if (ret)
+				return dev_err_probe(dev, PTR_ERR(ldev->lvds_clk),
+						     "Could not set parent clock\n");
 		}
 	}
 
