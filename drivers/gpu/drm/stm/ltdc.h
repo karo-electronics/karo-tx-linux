@@ -54,7 +54,6 @@ struct ltdc_device {
 	struct clk *ltdc_clk;	/* kernel clock */
 	struct clk *lvds_clk;	/* lvds clock */
 	struct mutex err_lock;	/* protecting error_status */
-	struct mutex act_lock;	/* protecting active status */
 	struct ltdc_caps caps;
 	u32 irq_status;
 	u32 fifo_err;		/* fifo underrun error counter */

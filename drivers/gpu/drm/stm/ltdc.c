@@ -1275,9 +1275,7 @@ static int ltdc_crtc_enable_vblank(struct drm_crtc *crtc)
 	DRM_DEBUG_DRIVER("\n");
 
 	if (state->enable) {
-		mutex_lock(&ldev->act_lock);
 		ldev->vblank_active = true;
-		mutex_unlock(&ldev->act_lock);
 		regmap_set_bits(ldev->regmap, LTDC_IER, IER_LIE);
 	} else
 		return -EPERM;
@@ -1291,9 +1289,7 @@ static void ltdc_crtc_disable_vblank(struct drm_crtc *crtc)
 
 	DRM_DEBUG_DRIVER("\n");
 
-	mutex_lock(&ldev->act_lock);
 	ldev->vblank_active = false;
-	mutex_unlock(&ldev->act_lock);
 
 	if (!ldev->vblank_active && !ldev->crc_active)
 		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE);
@@ -1312,15 +1308,11 @@ static int ltdc_crtc_set_crc_source(struct drm_crtc *crtc, const char *source)
 	ldev = crtc_to_ltdc(crtc);
 
 	if (source && strcmp(source, "auto") == 0) {
-		mutex_lock(&ldev->act_lock);
 		ldev->crc_active = true;
-		mutex_unlock(&ldev->act_lock);
 		regmap_set_bits(ldev->regmap, LTDC_IER, IER_LIE);
 		ret = regmap_set_bits(ldev->regmap, LTDC_GCR, GCR_CRCEN);
 	} else if (!source) {
-		mutex_lock(&ldev->act_lock);
 		ldev->crc_active = false;
-		mutex_unlock(&ldev->act_lock);
 		if (!ldev->vblank_active && !ldev->crc_active)
 			regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE);
 		ret = regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_CRCEN);
@@ -2430,7 +2422,6 @@ int ltdc_load(struct drm_device *ddev)
 	rstc = devm_reset_control_get_exclusive(dev, NULL);
 
 	mutex_init(&ldev->err_lock);
-	mutex_init(&ldev->act_lock);
 
 	def_value = device_property_read_bool(dev, "default-on");
 
