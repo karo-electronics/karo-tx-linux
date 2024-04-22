@@ -306,10 +306,11 @@ struct stm32_dma3_ddata {
 	struct stm32_dma3_chan *chans;
 	u32 dma_channels;
 	u32 dma_requests;
+	enum stm32_dma3_port_data_width ports_max_dw[2];
 	u32 axi_max_burst_len;
+	u32 lap;
 	struct gen_pool *gen_pool;
 	struct dma_pool *dma_pool;
-	enum stm32_dma3_port_data_width ports_max_dw[2];
 };
 
 static inline struct stm32_dma3_ddata *to_stm32_dma3_ddata(struct stm32_dma3_chan *chan)
@@ -556,14 +557,13 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 		return NULL;
 	}
 	swdesc->lli_size = count;
-	swdesc->ccr = 0;
 
 	/* Set LL base address */
 	writel_relaxed(swdesc->lli[0].hwdesc_addr & CLBAR_LBA,
 		       ddata->base + STM32_DMA3_CLBAR(chan->id));
 
-	/* Set LL allocated port (AXI) */
-	swdesc->ccr &= ~CCR_LAP;
+	/* Set LL allocated port */
+	swdesc->ccr = FIELD_PREP(CCR_LAP, ddata->lap);
 
 	return swdesc;
 }
@@ -1910,6 +1910,21 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		ddata->dma_requests = FIELD_GET(G_MAX_REQ_ID, hwcfgr) + 1;
 	}
 
+	/* G_MASTER_PORTS, G_M0_DATA_WIDTH_ENC, G_M1_DATA_WIDTH_ENC in HWCFGR1 */
+	hwcfgr = readl_relaxed(ddata->base + STM32_DMA3_HWCFGR1);
+	master_ports = FIELD_GET(G_MASTER_PORTS, hwcfgr);
+
+	ddata->ports_max_dw[0] = FIELD_GET(G_M0_DATA_WIDTH_ENC, hwcfgr);
+	if (master_ports == AXI64 || master_ports == AHB32) { /* Single master port */
+		ddata->ports_max_dw[1] = DW_INVALID;
+		ddata->lap = 0;
+	} else { /* Dual master ports */
+		ddata->ports_max_dw[1] = FIELD_GET(G_M1_DATA_WIDTH_ENC, hwcfgr);
+		/* lli-bus-interface is optional, Link Allocated Port is set to port 0 by default */
+		if (of_property_read_u32(np, "lli-bus-interface", &ddata->lap))
+			ddata->lap = 0;
+	}
+
 	/* st,axi-max-burst-len is optional, if not defined, use STM32_DMA3_MAX_BURST_LEN  */
 	if (of_property_read_u32(np, "st,axi-max-burst-len", &ddata->axi_max_burst_len))
 		ddata->axi_max_burst_len = STM32_DMA3_MAX_BURST_LEN;
@@ -1917,16 +1932,6 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		ddata->axi_max_burst_len = min_t(u32, ddata->axi_max_burst_len,
 						 STM32_DMA3_MAX_BURST_LEN);
 	dev_dbg(&pdev->dev, "Burst is limited to %u beats\n", ddata->axi_max_burst_len);
-
-	/* G_MASTER_PORTS, G_M0_DATA_WIDTH_ENC, G_M1_DATA_WIDTH_ENC in HWCFGR1 */
-	hwcfgr = readl_relaxed(ddata->base + STM32_DMA3_HWCFGR1);
-	master_ports = FIELD_GET(G_MASTER_PORTS, hwcfgr);
-
-	ddata->ports_max_dw[0] = FIELD_GET(G_M0_DATA_WIDTH_ENC, hwcfgr);
-	if (master_ports == AXI64 || master_ports == AHB32) /* Single master port */
-		ddata->ports_max_dw[1] = DW_INVALID;
-	else /* Dual master ports */
-		ddata->ports_max_dw[1] = FIELD_GET(G_M1_DATA_WIDTH_ENC, hwcfgr);
 
 	ret = stm32_dma3_lli_pool_create(pdev, ddata);
 	if (ret)
