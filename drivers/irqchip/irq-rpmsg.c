@@ -302,7 +302,19 @@ static struct platform_driver irq_rpmsg_plat_driver = {
 		.of_match_table	= of_match_ptr(irq_rpmsg_plat_ids),
 	}
 };
-module_platform_driver(irq_rpmsg_plat_driver);
+
+static int __init irq_rpmsg_init(void)
+{
+	return platform_driver_register(&irq_rpmsg_plat_driver);
+}
+
+static void __exit irq_rpmsg_exit(void)
+{
+	platform_driver_unregister(&irq_rpmsg_plat_driver);
+}
+
+subsys_initcall(irq_rpmsg_init);
+module_exit(irq_rpmsg_exit);
 
 MODULE_DESCRIPTION("RPMsg IRQC Driver");
 MODULE_LICENSE("GPL v2");
