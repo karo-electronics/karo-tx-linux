@@ -12,8 +12,8 @@
 		interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_CRYP1>;
 		resets = <&rcc CRYP1_R>;
-		dmas = <&hpdma 4 0x40 0x3021 0x0>,
-		       <&hpdma 5 0x43 0x3012 0x0>;
+		dmas = <&hpdma 4 0x40 0x3021>,
+		       <&hpdma 5 0x43 0x3012>;
 		dma-names = "in", "out";
 		feature-domains = <&rifsc STM32MP25_RIFSC_CRYP1_ID>;
 		power-domains = <&CLUSTER_PD>;
@@ -26,8 +26,8 @@
 		interrupts = <GIC_SPI 180 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_CRYP2>;
 		resets = <&rcc CRYP2_R>;
-		dmas = <&hpdma 140 0x40 0x3021 0x0>,
-		       <&hpdma 141 0x43 0x3012 0x0>;
+		dmas = <&hpdma 140 0x40 0x3021>,
+		       <&hpdma 141 0x43 0x3012>;
 		dma-names = "in", "out";
 		feature-domains = <&rifsc STM32MP25_RIFSC_CRYP2_ID>;
 		power-domains = <&CLUSTER_PD>;
