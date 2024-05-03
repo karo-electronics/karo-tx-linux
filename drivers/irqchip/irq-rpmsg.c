@@ -164,7 +164,8 @@ static void irq_rpmsg_setup_work(struct work_struct *ws)
 	struct rpmsg_intc_msg msg = {VIRT_INTC_CFG, 0, 0};
 	int ret;
 
-	if (irq_rpmsg_read_val(rirq_dev, &msg)) {
+	ret = irq_rpmsg_read_val(rirq_dev, &msg);
+	if (ret) {
 		dev_err(&rpdev->dev, "read intc cfg failed: %d\n", ret);
 		goto err;
 	}
