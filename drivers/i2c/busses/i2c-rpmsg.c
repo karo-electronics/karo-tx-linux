@@ -124,7 +124,7 @@ static int rpmsg_i2c_write(struct rpmsg_i2c_dev *ri2c_dev, struct i2c_msg *msg)
 
 	dev_dbg(&rpdev->dev, "%s: %x (len=%d)", __func__, r_msg->addr, r_msg->count);
 	ri2c_dev->is_write = true;
-	init_completion(&ri2c_dev->complete);
+	reinit_completion(&ri2c_dev->complete);
 
 	ret = rpmsg_send(rpdev->ept, r_msg, msg_size);
 	if (ret) {
@@ -161,7 +161,7 @@ static int rpmsg_i2c_read(struct rpmsg_i2c_dev *ri2c_dev, struct i2c_msg *msg)
 	r_msg->result = 0;
 
 	ri2c_dev->is_read = true;
-	init_completion(&ri2c_dev->complete);
+	reinit_completion(&ri2c_dev->complete);
 
 	dev_dbg(&rpdev->dev, "%s: %x (len=%d)", __func__, r_msg->addr, r_msg->count);
 
@@ -291,6 +291,7 @@ static int rpmsg_i2c_probe(struct rpmsg_device *rpdev)
 	adap->algo = &rpmsg_i2c_algo;
 	adap->dev.parent = ri2c_dev->dev;
 	adap->dev.of_node = ri2c_dev->dev->of_node;
+	init_completion(&ri2c_dev->complete);
 
 	/* match between proc id and service name */
 	dev_info(&rpdev->dev, "new channel: 0x%x -> 0x%x!\n",
