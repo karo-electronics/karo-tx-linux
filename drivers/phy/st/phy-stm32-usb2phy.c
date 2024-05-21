@@ -81,7 +81,7 @@ struct stm32_usb2phy {
 	struct regulator *vdd33, *vdda18;
 	enum phy_mode mode;
 	u32 mask_trim1, value_trim1, mask_trim2, value_trim2;
-	bool internal_vbus_comp, is_init;
+	bool is_init;
 	struct clk_hw clk48_hw;
 	atomic_t en_refcnt;
 	const struct stm32mp2_usb2phy_hw_data *hw_data;
@@ -351,7 +351,7 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
 						 0);
 		else {
-			if (!phy_dev->internal_vbus_comp && submode == USB_ROLE_NONE) {
+			if (submode == USB_ROLE_NONE) {
 				ret = regmap_update_bits(phy_dev->regmap,
 							 phy_data->cr_offset,
 							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
@@ -374,35 +374,25 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 		break;
 
 	case PHY_MODE_USB_DEVICE:
-		if (phy_dev->internal_vbus_comp) {
+		if (submode == USB_ROLE_NONE) {
 			ret = regmap_update_bits(phy_dev->regmap,
 						 phy_data->cr_offset,
 						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
 						 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
 						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
 						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
-						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK);
 		} else {
-			if (submode == USB_ROLE_NONE) {
-				ret = regmap_update_bits(phy_dev->regmap,
-							 phy_data->cr_offset,
-							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
-							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK);
-			} else {
-				ret = regmap_update_bits(phy_dev->regmap,
-							 phy_data->cr_offset,
-							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
-							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK);
-			}
+			ret = regmap_update_bits(phy_dev->regmap,
+						 phy_data->cr_offset,
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK);
 		}
 		if (ret) {
 			dev_err(dev, "can't set usb2phycr (%d)\n", ret);
@@ -750,12 +740,6 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 
 	phy_dev->phy = phy;
 	phy_set_drvdata(phy, phy_dev);
-
-	if (phy_dev->hw_data->valid_mode != USB2_MODE_HOST_ONLY) {
-		phy_dev->internal_vbus_comp = of_property_read_bool(np, "st,internal-vbus-comp");
-		dev_dbg(dev, "Using USB2PHY %s VBUS Comparator\n",
-			phy_dev->internal_vbus_comp ? "Internal" : "External");
-	}
 
 	/* Configure phy tuning */
 	ret = stm32_usb2phy_tuning(phy);
