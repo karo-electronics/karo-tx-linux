@@ -95,6 +95,7 @@ struct dcmipp_pipeline_config {
 	size_t num_ents;
 	const struct dcmipp_ent_link *links;
 	size_t num_links;
+	u32 hw_revision;
 };
 
 /* --------------------------------------------------------------------------
@@ -130,11 +131,13 @@ static const struct dcmipp_ent_link stm32mp13_ent_links[] = {
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 };
 
+#define DCMIPP_STM32MP13_VERR	0x10
 static const struct dcmipp_pipeline_config stm32mp13_pipe_cfg = {
 	.ents		= stm32mp13_ent_config,
 	.num_ents	= ARRAY_SIZE(stm32mp13_ent_config),
 	.links		= stm32mp13_ent_links,
-	.num_links	= ARRAY_SIZE(stm32mp13_ent_links)
+	.num_links	= ARRAY_SIZE(stm32mp13_ent_links),
+	.hw_revision	= DCMIPP_STM32MP13_VERR
 };
 
 #define	ID_MAIN_ISP 3
@@ -218,11 +221,13 @@ static const struct dcmipp_ent_link stm32mp25_ent_links[] = {
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 };
 
+#define DCMIPP_STM32MP25_VERR	0x30
 static const struct dcmipp_pipeline_config stm32mp25_pipe_cfg = {
 	.ents		= stm32mp25_ent_config,
 	.num_ents	= ARRAY_SIZE(stm32mp25_ent_config),
 	.links		= stm32mp25_ent_links,
-	.num_links	= ARRAY_SIZE(stm32mp25_ent_links)
+	.num_links	= ARRAY_SIZE(stm32mp25_ent_links),
+	.hw_revision	= DCMIPP_STM32MP25_VERR
 };
 
 /* -------------------------------------------------------------------------- */
@@ -575,6 +580,7 @@ static int dcmipp_probe(struct platform_device *pdev)
 		sizeof(dcmipp->mdev.model));
 	snprintf(dcmipp->mdev.bus_info, sizeof(dcmipp->mdev.bus_info),
 		 "platform:%s", DCMIPP_PDEV_NAME);
+	dcmipp->mdev.hw_revision = pipe_cfg->hw_revision;
 	dcmipp->mdev.dev = &pdev->dev;
 	dcmipp->mdev.ops = &dcmipp_media_ops;
 	media_device_init(&dcmipp->mdev);
