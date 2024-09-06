@@ -471,7 +471,7 @@ static const struct of_device_id stm32_tamp_nvram_of_match[] = {
 	  .data = &stm32mp1_tamp_nvram },
 	{ .compatible = "st,stm32mp25-tamp-nvram",
 	  .data = &stm32mp25_tamp_nvram },
-	{},
+	{}
 };
 
 static int stm32_tamp_nvram_probe(struct platform_device *pdev)
@@ -664,6 +664,6 @@ static struct platform_driver stm32_tamp_nvram_driver = {
 
 module_platform_driver(stm32_tamp_nvram_driver)
 MODULE_AUTHOR("Simeon Marijon <simeon.marijon@foss.st.com>");
-MODULE_DESCRIPTION("STMicroelectronics STM32 NVMEM TAMP Backup registeristers");
+MODULE_DESCRIPTION("STMicroelectronics STM32 NVMEM TAMP Backup registers");
 MODULE_ALIAS("platform:nvmem-stm32-tamp-nvram");
 MODULE_LICENSE("GPL");
