@@ -2584,11 +2584,11 @@ MODULE_DEVICE_TABLE(of, scmi_of_match);
 
 static struct platform_driver scmi_driver = {
 	.driver = {
-		   .name = "arm-scmi",
-		   .suppress_bind_attrs = true,
-		   .of_match_table = scmi_of_match,
-		   .dev_groups = versions_groups,
-		   },
+		.name = "arm-scmi",
+		.suppress_bind_attrs = true,
+		.of_match_table = scmi_of_match,
+		.dev_groups = versions_groups,
+	},
 	.probe = scmi_probe,
 	.remove = scmi_remove,
 };
@@ -2669,7 +2669,7 @@ static int __init scmi_driver_init(void)
 
 	return platform_driver_register(&scmi_driver);
 }
-subsys_initcall(scmi_driver_init);
+subsys_initcall_sync(scmi_driver_init);
 
 static void __exit scmi_driver_exit(void)
 {
