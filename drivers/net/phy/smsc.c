@@ -44,7 +44,7 @@ static struct smsc_hw_stat smsc_hw_stats[] = {
 };
 
 struct smsc_phy_priv {
- 	u16 intmask;
+	u16 intmask;
 	bool energy_enable;
 	bool wakeup_enable;
 };
@@ -66,12 +66,11 @@ static int smsc_phy_config_intr(struct phy_device *phydev)
 		if (rc)
 			return rc;
 
+		priv->intmask = MII_LAN83C185_ISF_INT_PHYLIB_EVENTS;
 		if (priv->wakeup_enable)
 			priv->intmask |= MII_LAN83C185_ISF_INT8;
 		rc = phy_write(phydev, MII_LAN83C185_IM, priv->intmask);
 	} else {
-		priv->intmask = 0;
-
 		rc = phy_write(phydev, MII_LAN83C185_IM, 0);
 		if (rc)
 			return rc;
