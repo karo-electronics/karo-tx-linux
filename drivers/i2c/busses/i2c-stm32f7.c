@@ -281,6 +281,7 @@ struct stm32f7_i2c_timings {
  */
 struct stm32f7_i2c_msg {
 	u16 addr;
+	u16 flags;
 	u32 count;
 	u8 *buf;
 	int result;
@@ -889,6 +890,7 @@ static void stm32f7_i2c_xfer_msg(struct stm32f7_i2c_dev *i2c_dev,
 	f7_msg->addr = msg->addr;
 	f7_msg->buf = msg->buf;
 	f7_msg->count = msg->len;
+	f7_msg->flags = msg->flags;
 	f7_msg->result = 0;
 	f7_msg->stop = (i2c_dev->msg_id >= i2c_dev->msg_num - 1);
 
@@ -932,7 +934,8 @@ static void stm32f7_i2c_xfer_msg(struct stm32f7_i2c_dev *i2c_dev,
 
 	/* Configure DMA or enable RX/TX interrupt */
 	i2c_dev->use_dma = false;
-	if (i2c_dev->dma && f7_msg->count >= STM32F7_I2C_DMA_LEN_MIN) {
+	if (i2c_dev->dma && msg->flags & I2C_M_DMA_SAFE &&
+	    f7_msg->count >= STM32F7_I2C_DMA_LEN_MIN) {
 		ret = stm32_i2c_prep_dma_xfer(i2c_dev->dev, i2c_dev->dma,
 					      msg->flags & I2C_M_RD,
 					      f7_msg->count, f7_msg->buf,
@@ -1099,7 +1102,8 @@ static int stm32f7_i2c_smbus_xfer_msg(struct stm32f7_i2c_dev *i2c_dev,
 
 	/* Configure DMA or enable RX/TX interrupt */
 	i2c_dev->use_dma = false;
-	if (i2c_dev->dma && f7_msg->count >= STM32F7_I2C_DMA_LEN_MIN) {
+	if (i2c_dev->dma && flags & I2C_M_DMA_SAFE &&
+	    f7_msg->count >= STM32F7_I2C_DMA_LEN_MIN) {
 		ret = stm32_i2c_prep_dma_xfer(i2c_dev->dev, i2c_dev->dma,
 					      cr2 & STM32F7_I2C_CR2_RD_WRN,
 					      f7_msg->count, f7_msg->buf,
@@ -1191,7 +1195,8 @@ static void stm32f7_i2c_smbus_rep_start(struct stm32f7_i2c_dev *i2c_dev)
 		 STM32F7_I2C_CR1_RXDMAEN | STM32F7_I2C_CR1_TXDMAEN);
 
 	i2c_dev->use_dma = false;
-	if (i2c_dev->dma && f7_msg->count >= STM32F7_I2C_DMA_LEN_MIN &&
+	if (i2c_dev->dma && f7_msg->flags & I2C_M_DMA_SAFE &&
+	    f7_msg->count >= STM32F7_I2C_DMA_LEN_MIN &&
 	    f7_msg->size != I2C_SMBUS_BLOCK_DATA &&
 	    f7_msg->size != I2C_SMBUS_BLOCK_PROC_CALL) {
 		ret = stm32_i2c_prep_dma_xfer(i2c_dev->dev, i2c_dev->dma,
@@ -1757,6 +1762,7 @@ static int stm32f7_i2c_smbus_xfer(struct i2c_adapter *adapter, u16 addr,
 
 	f7_msg->addr = addr;
 	f7_msg->size = size;
+	f7_msg->flags = flags;
 	f7_msg->read_write = read_write;
 	f7_msg->smbus = true;
 
