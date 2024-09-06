@@ -4,6 +4,8 @@
  * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
  */
 
+#include <dt-bindings/pinctrl/stm32-pinfunc.h>
+
 &pinctrl {
 	st,package = <STM32MP_PKG_AK>;
 
