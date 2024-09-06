@@ -590,10 +590,15 @@ static void stm32_pwm_detect_complementary(struct stm32_pwm *priv, struct stm32_
 static unsigned int stm32_pwm_detect_channels(struct stm32_pwm *priv, struct stm32_timers *ddata,
 					      unsigned int *num_enabled)
 {
-	u32 ccer, ccer_backup, val;
-	int npwm = 0;
+	u32 ccer, ccer_backup;
+	int npwm;
+
+	regmap_read(priv->regmap, TIM_CCER, &ccer_backup);
+	*num_enabled = hweight32(ccer_backup & TIM_CCER_CCXE);
 
 	if (ddata->ipidr) {
+		u32 val;
+
 		/* Simply deduce from HWCFGR the number of outputs (MP25). */
 		regmap_read(priv->regmap, TIM_HWCFGR1, &val);
 		/*
@@ -609,12 +614,9 @@ static unsigned int stm32_pwm_detect_channels(struct stm32_pwm *priv, struct stm
 	 * If channels enable bits don't exist writing 1 will have no
 	 * effect so we can detect and count them.
 	 */
-	regmap_read(priv->regmap, TIM_CCER, &ccer_backup);
 	regmap_set_bits(priv->regmap, TIM_CCER, TIM_CCER_CCXE);
 	regmap_read(priv->regmap, TIM_CCER, &ccer);
 	regmap_write(priv->regmap, TIM_CCER, ccer_backup);
-
-	*num_enabled = hweight32(ccer_backup & TIM_CCER_CCXE);
 
 	return hweight32(ccer & TIM_CCER_CCXE);
 }
