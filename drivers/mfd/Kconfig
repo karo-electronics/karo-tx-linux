@@ -2079,7 +2079,7 @@ config MFD_STPMIC1
 
 config MFD_STM32MP1_PWR
 	bool "STM32MP1 wake-up pins"
-	depends on MACH_STM32MP157
+	depends on MACH_STM32MP157 || MACH_STM32MP13
 	default y
 	help
 	  Select this option to enable STM32 PWR Wake-up pins driver.

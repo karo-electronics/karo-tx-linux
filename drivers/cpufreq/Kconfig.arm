@@ -313,7 +313,7 @@ config ARM_STI_CPUFREQ
 
 config ARM_STM32_CPUFREQ
 	tristate "STM32 CPUFreq support"
-	depends on MACH_STM32MP157
+	depends on MACH_STM32MP157 || MACH_STM32MP13
 	default y
 	help
 	  This adds the CPUFreq driver support for STM32 MPU SOCs.
