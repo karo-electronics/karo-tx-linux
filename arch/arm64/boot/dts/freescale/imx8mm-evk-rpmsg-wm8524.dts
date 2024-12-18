@@ -58,13 +58,13 @@
 	};
 
 	wm8524: audio-codec {
-		status = "disabled";
+		clocks = <&clk IMX8MM_CLK_SAI3_ROOT>;
 	};
 
 	rpmsg_audio: rpmsg_audio {
 		compatible = "fsl,imx8mm-rpmsg-audio";
 		model = "wm8524-audio";
-		fsl,platform = "rpmsg-audio-channel";
+		fsl,rpmsg-channel-name = "rpmsg-audio-channel";
 		fsl,enable-lpa;
 		fsl,rpmsg-out;
 		assigned-clocks = <&clk IMX8MM_CLK_SAI3>;
@@ -76,13 +76,14 @@
 			 <&clk IMX8MM_AUDIO_PLL1_OUT>,
 			 <&clk IMX8MM_AUDIO_PLL2_OUT>;
 		clock-names = "ipg", "mclk", "dma", "pll8k", "pll11k";
+		audio-codec = <&wm8524>;
 		status = "okay";
 	};
 
 	rpmsg_micfil: rpmsg_micfil {
 		compatible = "fsl,imx8mm-rpmsg-audio";
 		model = "micfil-audio";
-		fsl,platform = "rpmsg-micfil-channel";
+		fsl,rpmsg-channel-name = "rpmsg-micfil-channel";
 		fsl,enable-lpa;
 		fsl,rpmsg-in;
 		assigned-clocks = <&clk IMX8MM_CLK_PDM>;

@@ -43,6 +43,8 @@ properties:
 
   dma-channels:
     const: 32
+    minimum: 1
+    maximum: 64
 
   clocks:
     maxItems: 2
@@ -65,7 +67,7 @@ required:
   - dma-channels
 
 allOf:
-  - $ref: "dma-controller.yaml#"
+  - $ref: dma-controller.yaml#
   - if:
       properties:
         compatible:

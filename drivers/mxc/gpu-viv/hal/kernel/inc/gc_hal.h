@@ -52,7 +52,6 @@
 *
 *****************************************************************************/
 
-
 #ifndef __gc_hal_h_
 #define __gc_hal_h_
 
@@ -813,6 +812,11 @@ gckOS_GetProcessID(OUT gctUINT32_PTR ProcessID);
 
 gceSTATUS
 gckOS_GetCurrentProcessID(OUT gctUINT32_PTR ProcessID);
+
+#if gcdENABLE_GPU_WORK_PERIOD_TRACE
+gceSTATUS
+gckOS_GetApplicationUserID(IN gctUINT32 CoreID);
+#endif
 
 /*******************************************************************************
  **

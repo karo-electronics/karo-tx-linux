@@ -52,7 +52,6 @@
 *
 *****************************************************************************/
 
-
 #if gcdENABLE_DRM
 
 #    include <linux/version.h>
@@ -114,7 +113,7 @@ struct dma_buf *viv_gem_prime_export(struct drm_device *drm, struct drm_gem_obje
     return dmabuf;
 }
 
-struct drm_gem_object *viv_gem_prime_import(struct drm_device *drm, struct dma_buf *dmabuf)
+static struct drm_gem_object *viv_gem_prime_import(struct drm_device *drm, struct dma_buf *dmabuf)
 {
     struct drm_gem_object *gem_obj = gcvNULL;
     struct viv_gem_object *viv_obj;
@@ -741,7 +740,7 @@ static const struct drm_ioctl_desc viv_ioctls[] = {
     DRM_IOCTL_DEF_DRV(VIV_GEM_REF_NODE,      viv_ioctl_gem_ref_node,   DRM_AUTH | DRM_RENDER_ALLOW),
 };
 
-int viv_drm_open(struct drm_device *drm, struct drm_file *file)
+static int viv_drm_open(struct drm_device *drm, struct drm_file *file)
 {
     gctINT       i, dev_index;
     gctUINT32    pid     = _GetProcessID();
@@ -763,7 +762,7 @@ OnError:
     return gcmIS_ERROR(status) ? -ENODEV : 0;
 }
 
-void viv_drm_postclose(struct drm_device *drm, struct drm_file *file)
+static void viv_drm_postclose(struct drm_device *drm, struct drm_file *file)
 {
     gctINT       i, dev_index;
     gctUINT32    pid     = gcmPTR2SIZE(file->driver_priv);
@@ -808,8 +807,10 @@ static struct drm_driver viv_drm_driver = {
     .gem_free_object            = viv_gem_free_object,
 #        endif
 #    endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
     .prime_handle_to_fd = drm_gem_prime_handle_to_fd,
     .prime_fd_to_handle = drm_gem_prime_fd_to_handle,
+#    endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
     .gem_prime_export   = viv_gem_prime_export,
 #    endif

@@ -16,6 +16,7 @@
 #include <linux/irqbypass.h>
 
 struct vhost_work;
+struct vhost_task;
 typedef void (*vhost_work_fn_t)(struct vhost_work *work);
 
 #define VHOST_WORK_QUEUED 1
@@ -23,6 +24,16 @@ struct vhost_work {
 	struct llist_node	node;
 	vhost_work_fn_t		fn;
 	unsigned long		flags;
+};
+
+struct vhost_worker {
+	struct vhost_task	*vtsk;
+	/* Used to serialize device wide flushing with worker swapping. */
+	struct mutex		mutex;
+	struct llist_head	work_list;
+	u64			kcov_handle;
+	u32			id;
+	int			attachment_cnt;
 };
 
 /* Poll a file (eventfd or socket) */
@@ -34,17 +45,17 @@ struct vhost_poll {
 	struct vhost_work	work;
 	__poll_t		mask;
 	struct vhost_dev	*dev;
+	struct vhost_virtqueue	*vq;
 };
 
-void vhost_work_init(struct vhost_work *work, vhost_work_fn_t fn);
-void vhost_work_queue(struct vhost_dev *dev, struct vhost_work *work);
-bool vhost_has_work(struct vhost_dev *dev);
-
 void vhost_poll_init(struct vhost_poll *poll, vhost_work_fn_t fn,
-		     __poll_t mask, struct vhost_dev *dev);
+		     __poll_t mask, struct vhost_dev *dev,
+		     struct vhost_virtqueue *vq);
 int vhost_poll_start(struct vhost_poll *poll, struct file *file);
 void vhost_poll_stop(struct vhost_poll *poll);
 void vhost_poll_queue(struct vhost_poll *poll);
+
+void vhost_work_init(struct vhost_work *work, vhost_work_fn_t fn);
 void vhost_dev_flush(struct vhost_dev *dev);
 
 struct vhost_log {
@@ -67,6 +78,7 @@ struct vhost_vring_call {
 /* The virtqueue structure describes a queue attached to a device. */
 struct vhost_virtqueue {
 	struct vhost_dev *dev;
+	struct vhost_worker __rcu *worker;
 
 	/* The actual ring of buffers. */
 	struct mutex mutex;
@@ -134,6 +146,15 @@ struct vhost_virtqueue {
 	bool user_be;
 #endif
 	u32 busyloop_timeout;
+
+#ifdef CONFIG_VHOST_XEN
+	/*
+	 * Contains virtio descriptors mapped by using Xen specific mappings
+	 * in order to handle current request. To be unmapped once the request
+	 * is processed.
+	 */
+	struct list_head desc_maps;
+#endif
 };
 
 struct vhost_msg_node {
@@ -151,8 +172,6 @@ struct vhost_dev {
 	struct vhost_virtqueue **vqs;
 	int nvqs;
 	struct eventfd_ctx *log_ctx;
-	struct llist_head work_list;
-	struct task_struct *worker;
 	struct vhost_iotlb *umem;
 	struct vhost_iotlb *iotlb;
 	spinlock_t iotlb_lock;
@@ -162,7 +181,7 @@ struct vhost_dev {
 	int iov_limit;
 	int weight;
 	int byte_weight;
-	u64 kcov_handle;
+	struct xarray worker_xa;
 	bool use_worker;
 	int (*msg_handler)(struct vhost_dev *dev, u32 asid,
 			   struct vhost_iotlb_msg *msg);
@@ -183,16 +202,21 @@ void vhost_dev_cleanup(struct vhost_dev *);
 void vhost_dev_stop(struct vhost_dev *);
 long vhost_dev_ioctl(struct vhost_dev *, unsigned int ioctl, void __user *argp);
 long vhost_vring_ioctl(struct vhost_dev *d, unsigned int ioctl, void __user *argp);
+long vhost_worker_ioctl(struct vhost_dev *dev, unsigned int ioctl,
+			void __user *argp);
 bool vhost_vq_access_ok(struct vhost_virtqueue *vq);
 bool vhost_log_access_ok(struct vhost_dev *);
 void vhost_clear_msg(struct vhost_dev *dev);
 
 int vhost_get_vq_desc(struct vhost_virtqueue *,
-		      struct iovec iov[], unsigned int iov_count,
+		      struct iovec iov[], unsigned int iov_size,
 		      unsigned int *out_num, unsigned int *in_num,
 		      struct vhost_log *log, unsigned int *log_num);
 void vhost_discard_vq_desc(struct vhost_virtqueue *, int n);
 
+void vhost_vq_flush(struct vhost_virtqueue *vq);
+bool vhost_vq_work_queue(struct vhost_virtqueue *vq, struct vhost_work *work);
+bool vhost_vq_has_work(struct vhost_virtqueue *vq);
 bool vhost_vq_is_setup(struct vhost_virtqueue *vq);
 int vhost_vq_init_access(struct vhost_virtqueue *);
 int vhost_add_used(struct vhost_virtqueue *, unsigned int head, int len);
@@ -226,10 +250,28 @@ ssize_t vhost_chr_read_iter(struct vhost_dev *dev, struct iov_iter *to,
 			    int noblock);
 ssize_t vhost_chr_write_iter(struct vhost_dev *dev,
 			     struct iov_iter *from);
-int vhost_init_device_iotlb(struct vhost_dev *d, bool enabled);
+int vhost_init_device_iotlb(struct vhost_dev *d);
 
 void vhost_iotlb_map_free(struct vhost_iotlb *iotlb,
 			  struct vhost_iotlb_map *map);
+
+#define XEN_GRANT_DMA_ADDR_OFF    (1ULL << 63)
+
+#ifdef CONFIG_VHOST_XEN
+void vhost_xen_unmap_desc(struct vhost_virtqueue *vq, void *ptr, u32 size);
+void vhost_xen_unmap_desc_all(struct vhost_virtqueue *vq);
+void *vhost_xen_map_desc(struct vhost_virtqueue *vq, u64 addr, u32 size,
+			 int access);
+#else
+static inline void vhost_xen_unmap_desc(struct vhost_virtqueue *vq, void *ptr,
+					u32 size) {}
+static inline void vhost_xen_unmap_desc_all(struct vhost_virtqueue *vq) {}
+static inline void *vhost_xen_map_desc(struct vhost_virtqueue *vq, u64 addr,
+				       u32 size, int access)
+{
+	return ERR_PTR(-ENODEV);
+}
+#endif
 
 #define vq_err(vq, fmt, ...) do {                                  \
 		pr_debug(pr_fmt(fmt), ##__VA_ARGS__);       \

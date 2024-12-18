@@ -301,8 +301,8 @@ static int intel_lpss_register_clock_divider(struct intel_lpss *lpss,
 
 	snprintf(name, sizeof(name), "%s-div", devname);
 	tmp = clk_register_fractional_divider(NULL, name, __clk_get_name(tmp),
+					      0, lpss->priv, 1, 15, 16, 15,
 					      CLK_FRAC_DIVIDER_POWER_OF_TWO_PS,
-					      lpss->priv, 1, 15, 16, 15, 0,
 					      NULL);
 	if (IS_ERR(tmp))
 		return PTR_ERR(tmp);
@@ -460,6 +460,7 @@ void intel_lpss_remove(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(intel_lpss_remove);
 
+#ifdef CONFIG_PM
 static int resume_lpss_device(struct device *dev, void *data)
 {
 	if (!dev_pm_test_driver_flags(dev, DPM_FLAG_SMART_SUSPEND))
@@ -514,6 +515,7 @@ int intel_lpss_resume(struct device *dev)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(intel_lpss_resume);
+#endif
 
 static int __init intel_lpss_init(void)
 {

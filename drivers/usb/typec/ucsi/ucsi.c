@@ -36,6 +36,19 @@
  */
 #define UCSI_SWAP_TIMEOUT_MS	5000
 
+static int ucsi_read_message_in(struct ucsi *ucsi, void *buf,
+					  size_t buf_size)
+{
+	/*
+	 * Below UCSI 2.0, MESSAGE_IN was limited to 16 bytes. Truncate the
+	 * reads here.
+	 */
+	if (ucsi->version <= UCSI_VERSION_1_2)
+		buf_size = clamp(buf_size, 0, 16);
+
+	return ucsi->ops->read(ucsi, UCSI_MESSAGE_IN, buf, buf_size);
+}
+
 static int ucsi_acknowledge_command(struct ucsi *ucsi)
 {
 	u64 ctrl;
@@ -72,7 +85,7 @@ static int ucsi_read_error(struct ucsi *ucsi)
 	if (ret < 0)
 		return ret;
 
-	ret = ucsi->ops->read(ucsi, UCSI_MESSAGE_IN, &error, sizeof(error));
+	ret = ucsi_read_message_in(ucsi, &error, sizeof(error));
 	if (ret)
 		return ret;
 
@@ -138,8 +151,12 @@ static int ucsi_exec_command(struct ucsi *ucsi, u64 cmd)
 	if (!(cci & UCSI_CCI_COMMAND_COMPLETE))
 		return -EIO;
 
-	if (cci & UCSI_CCI_NOT_SUPPORTED)
+	if (cci & UCSI_CCI_NOT_SUPPORTED) {
+		if (ucsi_acknowledge_command(ucsi) < 0)
+			dev_err(ucsi->dev,
+				"ACK of unsupported command failed\n");
 		return -EOPNOTSUPP;
+	}
 
 	if (cci & UCSI_CCI_ERROR) {
 		if (cmd == UCSI_GET_ERROR_STATUS)
@@ -170,7 +187,7 @@ int ucsi_send_command(struct ucsi *ucsi, u64 command,
 	length = ret;
 
 	if (data) {
-		ret = ucsi->ops->read(ucsi, UCSI_MESSAGE_IN, data, size);
+		ret = ucsi_read_message_in(ucsi, data, size);
 		if (ret)
 			goto out;
 	}
@@ -570,8 +587,9 @@ static void ucsi_unregister_altmodes(struct ucsi_connector *con, u8 recipient)
 	}
 }
 
-static int ucsi_get_pdos(struct ucsi_connector *con, int is_partner,
-			 u32 *pdos, int offset, int num_pdos)
+static int ucsi_read_pdos(struct ucsi_connector *con,
+			  enum typec_role role, int is_partner,
+			  u32 *pdos, int offset, int num_pdos)
 {
 	struct ucsi *ucsi = con->ucsi;
 	u64 command;
@@ -581,7 +599,7 @@ static int ucsi_get_pdos(struct ucsi_connector *con, int is_partner,
 	command |= UCSI_GET_PDOS_PARTNER_PDO(is_partner);
 	command |= UCSI_GET_PDOS_PDO_OFFSET(offset);
 	command |= UCSI_GET_PDOS_NUM_PDOS(num_pdos - 1);
-	command |= UCSI_GET_PDOS_SRC_PDOS;
+	command |= is_source(role) ? UCSI_GET_PDOS_SRC_PDOS : 0;
 	ret = ucsi_send_command(ucsi, command, pdos + offset,
 				num_pdos * sizeof(u32));
 	if (ret < 0 && ret != -ETIMEDOUT)
@@ -590,30 +608,43 @@ static int ucsi_get_pdos(struct ucsi_connector *con, int is_partner,
 	return ret;
 }
 
+static int ucsi_get_pdos(struct ucsi_connector *con, enum typec_role role,
+			 int is_partner, u32 *pdos)
+{
+	u8 num_pdos;
+	int ret;
+
+	/* UCSI max payload means only getting at most 4 PDOs at a time */
+	ret = ucsi_read_pdos(con, role, is_partner, pdos, 0, UCSI_MAX_PDOS);
+	if (ret < 0)
+		return ret;
+
+	num_pdos = ret / sizeof(u32); /* number of bytes to 32-bit PDOs */
+	if (num_pdos < UCSI_MAX_PDOS)
+		return num_pdos;
+
+	/* get the remaining PDOs, if any */
+	ret = ucsi_read_pdos(con, role, is_partner, pdos, UCSI_MAX_PDOS,
+			     PDO_MAX_OBJECTS - UCSI_MAX_PDOS);
+	if (ret < 0)
+		return ret;
+
+	return ret / sizeof(u32) + num_pdos;
+}
+
 static int ucsi_get_src_pdos(struct ucsi_connector *con)
 {
 	int ret;
 
-	/* UCSI max payload means only getting at most 4 PDOs at a time */
-	ret = ucsi_get_pdos(con, 1, con->src_pdos, 0, UCSI_MAX_PDOS);
+	ret = ucsi_get_pdos(con, TYPEC_SOURCE, 1, con->src_pdos);
 	if (ret < 0)
 		return ret;
 
-	con->num_pdos = ret / sizeof(u32); /* number of bytes to 32-bit PDOs */
-	if (con->num_pdos < UCSI_MAX_PDOS)
-		return 0;
-
-	/* get the remaining PDOs, if any */
-	ret = ucsi_get_pdos(con, 1, con->src_pdos, UCSI_MAX_PDOS,
-			    PDO_MAX_OBJECTS - UCSI_MAX_PDOS);
-	if (ret < 0)
-		return ret;
-
-	con->num_pdos += ret / sizeof(u32);
+	con->num_pdos = ret;
 
 	ucsi_port_psy_changed(con);
 
-	return 0;
+	return ret;
 }
 
 static int ucsi_check_altmodes(struct ucsi_connector *con)
@@ -638,6 +669,60 @@ static int ucsi_check_altmodes(struct ucsi_connector *con)
 	return ret;
 }
 
+static int ucsi_register_partner_pdos(struct ucsi_connector *con)
+{
+	struct usb_power_delivery_desc desc = { con->ucsi->cap.pd_version };
+	struct usb_power_delivery_capabilities_desc caps;
+	struct usb_power_delivery_capabilities *cap;
+	int ret;
+
+	if (con->partner_pd)
+		return 0;
+
+	con->partner_pd = usb_power_delivery_register(NULL, &desc);
+	if (IS_ERR(con->partner_pd))
+		return PTR_ERR(con->partner_pd);
+
+	ret = ucsi_get_pdos(con, TYPEC_SOURCE, 1, caps.pdo);
+	if (ret > 0) {
+		if (ret < PDO_MAX_OBJECTS)
+			caps.pdo[ret] = 0;
+
+		caps.role = TYPEC_SOURCE;
+		cap = usb_power_delivery_register_capabilities(con->partner_pd, &caps);
+		if (IS_ERR(cap))
+			return PTR_ERR(cap);
+
+		con->partner_source_caps = cap;
+	}
+
+	ret = ucsi_get_pdos(con, TYPEC_SINK, 1, caps.pdo);
+	if (ret > 0) {
+		if (ret < PDO_MAX_OBJECTS)
+			caps.pdo[ret] = 0;
+
+		caps.role = TYPEC_SINK;
+
+		cap = usb_power_delivery_register_capabilities(con->partner_pd, &caps);
+		if (IS_ERR(cap))
+			return PTR_ERR(cap);
+
+		con->partner_sink_caps = cap;
+	}
+
+	return typec_partner_set_usb_power_delivery(con->partner, con->partner_pd);
+}
+
+static void ucsi_unregister_partner_pdos(struct ucsi_connector *con)
+{
+	usb_power_delivery_unregister_capabilities(con->partner_sink_caps);
+	con->partner_sink_caps = NULL;
+	usb_power_delivery_unregister_capabilities(con->partner_source_caps);
+	con->partner_source_caps = NULL;
+	usb_power_delivery_unregister(con->partner_pd);
+	con->partner_pd = NULL;
+}
+
 static void ucsi_pwr_opmode_change(struct ucsi_connector *con)
 {
 	switch (UCSI_CONSTAT_PWR_OPMODE(con->status.flags)) {
@@ -646,6 +731,7 @@ static void ucsi_pwr_opmode_change(struct ucsi_connector *con)
 		typec_set_pwr_opmode(con->port, TYPEC_PWR_MODE_PD);
 		ucsi_partner_task(con, ucsi_get_src_pdos, 30, 0);
 		ucsi_partner_task(con, ucsi_check_altmodes, 30, 0);
+		ucsi_partner_task(con, ucsi_register_partner_pdos, 1, HZ);
 		break;
 	case UCSI_CONSTAT_PWR_OPMODE_TYPEC1_5:
 		con->rdo = 0;
@@ -704,6 +790,10 @@ static void ucsi_unregister_partner(struct ucsi_connector *con)
 	if (!con->partner)
 		return;
 
+	typec_set_mode(con->port, TYPEC_STATE_SAFE);
+
+	typec_partner_set_usb_power_delivery(con->partner, NULL);
+	ucsi_unregister_partner_pdos(con);
 	ucsi_unregister_altmodes(con, UCSI_RECIPIENT_SOP);
 	typec_unregister_partner(con->partner);
 	con->partner = NULL;
@@ -728,6 +818,21 @@ static void ucsi_partner_change(struct ucsi_connector *con)
 		break;
 	default:
 		break;
+	}
+
+	if (con->status.flags & UCSI_CONSTAT_CONNECTED) {
+		switch (UCSI_CONSTAT_PARTNER_TYPE(con->status.flags)) {
+		case UCSI_CONSTAT_PARTNER_TYPE_DEBUG:
+			typec_set_mode(con->port, TYPEC_MODE_DEBUG);
+			break;
+		case UCSI_CONSTAT_PARTNER_TYPE_AUDIO:
+			typec_set_mode(con->port, TYPEC_MODE_AUDIO);
+			break;
+		default:
+			if (UCSI_CONSTAT_PARTNER_FLAGS(con->status.flags) ==
+					UCSI_CONSTAT_PARTNER_FLAG_USB)
+				typec_set_mode(con->port, TYPEC_STATE_USB);
+		}
 	}
 
 	/* Only notify USB controller if partner supports USB data */
@@ -785,6 +890,7 @@ static void ucsi_handle_connector_change(struct work_struct *work)
 	if (ret < 0) {
 		dev_err(ucsi->dev, "%s: GET_CONNECTOR_STATUS failed (%d)\n",
 			__func__, ret);
+		clear_bit(EVENT_PENDING, &con->ucsi->flags);
 		goto out_unlock;
 	}
 
@@ -808,6 +914,10 @@ static void ucsi_handle_connector_change(struct work_struct *work)
 		if (con->status.flags & UCSI_CONSTAT_CONNECTED) {
 			ucsi_register_partner(con);
 			ucsi_partner_task(con, ucsi_check_connection, 1, HZ);
+
+			if (UCSI_CONSTAT_PWR_OPMODE(con->status.flags) ==
+			    UCSI_CONSTAT_PWR_OPMODE_PD)
+				ucsi_partner_task(con, ucsi_register_partner_pdos, 1, HZ);
 		} else {
 			ucsi_unregister_partner(con);
 		}
@@ -828,9 +938,11 @@ static void ucsi_handle_connector_change(struct work_struct *work)
 	if (con->status.change & UCSI_CONSTAT_CAM_CHANGE)
 		ucsi_partner_task(con, ucsi_check_altmodes, 1, 0);
 
+	mutex_lock(&ucsi->ppm_lock);
 	clear_bit(EVENT_PENDING, &con->ucsi->flags);
-
 	ret = ucsi_acknowledge_connector_change(ucsi);
+	mutex_unlock(&ucsi->ppm_lock);
+
 	if (ret)
 		dev_err(ucsi->dev, "%s: ACK failed (%d)", __func__, ret);
 
@@ -848,7 +960,7 @@ void ucsi_connector_change(struct ucsi *ucsi, u8 num)
 	struct ucsi_connector *con = &ucsi->connector[num - 1];
 
 	if (!(ucsi->ntfy & UCSI_ENABLE_NTFY_CONNECTOR_CHANGE)) {
-		dev_dbg(ucsi->dev, "Bogus connector change event\n");
+		dev_dbg(ucsi->dev, "Early connector change event\n");
 		return;
 	}
 
@@ -871,13 +983,47 @@ static int ucsi_reset_connector(struct ucsi_connector *con, bool hard)
 
 static int ucsi_reset_ppm(struct ucsi *ucsi)
 {
-	u64 command = UCSI_PPM_RESET;
+	u64 command;
 	unsigned long tmo;
 	u32 cci;
 	int ret;
 
 	mutex_lock(&ucsi->ppm_lock);
 
+	ret = ucsi->ops->read(ucsi, UCSI_CCI, &cci, sizeof(cci));
+	if (ret < 0)
+		goto out;
+
+	/*
+	 * If UCSI_CCI_RESET_COMPLETE is already set we must clear
+	 * the flag before we start another reset. Send a
+	 * UCSI_SET_NOTIFICATION_ENABLE command to achieve this.
+	 * Ignore a timeout and try the reset anyway if this fails.
+	 */
+	if (cci & UCSI_CCI_RESET_COMPLETE) {
+		command = UCSI_SET_NOTIFICATION_ENABLE;
+		ret = ucsi->ops->async_write(ucsi, UCSI_CONTROL, &command,
+					     sizeof(command));
+		if (ret < 0)
+			goto out;
+
+		tmo = jiffies + msecs_to_jiffies(UCSI_TIMEOUT_MS);
+		do {
+			ret = ucsi->ops->read(ucsi, UCSI_CCI,
+					      &cci, sizeof(cci));
+			if (ret < 0)
+				goto out;
+			if (cci & UCSI_CCI_COMMAND_COMPLETE)
+				break;
+			if (time_is_before_jiffies(tmo))
+				break;
+			msleep(20);
+		} while (1);
+
+		WARN_ON(cci & UCSI_CCI_RESET_COMPLETE);
+	}
+
+	command = UCSI_PPM_RESET;
 	ret = ucsi->ops->async_write(ucsi, UCSI_CONTROL, &command,
 				     sizeof(command));
 	if (ret < 0)
@@ -1044,6 +1190,9 @@ static struct fwnode_handle *ucsi_find_fwnode(struct ucsi_connector *con)
 
 static int ucsi_register_port(struct ucsi *ucsi, struct ucsi_connector *con)
 {
+	struct usb_power_delivery_desc desc = { ucsi->cap.pd_version};
+	struct usb_power_delivery_capabilities_desc pd_caps;
+	struct usb_power_delivery_capabilities *pd_cap;
 	struct typec_capability *cap = &con->typec_cap;
 	enum typec_accessory *accessory = cap->accessory;
 	enum usb_role u_role = USB_ROLE_NONE;
@@ -1121,6 +1270,41 @@ static int ucsi_register_port(struct ucsi *ucsi, struct ucsi_connector *con)
 		goto out;
 	}
 
+	con->pd = usb_power_delivery_register(ucsi->dev, &desc);
+
+	ret = ucsi_get_pdos(con, TYPEC_SOURCE, 0, pd_caps.pdo);
+	if (ret > 0) {
+		if (ret < PDO_MAX_OBJECTS)
+			pd_caps.pdo[ret] = 0;
+
+		pd_caps.role = TYPEC_SOURCE;
+		pd_cap = usb_power_delivery_register_capabilities(con->pd, &pd_caps);
+		if (IS_ERR(pd_cap)) {
+			ret = PTR_ERR(pd_cap);
+			goto out;
+		}
+
+		con->port_source_caps = pd_cap;
+	}
+
+	memset(&pd_caps, 0, sizeof(pd_caps));
+	ret = ucsi_get_pdos(con, TYPEC_SINK, 0, pd_caps.pdo);
+	if (ret > 0) {
+		if (ret < PDO_MAX_OBJECTS)
+			pd_caps.pdo[ret] = 0;
+
+		pd_caps.role = TYPEC_SINK;
+		pd_cap = usb_power_delivery_register_capabilities(con->pd, &pd_caps);
+		if (IS_ERR(pd_cap)) {
+			ret = PTR_ERR(pd_cap);
+			goto out;
+		}
+
+		con->port_sink_caps = pd_cap;
+	}
+
+	typec_port_set_usb_power_delivery(con->port, con->pd);
+
 	/* Alternate modes */
 	ret = ucsi_register_altmodes(con, UCSI_RECIPIENT_CON);
 	if (ret) {
@@ -1159,8 +1343,8 @@ static int ucsi_register_port(struct ucsi *ucsi, struct ucsi_connector *con)
 	if (con->status.flags & UCSI_CONSTAT_CONNECTED) {
 		typec_set_pwr_role(con->port,
 				  !!(con->status.flags & UCSI_CONSTAT_PWR_DIR));
-		ucsi_pwr_opmode_change(con);
 		ucsi_register_partner(con);
+		ucsi_pwr_opmode_change(con);
 		ucsi_port_psy_changed(con);
 	}
 
@@ -1207,6 +1391,7 @@ static int ucsi_init(struct ucsi *ucsi)
 {
 	struct ucsi_connector *con, *connector;
 	u64 command, ntfy;
+	u32 cci;
 	int ret;
 	int i;
 
@@ -1259,6 +1444,15 @@ static int ucsi_init(struct ucsi *ucsi)
 
 	ucsi->connector = connector;
 	ucsi->ntfy = ntfy;
+
+	mutex_lock(&ucsi->ppm_lock);
+	ret = ucsi->ops->read(ucsi, UCSI_CCI, &cci, sizeof(cci));
+	mutex_unlock(&ucsi->ppm_lock);
+	if (ret)
+		return ret;
+	if (UCSI_CCI_CONNECTOR(cci))
+		ucsi_connector_change(ucsi, UCSI_CCI_CONNECTOR(cci));
+
 	return 0;
 
 err_unregister:
@@ -1268,6 +1462,13 @@ err_unregister:
 		ucsi_unregister_port_psy(con);
 		if (con->wq)
 			destroy_workqueue(con->wq);
+
+		usb_power_delivery_unregister_capabilities(con->port_sink_caps);
+		con->port_sink_caps = NULL;
+		usb_power_delivery_unregister_capabilities(con->port_source_caps);
+		con->port_source_caps = NULL;
+		usb_power_delivery_unregister(con->pd);
+		con->pd = NULL;
 		typec_unregister_port(con->port);
 		con->port = NULL;
 	}
@@ -1316,11 +1517,13 @@ static void ucsi_init_work(struct work_struct *work)
 
 	ret = ucsi_init(ucsi);
 	if (ret)
-		dev_err(ucsi->dev, "PPM init failed (%d)\n", ret);
+		dev_err_probe(ucsi->dev, ret, "PPM init failed\n");
 
 	if (ret == -EPROBE_DEFER) {
-		if (ucsi->work_count++ > UCSI_ROLE_SWITCH_WAIT_COUNT)
+		if (ucsi->work_count++ > UCSI_ROLE_SWITCH_WAIT_COUNT) {
+			dev_err(ucsi->dev, "PPM init failed, stop trying\n");
 			return;
+		}
 
 		queue_delayed_work(system_long_wq, &ucsi->work,
 				   UCSI_ROLE_SWITCH_INTERVAL);
@@ -1380,6 +1583,7 @@ EXPORT_SYMBOL_GPL(ucsi_create);
  */
 void ucsi_destroy(struct ucsi *ucsi)
 {
+	ucsi_debugfs_unregister(ucsi);
 	kfree(ucsi);
 }
 EXPORT_SYMBOL_GPL(ucsi_destroy);
@@ -1400,8 +1604,18 @@ int ucsi_register(struct ucsi *ucsi)
 	if (!ucsi->version)
 		return -ENODEV;
 
+	/*
+	 * Version format is JJ.M.N (JJ = Major version, M = Minor version,
+	 * N = sub-minor version).
+	 */
+	dev_dbg(ucsi->dev, "Registered UCSI interface with version %x.%x.%x",
+		UCSI_BCD_GET_MAJOR(ucsi->version),
+		UCSI_BCD_GET_MINOR(ucsi->version),
+		UCSI_BCD_GET_SUBMINOR(ucsi->version));
+
 	queue_delayed_work(system_long_wq, &ucsi->work, 0);
 
+	ucsi_debugfs_register(ucsi);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(ucsi_register);
@@ -1447,12 +1661,32 @@ void ucsi_unregister(struct ucsi *ucsi)
 			mutex_unlock(&ucsi->connector[i].lock);
 			destroy_workqueue(ucsi->connector[i].wq);
 		}
+
+		usb_power_delivery_unregister_capabilities(ucsi->connector[i].port_sink_caps);
+		ucsi->connector[i].port_sink_caps = NULL;
+		usb_power_delivery_unregister_capabilities(ucsi->connector[i].port_source_caps);
+		ucsi->connector[i].port_source_caps = NULL;
+		usb_power_delivery_unregister(ucsi->connector[i].pd);
+		ucsi->connector[i].pd = NULL;
 		typec_unregister_port(ucsi->connector[i].port);
 	}
 
 	kfree(ucsi->connector);
 }
 EXPORT_SYMBOL_GPL(ucsi_unregister);
+
+static int __init ucsi_module_init(void)
+{
+	ucsi_debugfs_init();
+	return 0;
+}
+module_init(ucsi_module_init);
+
+static void __exit ucsi_module_exit(void)
+{
+	ucsi_debugfs_exit();
+}
+module_exit(ucsi_module_exit);
 
 MODULE_AUTHOR("Heikki Krogerus <heikki.krogerus@linux.intel.com>");
 MODULE_LICENSE("GPL v2");

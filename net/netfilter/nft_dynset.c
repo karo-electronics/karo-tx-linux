@@ -148,7 +148,7 @@ static const struct nla_policy nft_dynset_policy[NFTA_DYNSET_MAX + 1] = {
 	[NFTA_DYNSET_SET_NAME]	= { .type = NLA_STRING,
 				    .len = NFT_SET_MAXNAMELEN - 1 },
 	[NFTA_DYNSET_SET_ID]	= { .type = NLA_U32 },
-	[NFTA_DYNSET_OP]	= { .type = NLA_U32 },
+	[NFTA_DYNSET_OP]	= NLA_POLICY_MAX(NLA_BE32, 255),
 	[NFTA_DYNSET_SREG_KEY]	= { .type = NLA_U32 },
 	[NFTA_DYNSET_SREG_DATA]	= { .type = NLA_U32 },
 	[NFTA_DYNSET_TIMEOUT]	= { .type = NLA_U64 },
@@ -190,6 +190,9 @@ static int nft_dynset_init(const struct nft_ctx *ctx,
 				    tb[NFTA_DYNSET_SET_ID], genmask);
 	if (IS_ERR(set))
 		return PTR_ERR(set);
+
+	if (set->flags & NFT_SET_OBJECT)
+		return -EOPNOTSUPP;
 
 	if (set->ops->update == NULL)
 		return -EOPNOTSUPP;
@@ -276,10 +279,15 @@ static int nft_dynset_init(const struct nft_ctx *ctx,
 			priv->expr_array[i] = dynset_expr;
 			priv->num_exprs++;
 
-			if (set->num_exprs &&
-			    dynset_expr->ops != set->exprs[i]->ops) {
-				err = -EOPNOTSUPP;
-				goto err_expr_free;
+			if (set->num_exprs) {
+				if (i >= set->num_exprs) {
+					err = -EINVAL;
+					goto err_expr_free;
+				}
+				if (dynset_expr->ops != set->exprs[i]->ops) {
+					err = -EOPNOTSUPP;
+					goto err_expr_free;
+				}
 			}
 			i++;
 		}
@@ -357,7 +365,8 @@ static void nft_dynset_destroy(const struct nft_ctx *ctx,
 	nf_tables_destroy_set(ctx, priv->set);
 }
 
-static int nft_dynset_dump(struct sk_buff *skb, const struct nft_expr *expr)
+static int nft_dynset_dump(struct sk_buff *skb,
+			   const struct nft_expr *expr, bool reset)
 {
 	const struct nft_dynset *priv = nft_expr_priv(expr);
 	u32 flags = priv->invert ? NFT_DYNSET_F_INV : 0;
@@ -379,7 +388,7 @@ static int nft_dynset_dump(struct sk_buff *skb, const struct nft_expr *expr)
 	if (priv->set->num_exprs == 0) {
 		if (priv->num_exprs == 1) {
 			if (nft_expr_dump(skb, NFTA_DYNSET_EXPR,
-					  priv->expr_array[0]))
+					  priv->expr_array[0], reset))
 				goto nla_put_failure;
 		} else if (priv->num_exprs > 1) {
 			struct nlattr *nest;
@@ -390,7 +399,7 @@ static int nft_dynset_dump(struct sk_buff *skb, const struct nft_expr *expr)
 
 			for (i = 0; i < priv->num_exprs; i++) {
 				if (nft_expr_dump(skb, NFTA_LIST_ELEM,
-						  priv->expr_array[i]))
+						  priv->expr_array[i], reset))
 					goto nla_put_failure;
 			}
 			nla_nest_end(skb, nest);

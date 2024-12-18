@@ -13,9 +13,20 @@ config VHOST_RING
 	  This option is selected by any driver which needs to access
 	  the host side of a virtio ring.
 
+config VHOST_XEN
+	tristate
+	help
+	  Support of Xen specific mappings for accessing descriptors in virtio rings.
+
+config VHOST_TASK
+	bool
+	default n
+
 config VHOST
 	tristate
 	select VHOST_IOTLB
+	select VHOST_TASK
+	select VHOST_XEN if XEN
 	help
 	  This option is selected by any driver which needs to access
 	  the core of vhost.

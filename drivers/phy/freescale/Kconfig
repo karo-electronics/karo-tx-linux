@@ -17,6 +17,16 @@ config PHY_FSL_IMX8MQ_USB
 	select GENERIC_PHY
 	default ARCH_MXC && ARM64
 
+config PHY_FSL_IMX9_DPHY_RX
+       tristate "Freescale i.MX9 DPHY Rx"
+       depends on OF && HAS_IOMEM
+       select GENERIC_PHY
+       select GENERIC_PHY_MIPI_DPHY
+       select REGMAP_MMIO
+       help
+         Enable this to add support for the Synopsys DW DPHY Rx as found
+         on NXP's i.MX9 family.
+
 config PHY_FSL_IMX93_MIPI_DPHY
 	tristate "Freescale i.MX93 MIPI DPHY"
 	depends on OF && HAS_IOMEM
@@ -69,6 +79,17 @@ config PHY_FSL_LYNX_XGKR_ALGORITHM
 	help
 	  Link training algorithm for copper backplane Ethernet (10GBase-KR,
 	  25GBase-KR, 40GBase-KR4) on the Lynx SerDes PHY.
+
+config PHY_FSL_LYNX_10G
+	tristate "Freescale Layerscape Lynx 10G SerDes PHY support"
+	depends on OF
+	depends on ARCH_LAYERSCAPE || COMPILE_TEST
+	select PHY_FSL_LYNX_XGKR_ALGORITHM
+	select GENERIC_PHY
+	select FSL_GUTS
+	help
+	  Enable this to add support for the Lynx 10G SerDes PHY as found on
+	  NXP's Layerscape platform such as LS1088A or LS1028A.
 
 config PHY_FSL_LYNX_28G
 	tristate "Freescale Layerscape Lynx 28G SerDes PHY support"

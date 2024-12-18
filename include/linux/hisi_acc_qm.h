@@ -104,7 +104,7 @@
 enum qm_stop_reason {
 	QM_NORMAL,
 	QM_SOFT_RESET,
-	QM_FLR,
+	QM_DOWN,
 };
 
 enum qm_state {
@@ -122,7 +122,6 @@ enum qp_state {
 };
 
 enum qm_hw_ver {
-	QM_HW_UNKNOWN = -1,
 	QM_HW_V1 = 0x20,
 	QM_HW_V2 = 0x21,
 	QM_HW_V3 = 0x30,
@@ -145,6 +144,13 @@ enum qm_vf_state {
 	QM_NOT_READY,
 };
 
+enum qm_misc_ctl_bits {
+	QM_DRIVER_REMOVING = 0x0,
+	QM_RST_SCHED,
+	QM_RESETTING,
+	QM_MODULE_PARAM,
+};
+
 enum qm_cap_bits {
 	QM_SUPPORT_DB_ISOLATION = 0x0,
 	QM_SUPPORT_FUNC_QOS,
@@ -152,6 +158,11 @@ enum qm_cap_bits {
 	QM_SUPPORT_MB_COMMAND,
 	QM_SUPPORT_SVA_PREFETCH,
 	QM_SUPPORT_RPM,
+};
+
+struct qm_dev_alg {
+	u64 alg_msk;
+	const char *alg;
 };
 
 struct dfx_diff_registers {
@@ -259,6 +270,16 @@ struct hisi_qm_cap_info {
 	u32 v3_val;
 };
 
+struct hisi_qm_cap_record {
+	u32 type;
+	u32 cap_val;
+};
+
+struct hisi_qm_cap_tables {
+	struct hisi_qm_cap_record *qm_cap_table;
+	struct hisi_qm_cap_record *dev_cap_table;
+};
+
 struct hisi_qm_list {
 	struct mutex lock;
 	struct list_head list;
@@ -270,6 +291,21 @@ struct hisi_qm_poll_data {
 	struct hisi_qm *qm;
 	struct work_struct work;
 	u16 *qp_finish_id;
+	u16 eqe_num;
+};
+
+/**
+ * struct qm_err_isolate
+ * @isolate_lock: protects device error log
+ * @err_threshold: user config error threshold which triggers isolation
+ * @is_isolate: device isolation state
+ * @uacce_hw_errs: index into qm device error list
+ */
+struct qm_err_isolate {
+	struct mutex isolate_lock;
+	u32 err_threshold;
+	bool is_isolate;
+	struct list_head qm_hw_errs;
 };
 
 struct hisi_qm {
@@ -309,7 +345,8 @@ struct hisi_qm {
 	const struct hisi_qm_err_ini *err_ini;
 	struct hisi_qm_err_info err_info;
 	struct hisi_qm_err_status err_status;
-	unsigned long misc_ctl; /* driver removing and reset sched */
+	/* driver removing and reset sched */
+	unsigned long misc_ctl;
 	/* Device capability bit */
 	unsigned long caps;
 
@@ -330,9 +367,7 @@ struct hisi_qm {
 	struct work_struct rst_work;
 	struct work_struct cmd_process;
 
-	const char *algs;
 	bool use_sva;
-	bool is_frozen;
 
 	resource_size_t phys_base;
 	resource_size_t db_phys_base;
@@ -341,6 +376,9 @@ struct hisi_qm {
 	struct qm_shaper_factor *factor;
 	u32 mb_qos;
 	u32 type_rate;
+	struct qm_err_isolate isolate_data;
+
+	struct hisi_qm_cap_tables cap_tables;
 };
 
 struct hisi_qp_status {
@@ -471,11 +509,11 @@ int hisi_qm_sriov_disable(struct pci_dev *pdev, bool is_frozen);
 int hisi_qm_sriov_configure(struct pci_dev *pdev, int num_vfs);
 void hisi_qm_dev_err_init(struct hisi_qm *qm);
 void hisi_qm_dev_err_uninit(struct hisi_qm *qm);
-int hisi_qm_diff_regs_init(struct hisi_qm *qm,
-		struct dfx_diff_registers *dregs, int reg_len);
-void hisi_qm_diff_regs_uninit(struct hisi_qm *qm, int reg_len);
+int hisi_qm_regs_debugfs_init(struct hisi_qm *qm,
+			  struct dfx_diff_registers *dregs, u32 reg_len);
+void hisi_qm_regs_debugfs_uninit(struct hisi_qm *qm, u32 reg_len);
 void hisi_qm_acc_diff_regs_dump(struct hisi_qm *qm, struct seq_file *s,
-		struct dfx_diff_registers *dregs, int regs_len);
+				struct dfx_diff_registers *dregs, u32 regs_len);
 
 pci_ers_result_t hisi_qm_dev_err_detected(struct pci_dev *pdev,
 					  pci_channel_state_t state);
@@ -514,6 +552,8 @@ void hisi_qm_regs_dump(struct seq_file *s, struct debugfs_regset32 *regset);
 u32 hisi_qm_get_hw_info(struct hisi_qm *qm,
 			const struct hisi_qm_cap_info *info_table,
 			u32 index, bool is_read);
+int hisi_qm_set_algs(struct hisi_qm *qm, u64 alg_msk, const struct qm_dev_alg *dev_algs,
+		     u32 dev_algs_size);
 
 /* Used by VFIO ACC live migration driver */
 struct pci_driver *hisi_sec_get_pf_driver(void);

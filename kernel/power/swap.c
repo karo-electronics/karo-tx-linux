@@ -356,14 +356,14 @@ static int swsusp_swap_check(void)
 		return res;
 	root_swap = res;
 
-	hib_resume_bdev = blkdev_get_by_dev(swsusp_resume_device, FMODE_WRITE,
-			NULL);
+	hib_resume_bdev = blkdev_get_by_dev(swsusp_resume_device,
+			BLK_OPEN_WRITE, NULL, NULL);
 	if (IS_ERR(hib_resume_bdev))
 		return PTR_ERR(hib_resume_bdev);
 
 	res = set_blocksize(hib_resume_bdev, PAGE_SIZE);
 	if (res < 0)
-		blkdev_put(hib_resume_bdev, FMODE_WRITE);
+		blkdev_put(hib_resume_bdev, NULL);
 
 	return res;
 }
@@ -443,7 +443,7 @@ static int get_swap_writer(struct swap_map_handle *handle)
 err_rel:
 	release_swap_writer(handle);
 err_close:
-	swsusp_close(FMODE_WRITE);
+	swsusp_close(false);
 	return ret;
 }
 
@@ -508,7 +508,7 @@ static int swap_writer_finish(struct swap_map_handle *handle,
 	if (error)
 		free_all_swap_pages(root_swap);
 	release_swap_writer(handle);
-	swsusp_close(FMODE_WRITE);
+	swsusp_close(false);
 
 	return error;
 }
@@ -581,7 +581,7 @@ static int save_image(struct swap_map_handle *handle,
 	return ret;
 }
 
-/**
+/*
  * Structure used for CRC32.
  */
 struct crc_data {
@@ -596,7 +596,7 @@ struct crc_data {
 	unsigned char *unc[LZO_THREADS];          /* uncompressed data */
 };
 
-/**
+/*
  * CRC32 update function that runs in its own thread.
  */
 static int crc32_threadfn(void *data)
@@ -605,11 +605,11 @@ static int crc32_threadfn(void *data)
 	unsigned i;
 
 	while (1) {
-		wait_event(d->go, atomic_read(&d->ready) ||
+		wait_event(d->go, atomic_read_acquire(&d->ready) ||
 		                  kthread_should_stop());
 		if (kthread_should_stop()) {
 			d->thr = NULL;
-			atomic_set(&d->stop, 1);
+			atomic_set_release(&d->stop, 1);
 			wake_up(&d->done);
 			break;
 		}
@@ -618,12 +618,12 @@ static int crc32_threadfn(void *data)
 		for (i = 0; i < d->run_threads; i++)
 			*d->crc32 = crc32_le(*d->crc32,
 			                     d->unc[i], *d->unc_len[i]);
-		atomic_set(&d->stop, 1);
+		atomic_set_release(&d->stop, 1);
 		wake_up(&d->done);
 	}
 	return 0;
 }
-/**
+/*
  * Structure used for LZO data compression.
  */
 struct cmp_data {
@@ -640,7 +640,7 @@ struct cmp_data {
 	unsigned char wrk[LZO1X_1_MEM_COMPRESS];  /* compression workspace */
 };
 
-/**
+/*
  * Compression function that runs in its own thread.
  */
 static int lzo_compress_threadfn(void *data)
@@ -648,12 +648,12 @@ static int lzo_compress_threadfn(void *data)
 	struct cmp_data *d = data;
 
 	while (1) {
-		wait_event(d->go, atomic_read(&d->ready) ||
+		wait_event(d->go, atomic_read_acquire(&d->ready) ||
 		                  kthread_should_stop());
 		if (kthread_should_stop()) {
 			d->thr = NULL;
 			d->ret = -1;
-			atomic_set(&d->stop, 1);
+			atomic_set_release(&d->stop, 1);
 			wake_up(&d->done);
 			break;
 		}
@@ -662,7 +662,7 @@ static int lzo_compress_threadfn(void *data)
 		d->ret = lzo1x_1_compress(d->unc, d->unc_len,
 		                          d->cmp + LZO_HEADER, &d->cmp_len,
 		                          d->wrk);
-		atomic_set(&d->stop, 1);
+		atomic_set_release(&d->stop, 1);
 		wake_up(&d->done);
 	}
 	return 0;
@@ -797,7 +797,7 @@ static int save_image_lzo(struct swap_map_handle *handle,
 
 			data[thr].unc_len = off;
 
-			atomic_set(&data[thr].ready, 1);
+			atomic_set_release(&data[thr].ready, 1);
 			wake_up(&data[thr].go);
 		}
 
@@ -805,12 +805,12 @@ static int save_image_lzo(struct swap_map_handle *handle,
 			break;
 
 		crc->run_threads = thr;
-		atomic_set(&crc->ready, 1);
+		atomic_set_release(&crc->ready, 1);
 		wake_up(&crc->go);
 
 		for (run_threads = thr, thr = 0; thr < run_threads; thr++) {
 			wait_event(data[thr].done,
-			           atomic_read(&data[thr].stop));
+				atomic_read_acquire(&data[thr].stop));
 			atomic_set(&data[thr].stop, 0);
 
 			ret = data[thr].ret;
@@ -849,7 +849,7 @@ static int save_image_lzo(struct swap_map_handle *handle,
 			}
 		}
 
-		wait_event(crc->done, atomic_read(&crc->stop));
+		wait_event(crc->done, atomic_read_acquire(&crc->stop));
 		atomic_set(&crc->stop, 0);
 	}
 
@@ -948,9 +948,9 @@ out_finish:
 	return error;
 }
 
-/**
+/*
  *	The following functions allow us to read data using a swap map
- *	in a file-alike way
+ *	in a file-like way.
  */
 
 static void release_swap_reader(struct swap_map_handle *handle)
@@ -1107,7 +1107,7 @@ static int load_image(struct swap_map_handle *handle,
 	return ret;
 }
 
-/**
+/*
  * Structure used for LZO data decompression.
  */
 struct dec_data {
@@ -1123,7 +1123,7 @@ struct dec_data {
 	unsigned char cmp[LZO_CMP_SIZE];          /* compressed buffer */
 };
 
-/**
+/*
  * Decompression function that runs in its own thread.
  */
 static int lzo_decompress_threadfn(void *data)
@@ -1131,12 +1131,12 @@ static int lzo_decompress_threadfn(void *data)
 	struct dec_data *d = data;
 
 	while (1) {
-		wait_event(d->go, atomic_read(&d->ready) ||
+		wait_event(d->go, atomic_read_acquire(&d->ready) ||
 		                  kthread_should_stop());
 		if (kthread_should_stop()) {
 			d->thr = NULL;
 			d->ret = -1;
-			atomic_set(&d->stop, 1);
+			atomic_set_release(&d->stop, 1);
 			wake_up(&d->done);
 			break;
 		}
@@ -1149,7 +1149,7 @@ static int lzo_decompress_threadfn(void *data)
 			flush_icache_range((unsigned long)d->unc,
 					   (unsigned long)d->unc + d->unc_len);
 
-		atomic_set(&d->stop, 1);
+		atomic_set_release(&d->stop, 1);
 		wake_up(&d->done);
 	}
 	return 0;
@@ -1334,7 +1334,7 @@ static int load_image_lzo(struct swap_map_handle *handle,
 		}
 
 		if (crc->run_threads) {
-			wait_event(crc->done, atomic_read(&crc->stop));
+			wait_event(crc->done, atomic_read_acquire(&crc->stop));
 			atomic_set(&crc->stop, 0);
 			crc->run_threads = 0;
 		}
@@ -1370,7 +1370,7 @@ static int load_image_lzo(struct swap_map_handle *handle,
 					pg = 0;
 			}
 
-			atomic_set(&data[thr].ready, 1);
+			atomic_set_release(&data[thr].ready, 1);
 			wake_up(&data[thr].go);
 		}
 
@@ -1389,7 +1389,7 @@ static int load_image_lzo(struct swap_map_handle *handle,
 
 		for (run_threads = thr, thr = 0; thr < run_threads; thr++) {
 			wait_event(data[thr].done,
-			           atomic_read(&data[thr].stop));
+				atomic_read_acquire(&data[thr].stop));
 			atomic_set(&data[thr].stop, 0);
 
 			ret = data[thr].ret;
@@ -1420,7 +1420,7 @@ static int load_image_lzo(struct swap_map_handle *handle,
 				ret = snapshot_write_next(snapshot);
 				if (ret <= 0) {
 					crc->run_threads = thr + 1;
-					atomic_set(&crc->ready, 1);
+					atomic_set_release(&crc->ready, 1);
 					wake_up(&crc->go);
 					goto out_finish;
 				}
@@ -1428,13 +1428,13 @@ static int load_image_lzo(struct swap_map_handle *handle,
 		}
 
 		crc->run_threads = thr;
-		atomic_set(&crc->ready, 1);
+		atomic_set_release(&crc->ready, 1);
 		wake_up(&crc->go);
 	}
 
 out_finish:
 	if (crc->run_threads) {
-		wait_event(crc->done, atomic_read(&crc->stop));
+		wait_event(crc->done, atomic_read_acquire(&crc->stop));
 		atomic_set(&crc->stop, 0);
 	}
 	stop = ktime_get();
@@ -1510,21 +1510,20 @@ end:
 	return error;
 }
 
+static void *swsusp_holder;
+
 /**
- *      swsusp_check - Check for swsusp signature in the resume device
+ * swsusp_check - Check for swsusp signature in the resume device
+ * @exclusive: Open the resume device exclusively.
  */
 
-int swsusp_check(void)
+int swsusp_check(bool exclusive)
 {
+	void *holder = exclusive ? &swsusp_holder : NULL;
 	int error;
-	void *holder;
-	fmode_t mode = FMODE_READ;
 
-	if (snapshot_test)
-		mode |= FMODE_EXCL;
-
-	hib_resume_bdev = blkdev_get_by_dev(swsusp_resume_device,
-					    mode, &holder);
+	hib_resume_bdev = blkdev_get_by_dev(swsusp_resume_device, BLK_OPEN_READ,
+					    holder, NULL);
 	if (!IS_ERR(hib_resume_bdev)) {
 		set_blocksize(hib_resume_bdev, PAGE_SIZE);
 		clear_page(swsusp_header);
@@ -1551,7 +1550,7 @@ int swsusp_check(void)
 
 put:
 		if (error)
-			blkdev_put(hib_resume_bdev, mode);
+			blkdev_put(hib_resume_bdev, holder);
 		else
 			pr_debug("Image signature found, resuming\n");
 	} else {
@@ -1565,17 +1564,18 @@ put:
 }
 
 /**
- *	swsusp_close - close swap device.
+ * swsusp_close - close swap device.
+ * @exclusive: Close the resume device which is exclusively opened.
  */
 
-void swsusp_close(fmode_t mode)
+void swsusp_close(bool exclusive)
 {
 	if (IS_ERR(hib_resume_bdev)) {
 		pr_debug("Image device not initialised\n");
 		return;
 	}
 
-	blkdev_put(hib_resume_bdev, mode);
+	blkdev_put(hib_resume_bdev, exclusive ? &swsusp_holder : NULL);
 }
 
 /**

@@ -67,7 +67,6 @@
 
 &ov5640_1 {
 	pinctrl-0 = <&pinctrl_csi1_pwn>, <&pinctrl_csi1_rst>, <&pinctrl_csi_mclk>;
-	csi_id = <1>;
 
 	status = "okay";
 };
@@ -95,7 +94,7 @@
 &mipi_csi_0 {
 	status = "okay";
 
-	port@0 {
+	port {
 		endpoint {
 			remote-endpoint = <&ov2775_mipi_0_ep>;
 			data-lanes = <4>;

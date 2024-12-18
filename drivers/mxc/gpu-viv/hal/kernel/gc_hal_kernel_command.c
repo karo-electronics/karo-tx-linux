@@ -52,7 +52,6 @@
 *
 *****************************************************************************/
 
-
 #include "gc_hal_kernel_precomp.h"
 #include "gc_hal_kernel_context.h"
 
@@ -2850,6 +2849,47 @@ OnError:
     return status;
 }
 
+/* Switch to security first, then switch to non-security mode. */
+gceSTATUS
+gckCOMMAND_SwitchSecurityMode(gckCOMMAND Command, gckHARDWARE Hardware)
+{
+    gceSTATUS status = gcvSTATUS_OK;
+    gctUINT32 reserveBytes;
+    gctUINT32 size;
+    gctUINT8_PTR pointer;
+    gctADDRESS address;
+    gctBOOL powerManagement = gcvFALSE;
+
+    gcmkONERROR(gckHARDWARE_QueryPowerManagement(Hardware, &powerManagement));
+
+    if (powerManagement)
+        gcmkONERROR(gckHARDWARE_EnablePowerManagement(Hardware, gcvFALSE));
+
+    gcmkONERROR(gckHARDWARE_SetPowerState(Hardware, gcvPOWER_ON_AUTO));
+
+    gcmkONERROR(gckHARDWARE_SwitchSecurityMode(Hardware, gcvNULL, gcvINVALID_ADDRESS, 1, 0, &reserveBytes));
+
+    gcmkONERROR(gckCOMMAND_Reserve(Command, reserveBytes, (gctPOINTER *)&pointer, &size));
+
+    address = Command->address + Command->offset;
+
+    /* Switch to security mode then to non-secuirty mode. */
+    gcmkONERROR(gckHARDWARE_SwitchSecurityMode(Hardware, pointer, address, 1, 0, &reserveBytes));
+
+    if (Command->feType == gcvHW_FE_WAIT_LINK)
+        gcmkONERROR(gckCOMMAND_Execute(Command, reserveBytes));
+    else
+        gcmkONERROR(gckCOMMAND_ExecuteEnd(Command, reserveBytes));
+
+    /* enable power management */
+    if (powerManagement)
+        gcmkONERROR(gckHARDWARE_EnablePowerManagement(Hardware, gcvTRUE));
+
+OnError:
+    return status;
+}
+
+#if gcdVALID_COMMAND_BUFFER
 gceSTATUS
 _ValidCommandBuffer(IN gckCOMMAND Command, IN gctUINT32 ProcessId,
                     IN gcsHAL_COMMAND_LOCATION *cmdLoc)
@@ -2871,6 +2911,7 @@ OnError:
     gcmkFOOTER();
     return status;
 }
+#endif
 
 /*******************************************************************************
  **
@@ -2908,6 +2949,7 @@ gckCOMMAND_Commit(IN gckCOMMAND Command, IN gcsHAL_SUBCOMMIT *SubCommit,
     gctBOOL                  needCopy      = gcvFALSE;
     gcsPATCH_LIST_VARIABLE   patchListVar  = { 0, 0 };
     gctBOOL                  commitEntered = gcvFALSE;
+    gctBOOL                  switchSecurityMode = gcvFALSE;
 
     gcmkHEADER_ARG("Command=%p SubCommit=%p delta=%p context=%llu pid=%u",
                    Command, SubCommit, delta, SubCommit->context, ProcessId);
@@ -2945,6 +2987,19 @@ gckCOMMAND_Commit(IN gckCOMMAND Command, IN gcsHAL_SUBCOMMIT *SubCommit,
         gcmkONERROR(_ValidCommandBuffer(Command, ProcessId, cmdLoc));
 #endif
 
+#if gcdCONTEXT_SWITCH_FORCE_USC_RESET
+        if (Command->kernel->hardware->supportUscReset
+            && Command->currPid && Command->currPid != ProcessId
+#if gcdLOCAL_MEMORY_USAGE
+            && SubCommit->useLocalMem
+#endif
+            && Command->kernel->hardware->type == gcvHARDWARE_3D)
+            switchSecurityMode = gcvTRUE;
+#endif
+
+        if (switchSecurityMode)
+            gcmkONERROR(gckCOMMAND_SwitchSecurityMode(Command, Command->kernel->hardware));
+
         /* Acquire the command queue. */
         gcmkONERROR(gckCOMMAND_EnterCommit(Command, gcvFALSE));
         commitEntered = gcvTRUE;
@@ -2972,6 +3027,8 @@ gckCOMMAND_Commit(IN gckCOMMAND Command, IN gcsHAL_SUBCOMMIT *SubCommit,
 
         if (status != gcvSTATUS_INTERRUPTED)
             gcmkONERROR(status);
+
+        Command->currPid = ProcessId;
 
         /* Release the command queue. */
         gcmkONERROR(gckCOMMAND_ExitCommit(Command, gcvFALSE));
@@ -3108,7 +3165,7 @@ gckCOMMAND_Reserve(IN gckCOMMAND Command, IN gctUINT32 RequestedBytes,
     bytes = Command->pageSize - Command->offset;
 
     /* Is there enough space in the current command queue? */
-    if (bytes <= requiredBytes) {
+    if (bytes <= requiredBytes || (Command->offset + requiredBytes >= Command->pageSize)) {
         /* Create a new command queue. */
         gcmkONERROR(_NewQueue(Command, gcvFALSE));
 

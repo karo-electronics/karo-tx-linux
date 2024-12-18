@@ -19,7 +19,7 @@
 	/delete-node/ov5640_mipi@3c;
 
 	os08a20_0: os08a20_mipi@36 {
-		compatible = "ovti,os08a20";
+		compatible = "ovti,os08a20_mipi";
 		reg = <0x36>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_csi_mclk>;
@@ -51,7 +51,7 @@
 	/delete-node/ov5640_mipi@3c;
 
 	os08a20_1: os08a20_mipi@36 {
-		compatible = "ovti,os08a20";
+		compatible = "ovti,os08a20_mipi";
 		reg = <0x36>;
 		clocks = <&clk_dummy>;
 		clock-names = "csi_mclk";
@@ -76,7 +76,9 @@
 };
 
 &isi_0 {
-	status = "disabled";
+	cap_device {
+		status = "disabled";
+	};
 };
 
 &isi_1 {
@@ -101,7 +103,7 @@
 	assigned-clock-parents = <&clk IMX8MP_SYS_PLL1_266M>;
 	assigned-clock-rates = <266000000>;
 
-	port@0 {
+	port {
 		endpoint {
 			remote-endpoint = <&os08a20_mipi_0_ep>;
 			data-lanes = <4>;

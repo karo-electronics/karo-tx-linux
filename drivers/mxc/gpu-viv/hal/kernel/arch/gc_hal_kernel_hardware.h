@@ -52,7 +52,6 @@
 *
 *****************************************************************************/
 
-
 #ifndef __gc_hal_kernel_hardware_h_
 #define __gc_hal_kernel_hardware_h_
 
@@ -235,6 +234,8 @@ struct _gckHARDWARE {
     gctUINT32                   devID;
 
     gctBOOL                     largeVA;
+
+    gctBOOL                     supportUscReset;
 };
 
 gceSTATUS
@@ -309,6 +310,12 @@ gckHARDWARE_CancelJob(IN gckHARDWARE Hardware);
 
 gceSTATUS
 gckHARDWARE_ResumeWLFE(gckHARDWARE Hardware);
+
+gceSTATUS
+gckHARDWARE_SwitchSecurityMode(gckHARDWARE Hardware,
+                               gctPOINTER Logical, gctADDRESS Address,
+                               gctUINT32 firstMode, gctUINT32 secondMode,
+                               gctUINT32 *Bytes);
 
 #define gcmkWRITE_MEMORY(logical, data)                                       \
     do {                                                                      \

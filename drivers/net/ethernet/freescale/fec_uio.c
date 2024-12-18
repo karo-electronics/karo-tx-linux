@@ -35,6 +35,7 @@ static const char fec_uio_version[] = "FEC UIO driver v1.0";
 dma_addr_t bd_dma;
 int bd_size;
 struct bufdesc *cbd_base;
+resource_size_t size;
 
 #define NAME_LENGTH		30
 #define DRIVER_NAME		"fec-uio"
@@ -58,7 +59,6 @@ struct bufdesc *cbd_base;
 #define FEC_MMFR_TA             (2 << 16)
 #define FEC_MMFR_DATA(v)        ((v) & 0xffff)
 
-#define ENET_QOS               "30bf0000.ethernet"
 #define MTL_MAX_RX_QUEUES       8
 #define MTL_MAX_TX_QUEUES       8
 static int phyaddr = -1;
@@ -109,7 +109,7 @@ MODULE_DEVICE_TABLE(platform, fec_enet_uio_devtype);
 
 static const struct of_device_id fec_enet_uio_ids[] = {
 	{ .compatible = "fsl,imx8mm-fec-uio", .data = &fec_enet_uio_devtype },
-	{ .compatible = "fsl,imx8mp-enet-qos", .data = &fec_enet_uio_devtype },
+	{ .compatible = "fsl,imx-enet-qos", .data = &fec_enet_uio_devtype },
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, fec_enet_uio_ids);
@@ -182,7 +182,7 @@ static int imx_dwmac_init(struct platform_device *pdev, void *priv)
 	return 0;
 }
 
-static void imx_dwmac_fix_speed(void *priv, unsigned int speed)
+static void imx_dwmac_fix_speed(void *priv, unsigned int speed, unsigned int mode)
 {
 	struct plat_stmmacenet_data *plat_dat;
 	struct imx_priv_data *dwmac = priv;
@@ -192,8 +192,8 @@ static void imx_dwmac_fix_speed(void *priv, unsigned int speed)
 	plat_dat = dwmac->plat_dat;
 
 	if (dwmac->ops->mac_rgmii_txclk_auto_adj ||
-			(plat_dat->interface == PHY_INTERFACE_MODE_RMII) ||
-			(plat_dat->interface == PHY_INTERFACE_MODE_MII))
+			(plat_dat->mac_interface == PHY_INTERFACE_MODE_RMII) ||
+			(plat_dat->mac_interface == PHY_INTERFACE_MODE_MII))
 		return;
 
 	switch (speed) {
@@ -263,7 +263,8 @@ static void stmmac_fpe_link_state_handle(struct stmmac_priv *priv, bool is_up)
 	bool *hs_enable = &fpe_cfg->hs_enable;
 
 	if (is_up && *hs_enable) {
-		stmmac_fpe_send_mpacket(priv, priv->ioaddr, MPACKET_VERIFY);
+		stmmac_fpe_send_mpacket(priv, priv->ioaddr, fpe_cfg,
+					MPACKET_VERIFY);
 	} else {
 		*lo_state = FPE_STATE_OFF;
 		*lp_state = FPE_STATE_OFF;
@@ -367,7 +368,7 @@ static void stmmac_mac_link_up(struct phylink_config *config,
 	priv->speed = speed;
 
 	if (priv->plat->fix_mac_speed)
-		priv->plat->fix_mac_speed(priv->plat->bsp_priv, speed);
+		priv->plat->fix_mac_speed(priv->plat->bsp_priv, speed, mode);
 
 	if (!duplex)
 		ctrl &= ~priv->hw->link.duplex;
@@ -413,9 +414,9 @@ static const struct phylink_mac_ops stmmac_phylink_mac_ops = {
 static int stmmac_phy_setup(struct stmmac_priv *priv)
 {
 	struct stmmac_mdio_bus_data *mdio_bus_data = priv->plat->mdio_bus_data;
-	struct fwnode_handle *fwnode = of_fwnode_handle(priv->plat->phylink_node);
 	int max_speed = priv->plat->max_speed;
 	int mode = priv->plat->phy_interface;
+	struct fwnode_handle *fwnode;
 	struct phylink *phylink;
 
 	priv->phylink_config.dev = &priv->dev->dev;
@@ -423,9 +424,6 @@ static int stmmac_phy_setup(struct stmmac_priv *priv)
 	if (priv->plat->mdio_bus_data)
 		priv->phylink_config.ovr_an_inband =
 			mdio_bus_data->xpcs_an_inband;
-
-	if (!fwnode)
-		fwnode = dev_fwnode(priv->device);
 
 	/* Set the platform/firmware specified interface mode */
 	__set_bit(mode, priv->phylink_config.supported_interfaces);
@@ -443,6 +441,10 @@ static int stmmac_phy_setup(struct stmmac_priv *priv)
 
 	priv->phylink_config.mac_managed_pm = true;
 
+	fwnode = priv->plat->port_node;
+	if (!fwnode)
+		fwnode = dev_fwnode(priv->device);
+
 	phylink = phylink_create(&priv->phylink_config, fwnode,
 			mode, &stmmac_phylink_mac_ops);
 	if (IS_ERR(phylink))
@@ -451,6 +453,7 @@ static int stmmac_phy_setup(struct stmmac_priv *priv)
 	priv->phylink = phylink;
 	return 0;
 }
+
 static int stmmac_init_phy(struct net_device *dev)
 {
 	struct stmmac_priv *priv = netdev_priv(dev);
@@ -461,7 +464,7 @@ static int stmmac_init_phy(struct net_device *dev)
 	if (!phylink_expects_phy(priv->phylink))
 		return 0;
 
-	fwnode = of_fwnode_handle(priv->plat->phylink_node);
+	fwnode = priv->plat->port_node;
 	if (!fwnode)
 		fwnode = dev_fwnode(priv->device);
 
@@ -499,7 +502,7 @@ static int stmmac_init_phy(struct net_device *dev)
 
 static void stmmac_check_pcs_mode(struct stmmac_priv *priv)
 {
-	int interface = priv->plat->interface;
+	int interface = priv->plat->mac_interface;
 
 	if (priv->dma_cap.pcs) {
 		if ((interface == PHY_INTERFACE_MODE_RGMII) ||
@@ -555,7 +558,7 @@ static void stmmac_clk_csr_set(struct stmmac_priv *priv)
 			priv->clk_csr = STMMAC_CSR_250_300M;
 	}
 
-	if (priv->plat->has_sun8i) {
+	if (priv->plat->flags & STMMAC_FLAG_HAS_SUN8I) {
 		if (clk_rate > 160000000)
 			priv->clk_csr = 0x03;
 		else if (clk_rate > 80000000)
@@ -603,7 +606,7 @@ static int stmmac_qos_dvr_probe(struct device *device,
 	priv->plat = plat_dat;
 	priv->ioaddr = res->addr;
 	priv->dev->base_addr = (unsigned long)res->addr;
-	priv->plat->dma_cfg->multi_msi_en = priv->plat->multi_msi_en;
+	priv->plat->dma_cfg->multi_msi_en = (priv->plat->flags & STMMAC_FLAG_MULTI_MSI_EN);
 
 	dev_set_drvdata(device, priv->dev);
 
@@ -860,50 +863,33 @@ static int fec_enet_uio_mdio_wait(struct fec_enet_private *fep)
 	return ret;
 }
 
-static int fec_enet_uio_mdio_read(struct mii_bus *bus, int mii_id, int regnum)
+static int fec_enet_uio_mdio_read_c22(struct mii_bus *bus, int mii_id, int regnum)
 {
 	struct fec_enet_private *fep = bus->priv;
 	struct device *dev = &fep->pdev->dev;
 	int ret = 0, frame_start, frame_addr, frame_op;
-	bool is_c45 = !!(regnum & MII_ADDR_C45);
 
 	ret = pm_runtime_resume_and_get(dev);
 	if (ret < 0)
 		return ret;
 
-	if (is_c45) {
-		frame_start = FEC_MMFR_ST_C45;
+	/* C22 read */
+	frame_op = FEC_MMFR_OP_READ;
+	frame_start = FEC_MMFR_ST;
+	frame_addr = regnum;
 
-		/* write address */
-		frame_addr = (regnum >> 16);
-		writel(frame_start | FEC_MMFR_OP_ADDR_WRITE |
-				FEC_MMFR_PA(mii_id) | FEC_MMFR_RA(frame_addr) |
-				FEC_MMFR_TA | (regnum & 0xFFFF),
-				fep->hwp + FEC_MII_DATA);
-
-		/* wait for end of transfer */
-		ret = fec_enet_uio_mdio_wait(fep);
-		if (ret) {
-			netdev_err(fep->netdev, "MDIO address write timeout\n");
-			goto out;
-		}
-		frame_op = FEC_MMFR_OP_READ_C45;
-	} else {
-		/* C22 read */
-		frame_op = FEC_MMFR_OP_READ;
-		frame_start = FEC_MMFR_ST;
-		frame_addr = regnum;
-	}
 	/* start a read op */
 	writel(frame_start | frame_op |
 			FEC_MMFR_PA(mii_id) | FEC_MMFR_RA(frame_addr) |
 			FEC_MMFR_TA, fep->hwp + FEC_MII_DATA);
+
 	/* wait for end of transfer */
 	ret = fec_enet_uio_mdio_wait(fep);
 	if (ret) {
 		netdev_err(fep->netdev, "MDIO read timeout\n");
 		goto out;
 	}
+
 	ret = FEC_MMFR_DATA(readl(fep->hwp + FEC_MII_DATA));
 
 out:
@@ -913,45 +899,118 @@ out:
 	return ret;
 }
 
-static int fec_enet_uio_mdio_write(struct mii_bus *bus, int mii_id, int regnum,
-		u16 value)
+static int fec_enet_uio_mdio_read_c45(struct mii_bus *bus, int mii_id,
+				      int devad, int regnum)
 {
 	struct fec_enet_private *fep = bus->priv;
 	struct device *dev = &fep->pdev->dev;
-	int ret, frame_start, frame_addr;
-	bool is_c45 = !!(regnum & MII_ADDR_C45);
+	int ret = 0, frame_start, frame_op;
 
 	ret = pm_runtime_resume_and_get(dev);
 	if (ret < 0)
 		return ret;
 
-	if (is_c45) {
-		frame_start = FEC_MMFR_ST_C45;
+	frame_start = FEC_MMFR_ST_C45;
 
-		/* write address */
-		frame_addr = (regnum >> 16);
-		writel(frame_start | FEC_MMFR_OP_ADDR_WRITE |
-				FEC_MMFR_PA(mii_id) | FEC_MMFR_RA(frame_addr) |
-				FEC_MMFR_TA | (regnum & 0xFFFF),
-				fep->hwp + FEC_MII_DATA);
+	/* write address */
+	writel(frame_start | FEC_MMFR_OP_ADDR_WRITE |
+			FEC_MMFR_PA(mii_id) | FEC_MMFR_RA(devad) |
+			FEC_MMFR_TA | (regnum & 0xFFFF),
+			fep->hwp + FEC_MII_DATA);
 
-		/* wait for end of transfer */
-		ret = fec_enet_uio_mdio_wait(fep);
-		if (ret) {
-			netdev_err(fep->netdev, "MDIO address write timeout\n");
-			goto out;
-		}
-	} else {
-		/* C22 write */
-		frame_start = FEC_MMFR_ST;
-		frame_addr = regnum;
+	/* wait for end of transfer */
+	ret = fec_enet_uio_mdio_wait(fep);
+	if (ret) {
+		netdev_err(fep->netdev, "MDIO address write timeout\n");
+		goto out;
+	}
+
+	frame_op = FEC_MMFR_OP_READ_C45;
+
+	/* start a read op */
+	writel(frame_start | frame_op |
+	       FEC_MMFR_PA(mii_id) | FEC_MMFR_RA(devad) |
+	       FEC_MMFR_TA, fep->hwp + FEC_MII_DATA);
+
+	/* wait for end of transfer */
+	ret = fec_enet_uio_mdio_wait(fep);
+	if (ret) {
+		netdev_err(fep->netdev, "MDIO read timeout\n");
+		goto out;
+	}
+
+	ret = FEC_MMFR_DATA(readl(fep->hwp + FEC_MII_DATA));
+
+out:
+	pm_runtime_mark_last_busy(dev);
+	pm_runtime_put_autosuspend(dev);
+
+	return ret;
+}
+
+static int fec_enet_uio_mdio_write_c22(struct mii_bus *bus, int mii_id, int regnum,
+					u16 value)
+{
+	struct fec_enet_private *fep = bus->priv;
+	struct device *dev = &fep->pdev->dev;
+	int ret, frame_start, frame_addr;
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
+
+	/* C22 write */
+	frame_start = FEC_MMFR_ST;
+	frame_addr = regnum;
+
+	/* start a write op */
+	writel(frame_start | FEC_MMFR_OP_WRITE |
+		FEC_MMFR_PA(mii_id) | FEC_MMFR_RA(frame_addr) |
+		FEC_MMFR_TA | FEC_MMFR_DATA(value),
+		fep->hwp + FEC_MII_DATA);
+
+	/* wait for end of transfer */
+	ret = fec_enet_uio_mdio_wait(fep);
+	if (ret)
+		netdev_err(fep->netdev, "MDIO write timeout\n");
+
+	pm_runtime_mark_last_busy(dev);
+	pm_runtime_put_autosuspend(dev);
+
+	return ret;
+}
+
+static int fec_enet_uio_mdio_write_c45(struct mii_bus *bus, int mii_id,
+				   int devad, int regnum, u16 value)
+{
+	struct fec_enet_private *fep = bus->priv;
+	struct device *dev = &fep->pdev->dev;
+	int ret, frame_start;
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
+
+	frame_start = FEC_MMFR_ST_C45;
+
+	/* write address */
+	writel(frame_start | FEC_MMFR_OP_ADDR_WRITE |
+	       FEC_MMFR_PA(mii_id) | FEC_MMFR_RA(devad) |
+	       FEC_MMFR_TA | (regnum & 0xFFFF),
+	       fep->hwp + FEC_MII_DATA);
+
+	/* wait for end of transfer */
+	ret = fec_enet_uio_mdio_wait(fep);
+	if (ret) {
+		netdev_err(fep->netdev, "MDIO address write timeout\n");
+		goto out;
 	}
 
 	/* start a write op */
 	writel(frame_start | FEC_MMFR_OP_WRITE |
-			FEC_MMFR_PA(mii_id) | FEC_MMFR_RA(frame_addr) |
-			FEC_MMFR_TA | FEC_MMFR_DATA(value),
-			fep->hwp + FEC_MII_DATA);
+	       FEC_MMFR_PA(mii_id) | FEC_MMFR_RA(devad) |
+	       FEC_MMFR_TA | FEC_MMFR_DATA(value),
+	       fep->hwp + FEC_MII_DATA);
 
 	/* wait for end of transfer */
 	ret = fec_enet_uio_mdio_wait(fep);
@@ -1069,8 +1128,10 @@ static int fec_enet_uio_mii_init(struct platform_device *pdev)
 	}
 
 	fep->mii_bus->name = "fec_enet_mii_bus";
-	fep->mii_bus->read = fec_enet_uio_mdio_read;
-	fep->mii_bus->write = fec_enet_uio_mdio_write;
+	fep->mii_bus->read = fec_enet_uio_mdio_read_c22;
+	fep->mii_bus->write = fec_enet_uio_mdio_write_c22;
+	fep->mii_bus->read_c45 = fec_enet_uio_mdio_read_c45;
+	fep->mii_bus->write_c45 = fec_enet_uio_mdio_write_c45;
 	snprintf(fep->mii_bus->id, MII_BUS_ID_SIZE, "%s-%x",
 			pdev->name, fep->dev_id + 1);
 	fep->mii_bus->priv = fep;
@@ -1154,10 +1215,12 @@ static int __init fec_uio_init(struct fec_dev *fec_dev)
 	fec_uio_info->uio_info.priv = fec_dev;
 
 	ret = uio_register_device(fec_dev->dev, &fec_uio_info->uio_info);
-	if (ret == -517)
-		return ret;
 	if (ret) {
-		dev_err(fec_dev->dev, "fec_uio: UIO registration failed\n");
+		if (ret == -EPROBE_DEFER)
+			pr_info("UIO is not initialized, enetfec probe deferred");
+		else
+			dev_err(fec_dev->dev, "fec_uio: UIO registration failed\n");
+
 		return ret;
 	}
 	return 0;
@@ -1221,13 +1284,6 @@ enet_fec_probe(struct platform_device *pdev)
 	bool reset_again;
 	int ret = 0;
 
-	/* Checking UIO framework is initialized or not */
-	ret = uio_register_device(NULL, NULL);
-	if (ret == -EPROBE_DEFER) {
-		pr_info("UIO is not initialized, enetfec probe deferred");
-		return ret;
-	}
-
 	/* Init network device */
 	ndev = alloc_etherdev_mq(sizeof(struct fec_enet_private) +
 			FEC_PRIV_SIZE, FEC_MAX_Q);
@@ -1252,15 +1308,16 @@ enet_fec_probe(struct platform_device *pdev)
 
 	/* allocate memory for uio structure */
 	fec_dev = kzalloc(sizeof(*fec_dev), GFP_KERNEL);
-	if (!fec_dev)
-		return -ENOMEM;
-
+	if (!fec_dev) {
+		ret = -ENOMEM;
+		goto failed_kzalloc;
+	}
 	snprintf(fec_dev->info.name, sizeof(fec_dev->info.name) - 1,
 			"%s", uio_device_name);
 
 	fec_dev->dev = &pdev->dev;
-
 	fec_dev->res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	size = resource_size(fec_dev->res);
 	fep->hwp = devm_ioremap_resource(&pdev->dev, fec_dev->res);
 	if (IS_ERR(fep->hwp)) {
 		ret = PTR_ERR(fep->hwp);
@@ -1276,28 +1333,32 @@ enet_fec_probe(struct platform_device *pdev)
 	fep->clk_ipg = devm_clk_get(&pdev->dev, "ipg");
 	if (IS_ERR(fep->clk_ipg)) {
 		ret = PTR_ERR(fep->clk_ipg);
-		goto failed_clk;
+		goto failed_clk_ipg_res_release;
 	}
 
 	fep->clk_ahb = devm_clk_get(&pdev->dev, "ahb");
 	if (IS_ERR(fep->clk_ahb)) {
 		ret = PTR_ERR(fep->clk_ahb);
-		goto failed_clk;
+		goto failed_clk_ahb_res_release;
 	}
 
 	/* enet_out is optional, depends on board */
-	fep->clk_enet_out = devm_clk_get(&pdev->dev, "enet_out");
-	if (IS_ERR(fep->clk_enet_out))
-		fep->clk_enet_out = NULL;
+	fep->clk_enet_out = devm_clk_get_optional(&pdev->dev, "enet_out");
+	if (IS_ERR(fep->clk_enet_out)) {
+		ret = PTR_ERR(fep->clk_enet_out);
+		goto failed_clk_enet_out_res_release;
+	}
 
 	/* clk_ref is optional, depends on board */
-	fep->clk_ref = devm_clk_get(&pdev->dev, "enet_clk_ref");
-	if (IS_ERR(fep->clk_ref))
-		fep->clk_ref = NULL;
+	fep->clk_ref = devm_clk_get_optional(&pdev->dev, "enet_clk_ref");
+	if (IS_ERR(fep->clk_ref)) {
+		ret = PTR_ERR(fep->clk_ref);
+		goto failed_clk_ref_res_release;
+	}
 
 	ret = clk_prepare_enable(fep->clk_enet_out);
 	if (ret)
-		return ret;
+		goto failed_clk;
 
 	ret = clk_prepare_enable(fep->clk_ref);
 	if (ret)
@@ -1331,26 +1392,28 @@ enet_fec_probe(struct platform_device *pdev)
 
 	pm_runtime_enable(&pdev->dev);
 	ret = fec_enet_uio_reset_phy(pdev);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "fec-uio reset phy FAILED %d\n", ret);
 		goto failed_reset;
-
+	}
 	ret = fec_enet_uio_init(ndev);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "fec-uio init FAILED %d\n", ret);
 		goto failed_init;
+	}
 
 	/* Register UIO */
 	ret = fec_uio_init(fec_dev);
 	if (ret) {
-		if (ret == -517) {
+		if (ret == -EPROBE_DEFER)
 			dev_info(&pdev->dev,
 					"Driver request probe retry: %s\n", __func__);
-			goto out_unmap;
-		} else {
+		else
 			dev_err(&pdev->dev, "UIO init Failed\n");
-			goto abort;
-		}
+
+		goto failed_uio_init;
 	}
-	dev_info(fec_dev->dev, "UIO device full name %s initialized\n",
+	dev_info(fec_dev->dev, "UIO device \"%s\" initialized\n",
 			fec_dev->info.name);
 
 	if (fep->quirks & FEC_QUIRK_ENET_MAC) {
@@ -1364,9 +1427,10 @@ enet_fec_probe(struct platform_device *pdev)
 	writel(ecntl, fep->hwp + FEC_ECNTRL);
 
 	ret = fec_enet_uio_mii_init(pdev);
-	if (ret)
+	if (ret) {
+		dev_err(&pdev->dev, "fec-uio mii_init FAILED %d\n", ret);
 		goto failed_mii_init;
-
+	}
 	pm_runtime_get_sync(&fep->pdev->dev);
 	if (ndev->phydev && ndev->phydev->drv)
 		reset_again = false;
@@ -1376,51 +1440,87 @@ enet_fec_probe(struct platform_device *pdev)
 	return 0;
 
 failed_mii_init:
+	fec_enet_uio_mii_remove(fep);
+failed_uio_init:
+	uio_unregister_device(&fec_dev->info.uio_info);
 failed_init:
+	if (cbd_base)
+		dma_free_coherent(&fep->pdev->dev, bd_size, cbd_base, bd_dma);
 failed_reset:
 	pm_runtime_disable(&pdev->dev);
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
-failed_clk_ref:
-	clk_disable_unprepare(fep->clk_enet_out);
 failed_regulator:
 	clk_disable_unprepare(fep->clk_ahb);
 failed_clk_ahb:
 	clk_disable_unprepare(fep->clk_ipg);
 failed_clk_ipg:
-	clk_disable_unprepare(fep->clk_enet_out);
 	clk_disable_unprepare(fep->clk_ref);
+failed_clk_ref:
+	clk_disable_unprepare(fep->clk_enet_out);
 failed_clk:
+	devm_clk_put(&pdev->dev, fep->clk_ref);
+failed_clk_ref_res_release:
+	devm_clk_put(&pdev->dev, fep->clk_enet_out);
+failed_clk_enet_out_res_release:
+	devm_clk_put(&pdev->dev, fep->clk_ahb);
+failed_clk_ahb_res_release:
+	devm_clk_put(&pdev->dev, fep->clk_ipg);
+failed_clk_ipg_res_release:
 	release_bus_freq(BUS_FREQ_HIGH);
 	dev_id--;
 failed_ioremap:
+	kfree(fec_dev);
+	if (fep->hwp)
+		devm_release_mem_region(&pdev->dev, fec_dev->res->start, size);
+failed_kzalloc:
 	free_netdev(ndev);
 
 	return ret;
-out_unmap:
-	dev_id--;
-	kfree(fec_dev);
-	iounmap(fep->hwp);
+}
+
+static int
+fec_enet_uio_remove(struct platform_device *pdev)
+{
+	struct net_device *ndev = platform_get_drvdata(pdev);
+	struct fec_enet_private *fep = netdev_priv(ndev);
+
+	fec_enet_uio_mii_remove(fep);
+	uio_unregister_device(&fec_dev->info.uio_info);
 	dma_free_coherent(&fep->pdev->dev, bd_size, cbd_base, bd_dma);
-	free_netdev(ndev);
+
+	if (fep->hwp)
+		devm_release_mem_region(&pdev->dev, fec_dev->res->start, size);
+	if (fep->reg_phy)
+		regulator_disable(fep->reg_phy);
+
 	clk_disable_unprepare(fep->clk_ahb);
 	clk_disable_unprepare(fep->clk_ipg);
-	clk_disable_unprepare(fep->clk_enet_out);
 	clk_disable_unprepare(fep->clk_ref);
+	clk_disable_unprepare(fep->clk_enet_out);
+	devm_clk_put(&pdev->dev, fep->clk_ref);
+	devm_clk_put(&pdev->dev, fep->clk_enet_out);
+	devm_clk_put(&pdev->dev, fep->clk_ahb);
+	devm_clk_put(&pdev->dev, fep->clk_ipg);
 	pm_runtime_disable(&pdev->dev);
+	release_bus_freq(BUS_FREQ_HIGH);
+	fep->dev_id--;
+	kfree(fec_dev);
+	free_netdev(ndev);
+	dev_info(fec_dev->dev, "\"%s\" successfully removed \n",
+		 fec_dev->info.name);
 
-	return -EPROBE_DEFER;
-abort:
-	return ret;
+	return 0;
 }
 
 static int
 fec_enet_uio_probe(struct platform_device *pdev)
 {
+	const char *comp_str = of_get_property(pdev->dev.of_node, "compatible", NULL);
 	int ret;
 
-	/* This is for the ENET-QOS ethernet */
-	if (!strcmp(pdev->name, ENET_QOS)) {
+	/* This is for the ENET-QOS ethernet (i.MX8MP & i.MX93 supported)*/
+	if (!strcmp(comp_str, "fsl,imx-enet-qos")) {
 		ret = enet_qos_probe(pdev);
 
 		if (ret)
@@ -1435,32 +1535,6 @@ fec_enet_uio_probe(struct platform_device *pdev)
 	}
 
 	return ret;
-}
-
-
-static int
-fec_enet_uio_remove(struct platform_device *pdev)
-{
-	struct net_device *ndev = platform_get_drvdata(pdev);
-	struct fec_enet_private *fep = netdev_priv(ndev);
-
-	kfree(fec_dev);
-	iounmap(fep->hwp);
-	dma_free_coherent(&fep->pdev->dev, bd_size, cbd_base, bd_dma);
-
-	uio_unregister_device(&fec_dev->info.uio_info);
-
-	fec_enet_uio_mii_remove(fep);
-	if (fep->reg_phy)
-		regulator_disable(fep->reg_phy);
-
-	free_netdev(ndev);
-
-	clk_disable_unprepare(fep->clk_ahb);
-	clk_disable_unprepare(fep->clk_ipg);
-	pm_runtime_disable(&pdev->dev);
-
-	return 0;
 }
 
 static struct platform_driver fec_enet_uio_driver = {

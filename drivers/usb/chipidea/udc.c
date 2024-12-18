@@ -20,6 +20,7 @@
 #include <linux/usb/gadget.h>
 #include <linux/usb/otg-fsm.h>
 #include <linux/usb/chipidea.h>
+#include <linux/usb/composite.h>
 
 #include "ci.h"
 #include "udc.h"
@@ -517,7 +518,8 @@ static int prepare_td_for_sg(struct ci_hw_ep *hwep, struct ci_hw_req *hwreq)
 	}
 
 	while (i++ < req->num_mapped_sgs) {
-		if (sg_dma_address(s) % PAGE_SIZE) {
+		/* The first buffer could be not page size aligned. */
+		if ((sg_dma_address(s) % PAGE_SIZE) && (i > 1)) {
 			dev_err(hwep->ci->dev, "not page aligned sg buffer\n");
 			return -EINVAL;
 		}
@@ -1463,7 +1465,7 @@ static int ep_disable(struct usb_ep *ep)
  */
 static struct usb_request *ep_alloc_request(struct usb_ep *ep, gfp_t gfp_flags)
 {
-	struct ci_hw_req *hwreq = NULL;
+	struct ci_hw_req *hwreq;
 
 	if (ep == NULL)
 		return NULL;
@@ -1919,6 +1921,26 @@ static void destroy_eps(struct ci_hdrc *ci)
 	}
 }
 
+/*
+ * ChipIdea HW doesn't support scatterlist well for uvc, so we disable
+ * sg_support for uvc and enable it for others.
+ */
+static bool ci_udc_enable_sg_support(struct usb_gadget *gadget)
+{
+	struct usb_composite_dev *cdev = get_gadget_data(gadget);
+	struct usb_configuration *c;
+	struct usb_function *f;
+
+	list_for_each_entry(c, &cdev->configs, list) {
+		list_for_each_entry(f, &c->functions, list) {
+			if (!strcmp(f->name, "uvc"))
+				return false;
+		}
+	}
+
+	return true;
+}
+
 /**
  * ci_udc_start: register a gadget driver
  * @gadget: our gadget
@@ -1946,6 +1968,9 @@ static int ci_udc_start(struct usb_gadget *gadget,
 		return retval;
 
 	ci->driver = driver;
+
+	if (ci_udc_enable_sg_support(gadget))
+		ci->gadget.sg_supported = 1;
 
 	/* Start otg fsm for B-device */
 	if (ci_otg_is_fsm_mode(ci) && ci->fsm.id) {
@@ -1987,6 +2012,7 @@ static int ci_udc_stop(struct usb_gadget *gadget)
 
 	spin_lock_irqsave(&ci->lock, flags);
 	ci->driver = NULL;
+	ci->gadget.sg_supported = 0;
 
 	if (ci->vbus_active) {
 		hw_device_state(ci, 0);
@@ -2095,7 +2121,7 @@ static int udc_start(struct ci_hdrc *ci)
 	ci->gadget.max_speed    = USB_SPEED_HIGH;
 	ci->gadget.name         = ci->platdata->name;
 	ci->gadget.otg_caps	= otg_caps;
-	ci->gadget.sg_supported = 1;
+	ci->gadget.sg_supported = 0;
 	ci->gadget.irq		= ci->irq;
 
 	if (ci->platdata->flags & CI_HDRC_REQUIRES_ALIGNED_DMA)
@@ -2191,7 +2217,8 @@ static void udc_id_switch_for_host(struct ci_hdrc *ci)
 				     ci->platdata->pins_default);
 }
 
-static void udc_suspend_for_power_lost(struct ci_hdrc *ci)
+#ifdef CONFIG_PM_SLEEP
+static void udc_suspend(struct ci_hdrc *ci)
 {
 	/*
 	 * Set OP_ENDPTLISTADDR to be non-zero for
@@ -2202,32 +2229,21 @@ static void udc_suspend_for_power_lost(struct ci_hdrc *ci)
 		hw_write(ci, OP_ENDPTLISTADDR, ~0, ~0);
 }
 
-/* Power lost with device mode */
-static void udc_resume_from_power_lost(struct ci_hdrc *ci)
-{
-	if (ci->is_otg)
-		hw_write_otgsc(ci, OTGSC_BSVIS | OTGSC_BSVIE,
-					OTGSC_BSVIS | OTGSC_BSVIE);
-}
-
-static void udc_suspend(struct ci_hdrc *ci)
-{
-	udc_suspend_for_power_lost(ci);
-
-	if (ci->driver && ci->vbus_active &&
-			(ci->gadget.state != USB_STATE_SUSPENDED))
-		usb_gadget_disconnect(&ci->gadget);
-}
-
 static void udc_resume(struct ci_hdrc *ci, bool power_lost)
 {
 	if (power_lost) {
-		udc_resume_from_power_lost(ci);
-	} else {
-		if (ci->driver && ci->vbus_active)
-			usb_gadget_connect(&ci->gadget);
+		if (ci->is_otg)
+			hw_write_otgsc(ci, OTGSC_BSVIS | OTGSC_BSVIE,
+					OTGSC_BSVIS | OTGSC_BSVIE);
+		if (ci->vbus_active)
+			usb_gadget_vbus_disconnect(&ci->gadget);
 	}
+
+	/* Restore value 0 if it was set for power lost check */
+	if (hw_read(ci, OP_ENDPTLISTADDR, ~0) == 0xFFFFFFFF)
+		hw_write(ci, OP_ENDPTLISTADDR, ~0, 0);
 }
+#endif
 
 /**
  * ci_hdrc_gadget_init - initialize device related bits
@@ -2249,8 +2265,10 @@ int ci_hdrc_gadget_init(struct ci_hdrc *ci)
 
 	rdrv->start	= udc_id_switch_for_device;
 	rdrv->stop	= udc_id_switch_for_host;
+#ifdef CONFIG_PM_SLEEP
 	rdrv->suspend	= udc_suspend;
 	rdrv->resume	= udc_resume;
+#endif
 	rdrv->irq	= udc_irq;
 	rdrv->name	= "gadget";
 

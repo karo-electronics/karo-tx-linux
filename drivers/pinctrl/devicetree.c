@@ -7,7 +7,7 @@
 
 #include <linux/device.h>
 #include <linux/of.h>
-#include <linux/of_gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/pinctrl/pinctrl.h>
 #include <linux/slab.h>
 
@@ -197,38 +197,19 @@ static int dt_remember_dummy_state(struct pinctrl *p, const char *statename)
 static int dt_gpio_assert_pinctrl(struct pinctrl *p)
 {
 	struct device_node *np = p->dev->of_node;
-	enum of_gpio_flags flags;
-	int gpio;
+	struct gpio_desc *gpio;
 	int index = 0;
-	int ret;
 
 	if (!of_find_property(np, "pinctrl-assert-gpios", NULL))
 		return 0; /* Missing the property, so nothing to be done */
 
 	for (;; index++) {
-		gpio = of_get_named_gpio_flags(np, "pinctrl-assert-gpios",
-					       index, &flags);
-		if (gpio < 0) {
-			if (gpio == -EPROBE_DEFER)
-				return gpio;
-			break; /* End of the phandle list */
-		}
-
-		if (!gpio_is_valid(gpio))
-			return -EINVAL;
-
-		ret = devm_gpio_request_one(p->dev, gpio, GPIOF_OUT_INIT_LOW,
-					    NULL);
-		if (ret < 0)
-			return ret;
-
-		if (flags & OF_GPIO_ACTIVE_LOW)
-			continue;
-
-		if (gpio_cansleep(gpio))
-			gpio_set_value_cansleep(gpio, 1);
-		else
-			gpio_set_value(gpio, 1);
+		gpio = devm_gpiod_get_index(p->dev, "pinctrl-assert", index, GPIOD_OUT_HIGH);
+		if (IS_ERR(gpio)) {
+			if (PTR_ERR(gpio) == -EPROBE_DEFER)
+				return -EPROBE_DEFER;
+ 			break; /* End of the phandle list */
+ 		}
 	}
 
 	return 0;
@@ -267,14 +248,16 @@ int pinctrl_dt_to_map(struct pinctrl *p, struct pinctrl_dev *pctldev)
 	for (state = 0; ; state++) {
 		/* Retrieve the pinctrl-* property */
 		propname = kasprintf(GFP_KERNEL, "pinctrl-%d", state);
-		if (!propname)
-			return -ENOMEM;
+		if (!propname) {
+			ret = -ENOMEM;
+			goto err;
+		}
 		prop = of_find_property(np, propname, &size);
 		kfree(propname);
 		if (!prop) {
 			if (state == 0) {
-				of_node_put(np);
-				return -ENODEV;
+				ret = -ENODEV;
+				goto err;
 			}
 			break;
 		}

@@ -52,7 +52,6 @@
 *
 *****************************************************************************/
 
-
 #ifndef __gc_hal_enum_h_
 #define __gc_hal_enum_h_
 
@@ -1260,9 +1259,11 @@ typedef enum _gceTLS_KEY {
 } gceTLS_KEY;
 
 typedef enum _gcePLS_VALUE {
+    gcePLS_VALUE_EGL_DEVICE_INFO,
     gcePLS_VALUE_EGL_DISPLAY_INFO,
     gcePLS_VALUE_EGL_CONFIG_FORMAT_INFO,
     gcePLS_VALUE_EGL_DESTRUCTOR_INFO,
+    gcePLS_VALUE_OPENCL_DESTRUCTOR_INFO,
 } gcePLS_VALUE;
 
 #if gcdENABLE_3D
@@ -1331,6 +1332,8 @@ typedef enum _gceAPI {
     gcvAPI_OPENVG,
     gcvAPI_OPENCL,
     gcvAPI_OPENVK,
+    gcvAPI_EGL,
+    gcvAPI_COUNT,
 } gceAPI;
 
 typedef enum _gceWHERE {
@@ -1502,6 +1505,7 @@ typedef enum _gceSPLIT_DRAW_TYPE {
     gcvSPLIT_DRAW_STIPPLE,
     gcvSPLIT_DRAW_WIDE_LINE,
     gcvSPLIT_DRAW_LINES_HW_ZERO_AREA_LINE_PATCH,
+    gcvSPLIT_DRAW_TRIANGLES,
     gcvSPLIT_DRAW_LAST
 } gceSPLIT_DRAW_TYPE;
 

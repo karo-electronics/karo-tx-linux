@@ -457,7 +457,7 @@ static int mmdc_pmu_init(struct mmdc_pmu *pmu_mmdc,
 	return pmu_mmdc->id;
 }
 
-static int imx_mmdc_remove(struct platform_device *pdev)
+static void imx_mmdc_remove(struct platform_device *pdev)
 {
 	struct mmdc_pmu *pmu_mmdc = platform_get_drvdata(pdev);
 
@@ -467,7 +467,6 @@ static int imx_mmdc_remove(struct platform_device *pdev)
 	iounmap(pmu_mmdc->mmdc_base);
 	clk_disable_unprepare(pmu_mmdc->mmdc_ipg_clk);
 	kfree(pmu_mmdc);
-	return 0;
 }
 
 static int imx_mmdc_perf_init(struct platform_device *pdev, void __iomem *mmdc_base,
@@ -503,11 +502,15 @@ static int imx_mmdc_perf_init(struct platform_device *pdev, void __iomem *mmdc_b
 
 	name = devm_kasprintf(&pdev->dev,
 				GFP_KERNEL, "mmdc%d", ret);
+	if (!name) {
+		ret = -ENOMEM;
+		goto pmu_release_id;
+	}
 
 	pmu_mmdc->mmdc_ipg_clk = mmdc_ipg_clk;
 	pmu_mmdc->devtype_data = &imx6q_data;
 	if (of_id)
-		pmu_mmdc->devtype_data = (struct fsl_mmdc_devtype_data *)of_id->data;
+		pmu_mmdc->devtype_data = of_id->data;
 
 	hrtimer_init(&pmu_mmdc->hrtimer, CLOCK_MONOTONIC,
 			HRTIMER_MODE_REL);
@@ -527,9 +530,10 @@ static int imx_mmdc_perf_init(struct platform_device *pdev, void __iomem *mmdc_b
 
 pmu_register_err:
 	pr_warn("MMDC Perf PMU failed (%d), disabled\n", ret);
-	ida_simple_remove(&mmdc_ida, pmu_mmdc->id);
 	cpuhp_state_remove_instance_nocalls(cpuhp_mmdc_state, &pmu_mmdc->node);
 	hrtimer_cancel(&pmu_mmdc->hrtimer);
+pmu_release_id:
+	ida_simple_remove(&mmdc_ida, pmu_mmdc->id);
 pmu_free:
 	kfree(pmu_mmdc);
 	return ret;
@@ -600,7 +604,7 @@ static struct platform_driver imx_mmdc_driver = {
 		.of_match_table = imx_mmdc_dt_ids,
 	},
 	.probe		= imx_mmdc_probe,
-	.remove		= imx_mmdc_remove,
+	.remove_new	= imx_mmdc_remove,
 };
 
 static int __init imx_mmdc_init(void)

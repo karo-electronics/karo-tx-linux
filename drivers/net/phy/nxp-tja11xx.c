@@ -194,6 +194,8 @@ static int tja11xx_soft_reset(struct phy_device *phydev)
 	if (ret)
 		return ret;
 
+	genphy_resume(phydev);
+
 	return genphy_soft_reset(phydev);
 }
 
@@ -311,10 +313,12 @@ static int tja11xx_config_init(struct phy_device *phydev)
 		if (ret < 0)
 			return ret;
 
+		phy_set_bits(phydev, MII_BMCR, BMCR_PDOWN);
 		reg_val |= (ret & 0xffff);
 		ret = phy_modify(phydev, MII_CFG1, reg_mask, reg_val);
 		if (ret)
 			return ret;
+		phy_clear_bits(phydev, MII_BMCR, BMCR_PDOWN);
 		break;
 	case PHY_ID_TJA1101:
 		reg_mask = MII_CFG1_INTERFACE_MODE_MASK;
@@ -477,7 +481,7 @@ static umode_t tja11xx_hwmon_is_visible(const void *data,
 	return 0;
 }
 
-static const struct hwmon_channel_info *tja11xx_hwmon_info[] = {
+static const struct hwmon_channel_info * const tja11xx_hwmon_info[] = {
 	HWMON_CHANNEL_INFO(in, HWMON_I_LCRIT_ALARM),
 	HWMON_CHANNEL_INFO(temp, HWMON_T_CRIT_ALARM),
 	NULL

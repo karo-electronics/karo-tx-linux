@@ -28,6 +28,8 @@
 #define EDID_BLOCK_SIZE	128
 #define EDID_NUM_BLOCKS	2
 
+#define FW_FILE "lt9611uxc_fw.bin"
+
 struct lt9611uxc {
 	struct device *dev;
 	struct drm_bridge bridge;
@@ -94,9 +96,13 @@ struct lt9611uxc_mode {
  * Enumerate them here to check whether the mode is supported.
  */
 static struct lt9611uxc_mode lt9611uxc_modes[] = {
+	{ 4096, 2160, 30 },
+	{ 3840, 2160, 30 },
+	{ 3840, 2160, 25 },
 	{ 1920, 1080, 60 },
 	{ 1920, 1080, 30 },
 	{ 1920, 1080, 25 },
+	{ 1920, 1080, 24 },
 	{ 1366, 768, 60 },
 	{ 1360, 768, 60 },
 	{ 1280, 1024, 60 },
@@ -263,10 +269,8 @@ static struct mipi_dsi_device *lt9611uxc_attach_dsi(struct lt9611uxc *lt9611uxc,
 	int ret;
 
 	host = of_find_mipi_dsi_host_by_node(dsi_node);
-	if (!host) {
-		dev_err(dev, "failed to find dsi host\n");
-		return ERR_PTR(-EPROBE_DEFER);
-	}
+	if (!host)
+		return ERR_PTR(dev_err_probe(dev, -EPROBE_DEFER, "failed to find dsi host\n"));
 
 	dsi = devm_mipi_dsi_device_register_full(dev, host, &info);
 	if (IS_ERR(dsi)) {
@@ -377,6 +381,23 @@ lt9611uxc_bridge_mode_valid(struct drm_bridge *bridge,
 			    const struct drm_display_mode *mode)
 {
 	struct lt9611uxc_mode *lt9611uxc_mode;
+	struct drm_bridge *pre_bridge;
+
+	 /*
+	  * i.MX95 MIPI DSI cannot support both 1920x1080p60 (requiring approximately
+	  * 148.444MHz pixel clock) and 4Kp30 (requiring exactly 297MHz pixel clock)
+	  * using a single video PLL configuration.
+	  *
+	  * To ensure correct pixel clock operation for all modes, remove the
+	  * video modes with its 148.5MHz pixel clock.
+	  */
+	if (mode->clock == 148500) {
+		pre_bridge = drm_bridge_get_prev_bridge(bridge);
+		if (pre_bridge)
+			if (of_device_is_compatible(pre_bridge->of_node,
+						    "nxp,imx95-mipi-dsi"))
+				return MODE_BAD;
+	}
 
 	lt9611uxc_mode = lt9611uxc_find_mode(mode);
 
@@ -754,7 +775,7 @@ static int lt9611uxc_firmware_update(struct lt9611uxc *lt9611uxc)
 		REG_SEQ0(0x805a, 0x00),
 	};
 
-	ret = request_firmware(&fw, "lt9611uxc_fw.bin", lt9611uxc->dev);
+	ret = request_firmware(&fw, FW_FILE, lt9611uxc->dev);
 	if (ret < 0)
 		return ret;
 
@@ -844,8 +865,7 @@ static const struct attribute_group *lt9611uxc_attr_groups[] = {
 	NULL,
 };
 
-static int lt9611uxc_probe(struct i2c_client *client,
-			   const struct i2c_device_id *id)
+static int lt9611uxc_probe(struct i2c_client *client)
 {
 	struct lt9611uxc *lt9611uxc;
 	struct device *dev = &client->dev;
@@ -928,9 +948,9 @@ retry:
 	init_waitqueue_head(&lt9611uxc->wq);
 	INIT_WORK(&lt9611uxc->work, lt9611uxc_hpd_work);
 
-	ret = devm_request_threaded_irq(dev, client->irq, NULL,
-					lt9611uxc_irq_thread_handler,
-					IRQF_ONESHOT, "lt9611uxc", lt9611uxc);
+	ret = request_threaded_irq(client->irq, NULL,
+				   lt9611uxc_irq_thread_handler,
+				   IRQF_ONESHOT, "lt9611uxc", lt9611uxc);
 	if (ret) {
 		dev_err(dev, "failed to request irq\n");
 		goto err_disable_regulators;
@@ -966,6 +986,8 @@ retry:
 	return lt9611uxc_audio_init(dev, lt9611uxc);
 
 err_remove_bridge:
+	free_irq(client->irq, lt9611uxc);
+	cancel_work_sync(&lt9611uxc->work);
 	drm_bridge_remove(&lt9611uxc->bridge);
 
 err_disable_regulators:
@@ -982,7 +1004,7 @@ static void lt9611uxc_remove(struct i2c_client *client)
 {
 	struct lt9611uxc *lt9611uxc = i2c_get_clientdata(client);
 
-	disable_irq(client->irq);
+	free_irq(client->irq, lt9611uxc);
 	cancel_work_sync(&lt9611uxc->work);
 	lt9611uxc_audio_exit(lt9611uxc);
 	drm_bridge_remove(&lt9611uxc->bridge);
@@ -1020,3 +1042,5 @@ module_i2c_driver(lt9611uxc_driver);
 
 MODULE_AUTHOR("Dmitry Baryshkov <dmitry.baryshkov@linaro.org>");
 MODULE_LICENSE("GPL v2");
+
+MODULE_FIRMWARE(FW_FILE);

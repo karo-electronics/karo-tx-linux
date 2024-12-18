@@ -10,6 +10,8 @@
  * Vybrid, Layerscape and S32V234 SoCs.
  */
 
+#include <dt-bindings/dma/fsl-edma.h>
+#include <linux/bitfield.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/clk.h>
@@ -324,10 +326,8 @@ static int fsl_edma_probe(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	struct fsl_edma_engine *fsl_edma;
 	const struct fsl_edma_drvdata *drvdata = NULL;
-	struct fsl_edma_chan *fsl_chan;
 	struct edma_regs *regs;
-	struct resource *res;
-	int len, chans;
+	int chans;
 	int ret, i;
 
 	if (of_id)
@@ -343,8 +343,8 @@ static int fsl_edma_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	len = sizeof(*fsl_edma) + sizeof(*fsl_chan) * chans;
-	fsl_edma = devm_kzalloc(&pdev->dev, len, GFP_KERNEL);
+	fsl_edma = devm_kzalloc(&pdev->dev, struct_size(fsl_edma, chans, chans),
+				GFP_KERNEL);
 	if (!fsl_edma)
 		return -ENOMEM;
 
@@ -352,8 +352,7 @@ static int fsl_edma_probe(struct platform_device *pdev)
 	fsl_edma->n_chans = chans;
 	mutex_init(&fsl_edma->fsl_edma_mutex);
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	fsl_edma->membase = devm_ioremap_resource(&pdev->dev, res);
+	fsl_edma->membase = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(fsl_edma->membase))
 		return PTR_ERR(fsl_edma->membase);
 
@@ -377,8 +376,8 @@ static int fsl_edma_probe(struct platform_device *pdev)
 	for (i = 0; i < fsl_edma->drvdata->dmamuxs; i++) {
 		char clkname[32];
 
-		res = platform_get_resource(pdev, IORESOURCE_MEM, 1 + i);
-		fsl_edma->muxbase[i] = devm_ioremap_resource(&pdev->dev, res);
+		fsl_edma->muxbase[i] = devm_platform_ioremap_resource(pdev,
+								      1 + i);
 		if (IS_ERR(fsl_edma->muxbase[i])) {
 			/* on error: disable all previously enabled clks */
 			fsl_disable_clocks(fsl_edma, i);
@@ -457,7 +456,8 @@ static int fsl_edma_probe(struct platform_device *pdev)
 
 	fsl_edma->dma_dev.copy_align = DMAENGINE_ALIGN_32_BYTES;
 	/* Per worst case 'nbytes = 1' take CITER as the max_seg_size */
-	dma_set_max_seg_size(fsl_edma->dma_dev.dev, 0x3fff);
+	dma_set_max_seg_size(fsl_edma->dma_dev.dev,
+			     FIELD_GET(EDMA_TCD_ITER_MASK, EDMA_TCD_ITER_MASK));
 
 	platform_set_drvdata(pdev, fsl_edma);
 

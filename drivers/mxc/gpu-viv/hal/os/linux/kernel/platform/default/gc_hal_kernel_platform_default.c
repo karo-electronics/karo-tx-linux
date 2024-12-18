@@ -52,7 +52,6 @@
 *
 *****************************************************************************/
 
-
 /*
  *   dts node example:
  *   gpu_3d: gpu@53100000 {
@@ -234,6 +233,7 @@ gceSTATUS
 _set_power(IN gcsPLATFORM *Platform, IN gctUINT32 DevIndex, IN gceCORE GPU, IN gctBOOL Enable)
 {
     int num_domains = gpd.num_domains;
+    
     if (num_domains > 1) {
         int sub_index = gpd.local_core_index[GPU];
         struct device *sub_dev = gpd.power_dev[sub_index];
@@ -274,9 +274,8 @@ static int gpu_remove_power_domains(struct platform_device *pdev)
         }
     }
 
-    if (gpd.num_domains == 1) {
+    if (gpd.num_domains == 1)
         pm_runtime_disable(&pdev->dev);
-    }
 
     return 0;
 }
@@ -499,7 +498,7 @@ struct _gcsPLATFORM_PCIE default_platform = {
     },
 };
 
-gctINT
+static gctINT
 _QueryBarInfo(struct pci_dev *Pdev,
               gctPHYS_ADDR_T *BarAddr,
               gctUINT64      *BarSize,
@@ -761,7 +760,7 @@ _AdjustParam(IN gcsPLATFORM *Platform, OUT gcsMODULE_PARAMETERS *Args)
 
                     if (ptr) {
                         Args->registerBasesMapped[core] =
-                            (gctPOINTER)((gctCHAR*)ptr + Args->regOffsets[core]);
+                            (gctPOINTER)((gctCHAR *)ptr + Args->regOffsets[core]);
                     }
                 }
             }
@@ -786,7 +785,7 @@ _AdjustParam(IN gcsPLATFORM *Platform, OUT gcsMODULE_PARAMETERS *Args)
 
                     if (ptr) {
                         Args->register2DBasesMapped[core_2d] =
-                            (gctPOINTER)((gctCHAR*)ptr + Args->reg2DOffsets[core_2d]);
+                            (gctPOINTER)((gctCHAR *)ptr + Args->reg2DOffsets[core_2d]);
                     }
                 }
             }
@@ -808,7 +807,7 @@ _AdjustParam(IN gcsPLATFORM *Platform, OUT gcsMODULE_PARAMETERS *Args)
 
                 if (ptr) {
                     Args->registerVGBaseMapped =
-                        (gctPOINTER)((gctCHAR*)ptr + Args->regVGOffset);
+                        (gctPOINTER)((gctCHAR *)ptr + Args->regVGOffset);
                 }
             }
 

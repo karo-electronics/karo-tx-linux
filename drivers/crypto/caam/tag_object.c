@@ -11,8 +11,8 @@
 #include "desc.h"
 
 /**
- * is_key_type -	Check if the object is a key
  *
+ * is_key_type -	Check if the object is a key
  * @type:		The object type
  *
  * Return:		True if the object is a key (of black or red color),
@@ -153,7 +153,7 @@ int set_tag_object_header_conf(const struct header_conf *header,
 	 * Buffers might overlap, use memmove to
 	 * copy the buffer into the tagged object
 	 */
-	memmove(&tag_obj->object, buffer, buf_size);
+	memmove(tag_obj->object, buffer, buf_size);
 	/* Copy the tag object header configuration into the tagged object */
 	memcpy(&tag_obj->header, header, TAG_OVERHEAD_SIZE);
 	/* Set tagged object size */

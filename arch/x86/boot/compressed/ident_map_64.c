@@ -8,14 +8,6 @@
  * Copyright (C)      2016  Kees Cook
  */
 
-/*
- * Since we're dealing with identity mappings, physical and virtual
- * addresses are the same, so override these defines which are ultimately
- * used by the headers in misc.h.
- */
-#define __pa(x)  ((unsigned long)(x))
-#define __va(x)  ((void *)((unsigned long)(x)))
-
 /* No PAGE_TABLE_ISOLATION support needed either: */
 #undef CONFIG_PAGE_TABLE_ISOLATION
 
@@ -65,6 +57,14 @@ static void *alloc_pgt_page(void *context)
 		debug_putaddr(pages->pgt_buf_offset);
 		debug_putaddr(pages->pgt_buf_size);
 		return NULL;
+	}
+
+	/* Consumed more tables than expected? */
+	if (pages->pgt_buf_offset == BOOT_PGT_SIZE_WARN) {
+		debug_putstr("pgt_buf running low in " __FILE__ "\n");
+		debug_putstr("Need to raise BOOT_PGT_SIZE?\n");
+		debug_putaddr(pages->pgt_buf_offset);
+		debug_putaddr(pages->pgt_buf_size);
 	}
 
 	entry = pages->pgt_buf + pages->pgt_buf_offset;
@@ -384,4 +384,9 @@ void do_boot_page_fault(struct pt_regs *regs, unsigned long error_code)
 	 * the faulting address.
 	 */
 	kernel_add_identity_map(address, end);
+}
+
+void do_boot_nmi_trap(struct pt_regs *regs, unsigned long error_code)
+{
+	/* Empty handler to ignore NMI during early boot */
 }

@@ -56,6 +56,7 @@
 #include <asm/drmem.h>
 #include <asm/ultravisor.h>
 #include <asm/prom.h>
+#include <asm/plpks.h>
 
 #include <mm/mmu_decl.h>
 
@@ -72,6 +73,7 @@ int __initdata iommu_is_off;
 int __initdata iommu_force_on;
 unsigned long tce_alloc_start, tce_alloc_end;
 u64 ppc64_rma_size;
+unsigned int boot_cpu_node_count __ro_after_init;
 #endif
 static phys_addr_t first_memblock_size;
 static int __initdata boot_cpu_count;
@@ -180,6 +182,7 @@ static struct ibm_feature ibm_pa_features[] __initdata = {
 	  .cpu_user_ftrs2 = PPC_FEATURE2_HTM_COMP | PPC_FEATURE2_HTM_NOSC_COMP },
 
 	{ .pabyte = 64, .pabit = 0, .cpu_features = CPU_FTR_DAWR1 },
+	{ .pabyte = 68, .pabit = 5, .cpu_features = CPU_FTR_DEXCR_NPHIE },
 };
 
 /*
@@ -335,6 +338,9 @@ static int __init early_init_dt_scan_cpus(unsigned long node,
 	if (type == NULL || strcmp(type, "cpu") != 0)
 		return 0;
 
+	if (IS_ENABLED(CONFIG_PPC64))
+		boot_cpu_node_count++;
+
 	/* Get physical cpuid */
 	intserv = of_get_flat_dt_prop(node, "ibm,ppc-interrupt-server#s", &len);
 	if (!intserv)
@@ -368,6 +374,18 @@ static int __init early_init_dt_scan_cpus(unsigned long node,
 
 	if (IS_ENABLED(CONFIG_PPC64))
 		boot_cpu_hwid = be32_to_cpu(intserv[found_thread]);
+
+	if (nr_cpu_ids % nthreads != 0) {
+		set_nr_cpu_ids(ALIGN(nr_cpu_ids, nthreads));
+		pr_warn("nr_cpu_ids was not a multiple of threads_per_core, adjusted to %d\n",
+			nr_cpu_ids);
+	}
+
+	if (boot_cpuid >= nr_cpu_ids) {
+		set_nr_cpu_ids(min(CONFIG_NR_CPUS, ALIGN(boot_cpuid + 1, nthreads)));
+		pr_warn("Boot CPU %d >= nr_cpu_ids, adjusted nr_cpu_ids to %d\n",
+			boot_cpuid, nr_cpu_ids);
+	}
 
 	/*
 	 * PAPR defines "logical" PVR values for cpus that
@@ -882,6 +900,9 @@ void __init early_init_devtree(void *params)
 	if (of_flat_dt_is_compatible(of_get_flat_dt_root(), "sony,ps3"))
 		powerpc_firmware_features |= FW_FEATURE_PS3_POSSIBLE;
 #endif
+
+	/* If kexec left a PLPKS password in the DT, get it and clear it */
+	plpks_early_init_devtree();
 
 	tm_init();
 

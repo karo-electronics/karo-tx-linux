@@ -53,7 +53,7 @@
 	rpmsg_audio: rpmsg_audio {
 		compatible = "fsl,imx93-rpmsg-audio";
 		model = "wm8962-audio";
-		fsl,platform = "rpmsg-audio-channel";
+		fsl,rpmsg-channel-name = "rpmsg-audio-channel";
 		fsl,enable-lpa;
 		fsl,rpmsg-out;
 		fsl,rpmsg-in;
@@ -79,7 +79,7 @@
 	rpmsg_micfil: rpmsg_micfil {
 		compatible = "fsl,imx93-rpmsg-audio";
 		model = "micfil-audio";
-		fsl,platform = "rpmsg-micfil-channel";
+		fsl,rpmsg-channel-name = "rpmsg-micfil-channel";
 		fsl,enable-lpa;
 		fsl,rpmsg-in;
 		assigned-clocks = <&clk IMX93_CLK_PDM>;
@@ -95,7 +95,7 @@
 	};
 
 	i2c_rpbus_1: i2c-rpbus-1 {
-		compatible = "fsl,i2c-rpbus";
+		compatible = "fsl,i2c-rpbus-v2";
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "okay";
@@ -126,7 +126,7 @@
 			reg = <0x3d>;
 			adi,addr-cec = <0x3b>;
 			adi,dsi-lanes = <4>;
-			status = "okay";
+			status = "disabled";
 
 			port {
 				adv7535_to_dsi: endpoint {
@@ -138,6 +138,7 @@
 		lsm6dsm@6a {
 			compatible = "st,lsm6dso";
 			reg = <0x6a>;
+			status = "disabled";
 		};
 	};
 };

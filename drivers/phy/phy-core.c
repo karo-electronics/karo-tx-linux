@@ -21,12 +21,11 @@
 #include <linux/regulator/consumer.h>
 
 static struct class *phy_class;
+static struct dentry *phy_debugfs_root;
 static DEFINE_MUTEX(phy_provider_mutex);
 static LIST_HEAD(phy_provider_list);
 static LIST_HEAD(phys);
 static DEFINE_IDA(phy_ida);
-struct dentry *phy_debugfs_root;
-EXPORT_SYMBOL_GPL(phy_debugfs_root);
 
 static void devm_phy_release(struct device *dev, void *res)
 {
@@ -554,6 +553,7 @@ int phy_validate(struct phy *phy, enum phy_mode mode, int submode,
 }
 EXPORT_SYMBOL_GPL(phy_validate);
 
+/**
 int phy_check_cdr_lock(struct phy *phy, bool *cdr_locked)
 {
 	int ret;
@@ -571,6 +571,38 @@ int phy_check_cdr_lock(struct phy *phy, bool *cdr_locked)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(phy_check_cdr_lock);
+*/
+
+/**
+ * phy_get_status() - Query various parameters of a PHY
+ * @phy: the phy returned by phy_get()
+ * @type: type of the status being queried
+ * @opts: pointer to union of status structures, determined by type
+ *
+ * phy_init() must have been called on the phy. The status is relative to the
+ * current phy mode, that can be changed using phy_set_mode(). Not all status
+ * types may be relevant to all phy modes.
+ *
+ * Return: %0 if successful, a negative error code otherwise
+ */
+int phy_get_status(struct phy *phy, enum phy_status_type type,
+		   union phy_status_opts *opts)
+{
+	int ret;
+
+	if (!phy)
+		return -EINVAL;
+
+	if (!phy->ops->get_status)
+		return -EOPNOTSUPP;
+
+	mutex_lock(&phy->mutex);
+	ret = phy->ops->get_status(phy, type, opts);
+	mutex_unlock(&phy->mutex);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(phy_get_status);
 
 /**
  * _of_phy_get() - lookup and obtain a reference to a phy by phandle
@@ -788,27 +820,6 @@ struct phy *phy_get(struct device *dev, const char *string)
 EXPORT_SYMBOL_GPL(phy_get);
 
 /**
- * phy_optional_get() - lookup and obtain a reference to an optional phy.
- * @dev: device that requests this phy
- * @string: the phy name as given in the dt data or the name of the controller
- * port for non-dt case
- *
- * Returns the phy driver, after getting a refcount to it; or
- * NULL if there is no such phy.  The caller is responsible for
- * calling phy_put() to release that count.
- */
-struct phy *phy_optional_get(struct device *dev, const char *string)
-{
-	struct phy *phy = phy_get(dev, string);
-
-	if (PTR_ERR(phy) == -ENODEV)
-		phy = NULL;
-
-	return phy;
-}
-EXPORT_SYMBOL_GPL(phy_optional_get);
-
-/**
  * devm_phy_get() - lookup and obtain a reference to a phy.
  * @dev: device that requests this phy
  * @string: the phy name as given in the dt data or phy device name
@@ -899,6 +910,36 @@ struct phy *devm_of_phy_get(struct device *dev, struct device_node *np,
 	return phy;
 }
 EXPORT_SYMBOL_GPL(devm_of_phy_get);
+
+/**
+ * devm_of_phy_optional_get() - lookup and obtain a reference to an optional
+ * phy.
+ * @dev: device that requests this phy
+ * @np: node containing the phy
+ * @con_id: name of the phy from device's point of view
+ *
+ * Gets the phy using of_phy_get(), and associates a device with it using
+ * devres. On driver detach, release function is invoked on the devres data,
+ * then, devres data is freed.  This differs to devm_of_phy_get() in
+ * that if the phy does not exist, it is not considered an error and
+ * -ENODEV will not be returned. Instead the NULL phy is returned,
+ * which can be passed to all other phy consumer calls.
+ */
+struct phy *devm_of_phy_optional_get(struct device *dev, struct device_node *np,
+				     const char *con_id)
+{
+	struct phy *phy = devm_of_phy_get(dev, np, con_id);
+
+	if (PTR_ERR(phy) == -ENODEV)
+		phy = NULL;
+
+	if (IS_ERR(phy))
+		dev_err_probe(dev, PTR_ERR(phy), "failed to get PHY %pOF:%s",
+			      np, con_id);
+
+	return phy;
+}
+EXPORT_SYMBOL_GPL(devm_of_phy_optional_get);
 
 /**
  * devm_of_phy_get_by_index() - lookup and obtain a reference to a phy by index.
@@ -1007,6 +1048,8 @@ struct phy *phy_create(struct device *dev, struct device_node *node,
 		pm_runtime_enable(&phy->dev);
 		pm_runtime_no_callbacks(&phy->dev);
 	}
+
+	phy->debugfs = debugfs_create_dir(dev_name(&phy->dev), phy_debugfs_root);
 
 	return phy;
 
@@ -1238,6 +1281,7 @@ static void phy_release(struct device *dev)
 
 	phy = to_phy(dev);
 	dev_vdbg(dev, "releasing '%s'\n", dev_name(dev));
+	debugfs_remove_recursive(phy->debugfs);
 	regulator_put(phy->pwr);
 	ida_simple_remove(&phy_ida, phy->id);
 	kfree(phy);
@@ -1245,7 +1289,7 @@ static void phy_release(struct device *dev)
 
 static int __init phy_core_init(void)
 {
-	phy_class = class_create(THIS_MODULE, "phy");
+	phy_class = class_create("phy");
 	if (IS_ERR(phy_class)) {
 		pr_err("failed to create phy class --> %ld\n",
 			PTR_ERR(phy_class));
@@ -1259,3 +1303,10 @@ static int __init phy_core_init(void)
 	return 0;
 }
 device_initcall(phy_core_init);
+
+static void __exit phy_core_exit(void)
+{
+	debugfs_remove_recursive(phy_debugfs_root);
+	class_destroy(phy_class);
+}
+module_exit(phy_core_exit);

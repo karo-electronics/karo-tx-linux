@@ -11,6 +11,7 @@
 #include <linux/kobject.h>
 #include "ulist.h"
 #include "delayed-ref.h"
+#include "misc.h"
 
 /*
  * Btrfs qgroup overview
@@ -219,6 +220,15 @@ struct btrfs_qgroup {
 	struct list_head groups;  /* groups this group is member of */
 	struct list_head members; /* groups that are members of this group */
 	struct list_head dirty;   /* dirty groups */
+
+	/*
+	 * For qgroup iteration usage.
+	 *
+	 * The iteration list should always be empty until qgroup_iterator_add()
+	 * is called.  And should be reset to empty after the iteration is
+	 * finished.
+	 */
+	struct list_head iterator;
 	struct rb_node node;	  /* tree of qgroups */
 
 	/*
@@ -242,9 +252,11 @@ static inline u64 btrfs_qgroup_subvolid(u64 qgroupid)
 /*
  * For qgroup event trace points only
  */
-#define QGROUP_RESERVE		(1<<0)
-#define QGROUP_RELEASE		(1<<1)
-#define QGROUP_FREE		(1<<2)
+enum {
+	ENUM_BIT(QGROUP_RESERVE),
+	ENUM_BIT(QGROUP_RELEASE),
+	ENUM_BIT(QGROUP_FREE),
+};
 
 int btrfs_quota_enable(struct btrfs_fs_info *fs_info);
 int btrfs_quota_disable(struct btrfs_fs_info *fs_info);
@@ -318,7 +330,7 @@ int btrfs_qgroup_trace_extent_post(struct btrfs_trans_handle *trans,
  * (NULL trans)
  */
 int btrfs_qgroup_trace_extent(struct btrfs_trans_handle *trans, u64 bytenr,
-			      u64 num_bytes, gfp_t gfp_flag);
+			      u64 num_bytes);
 
 /*
  * Inform qgroup to trace all leaf items of data
@@ -360,10 +372,10 @@ int btrfs_verify_qgroup_counts(struct btrfs_fs_info *fs_info, u64 qgroupid,
 /* New io_tree based accurate qgroup reserve API */
 int btrfs_qgroup_reserve_data(struct btrfs_inode *inode,
 			struct extent_changeset **reserved, u64 start, u64 len);
-int btrfs_qgroup_release_data(struct btrfs_inode *inode, u64 start, u64 len);
+int btrfs_qgroup_release_data(struct btrfs_inode *inode, u64 start, u64 len, u64 *released);
 int btrfs_qgroup_free_data(struct btrfs_inode *inode,
 			   struct extent_changeset *reserved, u64 start,
-			   u64 len);
+			   u64 len, u64 *freed);
 int btrfs_qgroup_reserve_meta(struct btrfs_root *root, int num_bytes,
 			      enum btrfs_qgroup_rsv_type type, bool enforce);
 int __btrfs_qgroup_reserve_meta(struct btrfs_root *root, int num_bytes,

@@ -63,6 +63,13 @@ unsigned int vpu_get_buffer_state(struct vb2_v4l2_buffer *vbuf)
 	return vpu_buf->state;
 }
 
+void vpu_set_buffer_average_qp(struct vb2_v4l2_buffer *vbuf, u32 qp)
+{
+	struct vpu_vb2_buffer *vpu_buf = to_vpu_vb2_buffer(vbuf);
+
+	vpu_buf->average_qp = qp;
+}
+
 void vpu_v4l2_set_error(struct vpu_inst *inst)
 {
 	vpu_inst_lock(inst);
@@ -100,7 +107,7 @@ int vpu_notify_source_change(struct vpu_inst *inst)
 	return 0;
 }
 
-int vpu_set_last_buffer_dequeued(struct vpu_inst *inst)
+int vpu_set_last_buffer_dequeued(struct vpu_inst *inst, bool eos)
 {
 	struct vb2_queue *q;
 
@@ -116,7 +123,8 @@ int vpu_set_last_buffer_dequeued(struct vpu_inst *inst)
 	vpu_trace(inst->dev, "last buffer dequeued\n");
 	q->last_buffer_dequeued = true;
 	wake_up(&q->done_wq);
-	vpu_notify_eos(inst);
+	if (eos)
+		vpu_notify_eos(inst);
 	return 0;
 }
 
@@ -488,6 +496,11 @@ static int vpu_vb2_queue_setup(struct vb2_queue *vq,
 	for (i = 0; i < cur_fmt->mem_planes; i++)
 		psize[i] = vpu_get_fmt_plane_size(cur_fmt, i);
 
+	if (V4L2_TYPE_IS_OUTPUT(vq->type) && inst->state == VPU_CODEC_STATE_SEEK) {
+		vpu_trace(inst->dev, "reinit when VIDIOC_REQBUFS(OUTPUT, 0)\n");
+		call_void_vop(inst, release);
+	}
+
 	return 0;
 }
 
@@ -532,6 +545,15 @@ static void vpu_vb2_buf_finish(struct vb2_buffer *vb)
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
 	struct vpu_inst *inst = vb2_get_drv_priv(vb->vb2_queue);
 	struct vb2_queue *q = vb->vb2_queue;
+
+	if (V4L2_TYPE_IS_CAPTURE(vb->type)) {
+		struct vpu_vb2_buffer *vpu_buf = to_vpu_vb2_buffer(vbuf);
+		struct v4l2_ctrl *ctrl = v4l2_ctrl_find(&inst->ctrl_handler,
+							V4L2_CID_MPEG_VIDEO_AVERAGE_QP);
+
+		if (ctrl)
+			v4l2_ctrl_s_ctrl(ctrl, vpu_buf->average_qp);
+	}
 
 	if (vbuf->flags & V4L2_BUF_FLAG_LAST)
 		vpu_notify_eos(inst);
@@ -710,6 +732,7 @@ int vpu_v4l2_open(struct file *file, struct vpu_inst *inst)
 		func = &vpu->decoder;
 
 	atomic_set(&inst->ref_count, 0);
+	atomic_long_set(&inst->last_response_cmd, 0);
 	vpu_inst_get(inst);
 	inst->vpu = vpu;
 	inst->core = vpu_request_core(vpu, inst->type);
@@ -740,7 +763,7 @@ int vpu_v4l2_open(struct file *file, struct vpu_inst *inst)
 	inst->fh.ctrl_handler = &inst->ctrl_handler;
 	file->private_data = &inst->fh;
 	inst->state = VPU_CODEC_STATE_DEINIT;
-	inst->workqueue = alloc_workqueue("vpu_inst", WQ_UNBOUND | WQ_MEM_RECLAIM, 1);
+	inst->workqueue = alloc_ordered_workqueue("vpu_inst", WQ_MEM_RECLAIM);
 	if (inst->workqueue) {
 		INIT_WORK(&inst->msg_work, vpu_inst_run_work);
 		ret = kfifo_init(&inst->msg_fifo,
@@ -772,9 +795,9 @@ int vpu_v4l2_close(struct file *file)
 		v4l2_m2m_ctx_release(inst->fh.m2m_ctx);
 		inst->fh.m2m_ctx = NULL;
 	}
+	call_void_vop(inst, release);
 	vpu_inst_unlock(inst);
 
-	call_void_vop(inst, release);
 	vpu_inst_unregister(inst);
 	vpu_inst_put(inst);
 

@@ -12,6 +12,7 @@ void vpu_inst_lock(struct vpu_inst *inst);
 void vpu_inst_unlock(struct vpu_inst *inst);
 void vpu_set_buffer_state(struct vb2_v4l2_buffer *vbuf, unsigned int state);
 unsigned int vpu_get_buffer_state(struct vb2_v4l2_buffer *vbuf);
+void vpu_set_buffer_average_qp(struct vb2_v4l2_buffer *vbuf, u32 qp);
 
 int vpu_v4l2_open(struct file *file, struct vpu_inst *inst);
 int vpu_v4l2_close(struct file *file);
@@ -27,7 +28,7 @@ struct vb2_v4l2_buffer *vpu_find_buf_by_idx(struct vpu_inst *inst, u32 type, u32
 void vpu_v4l2_set_error(struct vpu_inst *inst);
 int vpu_notify_eos(struct vpu_inst *inst);
 int vpu_notify_source_change(struct vpu_inst *inst);
-int vpu_set_last_buffer_dequeued(struct vpu_inst *inst);
+int vpu_set_last_buffer_dequeued(struct vpu_inst *inst, bool eos);
 void vpu_vb2_buffers_return(struct vpu_inst *inst, unsigned int type, enum vb2_buffer_state state);
 int vpu_get_num_buffers(struct vpu_inst *inst, u32 type);
 bool vpu_is_source_empty(struct vpu_inst *inst);

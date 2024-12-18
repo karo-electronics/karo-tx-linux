@@ -18,6 +18,17 @@ static ssize_t clock_name_show(struct device *dev,
 }
 static DEVICE_ATTR_RO(clock_name);
 
+static ssize_t max_phase_adjustment_show(struct device *dev,
+					 struct device_attribute *attr,
+					 char *page)
+{
+	struct ptp_clock *ptp = dev_get_drvdata(dev);
+
+	return snprintf(page, PAGE_SIZE - 1, "%d\n",
+			ptp->info->getmaxphase(ptp->info));
+}
+static DEVICE_ATTR_RO(max_phase_adjustment);
+
 #define PTP_SHOW_INT(name, var)						\
 static ssize_t var##_show(struct device *dev,				\
 			   struct device_attribute *attr, char *page)	\
@@ -79,7 +90,8 @@ static ssize_t extts_fifo_show(struct device *dev,
 	qcnt = queue_cnt(queue);
 	if (qcnt) {
 		event = queue->buf[queue->head];
-		queue->head = (queue->head + 1) % PTP_MAX_TIMESTAMPS;
+		/* Paired with READ_ONCE() in queue_cnt() */
+		WRITE_ONCE(queue->head, (queue->head + 1) % PTP_MAX_TIMESTAMPS);
 	}
 	spin_unlock_irqrestore(&queue->lock, flags);
 
@@ -282,8 +294,7 @@ static ssize_t max_vclocks_store(struct device *dev,
 	if (max < ptp->n_vclocks)
 		goto out;
 
-	size = sizeof(int) * max;
-	vclock_index = kzalloc(size, GFP_KERNEL);
+	vclock_index = kcalloc(max, sizeof(int), GFP_KERNEL);
 	if (!vclock_index) {
 		err = -ENOMEM;
 		goto out;
@@ -309,6 +320,7 @@ static struct attribute *ptp_attrs[] = {
 	&dev_attr_clock_name.attr,
 
 	&dev_attr_max_adjustment.attr,
+	&dev_attr_max_phase_adjustment.attr,
 	&dev_attr_n_alarms.attr,
 	&dev_attr_n_external_timestamps.attr,
 	&dev_attr_n_periodic_outputs.attr,
@@ -345,6 +357,9 @@ static umode_t ptp_is_attribute_visible(struct kobject *kobj,
 	} else if (attr == &dev_attr_n_vclocks.attr ||
 		   attr == &dev_attr_max_vclocks.attr) {
 		if (ptp->is_virtual_clock)
+			mode = 0;
+	} else if (attr == &dev_attr_max_phase_adjustment.attr) {
+		if (!info->adjphase || !info->getmaxphase)
 			mode = 0;
 	}
 

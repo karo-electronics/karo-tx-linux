@@ -45,13 +45,19 @@ static const struct of_device_id fxls8962af_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, fxls8962af_of_match);
 
+static void fxls8962af_shutdown(struct i2c_client *client)
+{
+	fxls8962af_core_shutdown(&client->dev);
+};
+
 static struct i2c_driver fxls8962af_driver = {
 	.driver = {
 		   .name = "fxls8962af_i2c",
 		   .of_match_table = fxls8962af_of_match,
-		   .pm = &fxls8962af_pm_ops,
+		   .pm = pm_ptr(&fxls8962af_pm_ops),
 		   },
-	.probe_new = fxls8962af_probe,
+	.probe = fxls8962af_probe,
+	.shutdown = fxls8962af_shutdown,
 	.id_table = fxls8962af_id,
 };
 module_i2c_driver(fxls8962af_driver);

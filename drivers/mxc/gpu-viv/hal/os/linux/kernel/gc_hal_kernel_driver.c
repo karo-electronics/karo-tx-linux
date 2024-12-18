@@ -52,7 +52,6 @@
 *
 *****************************************************************************/
 
-
 #include <linux/device.h>
 #include <linux/slab.h>
 #include <linux/miscdevice.h>
@@ -460,7 +459,7 @@ gckOS_DumpParam(void)
     }
 
 #if USE_LINUX_PCIE
-    pr_warn("Bars configuration: \n");
+    pr_warn("Bars configuration:\n");
 
     for (i = 0; i < gcdGLOBAL_CORE_COUNT; i++) {
         if (bars[i] != -1) {
@@ -471,7 +470,7 @@ gckOS_DumpParam(void)
     }
 #endif
 
-    pr_warn("System reserve memory configuration: \n");
+    pr_warn("System reserve memory configuration:\n");
 
     for (i = 0; i < gcdSYSTEM_RESERVE_COUNT; i++) {
         if (contiguousSizes[i]) {
@@ -484,7 +483,7 @@ gckOS_DumpParam(void)
         }
     }
 
-    pr_warn("Registers configuration: \n");
+    pr_warn("Registers configuration:\n");
 
     for (i = 0; i < gcdGLOBAL_CORE_COUNT; i++) {
         if (registerSizes[i]) {
@@ -991,6 +990,7 @@ static void drv_exit(void)
         gcmkASSERT(gpuClass != gcvNULL);
         device_destroy(gpuClass, MKDEV(major, 0));
         class_destroy(gpuClass);
+        gpuClass = gcvNULL;
 
         unregister_chrdev(major, DEVICE_NAME);
     }
@@ -1000,11 +1000,6 @@ static void drv_exit(void)
 
     gcmkFOOTER_NO();
 }
-
-#if gcdENABLE_DRM
-int viv_drm_probe(struct device *dev);
-int viv_drm_remove(struct device *dev);
-#endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
 static int viv_dev_probe(struct platform_device *pdev)

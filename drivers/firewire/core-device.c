@@ -100,10 +100,9 @@ static int textual_leaf_to_string(const u32 *block, char *buf, size_t size)
  * @buf:	where to put the string
  * @size:	size of @buf, in bytes
  *
- * The string is taken from a minimal ASCII text descriptor leaf after
- * the immediate entry with @key.  The string is zero-terminated.
- * An overlong string is silently truncated such that it and the
- * zero byte fit into @size.
+ * The string is taken from a minimal ASCII text descriptor leaf just after the entry with the
+ * @key. The string is zero-terminated. An overlong string is silently truncated such that it
+ * and the zero byte fit into @size.
  *
  * Returns strlen(buf) or a negative error code.
  */
@@ -133,7 +132,7 @@ static void get_ids(const u32 *directory, int *id)
 	}
 }
 
-static void get_modalias_ids(struct fw_unit *unit, int *id)
+static void get_modalias_ids(const struct fw_unit *unit, int *id)
 {
 	get_ids(&fw_parent_device(unit)->config_rom[5], id);
 	get_ids(unit->directory, id);
@@ -195,7 +194,7 @@ static void fw_unit_remove(struct device *dev)
 	driver->remove(fw_unit(dev));
 }
 
-static int get_modalias(struct fw_unit *unit, char *buffer, size_t buffer_size)
+static int get_modalias(const struct fw_unit *unit, char *buffer, size_t buffer_size)
 {
 	int id[] = {0, 0, 0, 0};
 
@@ -206,9 +205,9 @@ static int get_modalias(struct fw_unit *unit, char *buffer, size_t buffer_size)
 			id[0], id[1], id[2], id[3]);
 }
 
-static int fw_unit_uevent(struct device *dev, struct kobj_uevent_env *env)
+static int fw_unit_uevent(const struct device *dev, struct kobj_uevent_env *env)
 {
-	struct fw_unit *unit = fw_unit(dev);
+	const struct fw_unit *unit = fw_unit(dev);
 	char modalias[64];
 
 	get_modalias(unit, modalias, sizeof(modalias));
@@ -717,14 +716,11 @@ static void create_units(struct fw_device *device)
 					fw_unit_attributes,
 					&unit->attribute_group);
 
-		if (device_register(&unit->device) < 0)
-			goto skip_unit;
-
 		fw_device_get(device);
-		continue;
-
-	skip_unit:
-		kfree(unit);
+		if (device_register(&unit->device) < 0) {
+			put_device(&unit->device);
+			continue;
+		}
 	}
 }
 

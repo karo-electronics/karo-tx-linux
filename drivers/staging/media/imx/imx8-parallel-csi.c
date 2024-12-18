@@ -183,7 +183,7 @@ struct mxc_parallel_csi_dev {
 	struct clk *clk_pixel;
 	bool clk_enable;
 
-	struct v4l2_async_subdev	asd;
+	struct v4l2_async_connection	asd;
 	struct v4l2_async_notifier	subdev_notifier;
 	struct v4l2_async_subdev	*async_subdevs[2];
 	struct v4l2_mbus_framefmt	format;
@@ -426,7 +426,7 @@ static int get_interface_ctrl_reg1_param(struct mxc_parallel_csi_dev *pcsidev,
 		*vsync_pulse = pcsidev->format.width << 1;
 		break;
 	case PI_V2:
-		*pixel_width = 10;
+		*pixel_width = pcsidev->format.width << 3;
 		*vsync_pulse = pcsidev->format.width - 1;
 		break;
 	default:
@@ -987,6 +987,20 @@ static const struct mxc_pcsi_plat_data imx93_pdata = {
 	.interface_ctrl_reg1	= 0xc,
 	.has_gasket		= true,
 	.def_hsync_pol		= 0,
+	.def_vsync_pol		= 1,
+	.def_pixel_clk_pol	= 0,
+	.def_csi_in_data_type	= CSI_IN_DT_YVYU_8,
+	.pd_ops			= NULL,
+};
+
+static const struct mxc_pcsi_plat_data imx91_pdata = {
+	.version		= PI_V2,
+	.if_ctrl_reg		= 0x0,
+	.interface_status	= 0x4,
+	.interface_ctrl_reg	= 0x8,
+	.interface_ctrl_reg1	= 0xc,
+	.has_gasket		= false,
+	.def_hsync_pol		= 0,
 	.def_vsync_pol		= 0,
 	.def_pixel_clk_pol	= 0,
 	.def_csi_in_data_type	= CSI_IN_DT_YVYU_8,
@@ -1003,6 +1017,7 @@ static const struct dev_pm_ops parallel_csi_pm_ops = {
 static const struct of_device_id parallel_csi_of_match[] = {
 	{	.compatible = "fsl,mxc-parallel-csi",   .data = &imx8_pdata},
 	{	.compatible = "fsl,imx93-parallel-csi", .data = &imx93_pdata},
+	{	.compatible = "fsl,imx91-parallel-csi", .data = &imx91_pdata},
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, parallel_csi_of_match);

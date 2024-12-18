@@ -52,7 +52,6 @@
 *
 *****************************************************************************/
 
-
 #ifndef __gc_hal_kernel_linux_h_
 #define __gc_hal_kernel_linux_h_
 
@@ -186,6 +185,10 @@
 #    define gcdUSE_LINUX_SG_TABLE_API   1
 #else
 #    define gcdUSE_LINUX_SG_TABLE_API   0
+#endif
+
+#ifndef gcdWAR_WC
+#define gcdWAR_WC 1
 #endif
 
 /******************************************************************************
@@ -350,6 +353,20 @@ _GetProcessID(void)
 #endif
 }
 
+#if gcdENABLE_GPU_WORK_PERIOD_TRACE
+static inline gctINT
+_GetUserID(void)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)
+    return from_kuid_munged(current_user_ns(), current_uid());
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
+    return current_uid();
+#else
+    return current->uid;
+#endif
+}
+#endif
+
 static inline void
 _MemoryBarrier(void)
 {
@@ -382,5 +399,12 @@ gckIOMMU_Destory(IN gckOS Os, IN gckIOMMU Iommu);
 
 gceSTATUS
 gckIOMMU_Construct(IN gckOS Os, OUT gckIOMMU *Iommu);
+
+/* Drm init and destroy */
+#if gcdENABLE_DRM
+int viv_drm_probe(struct device *dev);
+
+int viv_drm_remove(struct device *dev);
+#endif
 
 #endif /* __gc_hal_kernel_linux_h_ */
