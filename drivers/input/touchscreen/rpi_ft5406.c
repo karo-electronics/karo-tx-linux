@@ -211,8 +211,7 @@ static void rpi_ft5406_work(struct work_struct *work)
 	regulator_disable(ts_data->power_supply);
 }
 
-static int rpi_ft5406_probe(struct i2c_client *client,
-			const struct i2c_device_id *id)
+static int rpi_ft5406_probe(struct i2c_client *client)
 {
 	struct input_dev *input_dev;
 	struct rpi_ft5406_data *ts_data;

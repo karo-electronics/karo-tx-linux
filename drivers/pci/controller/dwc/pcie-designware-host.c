@@ -19,6 +19,8 @@
 
 #include "pcie-designware.h"
 
+#define PCIE_PME_TO_L2_TIMEOUT_US	10000
+
 static struct pci_ops dw_pcie_ops;
 static struct pci_ops dw_child_pcie_ops;
 
