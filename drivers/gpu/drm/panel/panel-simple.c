@@ -464,6 +464,7 @@ static int panel_dpi_probe(struct device *dev,
 	struct panel_desc *desc;
 	unsigned int bus_flags;
 	struct videomode vm;
+	const char *mapping;
 	int ret;
 
 	np = dev->of_node;
@@ -487,6 +488,16 @@ static int panel_dpi_probe(struct device *dev,
 
 	of_property_read_u32(np, "width-mm", &desc->size.width);
 	of_property_read_u32(np, "height-mm", &desc->size.height);
+
+	of_property_read_string(np, "data-mapping", &mapping);
+	if (!strcmp(mapping, "rgb24"))
+		desc->bus_format = MEDIA_BUS_FMT_RGB888_1X24;
+	else if (!strcmp(mapping, "rgb565"))
+		desc->bus_format = MEDIA_BUS_FMT_RGB565_1X16;
+	else if (!strcmp(mapping, "bgr666"))
+		desc->bus_format = MEDIA_BUS_FMT_RGB666_1X18;
+	else if (!strcmp(mapping, "lvds666"))
+		desc->bus_format = MEDIA_BUS_FMT_RGB666_1X24_CPADHI;
 
 	/* Extract bus_flags from display_timing */
 	bus_flags = 0;
@@ -1776,6 +1787,56 @@ static const struct panel_desc edt_etm0430g0dh6 = {
 	.connector_type = DRM_MODE_CONNECTOR_DPI,
 };
 
+static const struct drm_display_mode edt_et0350g0dh6_mode = {
+	.clock = 6500,
+	.hdisplay = 320,
+	.hsync_start = 320 + 20,
+	.hsync_end = 320 + 20 + 0,
+	.htotal = 320 + 20 + 0 + 68,
+	.vdisplay = 240,
+	.vsync_start = 240 + 4,
+	.vsync_end = 240 + 4 + 0,
+	.vtotal = 240 + 4 + 0 + 18,
+	.flags = DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC,
+};
+
+static const struct panel_desc edt_et0350g0dh6 = {
+	.modes = &edt_et0350g0dh6_mode,
+	.num_modes = 1,
+	.bpc = 6,
+	.size = {
+		.width = 70,
+		.height = 53,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
+	.bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE,
+};
+
+static const struct drm_display_mode edt_et0430g0dh6_mode = {
+	.clock = 9000,
+	.hdisplay = 480,
+	.hsync_start = 480 + 2,
+	.hsync_end = 480 + 2 + 41,
+	.htotal = 480 + 2 + 41 + 2,
+	.vdisplay = 272,
+	.vsync_start = 272 + 2,
+	.vsync_end = 272 + 2 + 10,
+	.vtotal = 272 + 2 + 10 + 2,
+	.flags = DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC,
+};
+
+static const struct panel_desc edt_et0430g0dh6 = {
+	.modes = &edt_et0430g0dh6_mode,
+	.num_modes = 1,
+	.bpc = 6,
+	.size = {
+		.width = 95,
+		.height = 54,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
+	.bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_DRIVE_POSEDGE,
+};
+
 static const struct drm_display_mode edt_et057090dhu_mode = {
 	.clock = 25175,
 	.hdisplay = 640,
@@ -1918,6 +1979,31 @@ static const struct panel_desc eink_vb3300_kca = {
 	.bus_format = MEDIA_BUS_FMT_RGB888_1X24,
 	.bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_DRIVE_POSEDGE,
 	.connector_type = DRM_MODE_CONNECTOR_DPI,
+};
+
+static const struct drm_display_mode edt_et1010g0dsa_mode = {
+	.clock = 71100,
+	.hdisplay = 1280,
+	.hsync_start = 1280 + 25,
+	.hsync_end = 1280 + 25 + 80,
+	.htotal = 1280 + 25 + 80 + 55,
+	.vdisplay = 800,
+	.vsync_start = 800 + 5,
+	.vsync_end = 800 + 5 + 2,
+	.vtotal = 800 + 5 + 2 + 16,
+	.flags = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
+};
+
+static const struct panel_desc edt_et1010g0dsa = {
+	.modes = &edt_et1010g0dsa_mode,
+	.num_modes = 1,
+	.bpc = 8,
+	.size = {
+		.width = 217,
+		.height = 136,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+	.bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE,
 };
 
 static const struct display_timing evervision_vgg804821_timing = {
@@ -3087,6 +3173,52 @@ static const struct panel_desc nlt_nl192108ac18_02d = {
 	.connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 
+static const struct drm_display_mode nlt_nl12880bc20_mode = {
+	.clock = 71000,
+	.hdisplay = 1280,
+	.hsync_start = 1280 + 50,
+	.hsync_end = 1280 + 50 + 60,
+	.htotal = 1280 + 50 + 60 + 50,
+	.vdisplay = 800,
+	.vsync_start = 800 + 5,
+	.vsync_end = 800 + 5 + 13,
+	.vtotal = 800 + 5 + 13 + 5,
+	.flags = 0,
+};
+
+static const struct panel_desc nlt_nl12880bc20_jeida = {
+	.modes = &nlt_nl12880bc20_mode,
+	.num_modes = 1,
+	.bpc = 8,
+	.size = {
+		.width = 261,
+		.height = 163,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+};
+
+static const struct panel_desc nlt_nl12880bc20_spwg_18 = {
+	.modes = &nlt_nl12880bc20_mode,
+	.num_modes = 1,
+	.bpc = 6,
+	.size = {
+		.width = 261,
+		.height = 163,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
+};
+
+static const struct panel_desc nlt_nl12880bc20_spwg_24 = {
+	.modes = &nlt_nl12880bc20_mode,
+	.num_modes = 1,
+	.bpc = 8,
+	.size = {
+		.width = 261,
+		.height = 163,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+};
+
 static const struct drm_display_mode nvd_9128_mode = {
 	.clock = 29500,
 	.hdisplay = 800,
@@ -3896,6 +4028,30 @@ static const struct panel_desc tianma_tm070rvhg71 = {
 	.connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 
+static const struct display_timing tianma_tm101jvhg32_timing = {
+	.pixelclock = { 62600000, 68200000, 78100000, },
+	.hactive = { 1280, 1280, 1280, },
+	.hfront_porch = { 15, 64, 159, },
+	.hback_porch = { 5, 4, 100, },
+	.hsync_len = { 20, 1, 164, },
+	.vactive = { 800, 800, 800, },
+	.vfront_porch = { 3, 40, 99, },
+	.vback_porch = { 2, 1, 61, },
+	.vsync_len = { 1, 1, 128, },
+	.flags = DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW,
+};
+
+static const struct panel_desc tianma_tm101jvhg32 = {
+	.timings = &tianma_tm101jvhg32_timing,
+	.num_timings = 1,
+	.bpc = 8,
+	.size = {
+		.width = 217,
+		.height = 136,
+	},
+	.bus_format = MEDIA_BUS_FMT_RGB888_1X24,
+};
+
 static const struct drm_display_mode ti_nspire_cx_lcd_mode[] = {
 	{
 		.clock = 10000,
@@ -4286,6 +4442,12 @@ static const struct of_device_id platform_of_match[] = {
 		.compatible = "dataimage,fg1001l0dsswmg01",
 		.data = &dataimage_fg1001l0dsswmg01,
 	}, {
+		.compatible = "edt,et0350g0dh6",
+		.data = &edt_et0350g0dh6,
+	}, {
+		.compatible = "edt,et0430g0dh6",
+		.data = &edt_et0430g0dh6,
+	}, {
 		.compatible = "dataimage,scf0700c48ggu18",
 		.data = &dataimage_scf0700c48ggu18,
 	}, {
@@ -4315,6 +4477,12 @@ static const struct of_device_id platform_of_match[] = {
 	}, {
 		.compatible = "edt,etm0700g0dh6",
 		.data = &edt_etm0700g0dh6,
+	}, {
+		.compatible = "edt,et1010g0dsa",
+		.data = &edt_et1010g0dsa,
+	}, {
+		.compatible = "edt,etml1010g0dka",
+		.data = &edt_et1010g0dsa,
 	}, {
 		.compatible = "edt,etm0700g0bdh6",
 		.data = &edt_etm0700g0bdh6,
@@ -4460,6 +4628,15 @@ static const struct of_device_id platform_of_match[] = {
 		.compatible = "nlt,nl192108ac18-02d",
 		.data = &nlt_nl192108ac18_02d,
 	}, {
+		.compatible = "nlt,nl12880bc20-jeida",
+		.data = &nlt_nl12880bc20_jeida,
+	}, {
+		.compatible = "nlt,nl12880bc20-spwg-18",
+		.data = &nlt_nl12880bc20_spwg_18,
+	}, {
+		.compatible = "nlt,nl12880bc20-spwg-24",
+		.data = &nlt_nl12880bc20_spwg_24,
+	}, {
 		.compatible = "nvd,9128",
 		.data = &nvd_9128,
 	}, {
@@ -4552,6 +4729,9 @@ static const struct of_device_id platform_of_match[] = {
 	}, {
 		.compatible = "tianma,tm070rvhg71",
 		.data = &tianma_tm070rvhg71,
+	}, {
+		.compatible = "tianma,tm101jvhg32",
+		.data = &tianma_tm101jvhg32,
 	}, {
 		.compatible = "ti,nspire-cx-lcd-panel",
 		.data = &ti_nspire_cx_lcd_panel,
