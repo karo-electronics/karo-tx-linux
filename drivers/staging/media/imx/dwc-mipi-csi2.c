@@ -385,7 +385,10 @@ struct dwc_mipi_csi2_host {
 static const struct csi2h_pix_format dwc_csi2h_formats[] = {
 	{
 		.code = MEDIA_BUS_FMT_YUYV8_2X8,
-		.fmt_reg = 0x18,
+		.fmt_reg = 0x1E,
+	}, {
+		.code = MEDIA_BUS_FMT_UYVY8_2X8,
+		.fmt_reg = 0x1E,
 	}, {
 		.code = MEDIA_BUS_FMT_RGB888_1X24,
 		.fmt_reg = 0x24,
@@ -396,10 +399,37 @@ static const struct csi2h_pix_format dwc_csi2h_formats[] = {
 		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
 		.fmt_reg = 0x2A,
 	}, {
+		.code = MEDIA_BUS_FMT_SRGGB8_1X8,
+		.fmt_reg = 0x2A,
+	}, {
+		.code = MEDIA_BUS_FMT_SGBRG8_1X8,
+		.fmt_reg = 0x2A,
+	}, {
+		.code = MEDIA_BUS_FMT_SGRBG8_1X8,
+		.fmt_reg = 0x2A,
+	}, {
 		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
 		.fmt_reg = 0x2B,
 	}, {
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+		.fmt_reg = 0x2B,
+	}, {
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+		.fmt_reg = 0x2B,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.fmt_reg = 0x2B,
+ 	}, {
 		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+		.fmt_reg = 0x2C,
+	}, {
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+		.fmt_reg = 0x2C,
+	}, {
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+		.fmt_reg = 0x2C,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
 		.fmt_reg = 0x2C,
 	}, {
 		/* sentinel */
@@ -702,24 +732,28 @@ static void disp_mix_gasket_config(struct dwc_mipi_csi2_host *csi2h)
 		fmt_val = DT_YUV422_8;
 		break;
 	case MEDIA_BUS_FMT_SBGGR8_1X8:
+	case MEDIA_BUS_FMT_SRGGB8_1X8:
+	case MEDIA_BUS_FMT_SGBRG8_1X8:
+	case MEDIA_BUS_FMT_SGRBG8_1X8:
 		fmt_val = DT_RAW8;
 		break;
 	case MEDIA_BUS_FMT_SBGGR10_1X10:
 	case MEDIA_BUS_FMT_SGBRG10_1X10:
 	case MEDIA_BUS_FMT_SGRBG10_1X10:
 	case MEDIA_BUS_FMT_SRGGB10_1X10:
-		fmt_val = DT_RAW10;
+		fmt_val = /*DT_RAW10*/ 0x31;
 		break;
 	case MEDIA_BUS_FMT_SBGGR12_1X12:
 	case MEDIA_BUS_FMT_SGBRG12_1X12:
 	case MEDIA_BUS_FMT_SGRBG12_1X12:
 	case MEDIA_BUS_FMT_SRGGB12_1X12:
-		fmt_val = DT_RAW12;
+		fmt_val = /*DT_RAW12*/ 0x31;
 		break;
 	default:
 		pr_err("gasket not support format %d\n", mf->code);
 		return;
 	}
+	pr_info("code: 0x%x, camera_mux fmt: 0x%x\n", mf->code, fmt_val);
 
 	if (csi2h->ppi_pg_enable)
 		fmt_val = DT_RGB888;
@@ -851,7 +885,7 @@ static int dwc_mipi_csi2_host_ipi_config(struct dwc_mipi_csi2_host *csi2h)
 		val &= ~DWC_MIPI_CSI2_IPI_VCID_VC_2;
 	dwc_mipi_csi2h_write(csi2h, DWC_MIPI_CSI2_IPI_VCID, val);
 
-	dev_dbg(dev, "data_type:0x%x, virtual chan: %d\n",
+	dev_info(dev, "ipi data_type:0x%x, virtual chan: %d\n",
 		ipi_cfg->data_type, ipi_cfg->vir_chan);
 
 	/* 1. Select the IPI mode, camera timing by default
@@ -872,6 +906,8 @@ static int dwc_mipi_csi2_host_ipi_config(struct dwc_mipi_csi2_host *csi2h)
 	/* Configure the IPI horizontal frame information */
 	dwc_mipi_csi2_ipi_config_htiming(csi2h);
 
+	dwc_mipi_csi2h_write(csi2h, DWC_MIPI_CSI2_IPI_ADV_FEATURES, 0x1230000);
+
 	if (csi2h->ppi_pg_enable)
 		dwc_mipi_csi2h_write(csi2h, DWC_MIPI_CSI2_IPI_ADV_FEATURES,
 				     0x01050000);
@@ -880,7 +916,7 @@ static int dwc_mipi_csi2_host_ipi_config(struct dwc_mipi_csi2_host *csi2h)
 	if (ipi_cfg->controller_mode || csi2h->ppi_pg_enable)
 		dwc_mipi_csi2_ipi_config_vtiming(csi2h);
 
-	dev_dbg(dev, "ipi mode: %s, color_mode: %s\n",
+	dev_info(dev, "ipi mode: %s, color_mode: %s\n",
 		ipi_cfg->controller_mode ? "controller" : "camera",
 		ipi_cfg->color_mode_16   ? "color mode 16" : "color mode 48");
 
@@ -1027,7 +1063,7 @@ static int dwc_mipi_csi2_param_init(struct dwc_mipi_csi2_host *csi2h)
 			ipi_cfg->vactive_lines   = 0x320;
 			ipi_cfg->controller_mode = 0;
 			ipi_cfg->color_mode_16   = 0;
-			ipi_cfg->embeded_data    = 0;
+			ipi_cfg->embeded_data    = 1;
 		}
 	}
 
@@ -1045,7 +1081,7 @@ static int dwc_mipi_csi2_param_init(struct dwc_mipi_csi2_host *csi2h)
 	of_property_read_u32(node, "cfg-clk-range", &csi2h->cfgclkfreqrange);
 	of_property_read_u32(node, "hs-clk-range", &csi2h->hsclkfreqrange);
 
-	dev_dbg(dev, "cfgclkfreqrange=%d, hsfreqrange=%d\n",
+	dev_info(dev, "cfgclkfreqrange=%d, hsfreqrange=%d\n",
 		 csi2h->cfgclkfreqrange, csi2h->hsclkfreqrange);
 	return 0;
 }
@@ -1110,6 +1146,39 @@ static int dwc_mipi_csi2_get_fmt(struct v4l2_subdev *sd,
 	}
 
 	memcpy(mf, &format->format, sizeof(struct v4l2_mbus_framefmt));
+
+	switch (mf->code) {
+	case MEDIA_BUS_FMT_YUYV8_2X8:
+	case MEDIA_BUS_FMT_UYVY8_2X8:
+		csi2h->ipi_cfg[0].data_type = DT_YUV422_8;
+		csi2h->ipi_cfg[0].color_mode_16 = 0;
+		break;
+	case MEDIA_BUS_FMT_SBGGR8_1X8:
+	case MEDIA_BUS_FMT_SGBRG8_1X8:
+	case MEDIA_BUS_FMT_SGRBG8_1X8:
+	case MEDIA_BUS_FMT_SRGGB8_1X8:
+		csi2h->ipi_cfg[0].data_type = DT_RAW8;
+		csi2h->ipi_cfg[0].color_mode_16 = 1;
+		break;
+	case MEDIA_BUS_FMT_SBGGR10_1X10:
+	case MEDIA_BUS_FMT_SGBRG10_1X10:
+	case MEDIA_BUS_FMT_SGRBG10_1X10:
+	case MEDIA_BUS_FMT_SRGGB10_1X10:
+		csi2h->ipi_cfg[0].data_type = DT_RAW10;
+		csi2h->ipi_cfg[0].color_mode_16 = 1;
+		break;
+	case MEDIA_BUS_FMT_SBGGR12_1X12:
+	case MEDIA_BUS_FMT_SGBRG12_1X12:
+	case MEDIA_BUS_FMT_SGRBG12_1X12:
+	case MEDIA_BUS_FMT_SRGGB12_1X12:
+		csi2h->ipi_cfg[0].data_type = DT_RAW12;
+		csi2h->ipi_cfg[0].color_mode_16 = 1;
+		break;
+	default:
+                pr_err("not support format %d\n", mf->code);
+	}
+	pr_info("code: 0x%x, csi fmt: 0x%x\n", mf->code, csi2h->ipi_cfg[0].data_type);
+
 	return 0;
 }
 

@@ -42,7 +42,7 @@ struct mxc_isi_fmt mxc_isi_out_formats[] = {
 		.memplanes	= 1,
 		.colplanes	= 1,
 		.align		= 3,
-		.mbus_code	= MEDIA_BUS_FMT_YUYV8_1X16,
+		.mbus_code	= /*MEDIA_BUS_FMT_YUYV8_1X16*/MEDIA_BUS_FMT_UYVY8_2X8,
 	}, {
 		.name		= "YUV32 (X-Y-U-V)",
 		.fourcc		= V4L2_PIX_FMT_YUV32,
@@ -97,6 +97,41 @@ struct mxc_isi_fmt mxc_isi_out_formats[] = {
 		.colplanes	= 1,
 		.align		= 2,
 		.mbus_code	= MEDIA_BUS_FMT_RGB888_1X24,
+	}, {
+		.name = "BA8",
+		.fourcc = V4L2_PIX_FMT_SRGGB8,
+		.depth = { 8 },
+		.color = MXC_ISI_OUT_FMT_RAW8,
+		.memplanes = 1,
+		.colplanes = 1,
+		.mbus_code = MEDIA_BUS_FMT_SRGGB8_1X8,
+	}, {
+		.name           = "RAW8 (SGRBG8)",
+		.fourcc         = V4L2_PIX_FMT_SGRBG8,
+		.depth          = { 8 },
+		.color          = MXC_ISI_OUT_FMT_RAW8,
+		.memplanes      = 1,
+		.colplanes      = 1,
+		.align          = 1,
+		.mbus_code      = MEDIA_BUS_FMT_SGRBG8_1X8,
+	}, {
+		.name           = "RAW10 (SRGGB10)",
+		.fourcc         = V4L2_PIX_FMT_SRGGB10,
+		.depth          = { 16 },
+		.color          = MXC_ISI_OUT_FMT_RAW10,
+		.memplanes      = 1,
+		.colplanes      = 1,
+		.align          = 2,
+		.mbus_code      = MEDIA_BUS_FMT_SRGGB10_1X10,
+	}, {
+		.name		= "RAW12 (SGRBG12)",
+		.fourcc		= V4L2_PIX_FMT_SGRBG12,
+		.depth		= { 16 },
+		.color		= MXC_ISI_OUT_FMT_RAW12,
+		.memplanes	= 1,
+		.colplanes	= 1,
+		.align		= 2,
+		.mbus_code	= MEDIA_BUS_FMT_SGRBG12_1X12,
 	}
 };
 
