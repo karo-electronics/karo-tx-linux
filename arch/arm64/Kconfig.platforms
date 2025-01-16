@@ -206,7 +206,7 @@ config ARCH_LAYERSCAPE
 
 config ARCH_MXC
 	bool "NXP i.MX SoC family"
-	select ARM64_ERRATUM_843419
+	select ARM64_ERRATUM_843419 if SOC_IMX8M
 	select ARM64_ERRATUM_845719 if COMPAT
 	select GPIOLIB
 	select IMX_GPCV2
