@@ -220,7 +220,7 @@ config ARCH_MXC
 
 config HAVE_IMX_BUSFREQ
 	bool "i.MX8 busfreq"
-	default ARCH_MXC
+	default SOC_IMX8M
 
 config ARCH_S32
 	bool "NXP S32 SoC Family"
