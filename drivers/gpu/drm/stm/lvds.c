@@ -329,6 +329,25 @@ enum lvds_pixel lvds_bitmap_jeida_rgb888[5][7] = {
 };
 
 /*
+ * Expected JEIDA-RGB666 data to be sent in LSB format
+ * CHAN0   {ONE, ONE, ZERO, ZERO, ZERO, ONE, ONE}
+ * CHAN1   {G0,  R5,  R4,   R3,   R2,   R1,  R0}
+ * CHAN2   {B1,  B0,  G5,   G4,   G3,   G2,  G1}
+ * CHAN3   {DE,  VS,  HS,   B5,   B4,   B3,  B2}
+ */
+const enum lvds_pixel lvds_bitmap_jeida_rgb666[4][7] = {
+	{
+		PIX_ONE, PIX_ONE, PIX_ZER, PIX_ZER, PIX_ZER, PIX_ONE, PIX_ONE
+	}, {
+		PIX_G_0, PIX_R_5, PIX_R_4, PIX_R_3, PIX_R_2, PIX_R_1, PIX_R_0
+	}, {
+		PIX_B_1, PIX_B_0, PIX_G_5, PIX_G_4, PIX_G_3, PIX_G_2, PIX_G_1
+	}, {
+		PIX_D_E, PIX_V_S, PIX_H_S, PIX_B_5, PIX_B_4, PIX_B_3, PIX_B_2
+	}
+};
+
+/*
  * Expected VESA-RGB888 data to be sent in LSB format
  *	    bit6 ............................bit0
  * CHAN0   {ONE, ONE, ZERO, ZERO, ZERO, ONE, ONE}
@@ -771,9 +790,8 @@ static void lvds_config_data_mapping(struct stm_lvds *lvds)
 {
 	struct drm_device *drm = lvds->lvds_bridge.dev;
 	const struct drm_display_info *info;
-	enum lvds_pixel (*bitmap)[7];
-	u32 lvds_dmlcr, lvds_dmmcr;
-	int i;
+	const enum lvds_pixel (*bitmap)[7];
+	size_t i, num_lanes;
 
 	info = &(&lvds->connector)->display_info;
 	if (!info->num_bus_formats || !info->bus_formats) {
@@ -782,14 +800,17 @@ static void lvds_config_data_mapping(struct stm_lvds *lvds)
 	}
 
 	switch (info->bus_formats[0]) {
-	case MEDIA_BUS_FMT_RGB666_1X7X3_SPWG: /* VESA-RGB666 */
-		drm_warn(drm, "Pixel format with data mapping not yet supported.\n");
-		return;
+	case MEDIA_BUS_FMT_RGB666_1X7X3_SPWG: /* JEIDA-RGB666 */
+		bitmap = lvds_bitmap_jeida_rgb666;
+		num_lanes = ARRAY_SIZE(lvds_bitmap_jeida_rgb666);
+		break;
 	case MEDIA_BUS_FMT_RGB888_1X7X4_SPWG: /* VESA-RGB888 */
 		bitmap = lvds_bitmap_vesa_rgb888;
+		num_lanes = ARRAY_SIZE(lvds_bitmap_vesa_rgb888);
 		break;
 	case MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA: /* JEIDA-RGB888 */
 		bitmap = lvds_bitmap_jeida_rgb888;
+		num_lanes = ARRAY_SIZE(lvds_bitmap_jeida_rgb888);
 		break;
 	default:
 		drm_warn(drm, "Unsupported LVDS bus format 0x%04x\n", info->bus_formats[0]);
@@ -797,14 +818,11 @@ static void lvds_config_data_mapping(struct stm_lvds *lvds)
 	}
 
 	/* Set bitmap for each lane */
-	for (i = 0; i < 5; i++) {
-		lvds_dmlcr = ((bitmap[i][0])
-			      + (bitmap[i][1] << 5)
-			      + (bitmap[i][2] << 10)
-			      + (bitmap[i][3] << 15));
-		lvds_dmmcr = ((bitmap[i][4])
-			      + (bitmap[i][5] << 5)
-			      + (bitmap[i][6] << 10));
+	for (i = 0; i < num_lanes; i++) {
+		u32 lvds_dmlcr = bitmap[i][0] | (bitmap[i][1] << 5) |
+			(bitmap[i][2] << 10) | (bitmap[i][3] << 15);
+		u32 lvds_dmmcr = bitmap[i][4] | (bitmap[i][5] << 5) |
+			(bitmap[i][6] << 10);
 
 		lvds_write(lvds, LVDS_DMLCR(i), lvds_dmlcr);
 		lvds_write(lvds, LVDS_DMMCR(i), lvds_dmmcr);
