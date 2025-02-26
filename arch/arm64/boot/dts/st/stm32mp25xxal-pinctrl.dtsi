@@ -60,6 +60,9 @@
 		ngpios = <12>;
 		gpio-ranges = <&pinctrl 0 128 12>;
 	};
+
+	/delete-node/ gpio@442d0000; /* GPIOJ */
+	/delete-node/ gpio@442e0000; /* GPIOK */
 };
 
 &pinctrl_z {

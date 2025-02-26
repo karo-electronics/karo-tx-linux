@@ -542,9 +542,11 @@ out:
 }
 
 static const struct v4l2_file_operations dcmipp_isp_params_fops = {
+	.owner		= THIS_MODULE,
 	.open		= v4l2_fh_open,
 	.release	= vb2_fop_release,
-	.mmap           = vb2_fop_mmap,
+	.read		= vb2_fop_read,
+	.mmap		= vb2_fop_mmap,
 	.poll		= vb2_fop_poll,
 	.unlocked_ioctl = video_ioctl2,
 };
@@ -558,7 +560,7 @@ dcmipp_isp_params_ent_init(const char *entity_name,
 	struct video_device *vdev;
 	struct vb2_queue *q;
 	const unsigned long pad_flag = MEDIA_PAD_FL_SOURCE;
-	int ret = 0;
+	int ret;
 
 	/* Allocate the dcmipp_cap_device struct */
 	vout = kzalloc(sizeof(*vout), GFP_KERNEL);

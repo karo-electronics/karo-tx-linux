@@ -418,7 +418,7 @@ config PCIE_VISCONTI_HOST
 config PCIE_STM32
 	tristate "STMicroelectronics PCIe Controller Host Mode for STM32 MP25"
 	depends on ARCH_STM32 || COMPILE_TEST
-	depends on PCI_MSI
+	depends on PCI_MSI && PCIEPORTBUS
 	select PCIE_DW_HOST
 	help
 	  Enables support for the DesignWare core based PCIe host controller

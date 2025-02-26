@@ -885,9 +885,8 @@ static void lvds_config_mode(struct stm_lvds *lvds)
 		lvds_cr |= CR_LKPHA;
 		break;
 	default:
-		drm_notice(lvds->lvds_bridge.dev, "No phase precised, setting default\n");
+		drm_notice(lvds->lvds_bridge.dev, "No LVDS clock phase specified, setting default\n");
 		lvds_cr &= ~CR_LKPHA;
-		break;
 	}
 
 	/* Write config to registers */

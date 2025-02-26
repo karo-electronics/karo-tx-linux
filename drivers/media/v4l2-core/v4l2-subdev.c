@@ -1076,26 +1076,26 @@ int v4l2_subdev_link_validate_default(struct v4l2_subdev *sd,
 
 	/* The width, height and code must match. */
 	if (source_fmt->format.width != sink_fmt->format.width) {
-		dev_dbg(sd->entity.graph_obj.mdev->dev,
-			"%s: width does not match (source %u, sink %u)\n",
-			__func__,
-			source_fmt->format.width, sink_fmt->format.width);
+		dev_warn(sd->entity.graph_obj.mdev->dev,
+			 "%s: width does not match (source %u, sink %u)\n",
+			 __func__,
+			 source_fmt->format.width, sink_fmt->format.width);
 		pass = false;
 	}
 
 	if (source_fmt->format.height != sink_fmt->format.height) {
-		dev_dbg(sd->entity.graph_obj.mdev->dev,
-			"%s: height does not match (source %u, sink %u)\n",
-			__func__,
-			source_fmt->format.height, sink_fmt->format.height);
+		dev_warn(sd->entity.graph_obj.mdev->dev,
+			 "%s: height does not match (source %u, sink %u)\n",
+			 __func__,
+			 source_fmt->format.height, sink_fmt->format.height);
 		pass = false;
 	}
 
 	if (source_fmt->format.code != sink_fmt->format.code) {
-		dev_dbg(sd->entity.graph_obj.mdev->dev,
-			"%s: media bus code does not match (source 0x%8.8x, sink 0x%8.8x)\n",
-			__func__,
-			source_fmt->format.code, sink_fmt->format.code);
+		dev_warn(sd->entity.graph_obj.mdev->dev,
+			 "%s: media bus code does not match (source 0x%8.8x, sink 0x%8.8x)\n",
+			 __func__,
+			 source_fmt->format.code, sink_fmt->format.code);
 		pass = false;
 	}
 
@@ -1105,7 +1105,7 @@ int v4l2_subdev_link_validate_default(struct v4l2_subdev *sd,
 	 */
 	if (source_fmt->format.field != sink_fmt->format.field &&
 	    sink_fmt->format.field != V4L2_FIELD_NONE) {
-		dev_dbg(sd->entity.graph_obj.mdev->dev,
+		dev_warn(sd->entity.graph_obj.mdev->dev,
 			"%s: field does not match (source %u, sink %u)\n",
 			__func__,
 			source_fmt->format.field, sink_fmt->format.field);

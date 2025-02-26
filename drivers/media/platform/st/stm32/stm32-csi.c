@@ -950,10 +950,9 @@ static int stm32_csi_parse_dt(struct stm32_csi_dev *csi2priv)
 	int ret;
 
 	/* Get bus characteristics from devicetree */
-	ep = fwnode_graph_get_endpoint_by_id(dev_fwnode(csi2priv->dev), 0, 0,
-					     FWNODE_GRAPH_ENDPOINT_NEXT);
+	ep = fwnode_graph_get_endpoint_by_regs(dev_fwnode(csi2priv->dev), 0, -1);
 	if (!ep) {
-		dev_err(csi2priv->dev, "Could not find the endpoint\n");
+		dev_err(csi2priv->dev, "Failed to find endpoint port0\n");
 		return -ENODEV;
 	}
 
@@ -973,12 +972,6 @@ static int stm32_csi_parse_dt(struct stm32_csi_dev *csi2priv)
 
 	memcpy(csi2priv->lanes, v4l2_ep.bus.mipi_csi2.data_lanes,
 	       sizeof(csi2priv->lanes));
-
-	ep = fwnode_graph_get_next_endpoint(dev_fwnode(csi2priv->dev), NULL);
-	if (!ep) {
-		dev_err(csi2priv->dev, "Failed to get next endpoint\n");
-		return -EINVAL;
-	}
 
 	v4l2_async_subdev_nf_init(&csi2priv->notifier, &csi2priv->subdev);
 
@@ -1028,8 +1021,8 @@ static int stm32_csi_probe(struct platform_device *pdev)
 	csi2priv->subdev.dev = &pdev->dev;
 	v4l2_subdev_init(&csi2priv->subdev, &stm32_csi_subdev_ops);
 	v4l2_set_subdevdata(&csi2priv->subdev, &pdev->dev);
-	snprintf(csi2priv->subdev.name, V4L2_SUBDEV_NAME_SIZE, "%s",
-		 dev_name(&pdev->dev));
+	snprintf(csi2priv->subdev.name, V4L2_SUBDEV_NAME_SIZE, "%s %s",
+		 KBUILD_MODNAME, dev_name(&pdev->dev));
 
 	/* Create our media pads */
 	csi2priv->subdev.entity.function = MEDIA_ENT_F_VID_IF_BRIDGE;
@@ -1144,7 +1137,7 @@ error_out:
 
 static const struct of_device_id stm32_csi_of_table[] = {
 	{ .compatible = "st,stm32mp25-csi", },
-	{ /* end node */ },
+	{ /* end node */ }
 };
 MODULE_DEVICE_TABLE(of, stm32_csi_of_table);
 

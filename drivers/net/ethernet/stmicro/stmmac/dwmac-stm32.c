@@ -281,7 +281,7 @@ static int stm32mp2_set_mode(struct plat_stmmacenet_data *plat_dat)
 		if ((clk_rate == ETH_CK_F_50M) &&
 		    (dwmac->eth_ref_clk_sel_reg || dwmac->ext_phyclk)) {
 			dwmac->enable_eth_ck = true;
-			val |= SYSCFG_ETHCR_ETH_REF_CLK_SEL;
+			val |= !dwmac->ext_phyclk * SYSCFG_ETHCR_ETH_REF_CLK_SEL;
 		}
 		dev_dbg(dwmac->dev, "SYSCFG init : PHY_INTERFACE_MODE_RMII\n");
 		break;
@@ -295,7 +295,7 @@ static int stm32mp2_set_mode(struct plat_stmmacenet_data *plat_dat)
 		if ((clk_rate == ETH_CK_F_125M) &&
 		    (dwmac->eth_clk_sel_reg || dwmac->ext_phyclk)) {
 			dwmac->enable_eth_ck = true;
-			val |= SYSCFG_ETHCR_ETH_CLK_SEL;
+			val |= !dwmac->ext_phyclk * SYSCFG_ETHCR_ETH_CLK_SEL;
 		}
 		dev_dbg(dwmac->dev, "SYSCFG init : PHY_INTERFACE_MODE_RGMII\n");
 		break;
@@ -701,7 +701,7 @@ static struct stm32_ops stm32mp25_dwmac_data = {
 	.suspend = stm32mp1_suspend,
 	.resume = stm32mp1_resume,
 	.parse_data = stm32mp1_parse_data,
-	.syscfg_eth_mask = SYSCFG_MP2_ETH_MASK
+	.syscfg_eth_mask = SYSCFG_MP2_ETH_MASK,
 };
 
 static const struct of_device_id stm32_dwmac_match[] = {
@@ -717,7 +717,7 @@ static struct platform_driver stm32_dwmac_driver = {
 	.probe  = stm32_dwmac_probe,
 	.remove_new = stm32_dwmac_remove,
 	.driver = {
-		.name           = "stm32-dwmac",
+		.name		= "stm32-dwmac",
 #ifdef CONFIG_PM_SLEEP
 		.pm		= &stm32_dwmac_pm_ops,
 #endif /* CONFIG_PM_SLEEP */
