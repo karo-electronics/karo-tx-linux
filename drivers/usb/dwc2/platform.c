@@ -586,7 +586,8 @@ static int dwc2_driver_probe(struct platform_device *dev)
 		}
 
 		ggpio = dwc2_readl(hsotg, GGPIO);
-		ggpio |= GGPIO_STM32_OTG_GCCFG_IDEN;
+		if (hsotg->dr_mode == USB_DR_MODE_OTG)
+			ggpio |= GGPIO_STM32_OTG_GCCFG_IDEN;
 		ggpio |= GGPIO_STM32_OTG_GCCFG_VBDEN;
 		dwc2_writel(hsotg, ggpio, GGPIO);
 
@@ -781,7 +782,8 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 			return ret;
 
 		ggpio = dwc2_readl(dwc2, GGPIO);
-		ggpio |= GGPIO_STM32_OTG_GCCFG_IDEN;
+		if (dwc2->dr_mode == USB_DR_MODE_OTG)
+			ggpio |= GGPIO_STM32_OTG_GCCFG_IDEN;
 		ggpio |= GGPIO_STM32_OTG_GCCFG_VBDEN;
 		dwc2_writel(dwc2, ggpio, GGPIO);
 
