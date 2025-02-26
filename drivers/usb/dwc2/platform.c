@@ -484,14 +484,6 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	if (hsotg->irq < 0)
 		return hsotg->irq;
 
-	dev_dbg(hsotg->dev, "registering common handler for irq%d\n",
-		hsotg->irq);
-	retval = devm_request_irq(hsotg->dev, hsotg->irq,
-				  dwc2_handle_common_intr, IRQF_SHARED,
-				  dev_name(hsotg->dev), hsotg);
-	if (retval)
-		return retval;
-
 	hsotg->vbus_supply = devm_regulator_get_optional(hsotg->dev, "vbus");
 	if (IS_ERR(hsotg->vbus_supply)) {
 		retval = PTR_ERR(hsotg->vbus_supply);
@@ -642,6 +634,14 @@ static int dwc2_driver_probe(struct platform_device *dev)
 		}
 		hsotg->hcd_enabled = 1;
 	}
+
+	dev_dbg(hsotg->dev, "registering common handler for irq%d\n",
+		hsotg->irq);
+	retval = devm_request_irq(hsotg->dev, hsotg->irq,
+				  dwc2_handle_common_intr, IRQF_SHARED,
+				  dev_name(hsotg->dev), hsotg);
+	if (retval)
+		goto error_init;
 
 	platform_set_drvdata(dev, hsotg);
 	hsotg->hibernated = 0;

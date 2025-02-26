@@ -508,6 +508,8 @@ static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 	dev_dbg(hsotg->dev, "USB SUSPEND\n");
 
 	if (dwc2_is_device_mode(hsotg)) {
+		if (WARN_ON(!hsotg->gadget_enabled))
+			return;
 		/*
 		 * Check the Device status register to determine if the Suspend
 		 * state is active
@@ -565,6 +567,8 @@ static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 			call_gadget(hsotg, suspend);
 		}
 	} else {
+		if (WARN_ON(!hsotg->hcd_enabled))
+			return;
 		if (hsotg->op_state == OTG_STATE_A_PERIPHERAL) {
 			dev_dbg(hsotg->dev, "a_peripheral->a_host\n");
 
@@ -611,6 +615,8 @@ static void dwc2_handle_lpm_intr(struct dwc2_hsotg *hsotg)
 	enslpm = glpmcfg & GLPMCFG_ENBLSLPM;
 
 	if (dwc2_is_device_mode(hsotg)) {
+		if (WARN_ON(!hsotg->gadget_enabled))
+			return;
 		dev_dbg(hsotg->dev, "HIRD_THRES_EN = %d\n", hird_thres_en);
 
 		if (hird_thres_en && hird >= hird_thres) {
@@ -834,6 +840,8 @@ irqreturn_t dwc2_handle_common_intr(int irq, void *dev)
 		dev_warn(hsotg->dev, "Controller is dead\n");
 		goto out;
 	}
+	if (WARN_ON(!(hsotg->gadget_enabled || hsotg->hcd_enabled)))
+		goto out;
 
 	/* Reading current frame number value in device or host modes. */
 	if (dwc2_is_device_mode(hsotg))
