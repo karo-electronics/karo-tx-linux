@@ -1237,7 +1237,7 @@ static void stm32_usart_unthrottle(struct uart_port *port)
 	 * Switch back to DMA mode (resume DMA).
 	 * Hardware flow control is stopped when FIFO is not full any more.
 	 */
-	if (stm32_port->rx_ch)
+	if (stm32_port->rx_ch && !uart_console(port))
 		stm32_usart_rx_dma_start_or_resume(port);
 
 	spin_unlock_irqrestore(&port->lock, flags);
@@ -1297,7 +1297,7 @@ static int stm32_usart_startup(struct uart_port *port)
 	if (ofs->rqr != UNDEF_REG)
 		writel_relaxed(USART_RQR_RXFRQ, port->membase + ofs->rqr);
 
-	if (stm32_port->rx_ch) {
+	if (stm32_port->rx_ch && !uart_console(port)) {
 		ret = stm32_usart_rx_dma_start_or_resume(port);
 		if (ret) {
 			free_irq(port->irq, port);
@@ -1344,7 +1344,7 @@ static void stm32_usart_shutdown(struct uart_port *port)
 		dev_err(port->dev, "Transmission is not complete\n");
 
 	/* Disable RX DMA. */
-	if (stm32_port->rx_ch) {
+	if (stm32_port->rx_ch && !uart_console(port)) {
 		stm32_usart_rx_dma_terminate(stm32_port);
 		dmaengine_synchronize(stm32_port->rx_ch);
 	}
