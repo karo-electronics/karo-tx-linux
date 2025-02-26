@@ -569,6 +569,21 @@ int crypto_engine_exit(struct crypto_engine *engine)
 }
 EXPORT_SYMBOL_GPL(crypto_engine_exit);
 
+#include <linux/string_helpers.h>
+
+#define CRYPTO_REGISTER_WARN(_a)					\
+__weak int crypto_register_##_a(struct _a##_alg *alg)			\
+{									\
+	WARN_ONCE("CONFIG_CRYPTO_%s is not enabled in the kernel config\n", \
+		  #_a);							\
+	return -ENODEV;							\
+}									\
+									\
+__weak void crypto_unregister_##_a(struct _a##_alg *alg)		\
+{									\
+}
+
+CRYPTO_REGISTER_WARN(aead);
 int crypto_engine_register_aead(struct aead_engine_alg *alg)
 {
 	if (!alg->op.do_one_request)
@@ -614,6 +629,7 @@ void crypto_engine_unregister_aeads(struct aead_engine_alg *algs, int count)
 }
 EXPORT_SYMBOL_GPL(crypto_engine_unregister_aeads);
 
+CRYPTO_REGISTER_WARN(ahash);
 int crypto_engine_register_ahash(struct ahash_engine_alg *alg)
 {
 	if (!alg->op.do_one_request)
@@ -660,6 +676,7 @@ void crypto_engine_unregister_ahashes(struct ahash_engine_alg *algs,
 }
 EXPORT_SYMBOL_GPL(crypto_engine_unregister_ahashes);
 
+CRYPTO_REGISTER_WARN(akcipher);
 int crypto_engine_register_akcipher(struct akcipher_engine_alg *alg)
 {
 	if (!alg->op.do_one_request)
@@ -677,6 +694,7 @@ void crypto_engine_unregister_akcipher(struct akcipher_engine_alg *alg)
 }
 EXPORT_SYMBOL_GPL(crypto_engine_unregister_akcipher);
 
+CRYPTO_REGISTER_WARN(kpp);
 int crypto_engine_register_kpp(struct kpp_engine_alg *alg)
 {
 	if (!alg->op.do_one_request)
@@ -694,6 +712,7 @@ void crypto_engine_unregister_kpp(struct kpp_engine_alg *alg)
 }
 EXPORT_SYMBOL_GPL(crypto_engine_unregister_kpp);
 
+CRYPTO_REGISTER_WARN(skcipher);
 int crypto_engine_register_skcipher(struct skcipher_engine_alg *alg)
 {
 	if (!alg->op.do_one_request)
