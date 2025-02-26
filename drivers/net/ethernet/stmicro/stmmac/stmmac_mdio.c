@@ -464,6 +464,8 @@ int stmmac_mdio_reset(struct mii_bus *bus)
 		reset_gpio = devm_gpiod_get_optional(priv->device,
 						     "snps,reset",
 						     GPIOD_OUT_LOW);
+		if (!reset_gpio)
+			goto out;
 		if (IS_ERR(reset_gpio))
 			return PTR_ERR(reset_gpio);
 
@@ -481,8 +483,11 @@ int stmmac_mdio_reset(struct mii_bus *bus)
 		gpiod_set_value_cansleep(reset_gpio, 0);
 		if (delays[2])
 			msleep(DIV_ROUND_UP(delays[2], 1000));
+
+		gpiod_put(reset_gpio);
 	}
 #endif
+out:
 
 	/* This is a workaround for problems with the STE101P PHY.
 	 * It doesn't complete its reset until at least one clock cycle
