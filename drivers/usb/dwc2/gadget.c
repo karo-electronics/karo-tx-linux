@@ -5559,7 +5559,7 @@ int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
  * This function is for exiting from device mode partial power down.
  */
 int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
-					bool restore)
+					int rem_wakeup, bool restore)
 {
 	u32 pcgcctl;
 	u32 dctl;

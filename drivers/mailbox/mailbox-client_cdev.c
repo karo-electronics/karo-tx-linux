@@ -6,6 +6,7 @@
 
 #include <linux/cdev.h>
 #include <linux/device.h>
+#include <linux/fs.h>
 #include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/mailbox_client.h>
@@ -82,7 +83,7 @@ static ssize_t mbox_cdev_read(struct file *filep, char *buffer, size_t len, loff
 {
 	struct mbox_cdev_ddata *mbxdev = cdev_to_mbxdev(filep->f_inode->i_cdev);
 
-	if (len > sizeof(mbxdev->resm_size))
+	if (len > mbxdev->resm_size)
 		return -EINVAL;
 
 	if (mbxdev->req_state == NO_REQ)
@@ -104,7 +105,7 @@ static ssize_t mbox_cdev_write(struct file *filep, const char *buffer, size_t le
 	struct mbox_cdev_ddata *mbxdev = cdev_to_mbxdev(filep->f_inode->i_cdev);
 	int ret;
 
-	if (len > sizeof(mbxdev->resm_size))
+	if (len > mbxdev->resm_size)
 		return -EINVAL;
 
 	if (mbxdev->req_state == REQ_SENT)
@@ -210,8 +211,8 @@ static void mbox_cdev_driver_remove(struct platform_device *pdev)
 {
 	struct mbox_cdev_ddata *mbxdev = platform_get_drvdata(pdev);
 
+	device_destroy(mbox_cl_class, mbxdev->dev.devt);
 	mbox_free_channel(mbxdev->mb.chan);
-	iounmap(mbxdev->resm);
 	cdev_del(&mbxdev->cdev);
 }
 
@@ -231,10 +232,10 @@ static int mbox_cdev_driver_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	// Initialize mailbox client
+	/* Initialize mailbox client */
 	ret = mbox_cdev_request_mbox(dev, mbxdev);
 	if (ret)
-		goto unmap;
+		return ret;
 
 	ret = mbxdev_char_device_add(pdev, mbxdev);
 	if (ret)
@@ -246,8 +247,6 @@ static int mbox_cdev_driver_probe(struct platform_device *pdev)
 
 free_mbx:
 	mbox_free_channel(mbxdev->mb.chan);
-unmap:
-	iounmap(mbxdev->resm);
 
 	return ret;
 }
