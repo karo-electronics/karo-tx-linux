@@ -12,6 +12,10 @@
 #include <linux/rpmsg.h>
 #include <linux/suspend.h>
 
+#ifndef CONFIG_SUSPEND
+#define pm_suspend_target_state PM_SUSPEND_ON
+#endif
+
 #define RPMSG_TIMEOUT 1000
 
 #define PM_RPMSG_TYPE		0
@@ -106,11 +110,11 @@ static int rpmsg_life_cycle_probe(struct rpmsg_device *rpdev)
 
 static struct rpmsg_device_id rpmsg_life_cycle_id_table[] = {
 	{ .name = "rpmsg-life-cycle-channel" },
-	{ },
+	{ }
 };
 
 static struct rpmsg_driver rpmsg_life_cycle_driver = {
-	.drv.name = 	"rpmsg_life_cycle",
+	.drv.name =	"rpmsg_life_cycle",
 	.drv.owner	= THIS_MODULE,
 	.id_table	= rpmsg_life_cycle_id_table,
 	.probe		= rpmsg_life_cycle_probe,
@@ -179,7 +183,7 @@ static int rpmsg_lifecycle_probe(struct platform_device *pdev)
 
 static const struct of_device_id rpmsg_lifecycle_id[] = {
 	{ "nxp,rpmsg-lifecycle", },
-	{},
+	{}
 };
 MODULE_DEVICE_TABLE(of, rpmsg_lifecycle_id);
 
