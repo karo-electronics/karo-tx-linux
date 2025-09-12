@@ -358,6 +358,12 @@ static int tc358762_dsi_probe(struct mipi_dsi_device *dsi)
 
 	drm_panel_init(&panel->base, dev, &tc358762_funcs, DRM_MODE_CONNECTOR_DSI);
 
+	err = drm_panel_of_backlight(&panel->base);
+	if (err) {
+		dev_err_probe(dev, err, "Could not find backlight\n");
+		return err;
+	}
+
 	drm_panel_add(&panel->base);
 
 	err = mipi_dsi_attach(dsi);
