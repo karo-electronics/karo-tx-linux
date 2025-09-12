@@ -773,12 +773,10 @@ static int mxc_isi_capture_release(struct file *file)
 
 label:
 	mutex_lock(&mxc_isi->lock);
-	if (atomic_read(&mxc_isi->usage_count) == 0) {
-		mxc_isi->cap_enabled = false;
-		pm_runtime_put(dev);
-	}
+	mxc_isi->cap_enabled = false;
 	mutex_unlock(&mxc_isi->lock);
 
+	pm_runtime_put(dev);
 	return (ret) ? ret : 0;
 }
 
@@ -973,6 +971,7 @@ static int mxc_isi_source_fmt_init(struct mxc_isi_cap_dev *isi_cap)
 	src_fmt.pad = source_pad->index;
 	src_fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
 	ret = v4l2_subdev_call(src_sd, pad, get_fmt, NULL, &src_fmt);
+	src_fmt.format.code = MEDIA_BUS_FMT_UYVY8_1X16;
 	if (ret < 0 && ret != -ENOIOCTLCMD) {
 		v4l2_err(&isi_cap->sd, "get remote fmt fail!\n");
 		return ret;

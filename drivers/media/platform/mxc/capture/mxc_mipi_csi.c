@@ -321,6 +321,14 @@ static const struct csis_pix_format mipi_csis_formats[] = {
 		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
 		.fmt_reg = MIPI_CSIS_ISPCFG_FMT_RAW8,
 		.data_alignment = 8,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB8_1X8,
+		.fmt_reg = MIPI_CSIS_ISPCFG_FMT_RAW8,
+		.data_alignment = 8,
+	}, {
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.fmt_reg = MIPI_CSIS_ISPCFG_FMT_RAW10,
+		.data_alignment = 16,
 	}
 };
 
@@ -334,8 +342,7 @@ static struct csi_state *mipi_sd_to_csi_state(struct v4l2_subdev *sdev)
 	return container_of(sdev, struct csi_state, mipi_sd);
 }
 
-static inline struct csi_state
-				*notifier_to_mipi_dev(struct v4l2_async_notifier *n)
+static inline struct csi_state *notifier_to_mipi_dev(struct v4l2_async_notifier *n)
 {
 	return container_of(n, struct csi_state, subdev_notifier);
 }
@@ -730,7 +737,7 @@ static int mipi_csis_enum_mbus_code(struct v4l2_subdev *mipi_sd,
 
 	csis_fmt = find_csis_format(code->code);
 	if (csis_fmt == NULL) {
-		dev_err(state->dev, "format not match\n");
+		dev_err(state->dev, "unsupported format %08x\n", code->code);
 		return -EINVAL;
 	}
 
@@ -1295,7 +1302,7 @@ static const struct of_device_id mipi_csis_of_match[] = {
 	{	.compatible = "fsl,imx8mm-mipi-csi",
 		.data = (void *)&mipi_csis_phy_reset_mx8mm,
 	},
-	{ /* sentinel */ },
+	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mipi_csis_of_match);
 
