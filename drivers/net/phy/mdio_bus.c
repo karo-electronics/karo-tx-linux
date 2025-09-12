@@ -9,6 +9,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/acpi.h>
+#include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/errno.h>
@@ -657,6 +658,7 @@ int __mdiobus_register(struct mii_bus *bus, struct module *owner)
 {
 	struct mdio_device *mdiodev;
 	struct gpio_desc *gpiod;
+	struct clk *clk;
 	bool prevent_c45_scan;
 	int i, err;
 
@@ -700,6 +702,10 @@ int __mdiobus_register(struct mii_bus *bus, struct module *owner)
 
 	mutex_init(&bus->mdio_lock);
 	mutex_init(&bus->shared_lock);
+
+	clk = devm_clk_get_optional_enabled(&bus->dev, NULL);
+	if (IS_ERR(clk))
+		return PTR_ERR(clk);
 
 	/* assert bus level PHY GPIO reset */
 	gpiod = devm_gpiod_get_optional(&bus->dev, "reset", GPIOD_OUT_HIGH);
