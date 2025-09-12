@@ -429,8 +429,9 @@ static int __maybe_unused pwm_imx_tpm_resume(struct device *dev)
 	return ret;
 }
 
-static SIMPLE_DEV_PM_OPS(imx_tpm_pwm_pm,
-			 pwm_imx_tpm_suspend, pwm_imx_tpm_resume);
+static const struct dev_pm_ops imx_tpm_pwm_pm = {
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(pwm_imx_tpm_suspend, pwm_imx_tpm_resume)
+};
 
 static const struct of_device_id imx_tpm_pwm_dt_ids[] = {
 	{ .compatible = "fsl,imx7ulp-pwm", },
