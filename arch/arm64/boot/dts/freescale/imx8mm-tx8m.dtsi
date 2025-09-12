@@ -9,6 +9,7 @@
 
 / {
 	aliases {
+		spi0 = &ecspi2;
 		usb-host = &usbotg2;
 	};
 };
@@ -19,7 +20,7 @@
 
 &fec1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_fec1 &pinctrl_etnphy_rst>;
+	pinctrl-0 = <&pinctrl_fec1>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
 	phy-supply = <&reg_3v3_etn>;
@@ -39,17 +40,31 @@
 	status = "okay";
 
 	mdio {
-		#address-cells = <1>;
-		#size-cells = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_etnphy_rst>;
+		clocks = <&clk IMX8MM_CLK_ENET_REF>;
 		reset-gpios = <&gpio1 29 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <25000>;
 		reset-post-delay-us = <100>;
+		#address-cells = <1>;
+		#size-cells = <0>;
 
 		ethphy0: ethernet-phy@0 {
 			reg = <0>;
-			clocks = <&clk IMX8MM_CLK_ENET_REF>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_etnphy_int>;
+			interrupt-parent = <&gpio1>;
+			interrupts = <28 IRQ_TYPE_EDGE_FALLING>;
 			smsc,disable-energy-detect;
 		};
+	};
+};
+
+&resmem {
+	/* overwrite freescale cma setting since it's not allocatable */
+	linux,cma {
+		size = <0 0x1e000000>;
+		/delete-property/ alloc-ranges;
 	};
 };
 
@@ -67,18 +82,6 @@
 	power-active-high;
 	over-current-active-low;
 	status = "okay";
-};
-
-&vpu_g1_pd {
-	power-supply = <&reg_vdd_dram>;
-};
-
-&vpu_g2_pd {
-	power-supply = <&reg_vdd_dram>;
-};
-
-&vpu_h1_pd {
-	power-supply = <&reg_vdd_dram>;
 };
 
 &iomuxc {
@@ -279,12 +282,12 @@
 
 	pinctrl_usdhc2: usdhc2grp {
 		fsl,pins = <
-			MX8MM_IOMUXC_SD2_CLK_USDHC2_CLK			0x190
-			MX8MM_IOMUXC_SD2_CMD_USDHC2_CMD			0x1d0
-			MX8MM_IOMUXC_SD2_DATA0_USDHC2_DATA0		0x1d0
-			MX8MM_IOMUXC_SD2_DATA1_USDHC2_DATA1		0x1d0
-			MX8MM_IOMUXC_SD2_DATA2_USDHC2_DATA2		0x1d0
-			MX8MM_IOMUXC_SD2_DATA3_USDHC2_DATA3		0x1d0
+			MX8MM_IOMUXC_SD2_CLK_USDHC2_CLK			0x016
+			MX8MM_IOMUXC_SD2_CMD_USDHC2_CMD			0x156
+			MX8MM_IOMUXC_SD2_DATA0_USDHC2_DATA0		0x156
+			MX8MM_IOMUXC_SD2_DATA1_USDHC2_DATA1		0x156
+			MX8MM_IOMUXC_SD2_DATA2_USDHC2_DATA2		0x156
+			MX8MM_IOMUXC_SD2_DATA3_USDHC2_DATA3		0x156
 		>;
 	};
 
@@ -300,12 +303,12 @@
 			 * Erratum e11341: SION must be asserted on NAND_WE_B
 			 * when used as SDHC3_CLK
 			 */
-			MX8MM_IOMUXC_NAND_WE_B_USDHC3_CLK		0x40000190
-			MX8MM_IOMUXC_NAND_WP_B_USDHC3_CMD		0x1d0
-			MX8MM_IOMUXC_NAND_DATA04_USDHC3_DATA0		0x1d0
-			MX8MM_IOMUXC_NAND_DATA05_USDHC3_DATA1		0x1d0
-			MX8MM_IOMUXC_NAND_DATA06_USDHC3_DATA2		0x1d0
-			MX8MM_IOMUXC_NAND_DATA07_USDHC3_DATA3		0x1d0
+			MX8MM_IOMUXC_NAND_WE_B_USDHC3_CLK		0x016
+			MX8MM_IOMUXC_NAND_WP_B_USDHC3_CMD		0x156
+			MX8MM_IOMUXC_NAND_DATA04_USDHC3_DATA0		0x156
+			MX8MM_IOMUXC_NAND_DATA05_USDHC3_DATA1		0x156
+			MX8MM_IOMUXC_NAND_DATA06_USDHC3_DATA2		0x156
+			MX8MM_IOMUXC_NAND_DATA07_USDHC3_DATA3		0x156
 		>;
 	};
 

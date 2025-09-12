@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
+/*
+ * Copyright (C) 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "imx8mp-pinfunc.h"
+
+&{/aliases} {
+	spi0 = "/soc@0/bus@30800000/spba-bus@30800000/spi@30830000";
+};
+
+&{/chosen} {
+	overlays {
+		tx8p-spidev;
+	};
+};
+
+&ecspi1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_ecspi1 &pinctrl_ecspi1_cs0 &pinctrl_ecspi1_cs1>;
+	cs-gpios = <&gpio5 9 GPIO_ACTIVE_LOW &gpio4 4 GPIO_ACTIVE_LOW>;
+	status = "okay";
+
+	spidev@0 {
+		reg = <0>;
+		compatible = "karo,spidev-test";
+	};
+
+	spidev@1 {
+		reg = <1>;
+		compatible = "karo,spidev-test";
+	};
+};
+
+&iomuxc {
+	pinctrl_ecspi1: ecspi1grp {
+		fsl,pins = <
+			MX8MP_IOMUXC_ECSPI1_MISO__ECSPI1_MISO		0x156
+			MX8MP_IOMUXC_ECSPI1_MOSI__ECSPI1_MOSI		0x156
+			MX8MP_IOMUXC_ECSPI1_SCLK__ECSPI1_SCLK		0x156
+		>;
+	};
+
+	pinctrl_ecspi1_cs0: ecspi1-cs0grp {
+		fsl,pins = <
+			MX8MP_IOMUXC_ECSPI1_SS0__GPIO5_IO09		0x3fe
+		>;
+	};
+
+	pinctrl_ecspi1_cs1: ecspi1-cs1grp {
+		fsl,pins = <
+			MX8MP_IOMUXC_SAI1_RXD2__GPIO4_IO04		0x3fe
+		>;
+	};
+};

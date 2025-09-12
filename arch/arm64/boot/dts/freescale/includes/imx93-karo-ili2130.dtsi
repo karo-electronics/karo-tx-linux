@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
+/*
+ * Copyright (C) 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ */
+
+&lpi2c2 {
+	status = "okay";
+
+	ili2130: touchpanel@41 {
+		compatible = "ilitek,ili2130";
+		reg = <0x41>;
+		wakeup-source;
+	};
+};

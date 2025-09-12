@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2025 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+
+&{/} {
+	reg_rpi_bridge: regulator-rpi-bridge {
+		compatible = "regulator-fixed";
+		regulator-name = "rpi-bridge";
+		gpio = <&reg_rpi_display 0 GPIO_ACTIVE_HIGH>;
+		vin-supply = <&reg_rpi_display>;
+		enable-active-high;
+	};
+};
+
+&i2c2 {
+	status = "okay";
+	clock-frequency = <100000>;
+
+	ts@38 {
+		compatible = "edt,edt-ft5506";
+		reg = <0x38>;
+		vcc-supply = <&reg_rpi_display>;
+		reset-gpios = <&reg_rpi_display 1 1>;
+		touchscreen-size-x = <800>;
+		touchscreen-size-y = <480>;
+		touchscreen-inverted-x;
+		touchscreen-inverted-y;
+	};
+
+	reg_rpi_display: regulator-rpi-display@45 {
+		compatible = "raspberrypi,7inch-touchscreen-panel-regulator";
+		reg = <0x45>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+};
+
+&mipi_dsi {
+	status = "okay";
+
+	panel@0 {
+		reg = <0>;
+		compatible = "raspberrypi,tc358762";
+		dsi-lanes = <1>;
+		video-mode = <2>;
+		power-supply = <&reg_rpi_bridge>;
+		backlight = <&reg_rpi_display>;
+		status = "okay";
+
+		port {
+			panel_from_mipi_dsi_bridge: endpoint {
+				remote-endpoint = <&mipi_dsi_bridge_to_panel>;
+			};
+		};
+	};
+
+	port@1 {
+		reg = <1>;
+
+		mipi_dsi_bridge_to_panel: endpoint {
+			remote-endpoint = <&panel_from_mipi_dsi_bridge>;
+		};
+	};
+};

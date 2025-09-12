@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
+/*
+ * Copyright (C) 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+&{/chosen} {
+	overlays {
+		karo-gpu;
+	};
+};
+
+&gpu {
+	assigned-clock-rates = <0>, <0>, <0>,<400000000>,<800000000>;
+	status = "okay";
+};

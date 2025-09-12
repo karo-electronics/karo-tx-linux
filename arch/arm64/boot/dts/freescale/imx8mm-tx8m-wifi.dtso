@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+&{/chosen} {
+	overlays {
+		tx8m-wifi;
+	};
+};
+
+&pcie0 {
+	status = "okay";
+
+	wifi@168c,002d {
+		compatible = "pci168c,0033";
+		reg = <0x7000 0 0 0 0x1000>;
+		qca,no-eeprom;
+	};
+};

@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pwm/pwm.h>
+#include "includes/imx8m-karo-backlight.dtsi"
+#include "imx8mp-pinfunc.h"
+
+&{/} {
+	panel: lvds-panel {
+		compatible = "panel-lvds";
+		data-mapping = "vesa-24";
+		backlight = <&backlight>;
+		status = "okay";
+
+		port {
+			panel_from_dsi_lvds_bridge: endpoint {
+				remote-endpoint = <&dsi_lvds_bridge_to_panel>;
+			};
+		};
+	};
+};
+
+&{/chosen} {
+	overlays {
+		karo-lvds-panel;
+	};
+};
+
+&backlight {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcd_en>;
+	enable-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
+};
+
+&dsi_lvds_bridge {
+	status = "okay";
+
+	ports {
+		port@2 {
+			dsi_lvds_bridge_to_panel: endpoint {
+				remote-endpoint = <&panel_from_dsi_lvds_bridge>;
+			};
+		};
+	};
+};
+
+&dsi_lvds_bridge_from_mipi_dsi {
+	data-lanes = <1 2>;
+};
+
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm1>;
+	status = "okay";
+};
+
+&lcdif2 {
+	status = "okay";
+};
+
+&iomuxc {
+	pinctrl_lcd_en: lcd-engrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_GPIO1_IO08__GPIO1_IO08	0x146
+		>;
+	};
+
+	pinctrl_pwm1: pwm1grp {
+		fsl,pins = <
+			MX8MP_IOMUXC_GPIO1_IO01__PWM1_OUT	0x06
+		>;
+	};
+};

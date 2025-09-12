@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pwm/pwm.h>
+#include "imx91-pinfunc.h"
+#include "includes/imx91-karo-backlight.dtsi"
+#include "includes/imx91-karo-lcd-panel.dtsi"
+
+&{/chosen} {
+	overlays {
+		tx91-lcd-panel;
+	};
+};
+
+&backlight {
+	pwms = <&tpm2 2 5000 PWM_POLARITY_INVERTED>;
+};
+
+&lcdif {
+	status = "okay";
+};
+
+&panel {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcd_reset>;
+	enable-gpios = <&gpio4 14 GPIO_ACTIVE_HIGH>;
+};
+
+&reg_lcd_pwr {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcd_pwr>;
+	gpios = <&gpio4 15 GPIO_ACTIVE_HIGH>;
+	enable-active-high;
+	status = "okay";
+};
+
+&tpm2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_tpm2>;
+	status = "okay";
+};
+
+&iomuxc {
+	pinctrl_lcd_pwr: lcd-pwrgrp {
+		fsl,pins = <
+			MX91_PAD_ENET2_MDIO__GPIO4_IO15			0x40e
+		>;
+	};
+
+	pinctrl_lcd_reset: lcd-resetgrp {
+		fsl,pins = <
+			MX91_PAD_ENET2_MDC__GPIO4_IO14			0x40e
+		>;
+	};
+
+	pinctrl_tpm2: tpm2grp {
+		fsl,pins = <
+			MX91_PAD_I2C2_SCL__TPM2_CH2			0x20e
+		>;
+	};
+};

@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/gpio/gpio.h>
+#include "imx8mm-pinfunc.h"
+
+&{/chosen} {
+	overlays {
+		tx8m-ft5x06;
+	};
+};
+
+&i2c2 {
+	status = "okay";
+
+	touchpanel@38 {
+		compatible = "edt,edt-ft5x06";
+		reg = <0x38>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_edt_ft5x06>;
+		interrupt-parent = <&gpio5>;
+		interrupts = <18 IRQ_TYPE_EDGE_FALLING>;
+		reset-gpios = <&gpio5 19 GPIO_ACTIVE_LOW>;
+		wake-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
+		wakeup-source;
+	};
+};
+
+&iomuxc {
+	pinctrl_edt_ft5x06: edt-ft5x06grp {
+		fsl,pins = <
+			MX8MM_IOMUXC_I2C3_SCL_GPIO5_IO18		0x90 /* Interrupt */
+			MX8MM_IOMUXC_I2C3_SDA_GPIO5_IO19		0x1b0b0 /* Reset */
+			MX8MM_IOMUXC_GPIO1_IO00_GPIO1_IO0		0x1b0b0 /* Wake */
+		>;
+	};
+};

@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "imx8mp-pinfunc.h"
+
+&{/chosen} {
+	overlays {
+		tx8p-lvds-mb;
+	};
+};
+
+&ldb {
+	lvds-channel@0 {
+		fsl,data-mapping = "spwg";
+	};
+};

@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+&{/} {
+	leds {
+		compatible = "gpio-leds";
+
+		stk5led: stk5led {
+			label = "Heartbeat";
+			linux,default-trigger = "heartbeat";
+		};
+	};
+};

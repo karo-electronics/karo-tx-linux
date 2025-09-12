@@ -1,0 +1,105 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pwm/pwm.h>
+#include "includes/imx91-karo-backlight.dtsi"
+#include "imx93-pinfunc.h"
+
+&{/} {
+	chosen {
+		overlays {
+			karo-lcd-panel;
+		};
+	};
+
+	aliases {
+		display = "/lcd-panel";
+		lcdif = "/soc/lcd-controller@4ae30000";
+	};
+
+	reg_lcd_pwr: regulator-lcd-pwr {
+		compatible = "regulator-fixed";
+		regulator-name = "LCD_PWR";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&reg_vdd_3v3>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lcd_pwr>;
+		gpios = <&gpio4 15 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+};
+
+&lcdif {
+	status = "okay";
+	ssigned-clock-rates = <300000000>, <30000000>, <400000000>, <133333333>;
+};
+
+&panel {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcd_reset>;
+	enable-gpios = <&gpio4 14 GPIO_ACTIVE_HIGH>;
+	power-supply = <&reg_lcd_pwr>;
+	backlight = <&backlight>;
+	status = "okay";
+
+	port {
+		panel_in: endpoint {
+			remote-endpoint = <&display_out>;
+		};
+	};
+};
+
+&tpm3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_tpm3>;
+};
+
+&iomuxc {
+	pinctrl_lcd_reset: lcd-resetgrp {
+		fsl,pins = <
+			MX93_PAD_ENET2_MDC__GPIO4_IO14	0x50e
+		>;
+	};
+
+	pinctrl_lcd_pwr: lcd-pwrgrp {
+		fsl,pins = <
+			MX93_PAD_ENET2_MDIO__GPIO4_IO15		0x50e
+		>;
+	};
+
+	pinctrl_tpm3: tpm3grp {
+		fsl,pins = <
+			MX93_PAD_I2C2_SCL__TPM2_CH2		0x50e
+		>;
+	};
+};
+
+&media_blk_ctrl {
+        status = "okay";
+};
+
+&parallel_disp_fmt {
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_lcdif>;
+        fsl,interface-pix-fmt = "rgb666";
+        status = "okay";
+
+        ports {
+                port@1 {
+                        reg = <1>;
+
+                        display_out: endpoint {
+                                remote-endpoint = <&panel_in>;
+                        };
+                };
+        };
+};

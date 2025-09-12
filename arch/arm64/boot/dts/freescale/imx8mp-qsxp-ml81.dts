@@ -20,6 +20,7 @@
 		serial0 = &uart2;
 		serial1 = &uart4;
 		serial2 = &uart1;
+		serial3 = &uart3;
 	};
 
 	reg_3v3_etn: regulator-3v3-etn {
@@ -34,13 +35,11 @@
 &flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
-	status = "okay";
 };
 
 &flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
-	status = "okay";
 };
 
 &i2c3 {

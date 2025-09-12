@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2025 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/gpio/gpio.h>
+#include "imx91-pinfunc.h"
+
+&{/chosen} {
+	overlays {
+		qs91-eqos-ksz9031;
+	};
+};
+
+&eqos {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_eqos_rgmii>;
+	phy-handle = <&ethphy0>;
+	phy-mode = "rgmii-id";
+	status = "okay";
+
+	mdio {
+		compatible = "snps,dwmac-mdio";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ethphy0_rst>;
+		reset-gpios = <&gpio3 1 GPIO_ACTIVE_LOW>;
+		reset-delay-us = <1000>;
+		reset-post-delay-us = <100>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy0: ethernet-phy@3 {
+			reg = <3>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_ethphy0_int>;
+			interrupt-parent = <&gpio3>;
+			interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
+			eee-broken-1000t;
+		};
+	};
+};
+
+&iomuxc {
+	pinctrl_eqos_rgmii: eqos-rgmiigrp {
+		fsl,pins = <
+			MX91_PAD_ENET1_MDC__ENET_QOS_MDC			0x106
+			MX91_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x106
+			MX91_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x51e
+			MX91_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x51e
+			MX91_PAD_ENET1_TD2__ENET_QOS_RGMII_TD2			0x51e
+			MX91_PAD_ENET1_TD3__ENET_QOS_RGMII_TD3			0x51e
+			MX91_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x51e
+			MX91_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x51e
+			/* KSZ9031 Strap pins 0x5..: LOW; 0x3..: HIGH */
+			MX91_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x300 /* MODE0 */
+			MX91_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x300 /* MODE1 */
+			MX91_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x300 /* MODE2 */
+			MX91_PAD_ENET1_RD3__ENET_QOS_RGMII_RD3			0x300 /* MODE3 */
+			MX91_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x500 /* CLK125_EN */
+			MX91_PAD_ENET1_RXC__ENET_QOS_RGMII_RXC			0x500 /* PHYAD2 */
+		>;
+	};
+
+	pinctrl_ethphy0_int: ethphy0-intgrp {
+		fsl,pins = <
+			MX91_PAD_SD2_DATA2__GPIO3_IO5				0x17e
+		>;
+	};
+
+	pinctrl_ethphy0_rst: ethphy0-rstgrp {
+		fsl,pins = <
+			MX91_PAD_SD2_CLK__GPIO3_IO1				0x17e
+		>;
+	};
+};

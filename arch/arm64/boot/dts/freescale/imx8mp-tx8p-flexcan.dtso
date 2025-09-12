@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include "imx8mp-pinfunc.h"
+
+&{/aliases} {
+	can0 = "/soc@0/bus@30800000/can@308c0000";
+};
+
+&{/chosen} {
+	overlays {
+		tx8p-flexcan;
+	};
+};
+
+&flexcan1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan1>;
+	status = "okay";
+};
+
+&iomuxc {
+	pinctrl_flexcan1: flexcan1grp {
+		fsl,pins = <
+			 MX8MP_IOMUXC_SPDIF_RX__CAN1_RX 		0x140
+			 MX8MP_IOMUXC_SPDIF_TX__CAN1_TX 		0x140
+		>;
+	};
+};

@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2023 Uwe Steinkohl <US@KARO-electronics.de>
+ *
+ */
+
+#include <dt-bindings/clock/imx8mn-clock.h>
+
+/dts-v1/;
+
+/plugin/;
+
+&{/chosen} {
+	overlays {
+		karo-copro;
+	};
+};
+
+&{/} {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		m_core_reserved: m_core@0x57000000 {
+			no-map;
+			reg = <0 0x57000000 0 0x1000000>;
+		};
+
+		vdev0vring0: vdev0vring0@58000000 {
+			reg = <0 0x58000000 0 0x8000>;
+			no-map;
+		};
+
+		vdev0vring1: vdev0vring1@58008000 {
+			reg = <0 0x58008000 0 0x8000>;
+			no-map;
+		};
+
+		rsc_table: rsc_table@580ff000 {
+			reg = <0 0x580ff000 0 0x1000>;
+			no-map;
+		};
+
+		vdevbuffer: vdevbuffer@58400000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x58400000 0 0x100000>;
+			no-map;
+		};
+	};
+
+	imx8mn-cm7 {
+		compatible = "fsl,imx8mn-cm7";
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&mu 0 1
+			  &mu 1 1
+			  &mu 3 1
+			 >;
+		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>;
+	};
+};
+
+&clk {
+	init-on-array = <
+			 IMX8MN_CLK_UART4_ROOT
+			>;
+};
+
+/*
+ * ATTENTION: M core may use IPs like below
+ * ECSPI2, GPIO1/GPIO5, GPT1, I2C3, I2S3, UART4, PWM3, SDMA1/3 and PDM
+ */
+&uart4 {
+	status = "disabled";
+};
+
+&uart2 {
+	status = "disabled";
+};

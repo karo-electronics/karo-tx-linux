@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "imx93-pinfunc.h"
+
+&{/} {
+	chosen {
+		overlays {
+			karo-mb7;
+		};
+	};
+};
+
+&usdhc2 {
+	pinctrl-0 = <&pinctrl_usdhc2 &pinctrl_usdhc2_cd>;
+	voltage-ranges = <3300 3300>;
+	cd-gpios = <&gpio3 0 GPIO_ACTIVE_LOW>;
+};
+
+&iomuxc {
+	pinctrl_usdhc2_cd: usdhc2-cdgrp {
+		fsl,pins = <
+			MX93_PAD_SD2_CD_B__GPIO3_IO00				0x31e
+		>;
+	};
+};

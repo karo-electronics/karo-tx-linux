@@ -16,33 +16,36 @@
 
 &fec1 {
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_fec1 &pinctrl_etnphy_rst>;
+	pinctrl-0 = <&pinctrl_fec1>;
 	pinctrl-1 = <&pinctrl_fec1_sleep>;
+	assigned-clock-parents = <
+		&clk IMX8MN_SYS_PLL1_266M
+		&clk IMX8MN_SYS_PLL2_100M
+		&clk IMX8MN_SYS_PLL2_50M
+		&clk IMX8MN_SYS_PLL2_50M
+	>;
+	assigned-clock-rates = <0>, <0>, <0>, <0>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
 	phy-supply = <&reg_3v3_etn>;
-	clocks = <&clk IMX8MN_CLK_ENET1_ROOT>,
-		 <&clk IMX8MN_CLK_ENET1_ROOT>,
-		 <&clk IMX8MN_CLK_ENET_TIMER>,
-		 <&clk IMX8MN_CLK_ENET_REF>;
-	assigned-clocks = <&clk IMX8MN_CLK_ENET_AXI>,
-			  <&clk IMX8MN_CLK_ENET_TIMER>,
-			  <&clk IMX8MN_CLK_ENET_REF>;
-	assigned-clock-parents = <&clk IMX8MN_SYS_PLL1_266M>,
-				 <&clk IMX8MN_SYS_PLL2_100M>,
-				 <&clk IMX8MN_SYS_PLL2_50M>;
-	assigned-clock-rates = <0>, <100000000>, <50000000>;
 	status = "okay";
 
 	mdio {
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_etnphy_rst>;
+		reset-gpios = <&gpio1 29 GPIO_ACTIVE_LOW>;
+		reset-delay-us = <25000>;
+		reset-post-delay-us = <100>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reset-gpios = <&gpio1 29 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <10000>;
 
 		ethphy0: ethernet-phy@0 {
 			reg = <0>;
 			clocks = <&clk IMX8MN_CLK_ENET_REF>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_etnphy_int>;
+			interrupt-parent = <&gpio1>;
+			interrupts = <28 IRQ_TYPE_EDGE_FALLING>;
 			smsc,disable-energy-detect;
 		};
 	};
@@ -80,13 +83,14 @@
 			MX8MN_IOMUXC_ENET_MDC_ENET1_MDC			0x142
 			MX8MN_IOMUXC_ENET_MDIO_ENET1_MDIO		0x142
 			MX8MN_IOMUXC_ENET_TD2_ENET1_TX_CLK		0x40000016
-			MX8MN_IOMUXC_ENET_TD0_ENET1_RGMII_TD0		0x16
-			MX8MN_IOMUXC_ENET_TD1_ENET1_RGMII_TD1		0x16
-			MX8MN_IOMUXC_ENET_RD0_ENET1_RGMII_RD0		0x90
-			MX8MN_IOMUXC_ENET_RD1_ENET1_RGMII_RD1		0x90
-			MX8MN_IOMUXC_ENET_RXC_ENET1_RX_ER		0x16
-			MX8MN_IOMUXC_ENET_RX_CTL_ENET1_RGMII_RX_CTL	0x16
-			MX8MN_IOMUXC_ENET_TX_CTL_ENET1_RGMII_TX_CTL	0x16
+			MX8MN_IOMUXC_ENET_TD0_ENET1_RGMII_TD0		0x016
+			MX8MN_IOMUXC_ENET_TD1_ENET1_RGMII_TD1		0x016
+			MX8MN_IOMUXC_ENET_TX_CTL_ENET1_RGMII_TX_CTL	0x116
+			/* SMSC LAN8710 Strap pins */
+			MX8MN_IOMUXC_ENET_RD0_ENET1_RGMII_RD0		0x150 /* MODE0 */
+			MX8MN_IOMUXC_ENET_RD1_ENET1_RGMII_RD1		0x150 /* MODE1 */
+			MX8MN_IOMUXC_ENET_RX_CTL_ENET1_RGMII_RX_CTL	0x150 /* MODE2 */
+			MX8MN_IOMUXC_ENET_RXC_ENET1_RX_ER		0x110 /* PHYAD0 */
 		>;
 	};
 
@@ -246,12 +250,12 @@
 
 	pinctrl_usdhc2: usdhc2grp {
 		fsl,pins = <
-			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK			0x110
-			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD			0x150
-			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0		0x150
-			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1		0x150
-			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2		0x150
-			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3		0x150
+			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK			0x016
+			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD			0x156
+			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0		0x156
+			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1		0x156
+			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2		0x156
+			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3		0x156
 		>;
 	};
 
@@ -267,12 +271,12 @@
 			 * Erratum e11341: SION must be asserted on NAND_WE_B
 			 * when used as SDHC3_CLK
 			 */
-			MX8MN_IOMUXC_NAND_WE_B_USDHC3_CLK		0x40000190
-			MX8MN_IOMUXC_NAND_WP_B_USDHC3_CMD		0x1d0
-			MX8MN_IOMUXC_NAND_DATA04_USDHC3_DATA0		0x1d0
-			MX8MN_IOMUXC_NAND_DATA05_USDHC3_DATA1		0x1d0
-			MX8MN_IOMUXC_NAND_DATA06_USDHC3_DATA2		0x1d0
-			MX8MN_IOMUXC_NAND_DATA07_USDHC3_DATA3		0x1d0
+			MX8MN_IOMUXC_NAND_WE_B_USDHC3_CLK		0x016
+			MX8MN_IOMUXC_NAND_WP_B_USDHC3_CMD		0x150
+			MX8MN_IOMUXC_NAND_DATA04_USDHC3_DATA0		0x150
+			MX8MN_IOMUXC_NAND_DATA05_USDHC3_DATA1		0x150
+			MX8MN_IOMUXC_NAND_DATA06_USDHC3_DATA2		0x150
+			MX8MN_IOMUXC_NAND_DATA07_USDHC3_DATA3		0x150
 		>;
 	};
 

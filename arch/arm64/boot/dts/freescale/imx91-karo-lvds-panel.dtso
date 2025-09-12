@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pwm/pwm.h>
+#include "includes/imx91-karo-backlight.dtsi"
+#include "imx93-pinfunc.h"
+
+&{/} {
+	chosen {
+		overlays {
+			karo-lvds-panel;
+		};
+	};
+
+	aliases {
+		display = "/lvds-panel";
+		lcdif = "/soc/lcd-controller@4ae30000";
+	};
+};
+
+&backlight {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_bl_en>;
+	enable-gpios = <&gpio3 30 GPIO_ACTIVE_HIGH>;
+};
+
+&lcdif {
+	assigned-clock-rates = <498000000>, <62500000>, <400000000>, <133333333>;
+	status = "okay";
+};
+
+&ldb {
+	status = "okay";
+
+	lvds-channel@0 {
+		status = "okay";
+
+		port@1 {
+			reg = <1>;
+
+			ldb_ch0_to_lvds_panel: endpoint {
+				remote-endpoint = <&lvds_panel_from_ldb_ch0>;
+			};
+		};
+	};
+};
+
+&ldb_phy {
+	status = "okay";
+};
+
+&panel {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcd_reset>;
+	enable-gpios = <&gpio3 29 GPIO_ACTIVE_HIGH>;
+	backlight = <&backlight>;
+	status = "okay";
+
+	port {
+		lvds_panel_from_ldb_ch0: endpoint {
+			remote-endpoint = <&ldb_ch0_to_lvds_panel>;
+		};
+	};
+};
+
+&tpm3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_tpm3>;
+};
+
+&iomuxc {
+	pinctrl_bl_en: bl-engrp {
+		fsl,pins = <
+			MX93_PAD_DAP_TCLK_SWCLK__GPIO3_IO30	0x50e
+		>;
+	};
+
+	pinctrl_lcd_reset: lcd-resetgrp {
+		fsl,pins = <
+			MX93_PAD_DAP_TMS_SWDIO__GPIO3_IO29	0x50e
+		>;
+	};
+
+	pinctrl_tpm3: tpm3grp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO04__TPM3_CH0		0x50e
+		>;
+	};
+};

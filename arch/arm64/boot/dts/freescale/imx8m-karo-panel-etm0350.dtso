@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+&{/chosen} {
+	overlays {
+		karo-panel-etm0350;
+	};
+};
+
+&panel {
+	label = "ETM0430G0DH6";
+	width-mm = <115>;
+	height-mm = <86>;
+	status = "okay";
+
+	panel-timing {
+		clock-frequency = <6520000>;
+		hactive = <320>;
+		vactive = <240>;
+		hback-porch = <34>;
+		hsync-len = <34>;
+		hfront-porch = <2>;
+		vback-porch = <2>;
+		vsync-len = <10>;
+		vfront-porch = <2>;
+		hsync-active = <0>;
+		vsync-active = <0>;
+		de-active = <1>;
+		pixelclk-active = <1>;
+	};
+};

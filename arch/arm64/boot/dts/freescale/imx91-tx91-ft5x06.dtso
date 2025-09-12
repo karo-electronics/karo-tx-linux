@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include "imx91-pinfunc.h"
+
+&{/chosen} {
+	overlays {
+		tx91-ft5x06;
+	};
+};
+
+&lpi2c3 {
+	status = "okay";
+
+	touchpanel@38 {
+		compatible = "edt,edt-ft5x06";
+		reg = <0x38>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_edt_ft5x06>;
+		interrupt-parent = <&gpio4>;
+		interrupts = <7 IRQ_TYPE_EDGE_FALLING>;
+		reset-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
+		wake-gpios = <&gpio3 19 GPIO_ACTIVE_HIGH>;
+		wakeup-source;
+	};
+};
+
+&iomuxc {
+	pinctrl_edt_ft5x06: edt-ft5x06grp {
+		fsl,pins = <
+			    MX91_PAD_ENET1_TXC__GPIO4_IO7		0x27e /* Interrupt */
+			    MX91_PAD_PDM_BIT_STREAM1__GPIO1_IO10	0x27e /* Reset */
+			    MX91_PAD_SD2_VSELECT__GPIO3_IO19		0x27e /* Wake */
+		>;
+	};
+};

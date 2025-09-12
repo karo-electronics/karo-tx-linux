@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pwm/pwm.h>
+#include "imx91-pinfunc.h"
+#include "includes/imx91-karo-backlight.dtsi"
+#include "includes/imx91-karo-lcd-panel.dtsi"
+
+&{/} {
+	chosen {
+		overlays {
+			qs91-lcd-panel;
+		};
+	};
+};
+
+&backlight {
+	pwms = <&tpm1 1 5000 PWM_POLARITY_INVERTED>;
+};
+
+&reg_lcd_pwr {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcd_pwr>;
+	gpios = <&gpio4 25 GPIO_ACTIVE_HIGH>;
+	enable-active-high;
+	status = "okay";
+};
+
+&tpm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_tpm1>;
+	status = "okay";
+};
+
+&iomuxc {
+	pinctrl_lcd_pwr: lcd-pwrgrp {
+		fsl,pins = <
+			MX91_PAD_ENET2_RD1__GPIO4_IO25			0x40e
+		>;
+	};
+
+	pinctrl_tpm1: tpm1grp {
+		fsl,pins = <
+			MX91_PAD_UART1_TXD__TPM1_CH1			0x20e
+		>;
+	};
+};

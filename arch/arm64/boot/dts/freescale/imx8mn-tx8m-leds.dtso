@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "includes/imx8m-karo-leds.dtsi"
+#include "imx8mn-pinfunc.h"
+
+&{/chosen} {
+	overlays {
+		tx8m-leds;
+	};
+};
+
+&stk5led {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_stk5led>;
+	gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+};
+
+&iomuxc {
+	pinctrl_stk5led: stk5ledgrp {
+		fsl,pins = <
+			MX8MN_IOMUXC_GPIO1_IO02_GPIO1_IO2		0x06
+		>;
+	};
+};

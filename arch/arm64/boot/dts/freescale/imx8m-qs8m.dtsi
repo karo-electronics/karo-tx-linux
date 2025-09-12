@@ -36,18 +36,6 @@
 	arm-supply = <&reg_vdd_arm>;
 };
 
-&ecspi1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_ecspi1>;
-	status = "okay";
-};
-
-&ecspi2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_ecspi2>;
-	status = "okay";
-};
-
 &i2c1 {
 	pinctrl-names = "default", "gpio";
 	pinctrl-0 = <&pinctrl_i2c1>;
@@ -171,6 +159,14 @@
 	status = "okay";
 };
 
+&resmem {
+	/* overwrite freescale cma setting since it's not allocatable */
+	linux,cma {
+		size = <0 0xf000000>;
+		/delete-property/ alloc-ranges;
+	};
+};
+
 &uart1 { /* console */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1>;
@@ -180,6 +176,8 @@
 &uart2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart2 &pinctrl_uart2_rtscts>;
+	dmas = <&sdma1 24 4 0>, <&sdma1 25 4 0>;
+	dma-names = "rx", "tx";
 	uart-has-rtscts;
 	status = "okay";
 };
@@ -210,11 +208,7 @@
 &usdhc2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc2 &pinctrl_usdhc2_cd>;
-	bus-width = <4>;
 	cd-gpios = <&gpio2 12 GPIO_ACTIVE_LOW>;
-	no-1-8-v;
-	fsl,wp-controller;
-	status = "okay";
 };
 
 &wdog1 {

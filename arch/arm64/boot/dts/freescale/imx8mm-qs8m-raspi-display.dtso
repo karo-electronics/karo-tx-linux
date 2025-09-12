@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include "includes/imx8m-karo-raspi-display.dtsi"
+
+&{/} {
+	aliases {
+		display = "/soc@0/bus@32c00000/lcdif@32e00000";
+		panel = "/soc@0/bus@32c00000/mipi_dsi@32e10000/panel@0";
+		mipi-dsi = "/soc@0/bus@32c00000/mipi_dsi@32e10000";
+	};
+
+	chosen {
+		overlays {
+			qs8m-raspi-display;
+		};
+	};
+};

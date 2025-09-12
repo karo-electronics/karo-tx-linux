@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ * Copyright 2023 Markus Bauer <MB@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/clock/imx8mm-clock.h>
+#include <dt-bindings/phy/phy-imx8-pcie.h>
+#include "imx8mm-pinfunc.h"
+#include "includes/imx8m-karo-pcie.dtsi"
+
+&{/chosen} {
+	overlays {
+		tx8m-pcie;
+	};
+};
+
+// conflicts with disable-gpio
+&i2c3 {
+	status = "disabled";
+};
+
+&pcie_phy {
+	clocks = <&clk IMX8MM_CLK_PCIE1_PHY>;
+	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_OUTPUT>;
+	fsl,tx-deemph-gen1 = <0x2d>;
+	fsl,tx-deemph-gen2 = <0xf>;
+	fsl,clkreq-unsupported;
+	status = "okay";
+};
+
+&pcie0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie0>;
+	disable-gpio = <&gpio5 18 GPIO_ACTIVE_LOW>;
+	reset-gpio = <&gpio2 19 GPIO_ACTIVE_LOW>;
+	wake-gpio = <&gpio1 0 GPIO_ACTIVE_LOW>;
+	clocks = <&clk IMX8MM_CLK_PCIE1_ROOT>,
+		 <&clk IMX8MM_CLK_PCIE1_AUX>,
+		 <&clk IMX8MM_CLK_PCIE1_PHY>;
+	clock-names = "pcie", "pcie_aux", "pcie_bus";
+	assigned-clocks = <&clk IMX8MM_CLK_PCIE1_AUX>,
+			  <&clk IMX8MM_CLK_PCIE1_CTRL>;
+	assigned-clock-rates = <10000000>, <250000000>;
+	assigned-clock-parents = <&clk IMX8MM_SYS_PLL2_50M>,
+				 <&clk IMX8MM_SYS_PLL2_250M>;
+	status = "okay";
+};
+
+&reg_vdd_soc {
+	/* PCIe requires a minimum vdd soc voltage of 0.805V */
+	regulator-min-microvolt = <805000>;
+};
+
+&iomuxc {
+	pinctrl_pcie0: pciegrp {
+		fsl,pins = <
+			MX8MM_IOMUXC_SD2_RESET_B_GPIO2_IO19	0x146
+			MX8MM_IOMUXC_GPIO1_IO00_GPIO1_IO0	0x146
+			MX8MM_IOMUXC_I2C3_SCL_GPIO5_IO18	0x146
+		>;
+	};
+};

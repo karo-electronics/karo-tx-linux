@@ -18,6 +18,8 @@
 		i2c2 = &i2c3;
 		mmc0 = &usdhc1;
 		mmc1 = &usdhc2;
+		serial1 = &uart3;
+		serial2 = &uart2;
 		usb-host = &usbotg2;
 		usbotg = &usbotg1;
 	};
@@ -26,16 +28,10 @@
 		stdout-path = "serial0:115200";
 	};
 
-	clocks {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		audio_clk: clock@0 {
-			compatible = "fixed-clock";
-			reg = <0>;
-			#clock-cells = <0>;
-			clock-frequency = <26000000>;
-		};
+	audio_clk: audio-clock {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <26000000>;
 	};
 
 	memory@40000000 {
@@ -214,24 +210,37 @@
 	status = "okay";
 };
 
+&resmem {
+	/* overwrite freescale cma setting since it's not allocatable */
+	linux,cma {
+		size = <0 0x1e000000>;
+		/delete-property/ alloc-ranges;
+	};
+};
+
 &uart1 { /* console */
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart1 &pinctrl_uart1_rtscts>;
-	uart-has-rtscts;
+	pinctrl-0 = <&pinctrl_uart1>;
 	status = "okay";
 };
 
 &uart2 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart2 &pinctrl_uart2_rtscts>;
-	uart-has-rtscts;
+	pinctrl-0 = <&pinctrl_uart2>;
+	dmas = <&sdma1 24 4 0>, <&sdma1 25 4 0>;
+	dma-names = "rx", "tx";
 	status = "okay";
 };
 
 &uart3 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart3 &pinctrl_uart3_rtscts>;
-	uart-has-rtscts;
+	pinctrl-0 = <&pinctrl_uart3>;
+	status = "okay";
+};
+
+&uart4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart4>;
 	status = "okay";
 };
 
@@ -260,11 +269,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc2 &pinctrl_usdhc2_cd>;
 	voltage-ranges = <3300 3300>;
-	bus-width = <4>;
 	cd-gpios = <&gpio2 12 GPIO_ACTIVE_LOW>;
-	no-1-8-v;
-	fsl,wp-controller;
-	status = "okay";
 };
 
 &wdog1 {
@@ -354,13 +359,6 @@
 		>;
 	};
 
-	pinctrl_uart1_rtscts: uart1-rtsctsgrp {
-		fsl,pins = <
-			MX8MM_IOMUXC_UART3_TXD_UART1_DCE_RTS_B		0x140
-			MX8MM_IOMUXC_UART3_RXD_UART1_DCE_CTS_B		0x140
-		>;
-	};
-
 	pinctrl_uart2: uart2grp {
 		fsl,pins = <
 			MX8MM_IOMUXC_UART2_RXD_UART2_DCE_RX		0x140
@@ -368,24 +366,17 @@
 		>;
 	};
 
-	pinctrl_uart2_rtscts: uart2-rtsctsgrp {
-		fsl,pins = <
-			MX8MM_IOMUXC_UART4_TXD_UART2_DCE_RTS_B		0x140
-			MX8MM_IOMUXC_UART4_RXD_UART2_DCE_CTS_B		0x140
-		>;
-	};
-
 	pinctrl_uart3: uart3grp {
 		fsl,pins = <
-			MX8MM_IOMUXC_ECSPI1_SCLK_UART3_DCE_RX		0x140
-			MX8MM_IOMUXC_ECSPI1_MOSI_UART3_DCE_TX		0x140
+			MX8MM_IOMUXC_UART3_RXD_UART3_DCE_RX		0x140
+			MX8MM_IOMUXC_UART3_TXD_UART3_DCE_TX		0x140
 		>;
 	};
 
-	pinctrl_uart3_rtscts: uart3-rtsctsgrp {
+	pinctrl_uart4: uart4grp {
 		fsl,pins = <
-			MX8MM_IOMUXC_ECSPI1_SS0_UART3_DCE_RTS_B		0x140
-			MX8MM_IOMUXC_ECSPI1_MISO_UART3_DCE_CTS_B	0x140
+			MX8MM_IOMUXC_UART4_RXD_UART4_DCE_RX		0x140
+			MX8MM_IOMUXC_UART4_TXD_UART4_DCE_TX		0x140
 		>;
 	};
 
@@ -442,12 +433,12 @@
 
 	pinctrl_usdhc2: usdhc2grp {
 		fsl,pins = <
-			MX8MM_IOMUXC_SD2_CLK_USDHC2_CLK			0x190
-			MX8MM_IOMUXC_SD2_CMD_USDHC2_CMD			0x1d0
-			MX8MM_IOMUXC_SD2_DATA0_USDHC2_DATA0		0x1d0
-			MX8MM_IOMUXC_SD2_DATA1_USDHC2_DATA1		0x1d0
-			MX8MM_IOMUXC_SD2_DATA2_USDHC2_DATA2		0x1d0
-			MX8MM_IOMUXC_SD2_DATA3_USDHC2_DATA3		0x1d0
+			MX8MM_IOMUXC_SD2_CLK_USDHC2_CLK			0x010
+			MX8MM_IOMUXC_SD2_CMD_USDHC2_CMD			0x010
+			MX8MM_IOMUXC_SD2_DATA0_USDHC2_DATA0		0x010
+			MX8MM_IOMUXC_SD2_DATA1_USDHC2_DATA1		0x010
+			MX8MM_IOMUXC_SD2_DATA2_USDHC2_DATA2		0x010
+			MX8MM_IOMUXC_SD2_DATA3_USDHC2_DATA3		0x010
 		>;
 	};
 

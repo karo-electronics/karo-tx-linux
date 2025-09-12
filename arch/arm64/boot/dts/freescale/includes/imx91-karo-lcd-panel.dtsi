@@ -1,0 +1,92 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+&{/} {
+	aliases {
+		display = "/lcd-panel";
+		lcdif = "/soc/lcd-controller@4ae30000";
+	};
+
+	reg_lcd_pwr: regulator-lcd-pwr {
+		compatible = "regulator-fixed";
+		regulator-name = "LCD_PWR";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&reg_vdd_3v3>;
+		status = "disabled";
+	};
+};
+
+&panel {
+	power-supply = <&reg_lcd_pwr>;
+	backlight = <&backlight>;
+	status = "okay";
+
+	port {
+		panel_from_lcdif: endpoint {
+			remote-endpoint = <&lcdif_to_panel>;
+		};
+	};
+};
+
+&media_blk_ctrl {
+	status = "okay";
+};
+
+&parallel_disp_fmt {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcdif>;
+	fsl,interface-pix-fmt = "rgb888";
+	status = "okay";
+
+	ports {
+		port@1 {
+			reg = <1>;
+
+			lcdif_to_panel: endpoint {
+				remote-endpoint = <&panel_from_lcdif>;
+			};
+		};
+	};
+};
+
+&iomuxc {
+	pinctrl_lcdif: lcdifgrp {
+		fsl,pins = <
+			MX91_PAD_GPIO_IO00__MEDIAMIX_DISP_CLK		0x20e
+			MX91_PAD_GPIO_IO01__MEDIAMIX_DISP_DE		0x20e
+			MX91_PAD_GPIO_IO02__MEDIAMIX_DISP_VSYNC		0x20e
+			MX91_PAD_GPIO_IO03__MEDIAMIX_DISP_HSYNC		0x20e
+			/* BLUE */
+			MX91_PAD_GPIO_IO04__MEDIAMIX_DISP_DATA0		0x20e
+			MX91_PAD_GPIO_IO05__MEDIAMIX_DISP_DATA1		0x20e
+			MX91_PAD_GPIO_IO06__MEDIAMIX_DISP_DATA2		0x20e
+			MX91_PAD_GPIO_IO07__MEDIAMIX_DISP_DATA3		0x20e
+			MX91_PAD_GPIO_IO08__MEDIAMIX_DISP_DATA4		0x20e
+			MX91_PAD_GPIO_IO09__MEDIAMIX_DISP_DATA5		0x20e
+			MX91_PAD_GPIO_IO10__MEDIAMIX_DISP_DATA6		0x20e
+			MX91_PAD_GPIO_IO11__MEDIAMIX_DISP_DATA7		0x20e
+			/* GREEN */
+			MX91_PAD_GPIO_IO12__MEDIAMIX_DISP_DATA8		0x20e
+			MX91_PAD_GPIO_IO13__MEDIAMIX_DISP_DATA9		0x20e
+			MX91_PAD_GPIO_IO14__MEDIAMIX_DISP_DATA10	0x20e
+			MX91_PAD_GPIO_IO15__MEDIAMIX_DISP_DATA11	0x20e
+			MX91_PAD_GPIO_IO16__MEDIAMIX_DISP_DATA12	0x20e
+			MX91_PAD_GPIO_IO17__MEDIAMIX_DISP_DATA13	0x20e
+			MX91_PAD_GPIO_IO18__MEDIAMIX_DISP_DATA14	0x20e
+			MX91_PAD_GPIO_IO19__MEDIAMIX_DISP_DATA15	0x20e
+			/* RED */
+			MX91_PAD_GPIO_IO20__MEDIAMIX_DISP_DATA16	0x20e
+			MX91_PAD_GPIO_IO21__MEDIAMIX_DISP_DATA17	0x20e
+			MX91_PAD_GPIO_IO22__MEDIAMIX_DISP_DATA18	0x20e
+			MX91_PAD_GPIO_IO23__MEDIAMIX_DISP_DATA19	0x20e
+			MX91_PAD_GPIO_IO24__MEDIAMIX_DISP_DATA20	0x20e
+			MX91_PAD_GPIO_IO25__MEDIAMIX_DISP_DATA21	0x20e
+			MX91_PAD_GPIO_IO26__MEDIAMIX_DISP_DATA22	0x20e
+			MX91_PAD_GPIO_IO27__MEDIAMIX_DISP_DATA23	0x20e
+		>;
+	};
+};

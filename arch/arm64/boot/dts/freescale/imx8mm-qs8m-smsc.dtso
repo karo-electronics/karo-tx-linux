@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include "imx8mm-pinfunc.h"
+
+&{/chosen} {
+	overlays {
+		qs8m-smsc;
+	};
+};
+
+&fec1 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_fec1_b &pinctrl_etnphy_rst_b>;
+	pinctrl-1 = <&pinctrl_fec1_b_sleep>;
+};
+
+&iomuxc {
+	pinctrl_etnphy_int_b: etnphy-int-bgrp {
+		fsl,pins = <
+			    MX8MM_IOMUXC_GPIO1_IO10_GPIO1_IO10		0x90
+		>;
+	};
+
+	pinctrl_etnphy_rst_b: etnphy-rst-bgrp {
+		fsl,pins = <
+			    MX8MM_IOMUXC_SAI2_RXC_GPIO4_IO22		0x140
+		>;
+	};
+
+	pinctrl_fec1_b: fec1-bgrp {
+		fsl,pins = <
+			    MX8MM_IOMUXC_GPIO1_IO00_CCMSRCGPCMIX_ENET_PHY_REF_CLK_ROOT 0x110
+			    MX8MM_IOMUXC_ENET_MDC_ENET1_MDC		0x142
+			    MX8MM_IOMUXC_ENET_MDIO_ENET1_MDIO		0x142
+			    MX8MM_IOMUXC_ENET_TD0_ENET1_RGMII_TD0	0x016
+			    MX8MM_IOMUXC_ENET_TD1_ENET1_RGMII_TD1	0x016
+			    MX8MM_IOMUXC_ENET_RD0_ENET1_RGMII_RD0	0x150
+			    MX8MM_IOMUXC_ENET_RD1_ENET1_RGMII_RD1	0x150
+			    MX8MM_IOMUXC_ENET_RXC_ENET1_RX_ER		0x150
+			    MX8MM_IOMUXC_ENET_RX_CTL_ENET1_RGMII_RX_CTL	0x116
+			    MX8MM_IOMUXC_ENET_TX_CTL_ENET1_RGMII_TX_CTL	0x016
+		>;
+	};
+
+	pinctrl_fec1_b_sleep: fec1-b-sleep-grp {
+		fsl,pins = <
+			    MX8MM_IOMUXC_GPIO1_IO00_GPIO1_IO0		0x120
+			    MX8MM_IOMUXC_ENET_MDC_GPIO1_IO16		0x120
+			    MX8MM_IOMUXC_ENET_MDIO_GPIO1_IO17		0x120
+			    MX8MM_IOMUXC_ENET_TD0_GPIO1_IO21		0x120
+			    MX8MM_IOMUXC_ENET_TD1_GPIO1_IO20		0x120
+			    MX8MM_IOMUXC_ENET_RD0_GPIO1_IO26		0x120
+			    MX8MM_IOMUXC_ENET_RD1_GPIO1_IO27		0x120
+			    MX8MM_IOMUXC_ENET_RXC_GPIO1_IO25		0x120
+			    MX8MM_IOMUXC_ENET_RX_CTL_GPIO1_IO24		0x120
+			    MX8MM_IOMUXC_ENET_TX_CTL_GPIO1_IO22		0x120
+		>;
+	};
+};

@@ -14,9 +14,8 @@
 
 	aliases {
 		can0 = &flexcan1;
-		serial0 = &uart1;
-		serial1 = &uart2;
 		serial2 = &uart4;
+		serial3 = &uart3;
 	};
 
 	reg_3v3_etn: regulator-3v3-etn {
@@ -60,10 +59,6 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_eqos>;
 	pinctrl-1 = <&pinctrl_eqos_sleep>;
-	clocks = <&clk IMX8MP_CLK_ENET1_ROOT>,
-		 <&clk IMX8MP_CLK_SIM_ENET_ROOT>,
-		 <&clk IMX8MP_CLK_ENET_TIMER>,
-		 <&clk IMX8MP_CLK_ENET_REF>;
 	assigned-clocks = <&clk IMX8MP_CLK_ENET_AXI>,
 			  <&clk IMX8MP_CLK_ENET_QOS_TIMER>,
 			  <&clk IMX8MP_CLK_ENET_QOS>;
@@ -77,17 +72,22 @@
 	status = "okay";
 
 	mdio {
-		#address-cells = <1>;
-		#size-cells = <0>;
 		compatible = "snps,dwmac-mdio";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_etnphy_rst_b>;
 		reset-gpios = <&gpio4 22 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <25000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
 
 		ethphy0: ethernet-phy@0 {
 			reg = <0>;
 			clocks = <&clk IMX8MP_CLK_ENET_REF>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_etnphy_int_b>;
+			interrupt-parent = <&gpio4>;
+			interrupts = <21 IRQ_TYPE_EDGE_FALLING>;
+			smsc,disable-energy-detect;
 		};
 	};
 };
@@ -95,7 +95,6 @@
 &flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
-	status = "okay";
 };
 
 &i2c3 {
@@ -104,6 +103,14 @@
 
 &i2c4 {
 	status = "disabled";
+};
+
+&usb3_0 {
+	fsl,over-current-active-low;
+};
+
+&usb3_1 {
+	fsl,over-current-active-low;
 };
 
 &usb3_phy0 {
@@ -117,13 +124,11 @@
 &usb_dwc3_0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usb1_oc>;
-	oc-active-low;
 };
 
 &usb_dwc3_1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usb2_oc>;
-	oc-active-low;
 };
 
 &iomuxc {
@@ -154,24 +159,24 @@
 
 	pinctrl_eqos: eqosgrp {
 		fsl,pins = <
+			    MX8MP_IOMUXC_ENET_TD2__CCM_ENET_QOS_CLOCK_GENERATE_REF_CLK 0x40000142
 			    MX8MP_IOMUXC_ENET_MDC__ENET_QOS_MDC		0x142
 			    MX8MP_IOMUXC_ENET_MDIO__ENET_QOS_MDIO	0x142
-			    MX8MP_IOMUXC_ENET_TD2__CCM_ENET_QOS_CLOCK_GENERATE_REF_CLK 0x40000142
 			    MX8MP_IOMUXC_ENET_TD0__ENET_QOS_RGMII_TD0	0x016
 			    MX8MP_IOMUXC_ENET_TD1__ENET_QOS_RGMII_TD1	0x016
 			    MX8MP_IOMUXC_ENET_RD0__ENET_QOS_RGMII_RD0	0x150
 			    MX8MP_IOMUXC_ENET_RD1__ENET_QOS_RGMII_RD1	0x150
 			    MX8MP_IOMUXC_ENET_RXC__ENET_QOS_RX_ER	0x110
-			    MX8MP_IOMUXC_ENET_RX_CTL__ENET_QOS_RGMII_RX_CTL 0x156
+			    MX8MP_IOMUXC_ENET_RX_CTL__ENET_QOS_RGMII_RX_CTL 0x116
 			    MX8MP_IOMUXC_ENET_TX_CTL__ENET_QOS_RGMII_TX_CTL 0x016
 		>;
 	};
 
 	pinctrl_eqos_sleep: eqos-sleep-grp {
 		fsl,pins = <
+			    MX8MP_IOMUXC_ENET_TD2__GPIO1_IO19		0x120
 			    MX8MP_IOMUXC_ENET_MDC__GPIO1_IO16		0x120
 			    MX8MP_IOMUXC_ENET_MDIO__GPIO1_IO17		0x120
-			    MX8MP_IOMUXC_ENET_TD2__GPIO1_IO19		0x120
 			    MX8MP_IOMUXC_ENET_TD0__GPIO1_IO21		0x120
 			    MX8MP_IOMUXC_ENET_TD1__GPIO1_IO20		0x120
 			    MX8MP_IOMUXC_ENET_RD0__GPIO1_IO26		0x120

@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
+/*
+ * Copyright (C) 2023 Lothar Waßmann <LWKARO-electronics.de>
+ */
+
+&{/} {
+	aliases {
+		pcie = "/soc@0/pcie@33800000";
+	};
+
+	pcie0_refclk: pcie0-refclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <100000000>;
+	};
+};
+
+&pcie0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie0>;
+	bus-range = <0x00 0xff>;
+	ext_osc = <0>;
+	status = "okay";
+};

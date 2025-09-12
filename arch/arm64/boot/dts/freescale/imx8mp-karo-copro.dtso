@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2023 Uwe Steinkohl <US@KARO-electronics.de>
+ *
+ */
+
+#include <dt-bindings/clock/imx8mp-clock.h>
+
+/dts-v1/;
+
+/plugin/;
+
+&{/chosen} {
+	overlays {
+		karo-copro;
+	};
+};
+
+&{/} {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		m_core_reserved: m_core@0x80000000 {
+			no-map;
+			reg = <0 0x80000000 0 0x1000000>;
+		};
+
+		vdevbuffer: vdevbuffer@81000000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x81000000 0 0x100000>;
+			no-map;
+		};
+
+
+		vdev0vring0: vdev0vring0@81100000 {
+			reg = <0 0x81100000 0 0x8000>;
+			no-map;
+		};
+
+		vdev0vring1: vdev0vring1@81108000 {
+			reg = <0 0x81108000 0 0x8000>;
+			no-map;
+		};
+
+		rsc_table: rsc-table@811ff000 {
+			reg = <0 0x811ff000 0 0x1000>;
+			no-map;
+		};
+	};
+
+	imx8mp-cm7 {
+		compatible = "fsl,imx8mp-cm7";
+		rsc-da = <0x71108000>;
+		clocks = <&clk IMX8MP_CLK_M7_DIV>;
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&mu 0 1
+			  &mu 1 1
+			  &mu 3 1
+			 >;
+			memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>;
+	};
+};
+
+&clk {
+	init-on-array = <
+			 IMX8MP_CLK_UART4_ROOT
+			 IMX8MP_CLK_M7_CORE
+			 IMX8MP_CLK_AHB
+			>;
+};
+
+/*
+ * ATTENTION: M7 may use IPs like below
+ * ECSPI0/ECSPI2, FLEXCAN, GPIO1/GPIO5, GPT1, I2C3, I2S3, UART4,
+ * PWM4, SDMA1/SDMA2
+*/
+&uart4 {
+	status = "disabled";
+};

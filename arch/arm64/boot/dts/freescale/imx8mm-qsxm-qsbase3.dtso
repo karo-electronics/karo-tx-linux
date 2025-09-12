@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "imx8mm-pinfunc.h"
+
+&{/} {
+	chosen {
+		overlays {
+			qsxm-qsbase3;
+		};
+	};
+
+	reg_usbh_vbus: regulator-usbh-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "usbh-vbus";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_usbh_vbus>;
+		gpios = <&gpio2 12 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+};
+
+&i2c3 {
+	status = "disabled";
+};
+
+&usbotg2 {
+	vbus-supply = <&reg_usbh_vbus>;
+};
+
+&usdhc2 {
+	status = "disabled";
+};
+
+&iomuxc {
+	pinctrl_usbh_vbus: usbh-vbusgrp {
+		fsl,pins = <MX8MM_IOMUXC_SD2_CD_B_GPIO2_IO12 0x1c0>;
+	};
+};

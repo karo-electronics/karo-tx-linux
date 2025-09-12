@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2022 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pwm/pwm.h>
+#include "includes/imx8m-karo-backlight.dtsi"
+#include "imx8mp-pinfunc.h"
+
+&{/} {
+	panel: lvds0-panel {
+		compatible = "panel-lvds";
+		data-mapping = "vesa-24";
+		backlight = <&backlight>;
+		status = "okay";
+
+		port {
+			panel_from_lvds: endpoint {
+				remote-endpoint = <&lvds_to_panel>;
+			};
+		};
+	};
+
+	regulator-lvds-mode {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lvds>;
+		regulator-name = "lvds-mode";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&reg_vdd_3v3>;
+		/* switch between vesa-24 (LOW) and jeida-18 mode (HIGH) */
+		gpios = <&gpio5 20 GPIO_ACTIVE_LOW>;
+		regulator-always-on;
+	};
+};
+
+&{/chosen} {
+	overlays {
+		karo-lvds-panel;
+	};
+};
+
+&backlight {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcd_en>;
+	enable-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
+};
+
+&lcdif2 {
+	status = "okay";
+};
+
+&ldb {
+	status = "okay";
+
+	lvds-channel@0 {
+		reg = <0>;
+		fsl,data-width = <24>;
+		status = "okay";
+
+		port@1 {
+			reg = <1>;
+
+			lvds_to_panel: endpoint {
+				remote-endpoint = <&panel_from_lvds>;
+			};
+		};
+	};
+};
+
+&ldb_phy {
+	status = "okay";
+};
+
+
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm1>;
+};
+
+&iomuxc {
+	pinctrl_lvds: lvdsgrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_I2C4_SCL__GPIO5_IO20		0x146
+		>;
+	};
+
+	pinctrl_pwm1: pwm1grp {
+		fsl,pins = <
+			MX8MP_IOMUXC_GPIO1_IO01__PWM1_OUT		0x06
+		>;
+	};
+
+	pinctrl_lcd_en: lcd-engrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_GPIO1_IO04__GPIO1_IO04		0x146
+		>;
+	};
+};

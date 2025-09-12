@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include "imx93-pinfunc.h"
+
+&{/chosen} {
+	overlays {
+		tx93-flexcan;
+	};
+};
+
+&flexcan2 {
+	xceiver-supply = <&reg_vdd_3v3>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan2>;
+	status = "okay";
+};
+
+&iomuxc {
+	pinctrl_flexcan2: flexcan2grp {
+		fsl,pins = <
+			MX93_PAD_DAP_TDO_TRACESWO__CAN2_RX	0x139e
+			MX93_PAD_DAP_TDI__CAN2_TX		0x139e
+		>;
+	};
+};

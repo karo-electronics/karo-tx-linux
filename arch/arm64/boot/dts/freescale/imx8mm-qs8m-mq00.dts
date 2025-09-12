@@ -27,6 +27,14 @@
 	/delete-property/ cpu-idle-states;
 };
 
+&resmem {
+	/* overwrite freescale cma setting since it's not allocatable */
+	linux,cma {
+		size = <0 0x1e000000>;
+		/delete-property/ alloc-ranges;
+	};
+};
+
 &usbotg2 {
 	dr_mode = "host";
 	status = "okay";
@@ -37,24 +45,6 @@
 	pinctrl-0 = <&pinctrl_hog>;
 
 	pinctrl_hog: hoggrp {
-	};
-
-	pinctrl_ecspi1: ecspi1grp {
-		fsl,pins = <
-			MX8MM_IOMUXC_ECSPI1_SCLK_ECSPI1_SCLK		0x140
-			MX8MM_IOMUXC_ECSPI1_MOSI_ECSPI1_MOSI		0x140
-			MX8MM_IOMUXC_ECSPI1_MISO_ECSPI1_MISO		0x140
-			MX8MM_IOMUXC_ECSPI1_SS0_GPIO5_IO9		0x140
-		>;
-	};
-
-	pinctrl_ecspi2: ecspi2grp {
-		fsl,pins = <
-			MX8MM_IOMUXC_ECSPI2_SCLK_ECSPI2_SCLK		0x140
-			MX8MM_IOMUXC_ECSPI2_MOSI_ECSPI2_MOSI		0x140
-			MX8MM_IOMUXC_ECSPI2_MISO_ECSPI2_MISO		0x140
-			MX8MM_IOMUXC_ECSPI2_SS0_GPIO5_IO13		0x140
-		>;
 	};
 
 	pinctrl_i2c1: i2c1grp {
@@ -200,12 +190,12 @@
 
 	pinctrl_usdhc2: usdhc2grp {
 		fsl,pins = <
-			MX8MM_IOMUXC_SD2_CLK_USDHC2_CLK			0x190
-			MX8MM_IOMUXC_SD2_CMD_USDHC2_CMD			0x1d0
-			MX8MM_IOMUXC_SD2_DATA0_USDHC2_DATA0		0x1d0
-			MX8MM_IOMUXC_SD2_DATA1_USDHC2_DATA1		0x1d0
-			MX8MM_IOMUXC_SD2_DATA2_USDHC2_DATA2		0x1d0
-			MX8MM_IOMUXC_SD2_DATA3_USDHC2_DATA3		0x1d0
+			MX8MM_IOMUXC_SD2_CLK_USDHC2_CLK			0x010
+			MX8MM_IOMUXC_SD2_CMD_USDHC2_CMD			0x010
+			MX8MM_IOMUXC_SD2_DATA0_USDHC2_DATA0		0x010
+			MX8MM_IOMUXC_SD2_DATA1_USDHC2_DATA1		0x010
+			MX8MM_IOMUXC_SD2_DATA2_USDHC2_DATA2		0x010
+			MX8MM_IOMUXC_SD2_DATA3_USDHC2_DATA3		0x010
 		>;
 	};
 

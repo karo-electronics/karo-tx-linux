@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include "includes/imx91-karo-sound.dtsi"
+#include "imx91-pinfunc.h"
+
+&{/chosen} {
+	overlays {
+		qs91-sound;
+	};
+};
+
+&cpu_dai {
+	sound-dai = <&sai2>;
+};
+
+&lpi2c3 {
+	status = "okay";
+
+	audio_codec: codec@a {
+		compatible = "fsl,sgtl5000";
+		reg = <0xa>;
+		#sound-dai-cells = <0>;
+		VDDA-supply = <&reg_2v5>;
+		VDDIO-supply = <&reg_vdd_3v3>;
+		clocks = <&audio_clk>;
+	};
+};
+
+&sai2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sai2>;
+	#sound-dai-cells = <0>;
+	status = "okay";
+};
+
+&iomuxc {
+	pinctrl_sai2: sai2grp {
+		fsl,pins = <
+			MX91_PAD_ENET2_RX_CTL__SAI2_TX_DATA0		0x131e
+			MX91_PAD_ENET2_TD3__SAI2_RX_DATA0		0x131e
+			MX91_PAD_ENET2_TXC__SAI2_TX_BCLK		0x131e
+			MX91_PAD_ENET2_TX_CTL__SAI2_TX_SYNC		0x131e
+		>;
+	};
+};

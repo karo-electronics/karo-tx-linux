@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
+/*
+ * Copyright (C) 2022 Lothar Waßmann <LWKARO-electronics.de>
+ */
+
+&{/} {
+	audio_clk: audio-clk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <26000000>;
+	};
+
+	reg_2v5: regulator-2v5 {
+		compatible = "regulator-fixed";
+		regulator-name = "2v5";
+		regulator-min-microvolt = <2500000>;
+		regulator-max-microvolt = <2500000>;
+		vin-supply = <&reg_vdd_3v3>;
+		regulator-always-on;
+	};
+
+	sound {
+		compatible = "karo,imx8m-sgtl5000", "simple-audio-card";
+		simple-audio-card,name = "imx8m-tx8m-sgtl5000-audio";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,bitclock-master = <&codec_dai>;
+		simple-audio-card,frame-master = <&codec_dai>;
+		simple-audio-card,widgets =
+			"Microphone", "Mic Jack",
+			"Line", "Line In",
+			"Line", "Line Out",
+			"Headphone", "Headphone Jack";
+		simple-audio-card,routing =
+			"MIC_IN", "Mic Jack",
+			"Mic Jack", "Mic Bias",
+			"Headphone Jack", "HP_OUT";
+		status = "okay";
+
+		cpu_dai: simple-audio-card,cpu {
+		};
+
+		codec_dai: simple-audio-card,codec {
+			sound-dai = <&audio_codec>;
+		};
+	};
+};
