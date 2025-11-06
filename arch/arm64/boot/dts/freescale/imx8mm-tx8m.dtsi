@@ -19,30 +19,24 @@
 };
 
 &fec1 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_fec1>;
+	pinctrl-1 = <&pinctrl_fec1_sleep>;
+	assigned-clock-parents = <
+		&clk IMX8MM_SYS_PLL1_266M
+		&clk IMX8MM_SYS_PLL2_100M
+		&clk IMX8MM_SYS_PLL2_50M
+		&clk IMX8MM_SYS_PLL2_50M
+	>;
+	assigned-clock-rates = <0>, <0>, <0>, <0>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
 	phy-supply = <&reg_3v3_etn>;
-	clocks = <&clk IMX8MM_CLK_ENET1_ROOT>,
-		 <&clk IMX8MM_CLK_ENET1_ROOT>,
-		 <&clk IMX8MM_CLK_ENET_TIMER>,
-		 <&clk IMX8MM_CLK_ENET_REF>;
-	assigned-clocks = <&clk IMX8MM_CLK_ENET_AXI>,
-			  <&clk IMX8MM_CLK_ENET_TIMER>,
-			  <&clk IMX8MM_CLK_ENET_REF>,
-			  <&clk IMX8MM_CLK_ENET_REF>;
-	assigned-clock-parents = <&clk IMX8MM_SYS_PLL1_266M>,
-				 <&clk IMX8MM_SYS_PLL2_100M>,
-				 <&clk IMX8MM_SYS_PLL2_50M>,
-				 <&clk IMX8MM_SYS_PLL2_50M>;
-	assigned-clock-rates = <0>, <100000000>, <50000000>, <50000000>;
 	status = "okay";
 
 	mdio {
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_etnphy_rst>;
-		clocks = <&clk IMX8MM_CLK_ENET_REF>;
 		reset-gpios = <&gpio1 29 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <25000>;
 		reset-post-delay-us = <100>;
@@ -53,6 +47,7 @@
 			reg = <0>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_etnphy_int>;
+			clocks = <&clk IMX8MM_CLK_ENET_PHY_REF>;
 			interrupt-parent = <&gpio1>;
 			interrupts = <28 IRQ_TYPE_EDGE_FALLING>;
 			smsc,disable-energy-detect;
@@ -64,7 +59,7 @@
 	/* overwrite freescale cma setting since it's not allocatable */
 	linux,cma {
 		size = <0 0x1e000000>;
-		/delete-property/ alloc-ranges;
+		alloc-ranges = <0 0x40000000 0 0x40000000>;
 	};
 };
 
@@ -121,6 +116,21 @@
 			MX8MM_IOMUXC_ENET_RXC_ENET1_RX_ER		0x10
 			MX8MM_IOMUXC_ENET_RX_CTL_ENET1_RGMII_RX_CTL	0x10
 			MX8MM_IOMUXC_ENET_TX_CTL_ENET1_RGMII_TX_CTL	0x16
+		>;
+	};
+
+	pinctrl_fec1_sleep: fec1-sleepgrp {
+		fsl,pins = <
+			MX8MM_IOMUXC_ENET_MDC_ENET1_MDC			0x120
+			MX8MM_IOMUXC_ENET_MDIO_ENET1_MDIO		0x120
+			MX8MM_IOMUXC_ENET_TD2_ENET1_TX_CLK		0x120
+			MX8MM_IOMUXC_ENET_TD0_ENET1_RGMII_TD0		0x120
+			MX8MM_IOMUXC_ENET_TD1_ENET1_RGMII_TD1		0x120
+			MX8MM_IOMUXC_ENET_RD0_ENET1_RGMII_RD0		0x120
+			MX8MM_IOMUXC_ENET_RD1_ENET1_RGMII_RD1		0x120
+			MX8MM_IOMUXC_ENET_RXC_ENET1_RX_ER		0x120
+			MX8MM_IOMUXC_ENET_RX_CTL_ENET1_RGMII_RX_CTL	0x120
+			MX8MM_IOMUXC_ENET_TX_CTL_ENET1_RGMII_TX_CTL	0x120
 		>;
 	};
 

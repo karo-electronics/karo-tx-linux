@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+&{/chosen} {
+	overlays {
+		qs91-qsbase1;
+	};
+};
+
+&usdhc3 {
+	pinctrl-0 = <&pinctrl_usdhc3 &pinctrl_usdhc3_cd>;
+	status = "okay";
+};

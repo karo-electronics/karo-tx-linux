@@ -32,7 +32,6 @@
 		compatible = "snps,dwmac-mdio";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ethphy0_rst>;
-		clocks = <&clk IMX93_CLK_ENET>;
 		reset-gpios = <&gpio3 4 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <25000>;
 		reset-post-delay-us = <100>;
@@ -43,6 +42,7 @@
 			reg = <0>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_ethphy0_int>;
+			clocks = <&clk IMX93_CLK_ENET_REF>;
 			interrupt-parent = <&gpio3>;
 			interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
 			eee-broken-100tx;

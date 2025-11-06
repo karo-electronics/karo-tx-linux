@@ -14,6 +14,10 @@
 #include "imx8mp-pinfunc.h"
 
 &{/} {
+	aliases {
+		display = "/lvds0-panel";
+	};
+
 	panel: lvds0-panel {
 		compatible = "panel-lvds";
 		data-mapping = "vesa-24";
@@ -53,16 +57,11 @@
 	enable-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
 };
 
-&lcdif2 {
-	status = "okay";
-};
-
 &ldb {
 	status = "okay";
 
 	lvds-channel@0 {
 		reg = <0>;
-		fsl,data-width = <24>;
 		status = "okay";
 
 		port@1 {
@@ -78,7 +77,6 @@
 &ldb_phy {
 	status = "okay";
 };
-
 
 &pwm1 {
 	pinctrl-names = "default";

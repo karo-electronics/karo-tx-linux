@@ -19,6 +19,7 @@
 	panel: lvds-panel {
 		compatible = "panel-lvds";
 		label = "PANEL SPECIFIC OVERLAY MISSING";
+		status = "disabled";
 	};
 
 	reserved-memory {

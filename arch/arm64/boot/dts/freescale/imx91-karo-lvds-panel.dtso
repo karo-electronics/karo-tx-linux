@@ -11,13 +11,17 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/pwm/pwm.h>
 #include "includes/imx91-karo-backlight.dtsi"
-#include "imx93-pinfunc.h"
+#include "imx91-pinfunc.h"
 
 &{/} {
 	chosen {
 		overlays {
 			karo-lvds-panel;
 		};
+	};
+
+	display-subsystem {
+		status = "okay";
 	};
 
 	aliases {
@@ -34,7 +38,6 @@
 
 &lcdif {
 	assigned-clock-rates = <498000000>, <62500000>, <400000000>, <133333333>;
-	status = "okay";
 };
 
 &ldb {

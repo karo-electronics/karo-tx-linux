@@ -16,7 +16,7 @@
 &{/} {
 	chosen {
 		overlays {
-			karo-lvds-panel;
+			qs93-lvds-panel;
 		};
 	};
 
@@ -24,10 +24,10 @@
 		display = "/lvds-panel";
 		lcdif = "/soc/lcd-controller@4ae30000";
 	};
-};
 
-&lcdif {
-	status = "okay";
+	display-subsystem {
+		status = "okay";
+	};
 };
 
 &ldb {

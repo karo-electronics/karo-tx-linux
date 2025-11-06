@@ -29,13 +29,13 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ethphy0_rst>;
 		reset-gpios = <&gpio3 1 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <1000>;
+		reset-delay-us = <10000>;
 		reset-post-delay-us = <100>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		ethphy0: ethernet-phy@3 {
-			reg = <3>;
+		ethphy0: ethernet-phy@7 {
+			reg = <7>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_ethphy0_int>;
 			interrupt-parent = <&gpio3>;
@@ -62,7 +62,8 @@
 			MX91_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x300 /* MODE2 */
 			MX91_PAD_ENET1_RD3__ENET_QOS_RGMII_RD3			0x300 /* MODE3 */
 			MX91_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x500 /* CLK125_EN */
-			MX91_PAD_ENET1_RXC__ENET_QOS_RGMII_RXC			0x500 /* PHYAD2 */
+			/* ext. pullup on QSBASE4 */
+			MX91_PAD_ENET1_RXC__ENET_QOS_RGMII_RXC			0x300 /* PHYAD2 */
 		>;
 	};
 

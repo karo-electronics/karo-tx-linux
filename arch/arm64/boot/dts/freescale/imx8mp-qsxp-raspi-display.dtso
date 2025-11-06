@@ -16,11 +16,11 @@
 		display = "/soc@0/bus@32c00000/mipi_dsi@32e60000/panel@0";
 		mipi-dsi = "/soc@0/bus@32c00000/mipi_dsi@32e60000";
 	};
-};
 
-&{/chosen} {
-	overlays {
-		qsxp-raspi-display;
+	chosen {
+		overlays {
+			qsxp-raspi-display;
+		};
 	};
 };
 

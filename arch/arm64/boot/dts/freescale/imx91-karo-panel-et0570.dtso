@@ -17,7 +17,7 @@
 #define PIXCLK 25175000
 
 &lcdif {
-       	assigned-clock-rates = <(PIXCLK * 7)>, <PIXCLK>, <400000000>, <133333333>;
+	assigned-clock-rates = <(PIXCLK * 7)>, <PIXCLK>, <400000000>, <133333333>;
 	status = "okay";
 };
 

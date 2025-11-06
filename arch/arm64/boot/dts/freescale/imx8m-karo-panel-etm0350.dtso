@@ -14,8 +14,12 @@
 	};
 };
 
+&lcdif {
+	status = "okay";
+};
+
 &panel {
-	label = "ETM0430G0DH6";
+	label = "ETM0350G0DH6";
 	width-mm = <115>;
 	height-mm = <86>;
 	status = "okay";

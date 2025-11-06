@@ -57,10 +57,9 @@
 		compatible = "snps,dwmac-mdio";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ethphy0_rst>;
-		clocks = <&clk IMX91_CLK_ENET1_QOS_TSN>;
 		reset-gpios = <&gpio4 13 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <100>;
-		reset-post-delay-us = <25000>;
+		reset-delay-us = <25000>;
+		reset-post-delay-us = <100>;
 		clock-frequency = <2500000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -69,6 +68,7 @@
 			reg = <0>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_ethphy0_int>;
+			clocks = <&clk IMX91_CLK_ENET1_QOS_TSN>;
 			interrupt-parent = <&gpio4>;
 			interrupts = <12 IRQ_TYPE_EDGE_FALLING>;
 			eee-broken-100tx;

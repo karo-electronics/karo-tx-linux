@@ -18,10 +18,11 @@
 
 &lcdif {
 	assigned-clock-rates = <(PIXCLK * 7)>, <PIXCLK>, <400000000>, <133333333>;
+	status = "okay";
 };
 
 &panel {
-	label = "ET0430G0DH6";
+	label = "ETM0430G0DH6";
 	data-mapping = "jeida-24";
 	width-mm = <95>;
 	height-mm = <54>;

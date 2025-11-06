@@ -8,9 +8,6 @@
 
 /plugin/;
 
-#include <dt-bindings/gpio/gpio.h>
-#include "imx8mp-pinfunc.h"
-
 &{/chosen} {
 	overlays {
 		tx8p-lvds-mb;
@@ -20,5 +17,6 @@
 &ldb {
 	lvds-channel@0 {
 		fsl,data-mapping = "spwg";
+		fsl,data-width = <24>;
 	};
 };

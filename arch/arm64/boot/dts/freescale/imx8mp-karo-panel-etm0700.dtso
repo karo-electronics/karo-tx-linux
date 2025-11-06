@@ -14,7 +14,7 @@
 	};
 };
 
-&lcdif {
+&lcdif2 {
 	status = "okay";
 };
 

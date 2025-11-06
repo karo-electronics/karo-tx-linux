@@ -38,10 +38,6 @@
 	};
 };
 
-&lcdif {
-	status = "okay";
-};
-
 &ldb {
 	status = "okay";
 

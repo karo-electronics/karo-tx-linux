@@ -13,6 +13,16 @@
 #include "imx8mn-pinfunc.h"
 
 &{/} {
+	aliases {
+		mipi-csi = "/camera/csi@32e30000";
+	};
+
+	chosen {
+		overlays {
+			qs8m-cam;
+		};
+	};
+
 	reg_2v8: regulator-2v8 {
 		compatible = "regulator-fixed";
 		regulator-name = "2V8";
@@ -41,12 +51,6 @@
 	};
 };
 
-&{/chosen} {
-	overlays {
-		qs8m-cam;
-	};
-};
-
 &i2c2 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -72,8 +76,8 @@
 		status = "okay";
 
 		port {
-			imx219_out: endpoint {
-				remote-endpoint = <&csi_in>;
+			imx219_to_csi: endpoint {
+				remote-endpoint = <&csi_to_imx219>;
 				data-lanes = <1 2>;
 				clock-noncontinuous;
 				link-frequencies = /bits/ 64 <456000000>;
@@ -89,8 +93,8 @@
 
 	port@0 {
 		reg = <0>;
-		csi_in: endpoint {
-			remote-endpoint = <&imx219_out>;
+		csi_to_imx219: endpoint {
+			remote-endpoint = <&imx219_to_csi>;
 			data-lanes = <2>;
 			csis-hs-settle = <13>;
 			csis-clk-settle = <2>;

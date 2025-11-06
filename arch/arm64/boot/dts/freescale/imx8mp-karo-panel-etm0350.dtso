@@ -10,30 +10,30 @@
 
 &{/chosen} {
 	overlays {
-		karo-panel-etm0700;
+		karo-panel-etm0350;
 	};
 };
 
-&lcdif {
+&lcdif2 {
 	status = "okay";
 };
 
 &panel {
-	label = "ETM0700G0DH6";
-	width-mm = <152>;
-	height-mm = <91>;
+	label = "ETM0350G0DH6";
+	width-mm = <115>;
+	height-mm = <86>;
 	status = "okay";
 
 	panel-timing {
-		clock-frequency = <33264000>;
-		hactive = <800>;
-		vactive = <480>;
-		hback-porch = <88>;
-		hsync-len = <128>;
-		hfront-porch = <40>;
-		vback-porch = <33>;
-		vsync-len = <2>;
-		vfront-porch = <10>;
+		clock-frequency = <6520000>;
+		hactive = <320>;
+		vactive = <240>;
+		hback-porch = <34>;
+		hsync-len = <34>;
+		hfront-porch = <2>;
+		vback-porch = <2>;
+		vsync-len = <10>;
+		vfront-porch = <2>;
 		hsync-active = <0>;
 		vsync-active = <0>;
 		de-active = <1>;

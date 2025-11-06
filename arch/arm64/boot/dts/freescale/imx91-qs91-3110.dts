@@ -116,13 +116,13 @@
 
 &usdhc3 {
 	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc3>;
 	vmmc-supply = <&reg_vdd_3v3>;
 	vqmmc-supply = <&reg_vdd_3v3>;
 	bus-width = <4>;
 	no-1-8-v;
 	no-sdio;
 	no-mmc;
-	status = "okay";
 };
 
 &wdog3 {
@@ -263,9 +263,7 @@
 			MX91_PAD_SD3_DATA3__USDHC3_DATA3		0x1fe
 		>;
 	};
-};
 
-&iomuxc {
 	pinctrl_usdhc3_cd: usdhc3-cdgrp {
 		fsl,pins = <
 			MX91_PAD_SD2_DATA3__GPIO3_IO6			0x3fe

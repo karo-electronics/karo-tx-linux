@@ -22,7 +22,7 @@
 };
 
 &panel {
-	label = "ET0430G0DH6";
+	label = "ETM0430G0DH6";
 	data-mapping = "jeida-24";
 	width-mm = <95>;
 	height-mm = <54>;

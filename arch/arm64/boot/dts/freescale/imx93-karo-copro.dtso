@@ -81,8 +81,6 @@
 };
 */
 
-
-
 &lpuart3 {
 	status = "disabled";
 };
@@ -91,5 +89,3 @@
 	compatible = "fsl,imx93-mu", "fsl,imx8ulp-mu";
 	status = "okay";
 };
-
-

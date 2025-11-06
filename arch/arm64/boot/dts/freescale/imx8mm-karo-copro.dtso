@@ -33,7 +33,6 @@
 			no-map;
 		};
 
-
 		vdev0vring0: vdev0vring0@78100000 {
 			reg = <0 0x78100000 0 0x8000>;
 			no-map;
@@ -44,7 +43,7 @@
 			no-map;
 		};
 
-		rsc_table: rsc_table@781ff000 {
+		rsc_table: rsc-table@781ff000 {
 			reg = <0 0x781ff000 0 0x1000>;
 			no-map;
 		};

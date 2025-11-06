@@ -14,6 +14,17 @@
 #include "imx8mm-pinfunc.h"
 
 &{/} {
+	aliases {
+		display = "/lvds-panel";
+		lcdif = "/soc@0/bus@32c00000/lcdif@32e00000";
+	};
+
+	chosen {
+		overlays {
+			tx8m-1620-lvds-panel;
+		};
+	};
+
 	panel: lvds-panel {
 		compatible = "panel-lvds";
 		pinctrl-names = "default";
@@ -27,12 +38,6 @@
 				remote-endpoint = <&dsi_lvds_bridge_to_panel>;
 			};
 		};
-	};
-};
-
-&{/chosen} {
-	overlays {
-		tx8m-1620-lvds-panel;
 	};
 };
 
@@ -57,10 +62,6 @@
 &pwm1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm1>;
-	status = "okay";
-};
-
-&lcdif {
 	status = "okay";
 };
 

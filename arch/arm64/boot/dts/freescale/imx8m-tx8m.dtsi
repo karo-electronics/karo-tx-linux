@@ -130,15 +130,13 @@
 
 			BUCK6 {
 				// BUCK8 in datasheet
-				regulator-name = "buck6";
-				/*
-				 * The default output voltage is 1.1V, bumped
-				 * to 1.35V in HW by a 499R/2.2K voltage divider in the
-				 * feedback path.
-				 */
-				regulator-min-microvolt = <1100000>;
-				regulator-max-microvolt = <1100000>;
+				regulator-name = "NVCC_DRAM";
+				regulator-min-microvolt = <(1350000 - 6700)>;
+				regulator-max-microvolt = <(1350000 + 10000)>;
 				regulator-boot-on;
+				rohm,fb-pull-up-microvolt = <0>;
+				rohm,feedback-pull-up-r1-ohms = <2200>;
+				rohm,feedback-pull-up-r2-ohms = <499>;
 				regulator-always-on;
 			};
 
@@ -211,14 +209,6 @@
 
 &mu {
 	status = "okay";
-};
-
-&resmem {
-	/* overwrite freescale cma setting since it's not allocatable */
-	linux,cma {
-		size = <0 0xf000000>;
-		/delete-property/ alloc-ranges;
-	};
 };
 
 &uart1 { /* console */

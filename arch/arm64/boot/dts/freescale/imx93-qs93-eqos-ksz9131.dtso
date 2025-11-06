@@ -29,8 +29,8 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ethphy0_rst>;
 		reset-gpios = <&gpio3 4 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <1000>;
-		reset-post-delay-us = <1000>;
+		reset-delay-us = <10000>;
+		reset-post-delay-us = <100>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 

@@ -14,6 +14,13 @@
 	};
 };
 
+#define PCLK 68200000
+
+&lcdif {
+	assigned-clock-rates = <(PCLK * 7)>, <500000000>, <200000000>;
+	status = "okay";
+};
+
 &panel {
 	label = "TM101JVHG32";
 	width-mm = <217>;
@@ -21,7 +28,7 @@
 	status = "okay";
 
 	panel-timing {
-		clock-frequency = <62500000>;
+		clock-frequency = <PCLK>;
 		hactive = <1280>;
 		vactive = <800>;
 		hback-porch = <80>;
@@ -32,7 +39,7 @@
 		vsync-len = <1>;
 		hsync-active = <0>;
 		vsync-active = <0>;
-		de-active = <0>;
-		pixelclk-active = <0>;
+		de-active = <1>;
+		pixelclk-active = <1>;
 	};
 };

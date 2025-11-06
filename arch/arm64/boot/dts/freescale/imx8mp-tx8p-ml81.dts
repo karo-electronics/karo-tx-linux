@@ -10,10 +10,9 @@
 
 / {
 	model = "Ka-Ro electronics TX8P-ML81 (NXP i.MX8MP) module";
-	compatible = "karo,imx8mp-tx8m", "fsl,imx8mp";
+	compatible = "karo,tx8p-ml81", "karo,imx8mp-tx8m", "fsl,imx8mp";
 
 	aliases {
-		can0 = &flexcan1;
 		serial2 = &uart4;
 		serial3 = &uart3;
 	};
@@ -59,9 +58,6 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_eqos>;
 	pinctrl-1 = <&pinctrl_eqos_sleep>;
-	assigned-clocks = <&clk IMX8MP_CLK_ENET_AXI>,
-			  <&clk IMX8MP_CLK_ENET_QOS_TIMER>,
-			  <&clk IMX8MP_CLK_ENET_QOS>;
 	assigned-clock-parents = <&clk IMX8MP_SYS_PLL1_266M>,
 				 <&clk IMX8MP_SYS_PLL2_100M>,
 				 <&clk IMX8MP_SYS_PLL2_50M>;
@@ -77,14 +73,15 @@
 		pinctrl-0 = <&pinctrl_etnphy_rst_b>;
 		reset-gpios = <&gpio4 22 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <25000>;
+		reset-post-delay-us = <100>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 
 		ethphy0: ethernet-phy@0 {
 			reg = <0>;
-			clocks = <&clk IMX8MP_CLK_ENET_REF>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_etnphy_int_b>;
+			clocks = <&clk IMX8MP_CLK_ENET_QOS>;
 			interrupt-parent = <&gpio4>;
 			interrupts = <21 IRQ_TYPE_EDGE_FALLING>;
 			smsc,disable-energy-detect;

@@ -214,7 +214,7 @@
 	/* overwrite freescale cma setting since it's not allocatable */
 	linux,cma {
 		size = <0 0x1e000000>;
-		/delete-property/ alloc-ranges;
+		alloc-ranges = <0 0x40000000 0 0x80000000>;
 	};
 };
 
@@ -226,9 +226,10 @@
 
 &uart2 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart2>;
+	pinctrl-0 = <&pinctrl_uart2 &pinctrl_uart2_rtscts>;
 	dmas = <&sdma1 24 4 0>, <&sdma1 25 4 0>;
 	dma-names = "rx", "tx";
+	uart-has-rtscts;
 	status = "okay";
 };
 
@@ -239,9 +240,9 @@
 };
 
 &uart4 {
+	/* conflict with RTS/CTS pins of uart2 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart4>;
-	status = "okay";
 };
 
 &usbotg1 {
@@ -363,6 +364,13 @@
 		fsl,pins = <
 			MX8MM_IOMUXC_UART2_RXD_UART2_DCE_RX		0x140
 			MX8MM_IOMUXC_UART2_TXD_UART2_DCE_TX		0x140
+		>;
+	};
+
+	pinctrl_uart2_rtscts: uart2-rtsctsgrp {
+		fsl,pins = <
+			MX8MM_IOMUXC_UART4_RXD_UART2_DCE_CTS_B		0x140
+			MX8MM_IOMUXC_UART4_TXD_UART2_DCE_RTS_B		0x140
 		>;
 	};
 

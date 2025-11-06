@@ -33,7 +33,6 @@
 			no-map;
 		};
 
-
 		vdev0vring0: vdev0vring0@81100000 {
 			reg = <0 0x81100000 0 0x8000>;
 			no-map;

@@ -30,7 +30,7 @@
 
 &{/chosen} {
 	overlays {
-		karo-lvds-panel;
+		qsxp-mipi-lvds-bridge;
 	};
 };
 
@@ -59,10 +59,6 @@
 &pwm1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm1>;
-	status = "okay";
-};
-
-&lcdif2 {
 	status = "okay";
 };
 

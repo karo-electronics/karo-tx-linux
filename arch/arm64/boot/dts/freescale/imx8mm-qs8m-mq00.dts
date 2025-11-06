@@ -31,7 +31,7 @@
 	/* overwrite freescale cma setting since it's not allocatable */
 	linux,cma {
 		size = <0 0x1e000000>;
-		/delete-property/ alloc-ranges;
+		alloc-ranges = <0 0x40000000 0 0x40000000>;
 	};
 };
 

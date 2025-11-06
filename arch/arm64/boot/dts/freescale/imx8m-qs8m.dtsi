@@ -162,8 +162,8 @@
 &resmem {
 	/* overwrite freescale cma setting since it's not allocatable */
 	linux,cma {
-		size = <0 0xf000000>;
-		/delete-property/ alloc-ranges;
+		size = <0 0x18000000>;
+		alloc-ranges = <0 0x40000000 0 0x20000000>;
 	};
 };
 

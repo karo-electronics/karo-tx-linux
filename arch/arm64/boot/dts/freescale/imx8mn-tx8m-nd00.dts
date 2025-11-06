@@ -41,13 +41,21 @@
 
 		ethphy0: ethernet-phy@0 {
 			reg = <0>;
-			clocks = <&clk IMX8MN_CLK_ENET_REF>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_etnphy_int>;
+			clocks = <&clk IMX8MN_CLK_ENET_PHY_REF>;
 			interrupt-parent = <&gpio1>;
 			interrupts = <28 IRQ_TYPE_EDGE_FALLING>;
 			smsc,disable-energy-detect;
 		};
+	};
+};
+
+&resmem {
+	/* overwrite freescale cma setting since it's not allocatable */
+	linux,cma {
+		size = <0 0xf000000>;
+		alloc-ranges = <0 0x40000000 0 0x20000000>;
 	};
 };
 

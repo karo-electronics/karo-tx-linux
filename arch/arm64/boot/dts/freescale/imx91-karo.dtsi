@@ -16,9 +16,14 @@
 		};
 	};
 
+	display-subsystem {
+		status = "disabled";
+	};
+
 	panel: lcd-panel {
 		compatible = "panel-dpi";
 		label = "PANEL SPECIFIC OVERLAY MISSING";
+		status = "disabled";
 	};
 
 	reserved-memory {
