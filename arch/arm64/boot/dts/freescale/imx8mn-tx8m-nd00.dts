@@ -43,7 +43,7 @@
 			reg = <0>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_etnphy_int>;
-			clocks = <&clk IMX8MN_CLK_ENET_PHY_REF>;
+			clocks = <&clk IMX8MN_CLK_ENET_REF>;
 			interrupt-parent = <&gpio1>;
 			interrupts = <28 IRQ_TYPE_EDGE_FALLING>;
 			smsc,disable-energy-detect;
