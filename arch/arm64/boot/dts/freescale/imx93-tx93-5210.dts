@@ -101,7 +101,7 @@
 	snps,clk-csr = <5>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
-	phy-supply = <&buck4>;
+	phy-supply = <&reg_vdd_3v3>;
 	status = "okay";
 
 	mdio {
@@ -130,7 +130,7 @@
 &fec {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_fec_rgmii>;
-	phy-supply = <&buck4>;
+	phy-supply = <&reg_vdd_3v3>;
 	status = "disabled";
 
 	mdio {
@@ -158,8 +158,8 @@
 		interrupts = <15 IRQ_TYPE_LEVEL_LOW>;
 
 		regulators {
-			buck1: BUCK1 {
-				regulator-name = "BUCK1";
+			reg_vdd_soc: BUCK1 {
+				regulator-name = "VDD_SOC";
 				regulator-min-microvolt = <600000>;
 				regulator-max-microvolt = <2187500>;
 				regulator-boot-on;
@@ -311,8 +311,8 @@
 &usdhc1 { /* eMMC */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc1>;
-	vmmc-supply = <&buck4>;
-	vqmmc-supply = <&buck4>;
+	vmmc-supply = <&reg_vdd_3v3>;
+	vqmmc-supply = <&reg_vdd_3v3>;
 	bus-width = <8>;
 	no-1-8-v;
 	non-removable;
@@ -322,8 +322,8 @@
 &usdhc2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc2>;
-	vmmc-supply = <&buck4>;
-	vqmmc-supply = <&buck4>;
+	vmmc-supply = <&reg_vdd_3v3>;
+	vqmmc-supply = <&reg_vdd_3v3>;
 	bus-width = <4>;
 	no-1-8-v;
 	no-sdio;

@@ -50,7 +50,7 @@
 	assigned-clock-rates = <0>, <50000000>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
-	phy-supply = <&buck4>;
+	phy-supply = <&reg_vdd_3v3>;
 	status = "okay";
 
 	mdio {
@@ -80,7 +80,7 @@
 &fec {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_fec_rgmii>;
-	phy-supply = <&buck4>;
+	phy-supply = <&reg_vdd_3v3>;
 	status = "disabled";
 
 	mdio {
@@ -165,8 +165,8 @@
 &usdhc1 { /* eMMC */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc1>;
-	vmmc-supply = <&buck4>;
-	vqmmc-supply = <&buck4>;
+	vmmc-supply = <&reg_vdd_3v3>;
+	vqmmc-supply = <&reg_vdd_3v3>;
 	bus-width = <4>;
 	no-1-8-v;
 	non-removable;
@@ -176,8 +176,8 @@
 &usdhc2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc2>;
-	vmmc-supply = <&buck4>;
-	vqmmc-supply = <&buck4>;
+	vmmc-supply = <&reg_vdd_3v3>;
+	vqmmc-supply = <&reg_vdd_3v3>;
 	bus-width = <4>;
 	no-1-8-v;
 	no-sdio;
