@@ -14,9 +14,11 @@
 #include "includes/imx91-karo-backlight.dtsi"
 #include "includes/imx91-karo-lcd-panel.dtsi"
 
-&{/chosen} {
-	overlays {
-		tx91-lcd-panel;
+&{/} {
+	chosen {
+		overlays {
+			tx91-lcd-panel;
+		};
 	};
 };
 

@@ -18,11 +18,16 @@
 		display = "/lvds0-panel";
 	};
 
+	chosen {
+		overlays {
+			karo-lvds-panel;
+		};
+	};
+
 	panel: lvds0-panel {
 		compatible = "panel-lvds";
 		data-mapping = "vesa-24";
 		backlight = <&backlight>;
-		status = "okay";
 
 		port {
 			panel_from_lvds: endpoint {
@@ -42,12 +47,6 @@
 		/* switch between vesa-24 (LOW) and jeida-18 mode (HIGH) */
 		gpios = <&gpio5 20 GPIO_ACTIVE_LOW>;
 		regulator-always-on;
-	};
-};
-
-&{/chosen} {
-	overlays {
-		karo-lvds-panel;
 	};
 };
 

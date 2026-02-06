@@ -33,7 +33,6 @@
 		enable-gpios = <&gpio5 20 GPIO_ACTIVE_LOW>;
 		data-mapping = "vesa-24";
 		backlight = <&backlight>;
-		status = "okay";
 
 		port {
 			panel_from_dsi_lvds_bridge: endpoint {

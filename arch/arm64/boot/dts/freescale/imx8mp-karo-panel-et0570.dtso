@@ -8,9 +8,15 @@
 
 /plugin/;
 
-&{/chosen} {
-	overlays {
-		karo-panel-et0570;
+&{/} {
+	chosen {
+		overlays {
+			karo-panel-et0570;
+		};
+	};
+
+	display-subsystem {
+		status = "okay";
 	};
 };
 

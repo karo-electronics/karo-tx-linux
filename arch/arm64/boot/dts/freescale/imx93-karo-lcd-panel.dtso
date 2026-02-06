@@ -64,7 +64,6 @@
 	enable-gpios = <&gpio3 29 GPIO_ACTIVE_HIGH>;
 	power-supply = <&reg_lcd_pwr>;
 	backlight = <&backlight>;
-	status = "okay";
 
 	port {
 		lvds_panel_from_ldb_ch0: endpoint {

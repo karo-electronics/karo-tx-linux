@@ -31,7 +31,6 @@
 		pinctrl-0 = <&pinctrl_lvds>;
 		data-mapping = "jeida-24";
 		backlight = <&backlight>;
-		status = "okay";
 
 		port {
 			panel_from_dsi_lvds_bridge: endpoint {

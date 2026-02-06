@@ -7,6 +7,10 @@
 #include <dt-bindings/gpio/gpio.h>
 
 &{/} {
+	display-subsystem {
+		status = "okay";
+	};
+
 	reg_rpi_bridge: regulator-rpi-bridge {
 		compatible = "regulator-fixed";
 		regulator-name = "rpi-bridge";

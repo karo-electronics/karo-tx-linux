@@ -14,19 +14,15 @@
 #include "imx93-pinfunc.h"
 
 &{/} {
-	chosen {
-		overlays {
-			qs93-lvds-panel;
-		};
-	};
-
 	aliases {
 		display = "/lvds-panel";
 		lcdif = "/soc/lcd-controller@4ae30000";
 	};
 
-	display-subsystem {
-		status = "okay";
+	chosen {
+		overlays {
+			qs93-lvds-panel;
+		};
 	};
 };
 
@@ -52,7 +48,6 @@
 
 &panel {
 	backlight = <&backlight>;
-	status = "okay";
 
 	port {
 		lvds_panel_from_ldb_ch0: endpoint {

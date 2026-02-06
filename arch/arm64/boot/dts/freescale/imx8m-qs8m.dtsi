@@ -18,6 +18,10 @@
 		stdout-path = "serial0:115200";
 	};
 
+	display-subsystem {
+		status = "disabled";
+	};
+
 	thermal-zones {
 		cpu-thermal {
 			cooling-maps {

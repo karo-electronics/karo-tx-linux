@@ -14,6 +14,12 @@
 #include "imx8mn-pinfunc.h"
 
 &{/} {
+	chosen {
+		overlays {
+			karo-lvds-panel;
+		};
+	};
+
 	panel: lvds-panel {
 		compatible = "panel-lvds";
 		pinctrl-names = "default";
@@ -22,19 +28,12 @@
 		enable-gpios = <&gpio5 20 GPIO_ACTIVE_LOW>;
 		data-mapping = "vesa-24";
 		backlight = <&backlight>;
-		status = "okay";
 
 		port {
 			panel_from_dsi_lvds_bridge: endpoint {
 				remote-endpoint = <&dsi_lvds_bridge_to_panel>;
 			};
 		};
-	};
-};
-
-&{/chosen} {
-	overlays {
-		karo-lvds-panel;
 	};
 };
 

@@ -24,6 +24,10 @@
 		stdout-path = "serial0:115200";
 	};
 
+	display-subsystem {
+		status = "disabled";
+	};
+
 	memory@40000000 {
 		device_type = "memory";
 		reg = <0x0 0x40000000 0 0x40000000>,
@@ -230,7 +234,6 @@
 	hnp-disable;
 	srp-disable;
 	adp-disable;
-	status = "okay";
 };
 
 &usb3_phy0 {
@@ -243,7 +246,6 @@
 
 &usb_dwc3_1 {
 	dr_mode = "host";
-	status = "okay";
 };
 
 &usdhc2 {

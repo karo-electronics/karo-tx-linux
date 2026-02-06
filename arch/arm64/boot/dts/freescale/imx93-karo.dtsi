@@ -16,6 +16,10 @@
 		};
 	};
 
+	display-subsystem {
+		status = "disabled";
+	};
+
 	panel: lvds-panel {
 		compatible = "panel-lvds";
 		label = "PANEL SPECIFIC OVERLAY MISSING";
