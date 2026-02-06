@@ -215,6 +215,5 @@
 };
 
 &wdog1 {
-	pinctrl-names = "default";
 	status = "okay";
 };

@@ -274,6 +274,8 @@
 
 &wdog1 {
 	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_wdog1>;
+	fsl,ext-reset-output;
 	status = "okay";
 };
 
@@ -331,12 +333,6 @@
 		fsl,pins = <
 			MX8MM_IOMUXC_I2C4_SCL_GPIO5_IO20		0x400001c2
 			MX8MM_IOMUXC_I2C4_SDA_GPIO5_IO21		0x400001c2
-		>;
-	};
-
-	pinctrl_led: ledgrp {
-		fsl,pins = <
-			MX8MM_IOMUXC_GPIO1_IO02_GPIO1_IO2		0x06
 		>;
 	};
 
@@ -452,6 +448,12 @@
 	pinctrl_usdhc2_cd: usdhc2-cdgrp {
 		fsl,pins = <
 			MX8MM_IOMUXC_SD2_CD_B_GPIO2_IO12		0x1c0
+		>;
+	};
+
+	pinctrl_wdog1: wdog1grp {
+		fsl,pins = <
+			MX8MM_IOMUXC_GPIO1_IO02_WDOG1_WDOG_B		0x026
 		>;
 	};
 };

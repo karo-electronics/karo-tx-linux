@@ -287,7 +287,7 @@
 
 &wdog1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_wdog>;
+	pinctrl-0 = <&pinctrl_wdog1>;
 	fsl,ext-reset-output;
 	status = "okay";
 };
@@ -448,9 +448,9 @@
 		>;
 	};
 
-	pinctrl_wdog: wdoggrp {
+	pinctrl_wdog1: wdog1grp {
 		fsl,pins = <
-			MX8MP_IOMUXC_GPIO1_IO02__WDOG1_WDOG_B		0xc6
+			MX8MP_IOMUXC_GPIO1_IO02__WDOG1_WDOG_B		0x026
 		>;
 	};
 };
