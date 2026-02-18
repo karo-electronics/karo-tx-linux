@@ -52,9 +52,56 @@ static struct smsc_hw_stat smsc_hw_stats[] = {
 struct smsc_phy_priv {
 	unsigned int edpd_enable:1;
 	unsigned int edpd_mode_set_by_user:1;
+	unsigned int suspended:1;
 	unsigned int edpd_max_wait_ms;
 	bool wol_arp;
 };
+
+static int smsc_phy_suspend(struct phy_device *phydev)
+{
+	struct smsc_phy_priv *priv = phydev->priv;
+	int ret;
+
+	if (priv->suspended)
+		return 0;
+
+	if (phy_interrupt_is_valid(phydev)) {
+		phydev->interrupts = PHY_INTERRUPT_DISABLED;
+		if (phydev->drv->config_intr) {
+			ret = phydev->drv->config_intr(phydev);
+			if (ret)
+				return ret;
+		}
+	}
+
+	ret = genphy_suspend(phydev);
+	if (WARN_ON(ret))
+		return ret;
+
+	priv->suspended = 1;
+	return 0;
+}
+
+static int smsc_phy_resume(struct phy_device *phydev)
+{
+	struct smsc_phy_priv *priv = phydev->priv;
+	int ret;
+
+	if (!priv->suspended)
+		return 0;
+
+	ret = genphy_resume(phydev);
+	if (WARN_ON(ret))
+		return ret;
+
+	priv->suspended = 0;
+	if (phy_interrupt_is_valid(phydev)) {
+		phydev->interrupts = PHY_INTERRUPT_ENABLED;
+		if (phydev->drv->config_intr)
+			ret = phydev->drv->config_intr(phydev);
+	}
+	return ret;
+}
 
 static int smsc_phy_ack_interrupt(struct phy_device *phydev)
 {
@@ -100,7 +147,11 @@ static int smsc_phy_config_edpd(struct phy_device *phydev)
 
 irqreturn_t smsc_phy_handle_interrupt(struct phy_device *phydev)
 {
+	struct smsc_phy_priv *priv = phydev->priv;
 	int irq_status;
+
+	if (priv->suspended)
+		return IRQ_NONE;
 
 	irq_status = phy_read(phydev, MII_LAN83C185_ISF);
 	if (irq_status < 0) {
@@ -137,6 +188,7 @@ EXPORT_SYMBOL_GPL(smsc_phy_config_init);
 static int smsc_phy_reset(struct phy_device *phydev)
 {
 	int rc = phy_read(phydev, MII_LAN83C185_SPECIAL_MODES);
+
 	if (rc < 0)
 		return rc;
 
@@ -632,7 +684,8 @@ int smsc_phy_probe(struct phy_device *phydev)
 	refclk = devm_clk_get_optional_enabled(dev, NULL);
 	if (IS_ERR(refclk))
 		return dev_err_probe(dev, PTR_ERR(refclk),
-				     "Failed to request clock\n");
+				     "Failed to request clock: %ld\n",
+				     PTR_ERR(refclk));
 
 	return clk_set_rate(refclk, 50 * 1000 * 1000);
 }
@@ -759,8 +812,8 @@ static struct phy_driver smsc_phy_driver[] = {
 	.get_tunable	= smsc_phy_get_tunable,
 	.set_tunable	= smsc_phy_set_tunable,
 
-	.suspend	= genphy_suspend,
-	.resume		= genphy_resume,
+	.suspend	= smsc_phy_suspend,
+	.resume		= smsc_phy_resume,
 }, {
 	.phy_id		= 0x0007c110,
 	.phy_id_mask	= 0xfffffff0,
@@ -792,8 +845,8 @@ static struct phy_driver smsc_phy_driver[] = {
 	.set_wol	= lan874x_set_wol,
 	.get_wol	= lan874x_get_wol,
 
-	.suspend	= genphy_suspend,
-	.resume		= genphy_resume,
+	.suspend	= smsc_phy_suspend,
+	.resume		= smsc_phy_resume,
 }, {
 	.phy_id		= 0x0007c130,	/* 0x0007c130 and 0x0007c131 */
 	/* This mask (0xfffffff2) is to differentiate from
