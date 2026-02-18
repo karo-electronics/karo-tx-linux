@@ -4715,10 +4715,9 @@ static int __maybe_unused fec_resume(struct device *dev)
 			pm_runtime_force_resume(dev);
 
 		ret = fec_enet_clk_enable(ndev, true);
-		if (ret) {
-			rtnl_unlock();
+		if (ret)
 			goto failed_clk;
-		}
+
 		if (fep->wol_flag & FEC_WOL_FLAG_ENABLE) {
 			fec_enet_stop_mode(fep, false);
 			if (fep->wake_irq) {
@@ -4742,16 +4741,20 @@ static int __maybe_unused fec_resume(struct device *dev)
 		phy_start(ndev->phydev);
 	} else if (fep->mii_bus_share && !ndev->phydev) {
 		pinctrl_pm_select_default_state(&fep->pdev->dev);
-		/* And then recovery mii bus */
+		/* And then recover mii bus */
 		ret = fec_restore_mii_bus(ndev);
 		if (ret < 0)
-			return ret;
+			goto failed_restore_mii;
 	}
 	rtnl_unlock();
 
 	return 0;
 
+failed_restore_mii:
+	fec_enet_clk_enable(ndev, false);
+
 failed_clk:
+	rtnl_unlock();
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
 	return ret;
