@@ -2,14 +2,17 @@
 // Copyright (C) 2018 ROHM Semiconductors
 // bd71837-regulator.c ROHM BD71837MWV/BD71847MWV regulator driver
 
+#include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/mfd/rohm-bd718x7.h>
 #include <linux/module.h>
+#include <linux/notifier.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/reboot.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/machine.h>
 #include <linux/regulator/of_regulator.h>
@@ -426,12 +429,18 @@ struct reg_init {
 	unsigned int mask;
 	unsigned int val;
 };
+
 struct bd718xx_regulator_data {
 	struct regulator_desc desc;
 	const struct rohm_dvs_config dvs;
 	const struct reg_init init;
 	const struct reg_init *additional_inits;
 	int additional_init_amnt;
+};
+
+struct bd718xx_restart_notifier {
+	struct regmap *regmap;
+	struct notifier_block restart_nb;
 };
 
 static int bd718x7_xvp_sanity_check(struct regulator_dev *rdev, int lim_uV,
@@ -1545,7 +1554,7 @@ static void mark_hw_controlled(struct device *dev, struct device_node *np,
  * VLDO = 1.6V (used as FB-pull-up)
  * R1 = 1000ohms
  * R2 = 150ohms
- * VSEL 0x0 => 0.8V – (VLDO – 0.8) * R2 / R1 = 0.68V
+ * VSEL 0x0 => 0.8V - (VLDO - 0.8) * R2 / R1 = 0.68V
  * Linear Step = 10mV * (R1 + R2) / R1 = 11.5mV
  */
 static int setup_feedback_loop(struct device *dev, struct device_node *np,
@@ -1674,6 +1683,20 @@ err_out:
 	of_node_put(nproot);
 
 	return ret;
+}
+
+static int bd718xx_restart_handler(struct notifier_block *nb,
+				   unsigned long action, void *data)
+{
+	struct bd718xx_restart_notifier *notif = container_of(nb,
+							      struct bd718xx_restart_notifier,
+							      restart_nb);
+	struct regmap *regmap = notif->regmap;
+
+	if (!regmap)
+		return -EINVAL;
+
+	return regmap_set_bits(regmap, BD718XX_REG_SWRESET, BD718XX_SWRESET_RESET);
 }
 
 static int bd718xx_probe(struct platform_device *pdev)
@@ -1817,14 +1840,44 @@ static int bd718xx_probe(struct platform_device *pdev)
 					desc->name);
 		}
 	}
+	if (of_property_read_bool(pdev->dev.parent->of_node, "rohm,restart-with-swreset")) {
+		u32 prio = 129;
+		struct clk *i2cclk;
+		struct bd718xx_restart_notifier *notif = devm_kzalloc(pdev->dev.parent,
+								      sizeof(*notif), GFP_KERNEL);
 
+		if (!notif)
+			return -ENOMEM;
+
+		i2cclk = devm_clk_get(pdev->dev.parent, NULL);
+		if (IS_ERR(i2cclk))
+			return PTR_ERR(i2cclk);
+
+		err = clk_prepare(i2cclk);
+		if (err)
+			return err;
+
+		err = of_property_read_u32(pdev->dev.parent->of_node,
+					   "rohm,restart-handler-priority",
+					   &prio);
+		if (err && err != -ENOENT)
+			return err;
+
+		notif->regmap = regmap;
+		notif->restart_nb.notifier_call = bd718xx_restart_handler;
+		notif->restart_nb.priority = prio;
+
+		err = register_restart_handler(&notif->restart_nb);
+		if (err)
+			dev_warn(pdev->dev.parent, "Cannot register restart handler: %d\n", err);
+	}
 	return err;
 }
 
 static const struct platform_device_id bd718x7_pmic_id[] = {
 	{ "bd71837-pmic", ROHM_CHIP_TYPE_BD71837 },
 	{ "bd71847-pmic", ROHM_CHIP_TYPE_BD71847 },
-	{ },
+	{ }
 };
 MODULE_DEVICE_TABLE(platform, bd718x7_pmic_id);
 
