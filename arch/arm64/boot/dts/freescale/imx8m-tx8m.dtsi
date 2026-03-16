@@ -42,7 +42,12 @@
 		pinctrl-0 = <&pinctrl_etnphy_power>;
 		gpio = <&gpio1 23 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
+		startup-delay-us = <25000>;
 		vin-supply = <&reg_vdd_3v3>;
+
+		regulator-state-mem {
+			regulator-off-in-suspend;
+		};
 	};
 
 	thermal-zones {
@@ -190,6 +195,10 @@
 			};
 		};
 	};
+};
+
+&fec1 {
+	phy-supply = <&reg_3v3_etn>;
 };
 
 &i2c2 {

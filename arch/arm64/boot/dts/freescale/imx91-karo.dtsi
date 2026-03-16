@@ -26,23 +26,16 @@
 		status = "disabled";
 	};
 
-	reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
+	reg_3v3_etn: regulator-3v3-etn {
+		compatible = "regulator-fixed";
+		regulator-name = "3V3_ETN";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		startup-delay-us = <25000>;
+		vin-supply = <&reg_vdd_3v3>;
 
-		linux,cma {
-			compatible = "shared-dma-pool";
-			reusable;
-			alloc-ranges = <0 0x80000000 0 0x20000000>;
-			size = <0 0x10000000>;
-			linux,cma-default;
-		};
-
-		ele_reserved: ele-reserved@94120000 {
-			compatible = "shared-dma-pool";
-			reg = <0 0x94120000 0 0x100000>;
-			no-map;
+		regulator-state-mem {
+			regulator-off-in-suspend;
 		};
 	};
 
@@ -98,6 +91,26 @@
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
 		vin-supply = <&buck5>;
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			alloc-ranges = <0 0x80000000 0 0x20000000>;
+			size = <0 0x10000000>;
+			linux,cma-default;
+		};
+
+		ele_reserved: ele-reserved@94120000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x94120000 0 0x100000>;
+			no-map;
+		};
 	};
 };
 

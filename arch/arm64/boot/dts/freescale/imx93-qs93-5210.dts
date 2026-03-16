@@ -57,8 +57,7 @@
 };
 
 &eqos {
-	phy-supply = <&reg_vdd_3v3>;
-	status = "disabled";
+	phy-supply = <&reg_3v3_etn>;
 
 	mdio {
 		compatible = "snps,dwmac-mdio";
@@ -68,8 +67,7 @@
 };
 
 &fec {
-	phy-supply = <&reg_vdd_3v3>;
-	status = "disabled";
+	phy-supply = <&reg_3v3_etn>;
 
 	mdio {
 		#address-cells = <1>;

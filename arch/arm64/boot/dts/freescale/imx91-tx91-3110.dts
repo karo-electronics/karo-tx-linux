@@ -45,22 +45,25 @@
 };
 
 &eqos {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_eqos_rmii>;
-	assigned-clock-rates = <0>, <50000000>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_eqos_rmii &pinctrl_ethphy0_rst>;
+	pinctrl-1 = <&pinctrl_eqos_rmii_sleep>;
+	assigned-clock-parents = <
+		&clk IMX91_CLK_SYS_PLL_PFD1_DIV2
+		&clk IMX91_CLK_SYS_PLL_PFD1_DIV2
+	>;
+	assigned-clock-rates = <100000000>, <50000000>;
+	snps,clk-csr = <5>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
-	phy-supply = <&reg_vdd_3v3>;
+	phy-supply = <&reg_3v3_etn>;
 	status = "okay";
 
 	mdio {
 		compatible = "snps,dwmac-mdio";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ethphy0_rst>;
 		reset-gpios = <&gpio4 13 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <25000>;
 		reset-post-delay-us = <100>;
-		clock-frequency = <2500000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 
@@ -68,7 +71,6 @@
 			reg = <0>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_ethphy0_int>;
-			clocks = <&clk IMX91_CLK_ENET1_QOS_TSN>;
 			interrupt-parent = <&gpio4>;
 			interrupts = <12 IRQ_TYPE_EDGE_FALLING>;
 			eee-broken-100tx;
@@ -80,7 +82,7 @@
 &fec {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_fec_rgmii>;
-	phy-supply = <&reg_vdd_3v3>;
+	phy-supply = <&reg_3v3_etn>;
 	status = "disabled";
 
 	mdio {
@@ -206,6 +208,21 @@
 			MX91_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1		0x31e /* MODE1 */
 			MX91_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL	0x31e /* MODE2 (ext. pullup) */
 			MX91_PAD_ENET1_RXC__ENET_QOS_RX_ER		0x51e /* PHYAD0 */
+		>;
+	};
+
+	pinctrl_eqos_rmii_sleep: eqos-rmii-sleepgrp {
+		fsl,pins = <
+			MX91_PAD_ENET1_MDC__ENET_QOS_MDC		0x300
+			MX91_PAD_ENET1_MDIO__ENET_QOS_MDIO		0x300 /* ext. pullup */
+			MX91_PAD_ENET1_TD2__ENET_QOS_CLOCK_GENERATE_CLK	0x300
+			MX91_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0		0x300
+			MX91_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1		0x300
+			MX91_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL	0x300
+			MX91_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0		0x100
+			MX91_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1		0x100
+			MX91_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL	0x300 /* ext. pullup */
+			MX91_PAD_ENET1_RXC__ENET_QOS_RX_ER		0x100
 		>;
 	};
 

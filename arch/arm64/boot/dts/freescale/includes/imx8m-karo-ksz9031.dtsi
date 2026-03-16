@@ -8,17 +8,17 @@
 #include <dt-bindings/gpio/gpio.h>
 
 &fec1 {
-	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
-	phy-supply = <&reg_vdd_3v3>;
+	phy-mode = "rgmii-id";
 	status = "okay";
 
 	mdio {
-		#address-cells = <1>;
-		#size-cells = <0>;
+		clock-frequency = <8000000>;
 		reset-gpios = <&gpio4 22 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <10000>;
 		reset-post-delay-us = <100>;
+		#address-cells = <1>;
+		#size-cells = <0>;
 
 		ethphy0: ethernet-phy@3 {
 			reg = <3>;

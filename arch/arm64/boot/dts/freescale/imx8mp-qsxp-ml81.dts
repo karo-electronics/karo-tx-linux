@@ -28,8 +28,13 @@
 		regulator-name = "3v3-etn";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-		vin-supply = <&ldo5_reg>;
+		startup-delay-us = <25000>;
+		vin-supply = <&reg_vdd_3v3>;
 	};
+};
+
+&eqos {
+	phy-supply = <&reg_3v3_etn>;
 };
 
 &flexcan1 {
@@ -48,13 +53,6 @@
 
 &i2c4 {
 	status = "okay";
-};
-
-&ldo5_reg {
-	regulator-min-microvolt = <3300000>;
-	regulator-max-microvolt = <3300000>;
-	regulator-boot-on;
-	regulator-always-on;
 };
 
 &iomuxc {

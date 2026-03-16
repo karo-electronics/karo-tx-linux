@@ -7,8 +7,8 @@
 /dts-v1/;
 /plugin/;
 
-#include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 #include "imx91-pinfunc.h"
 
 &{/chosen} {
@@ -18,16 +18,16 @@
 };
 
 &eqos {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_eqos_rgmii>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_eqos_rgmii &pinctrl_ethphy0_rst>;
+	pinctrl-1 = <&pinctrl_eqos_rgmii_sleep>;
 	phy-handle = <&ethphy0>;
 	phy-mode = "rgmii-id";
+	snps,clk-csr = <0>;
 	status = "okay";
 
 	mdio {
 		compatible = "snps,dwmac-mdio";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ethphy0_rst>;
 		reset-gpios = <&gpio3 1 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <10000>;
 		reset-post-delay-us = <100>;
@@ -50,20 +50,40 @@
 		fsl,pins = <
 			MX91_PAD_ENET1_MDC__ENET_QOS_MDC			0x106
 			MX91_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x106
+			MX91_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x51e
+			MX91_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x51e
 			MX91_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x51e
 			MX91_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x51e
 			MX91_PAD_ENET1_TD2__ENET_QOS_RGMII_TD2			0x51e
 			MX91_PAD_ENET1_TD3__ENET_QOS_RGMII_TD3			0x51e
-			MX91_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x51e
-			MX91_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x51e
 			/* KSZ9131 Strap pins 0x5..: LOW; 0x3..: HIGH */
+			MX91_PAD_ENET1_RXC__ENET_QOS_RGMII_RXC			0x300 /* PHYAD2 */
+			MX91_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x500 /* CLK125_EN */
 			MX91_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x500 /* MODE0 */
 			MX91_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x300 /* MODE1 */
 			MX91_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x300 /* MODE2 */
 			MX91_PAD_ENET1_RD3__ENET_QOS_RGMII_RD3			0x300 /* MODE3 */
-			MX91_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x500 /* CLK125_EN */
-			/* ext. pullup on QSBASE4 */
-			MX91_PAD_ENET1_RXC__ENET_QOS_RGMII_RXC			0x300 /* PHYAD2 */
+			MX91_PAD_CCM_CLKO1__GPIO3_IO26				0x30e /* LED_MODE */
+		>;
+	};
+
+	pinctrl_eqos_rgmii_sleep: eqos-rgmii-sleepgrp {
+		fsl,pins = <
+			MX91_PAD_ENET1_MDC__GPIO4_IO0				0x100
+			MX91_PAD_ENET1_MDIO__GPIO4_IO1				0x100
+			MX91_PAD_ENET1_TXC__GPIO4_IO7				0x100
+			MX91_PAD_ENET1_TX_CTL__GPIO4_IO6			0x100
+			MX91_PAD_ENET1_TD0__GPIO4_IO5				0x100
+			MX91_PAD_ENET1_TD1__GPIO4_IO4				0x100
+			MX91_PAD_ENET1_TD2__GPIO4_IO3				0x100
+			MX91_PAD_ENET1_TD3__GPIO4_IO2				0x100
+			MX91_PAD_ENET1_RXC__GPIO4_IO9				0x100
+			MX91_PAD_ENET1_RX_CTL__GPIO4_IO8			0x100
+			MX91_PAD_ENET1_RD0__GPIO4_IO10				0x100
+			MX91_PAD_ENET1_RD1__GPIO4_IO11				0x100
+			MX91_PAD_ENET1_RD2__GPIO4_IO12				0x100
+			MX91_PAD_ENET1_RD3__GPIO4_IO13				0x100
+			MX91_PAD_CCM_CLKO1__GPIO3_IO26				0x100
 		>;
 	};
 

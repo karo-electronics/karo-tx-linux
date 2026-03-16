@@ -44,6 +44,10 @@
 	};
 };
 
+&eqos {
+	phy-supply = <&reg_3v3_etn>;
+};
+
 &lpi2c2 {
 	clock-frequency = <400000>;
 	pinctrl-names = "default", "gpio";

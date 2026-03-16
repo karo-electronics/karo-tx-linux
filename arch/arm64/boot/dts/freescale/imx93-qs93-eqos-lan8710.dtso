@@ -20,29 +20,29 @@
 };
 
 &eqos {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_eqos_rmii>;
-	assigned-clock-rates = <100000000 50000000>;
-	snps,clk-csr = <5>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_eqos_rmii &pinctrl_ethphy0_rst>;
+	pinctrl-1 = <&pinctrl_eqos_rmii_sleep>;
+	assigned-clock-parents = <
+		&clk IMX93_CLK_SYS_PLL_PFD1_DIV2
+		&clk IMX93_CLK_SYS_PLL_PFD1_DIV2
+	>;
+	assigned-clock-rates = <100000000>, <50000000>;
+	snps,clk-csr = <6>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
+	power-supply = <&reg_vdd_3v3>;
 	status = "okay";
 
 	mdio {
-		compatible = "snps,dwmac-mdio";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ethphy0_rst>;
 		reset-gpios = <&gpio3 4 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <25000>;
 		reset-post-delay-us = <100>;
-		#address-cells = <1>;
-		#size-cells = <0>;
 
 		ethphy0: ethernet-phy@0 {
 			reg = <0>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_ethphy0_int>;
-			clocks = <&clk IMX93_CLK_ENET_REF>;
 			interrupt-parent = <&gpio3>;
 			interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
 			eee-broken-100tx;
@@ -54,34 +54,45 @@
 &iomuxc {
 	pinctrl_eqos_rmii: eqos-rmiigrp {
 		fsl,pins = <
-			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x00e
-			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x40e
-			MX93_PAD_ENET1_TD2__CCM_ENET_QOS_CLOCK_GENERATE_REF_CLK	0x4000011e
-			/* Strap pins: HIGH: 0x3.. LOW: 0x5.. */
-			/* SMSC LAN8710 Strap pins: MODE0 */
-			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x300
-			/* MODE1 */
-			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x300
-			/* MODE2 (external Pullup) */
-			MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x300
-			/* PHYAD0/RXER (not used on RMII interface) */
-			MX93_PAD_ENET1_RXC__GPIO4_IO09				0x400
+			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x01e
+			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x01e
+			MX93_PAD_ENET1_TD2__CCM_ENET_QOS_CLOCK_GENERATE_REF_CLK	0x4000017e
+			MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x11e
+			MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x11e
+			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x11e
+			/* SMSC LAN8710 Strap pins: HIGH: 0x3.. LOW: 0x5.. */
+			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x300 /* MODE0 */
+			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x300 /* MODE1 */
+			MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x300 /* MODE2 (ext. Pullup) */
+			/* not used on RMII interface */
+			MX93_PAD_ENET1_RXC__GPIO4_IO09				0x500 /* PHYAD0/RXER */
+		>;
+	};
 
-			MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x51e
-			MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x51e
-			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x51e
+	pinctrl_eqos_rmii_sleep: eqos-rmii-sleepgrp {
+		fsl,pins = <
+			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x400
+			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x000
+			MX93_PAD_ENET1_TD2__CCM_ENET_QOS_CLOCK_GENERATE_REF_CLK	0x000
+			MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x400
+			MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x400
+			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x400
+			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x000
+			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x000
+			MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x000
+			MX93_PAD_ENET1_RXC__GPIO4_IO09				0x000
 		>;
 	};
 
 	pinctrl_ethphy0_int: ethphy0-intgrp {
 		fsl,pins = <
-			MX93_PAD_SD2_DATA2__GPIO3_IO05				0x300
+			MX93_PAD_SD2_DATA2__GPIO3_IO05				0x200
 		>;
 	};
 
 	pinctrl_ethphy0_rst: ethphy0-rstgrp {
 		fsl,pins = <
-			MX93_PAD_SD2_DATA1__GPIO3_IO04				0x11e
+			MX93_PAD_SD2_DATA1__GPIO3_IO04				0x20e
 		>;
 	};
 };

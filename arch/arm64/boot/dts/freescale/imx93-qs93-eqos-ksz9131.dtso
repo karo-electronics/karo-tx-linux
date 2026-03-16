@@ -7,8 +7,8 @@
 /dts-v1/;
 /plugin/;
 
-#include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 #include "imx93-pinfunc.h"
 
 &{/chosen} {
@@ -18,16 +18,16 @@
 };
 
 &eqos {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_eqos_rgmii>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_eqos_rgmii &pinctrl_ethphy0_rst>;
+	pinctrl-1 = <&pinctrl_eqos_rgmii_sleep>;
 	phy-handle = <&ethphy0>;
 	phy-mode = "rgmii-id";
+	snps,clk-csr = <0>;
 	status = "okay";
 
 	mdio {
 		compatible = "snps,dwmac-mdio";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ethphy0_rst>;
 		reset-gpios = <&gpio3 4 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <10000>;
 		reset-post-delay-us = <100>;
@@ -47,33 +47,55 @@
 &iomuxc {
 	pinctrl_eqos_rgmii: eqos-rgmiigrp {
 		fsl,pins = <
-			    MX93_PAD_ENET1_MDC__ENET_QOS_MDC				0x106
-			    MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO				0x106
-			    MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x51e
-			    MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x51e
-			    MX93_PAD_ENET1_TD2__ENET_QOS_RGMII_TD2			0x51e
-			    MX93_PAD_ENET1_TD3__ENET_QOS_RGMII_TD3			0x51e
-			    MX93_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x01e
-			    MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x51e
-			    /* KSZ9131 Strap pins 0x5..: LOW; 0x3..: HIGH */
-			    MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x500 /* MODE0 */
-			    MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x300 /* MODE1 */
-			    MX93_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x300 /* MODE2 */
-			    MX93_PAD_ENET1_RD3__ENET_QOS_RGMII_RD3			0x300 /* MODE3 */
-			    MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x500 /* CLK125_EN */
-			    MX93_PAD_ENET1_RXC__CCM_ENET_QOS_CLOCK_GENERATE_RX_CLK	0x500 /* PHYAD2 */
+			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x006
+			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x006
+			MX93_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x01e
+			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x51e
+			MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x51e
+			MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x51e
+			MX93_PAD_ENET1_TD2__ENET_QOS_RGMII_TD2			0x51e
+			MX93_PAD_ENET1_TD3__ENET_QOS_RGMII_TD3			0x51e
+			/* KSZ9131 Strap pins 0x5..: LOW; 0x3..: HIGH */
+			/* ext. pullups on QSBASE4 */
+			MX93_PAD_ENET1_RXC__CCM_ENET_QOS_CLOCK_GENERATE_RX_CLK	0x300 /* PHYAD2 */
+			MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x300 /* CLK125_EN */
+			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x500 /* MODE0 */
+			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x300 /* MODE1 */
+			MX93_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x300 /* MODE2 */
+			MX93_PAD_ENET1_RD3__ENET_QOS_RGMII_RD3			0x300 /* MODE3 */
+			MX93_PAD_CCM_CLKO1__GPIO3_IO26				0x400 /* LED_MODE */
+		>;
+	};
+
+	pinctrl_eqos_rgmii_sleep: eqos-rgmii-sleepgrp {
+		fsl,pins = <
+			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x000
+			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x000
+			MX93_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x400
+			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x400
+			MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x400
+			MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x400
+			MX93_PAD_ENET1_TD2__ENET_QOS_RGMII_TD2			0x400
+			MX93_PAD_ENET1_TD3__ENET_QOS_RGMII_TD3			0x400
+			MX93_PAD_ENET1_RXC__CCM_ENET_QOS_CLOCK_GENERATE_RX_CLK	0x000
+			MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x000
+			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x000
+			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x000
+			MX93_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x000
+			MX93_PAD_ENET1_RD3__ENET_QOS_RGMII_RD3			0x000
+			MX93_PAD_CCM_CLKO1__GPIO3_IO26				0x000
 		>;
 	};
 
 	pinctrl_ethphy0_int: ethphy0-intgrp {
 		fsl,pins = <
-			    MX93_PAD_SD2_DATA2__GPIO3_IO05				0x17e
+			MX93_PAD_SD2_DATA2__GPIO3_IO05				0x17e
 		>;
 	};
 
 	pinctrl_ethphy0_rst: ethphy0-rstgrp {
 		fsl,pins = <
-			    MX93_PAD_SD2_DATA1__GPIO3_IO04				0x17e
+			MX93_PAD_SD2_DATA1__GPIO3_IO04				0x17e
 		>;
 	};
 };

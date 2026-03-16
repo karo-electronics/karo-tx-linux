@@ -24,9 +24,14 @@
 		regulator-name = "3v3-etn";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-		vin-supply = <&reg_vdd_3v3>;
+		startup-delay-us = <25000>;
+		vin-supply = <&ldo5>;
 		gpios = <&gpio1 23 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
+
+		regulator-state-mem {
+			regulator-off-in-suspend;
+		};
 	};
 
 	reg_usb1_vbus: regulator-usb1-vbus {
@@ -39,6 +44,10 @@
 		vin-supply = <&reg_vdd_3v3>;
 		gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
+
+		regulator-state-mem {
+			regulator-off-in-suspend;
+		};
 	};
 
 	reg_usb2_vbus: regulator-usb2-vbus {
@@ -51,17 +60,22 @@
 		vin-supply = <&reg_vdd_3v3>;
 		gpios = <&gpio1 14 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
+
+		regulator-state-mem {
+			regulator-off-in-suspend;
+		};
 	};
 };
 
 &eqos {
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_eqos>;
+	pinctrl-0 = <&pinctrl_eqos &pinctrl_etnphy_rst_b>;
 	pinctrl-1 = <&pinctrl_eqos_sleep>;
 	assigned-clock-parents = <&clk IMX8MP_SYS_PLL1_266M>,
 				 <&clk IMX8MP_SYS_PLL2_100M>,
 				 <&clk IMX8MP_SYS_PLL2_50M>;
 	assigned-clock-rates = <0>, <100000000>, <50000000>;
+	snps,clk-csr = <5>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
 	phy-supply = <&reg_3v3_etn>;
@@ -69,8 +83,6 @@
 
 	mdio {
 		compatible = "snps,dwmac-mdio";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_etnphy_rst_b>;
 		reset-gpios = <&gpio4 22 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <25000>;
 		reset-post-delay-us = <100>;
@@ -81,7 +93,6 @@
 			reg = <0>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_etnphy_int_b>;
-			clocks = <&clk IMX8MP_CLK_ENET_QOS>;
 			interrupt-parent = <&gpio4>;
 			interrupts = <21 IRQ_TYPE_EDGE_FALLING>;
 			smsc,disable-energy-detect;
@@ -131,56 +142,57 @@
 &iomuxc {
 	pinctrl_etnphy_int_b: etnphy-int-bgrp {
 		fsl,pins = <
-			    MX8MP_IOMUXC_SAI2_RXFS__GPIO4_IO21		0x90
+			MX8MP_IOMUXC_SAI2_RXFS__GPIO4_IO21		0x090
 		>;
 	};
 
 	pinctrl_etnphy_rst_b: etnphy-rst-bgrp {
 		fsl,pins = <
-			    MX8MP_IOMUXC_SAI2_RXC__GPIO4_IO22		0x140
+			MX8MP_IOMUXC_SAI2_RXC__GPIO4_IO22		0x140
 		>;
 	};
 
 	pinctrl_flexcan1: flexcan1grp {
 		fsl,pins = <
-			 MX8MP_IOMUXC_SPDIF_RX__CAN1_RX 		0x140
-			 MX8MP_IOMUXC_SPDIF_TX__CAN1_TX 		0x140
+			MX8MP_IOMUXC_SPDIF_RX__CAN1_RX 			0x140
+			MX8MP_IOMUXC_SPDIF_TX__CAN1_TX	 		0x140
 		>;
 	};
 
 	pinctrl_reg_3v3_etn: reg-3v3-etngrp {
 		fsl,pins = <
-			    MX8MP_IOMUXC_ENET_TXC__GPIO1_IO23		0x140
+			MX8MP_IOMUXC_ENET_TXC__GPIO1_IO23		0x140
 		>;
 	};
 
 	pinctrl_eqos: eqosgrp {
 		fsl,pins = <
-			    MX8MP_IOMUXC_ENET_TD2__CCM_ENET_QOS_CLOCK_GENERATE_REF_CLK 0x40000142
-			    MX8MP_IOMUXC_ENET_MDC__ENET_QOS_MDC		0x142
-			    MX8MP_IOMUXC_ENET_MDIO__ENET_QOS_MDIO	0x142
-			    MX8MP_IOMUXC_ENET_TD0__ENET_QOS_RGMII_TD0	0x016
-			    MX8MP_IOMUXC_ENET_TD1__ENET_QOS_RGMII_TD1	0x016
-			    MX8MP_IOMUXC_ENET_RD0__ENET_QOS_RGMII_RD0	0x150
-			    MX8MP_IOMUXC_ENET_RD1__ENET_QOS_RGMII_RD1	0x150
-			    MX8MP_IOMUXC_ENET_RXC__ENET_QOS_RX_ER	0x110
-			    MX8MP_IOMUXC_ENET_RX_CTL__ENET_QOS_RGMII_RX_CTL 0x116
-			    MX8MP_IOMUXC_ENET_TX_CTL__ENET_QOS_RGMII_TX_CTL 0x016
+			MX8MP_IOMUXC_ENET_TD2__CCM_ENET_QOS_CLOCK_GENERATE_REF_CLK 0x40000142
+			MX8MP_IOMUXC_ENET_MDC__ENET_QOS_MDC		0x102
+			MX8MP_IOMUXC_ENET_MDIO__ENET_QOS_MDIO		0x102
+			MX8MP_IOMUXC_ENET_TD0__ENET_QOS_RGMII_TD0	0x016
+			MX8MP_IOMUXC_ENET_TD1__ENET_QOS_RGMII_TD1	0x016
+			MX8MP_IOMUXC_ENET_TX_CTL__ENET_QOS_RGMII_TX_CTL 0x016
+			/* LAN8710 Strap pins: 0x15. = HIGH; 0x11. = LOW */
+			MX8MP_IOMUXC_ENET_RD0__ENET_QOS_RGMII_RD0	0x150 /* MODE0 */
+			MX8MP_IOMUXC_ENET_RD1__ENET_QOS_RGMII_RD1	0x150 /* MODE1 */
+			MX8MP_IOMUXC_ENET_RX_CTL__ENET_QOS_RGMII_RX_CTL 0x156 /* MODE2 */
+			MX8MP_IOMUXC_ENET_RXC__GPIO1_IO25		0x110 /* PHYAD0 */
 		>;
 	};
 
 	pinctrl_eqos_sleep: eqos-sleep-grp {
 		fsl,pins = <
-			    MX8MP_IOMUXC_ENET_TD2__GPIO1_IO19		0x120
-			    MX8MP_IOMUXC_ENET_MDC__GPIO1_IO16		0x120
-			    MX8MP_IOMUXC_ENET_MDIO__GPIO1_IO17		0x120
-			    MX8MP_IOMUXC_ENET_TD0__GPIO1_IO21		0x120
-			    MX8MP_IOMUXC_ENET_TD1__GPIO1_IO20		0x120
-			    MX8MP_IOMUXC_ENET_RD0__GPIO1_IO26		0x120
-			    MX8MP_IOMUXC_ENET_RD1__GPIO1_IO27		0x120
-			    MX8MP_IOMUXC_ENET_RXC__GPIO1_IO25		0x120
-			    MX8MP_IOMUXC_ENET_RX_CTL__GPIO1_IO24	0x120
-			    MX8MP_IOMUXC_ENET_TX_CTL__GPIO1_IO22	0x120
+			MX8MP_IOMUXC_ENET_TD2__CCM_ENET_QOS_CLOCK_GENERATE_REF_CLK 0x000
+			MX8MP_IOMUXC_ENET_MDC__ENET_QOS_MDC		0x100
+			MX8MP_IOMUXC_ENET_MDIO__ENET_QOS_MDIO		0x000
+			MX8MP_IOMUXC_ENET_TD0__ENET_QOS_RGMII_TD0	0x100
+			MX8MP_IOMUXC_ENET_TD1__ENET_QOS_RGMII_TD1	0x100
+			MX8MP_IOMUXC_ENET_TX_CTL__ENET_QOS_RGMII_TX_CTL 0x100
+			MX8MP_IOMUXC_ENET_RD0__ENET_QOS_RGMII_RD0	0x000
+			MX8MP_IOMUXC_ENET_RD1__ENET_QOS_RGMII_RD1	0x000
+			MX8MP_IOMUXC_ENET_RX_CTL__ENET_QOS_RGMII_RX_CTL 0x000
+			MX8MP_IOMUXC_ENET_RXC__GPIO1_IO25		0x000
 		>;
 	};
 
