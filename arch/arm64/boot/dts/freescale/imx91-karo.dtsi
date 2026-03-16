@@ -163,3 +163,8 @@
 		};
 	};
 };
+
+&lpm {
+	soc-supply = <&reg_vdd_soc>;
+	status = "okay";
+};
