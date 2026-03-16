@@ -4,18 +4,19 @@
  */
 
 /dts-v1/;
-
 /plugin/;
 
-&{/chosen} {
-	overlays {
-		karo-rtc;
+&{/} {
+	aliases {
+		rtc0 = "/soc@0/bus@44000000/i2c@44350000/rtc@6f";
+		rtc1 = "/soc@0/bus@44000000/bbnsm@44440000/rtc";
 	};
-};
 
-&{/aliases} {
-	rtc0 = "/soc@0/bus@44000000/i2c@44350000/rtc@6f";
-	rtc1 = "/soc@0/bus@44000000/bbnsm@44440000/rtc";
+	chosen {
+		overlays {
+			karo-rtc;
+		};
+	};
 };
 
 &lpi2c2 {

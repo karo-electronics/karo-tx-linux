@@ -5,7 +5,6 @@
  */
 
 /dts-v1/;
-
 /plugin/;
 
 &{/chosen} {

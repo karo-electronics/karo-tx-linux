@@ -4,18 +4,19 @@
  */
 
 /dts-v1/;
-
 /plugin/;
 
-&{/chosen} {
-	overlays {
-		tx91-i2c-rtc;
+&{/} {
+	aliases {
+		rtc0 = "/soc@0/bus@42000000/i2c@42530000/rtc@6f";
+		rtc1 = "/soc@0/bus@44000000/bbnsm@44440000/rtc";
 	};
-};
 
-&{/aliases} {
-	rtc0 = "/soc@0/bus@42000000/i2c@42530000/rtc@6f";
-	rtc1 = "/soc@0/bus@44000000/bbnsm@44440000/rtc";
+	chosen {
+		overlays {
+			tx91-i2c-rtc;
+		};
+	};
 };
 
 &lpi2c3 {

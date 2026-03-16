@@ -5,7 +5,6 @@
  */
 
 /dts-v1/;
-
 /plugin/;
 
 #include <dt-bindings/gpio/gpio.h>
@@ -14,6 +13,12 @@
 #include "imx8mp-pinfunc.h"
 
 &{/} {
+	chosen {
+		overlays {
+			qsxp-mipi-lvds-bridge;
+		};
+	};
+
 	panel: lvds-panel {
 		compatible = "panel-lvds";
 		data-mapping = "vesa-24";
@@ -25,12 +30,6 @@
 				remote-endpoint = <&dsi_lvds_bridge_to_panel>;
 			};
 		};
-	};
-};
-
-&{/chosen} {
-	overlays {
-		qsxp-mipi-lvds-bridge;
 	};
 };
 

@@ -7,9 +7,9 @@
 /dts-v1/;
 /plugin/;
 
-#include <dt-bindings/phy/phy-imx8-pcie.h>
 #include <dt-bindings/clock/imx8mp-clock.h>
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/phy/phy-imx8-pcie.h>
 #include "imx8mp-pinfunc.h"
 
 &{/chosen} {

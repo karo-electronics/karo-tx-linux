@@ -5,7 +5,6 @@
  */
 
 /dts-v1/;
-
 /plugin/;
 
 #include <dt-bindings/gpio/gpio.h>
@@ -80,7 +79,7 @@
 
 	pinctrl_pwm1: pwm1grp {
 		fsl,pins = <
-			MX8MN_IOMUXC_GPIO1_IO01_PWM1_OUT	0x06
+			MX8MN_IOMUXC_GPIO1_IO01_PWM1_OUT	0x006
 		>;
 	};
 };

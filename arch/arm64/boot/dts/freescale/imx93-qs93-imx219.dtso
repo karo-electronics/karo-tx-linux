@@ -12,6 +12,12 @@
 #include "imx93-pinfunc.h"
 
 &{/} {
+	chosen {
+		overlays {
+			qs93-imx219;
+		};
+	};
+
 	reg_2v8: regulator-2v8 {
 		compatible = "regulator-fixed";
 		regulator-name = "2V8";
@@ -37,12 +43,6 @@
 		regulator-max-microvolt = <1200000>;
 		regulator-always-on;
 		vin-supply = <&reg_vdd_3v3>;
-	};
-};
-
-&{/chosen} {
-	overlays {
-		qs93-imx219;
 	};
 };
 

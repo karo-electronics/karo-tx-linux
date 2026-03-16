@@ -8,8 +8,8 @@
 /dts-v1/;
 /plugin/;
 
-#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/clock/imx8mm-clock.h>
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/phy/phy-imx8-pcie.h>
 #include "imx8mm-pinfunc.h"
 #include "includes/imx8m-karo-pcie.dtsi"
@@ -20,7 +20,7 @@
 	};
 };
 
-// conflicts with disable-gpio
+/* conflicts with disable-gpio */
 &i2c3 {
 	status = "disabled";
 };
@@ -44,17 +44,11 @@
 		 <&clk IMX8MM_CLK_PCIE1_AUX>,
 		 <&clk IMX8MM_CLK_PCIE1_PHY>;
 	clock-names = "pcie", "pcie_aux", "pcie_bus";
-	assigned-clocks = <&clk IMX8MM_CLK_PCIE1_AUX>,
-			  <&clk IMX8MM_CLK_PCIE1_CTRL>;
-	assigned-clock-rates = <10000000>, <250000000>;
-	assigned-clock-parents = <&clk IMX8MM_SYS_PLL2_50M>,
-				 <&clk IMX8MM_SYS_PLL2_250M>;
-	status = "okay";
 };
 
 &reg_vdd_soc {
-	/* PCIe requires a minimum vdd soc voltage of 0.805V */
-	regulator-min-microvolt = <805000>;
+	/* PCIe requires a minimum vdd soc voltage of 0.850V */
+	regulator-min-microvolt = <850000>;
 };
 
 &iomuxc {

@@ -5,11 +5,10 @@
  */
 
 /dts-v1/;
-
 /plugin/;
 
-#include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 #include "includes/imx8m-karo-mcp2515.dtsi"
 #include "imx8mm-pinfunc.h"
 

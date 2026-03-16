@@ -7,7 +7,6 @@
 #include <dt-bindings/clock/imx8mp-clock.h>
 
 /dts-v1/;
-
 /plugin/;
 
 &{/chosen} {
@@ -54,20 +53,21 @@
 		rsc-da = <0x71108000>;
 		clocks = <&clk IMX8MP_CLK_M7_DIV>;
 		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&mu 0 1
-			  &mu 1 1
-			  &mu 3 1
-			 >;
-			memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>;
+		mboxes = <
+			&mu 0 1
+			&mu 1 1
+			&mu 3 1
+		>;
+		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>;
 	};
 };
 
 &clk {
 	init-on-array = <
-			 IMX8MP_CLK_UART4_ROOT
-			 IMX8MP_CLK_M7_CORE
-			 IMX8MP_CLK_AHB
-			>;
+		IMX8MP_CLK_UART4_ROOT
+		IMX8MP_CLK_M7_CORE
+		IMX8MP_CLK_AHB
+	>;
 };
 
 /*

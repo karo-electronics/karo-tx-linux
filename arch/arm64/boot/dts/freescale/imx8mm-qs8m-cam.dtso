@@ -5,13 +5,18 @@
  */
 
 /dts-v1/;
-
 /plugin/;
 
 #include <dt-bindings/gpio/gpio.h>
 #include "imx8mm-pinfunc.h"
 
 &{/} {
+	chosen {
+		overlays {
+			qs8m-cam;
+		};
+	};
+
 	reg_2v8: regulator-2v8 {
 		compatible = "regulator-fixed";
 		regulator-name = "2V8";
@@ -43,12 +48,6 @@
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
 		clock-frequency = <24000000>;
-	};
-};
-
-&{/chosen} {
-	overlays {
-		qs8m-cam;
 	};
 };
 
