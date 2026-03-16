@@ -27,6 +27,14 @@
 	/delete-property/ cpu-idle-states;
 };
 
+&A53_2 {
+	cpu-supply = <&reg_vdd_arm>;
+};
+
+&A53_3 {
+	cpu-supply = <&reg_vdd_arm>;
+};
+
 &resmem {
 	/* overwrite freescale cma setting since it's not allocatable */
 	linux,cma {

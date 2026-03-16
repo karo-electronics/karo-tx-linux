@@ -28,7 +28,7 @@
 
 	reg_3v3_etn: regulator-3v3-etn {
 		compatible = "regulator-fixed";
-		regulator-name = "3V3_ETN";
+		regulator-name = "3v3-etn";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		startup-delay-us = <25000>;
@@ -60,6 +60,107 @@
 	};
 };
 
+&A55_0 {
+	cpu-supply = <&reg_vdd_soc>;
+};
+
+&A55_1 {
+	cpu-supply = <&reg_vdd_soc>;
+};
+
 &ele_fw2 {
 	memory-region = <&ele_reserved>;
+};
+
+&lpi2c1 {
+	clock-frequency = <400000>;
+	pinctrl-names = "default", "gpio";
+	pinctrl-0 = <&pinctrl_lpi2c1>;
+	pinctrl-1 = <&pinctrl_lpi2c1_gpio>;
+	scl-gpios = <&gpio1 0 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+	sda-gpios = <&gpio1 1 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+	status = "okay";
+
+	pmic: pmic@25 {
+		compatible = "nxp,pca9451a";
+		reg = <0x25>;
+
+		regulators {
+			reg_vdd_soc: BUCK1 {
+				regulator-name = "VDD_SOC";
+				regulator-min-microvolt = <612500>;
+				regulator-max-microvolt = <950000>;
+				regulator-ramp-delay = <3125>;
+				nxp,dvs-run-voltage = <862500>;
+				nxp,dvs-standby-voltage = <612500>;
+				regulator-boot-on;
+				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
+			};
+
+			reg_vdd_3v3: BUCK4 {
+				regulator-name = "VDD_3V3";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
+			};
+
+			reg_vdd_1v8: BUCK5 {
+				regulator-name = "VDD_1V8";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-boot-on;
+				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
+			};
+
+			reg_vddq_ddr: BUCK6 {
+				/* VDDQ_DDR (1.1V) for LPDDR4 SDRAM */
+				regulator-name = "VDDQ_DDR";
+				regulator-min-microvolt = <1100000>;
+				regulator-max-microvolt = <1100000>;
+				regulator-boot-on;
+				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
+			};
+
+			reg_nvcc_bbsm_1v8: LDO1 {
+				regulator-name = "NVCC_BBSM_1V8";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-boot-on;
+				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
+			};
+
+			reg_vdd_ana_0v8: LDO4 {
+				regulator-name = "VDD_ANA_0V8";
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <800000>;
+				regulator-boot-on;
+				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+		};
+	};
 };

@@ -30,6 +30,10 @@
 		regulator-max-microvolt = <3300000>;
 		startup-delay-us = <25000>;
 		vin-supply = <&reg_vdd_3v3>;
+
+		regulator-state-mem {
+			regulator-off-in-suspend;
+		};
 	};
 };
 

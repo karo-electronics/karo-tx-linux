@@ -49,6 +49,7 @@
 &reg_vdd_soc {
 	/* PCIe requires a minimum vdd soc voltage of 0.850V */
 	regulator-min-microvolt = <850000>;
+	rohm,dvs-run-voltage = <850000>;
 };
 
 &iomuxc {

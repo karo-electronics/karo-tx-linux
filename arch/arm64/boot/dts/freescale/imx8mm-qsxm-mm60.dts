@@ -49,7 +49,7 @@
 
 	reg_3v3_etn: regulator-3v3-etn {
 		compatible = "regulator-fixed";
-		regulator-name = "3V3_ETN";
+		regulator-name = "3v3-etn";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		startup-delay-us = <25000>;
@@ -75,17 +75,29 @@
 };
 
 &A53_0 {
-	cpu-supply = <&reg_vdd_arm>;
 	/delete-property/ cpu-idle-states;
+	cpu-supply = <&reg_vdd_arm>;
+};
+
+&A53_1 {
+	cpu-supply = <&reg_vdd_arm>;
+};
+
+&A53_2 {
+	cpu-supply = <&reg_vdd_arm>;
+};
+
+&A53_3 {
+	cpu-supply = <&reg_vdd_arm>;
 };
 
 &i2c1 {
 	pinctrl-names = "default", "gpio";
 	pinctrl-0 = <&pinctrl_i2c1>;
 	pinctrl-1 = <&pinctrl_i2c1_gpio>;
-	clock-frequency = <400000>;
 	scl-gpios = <&gpio5 14 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 	sda-gpios = <&gpio5 15 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+	clock-frequency = <400000>;
 	status = "okay";
 
 	pmic@25 {
@@ -99,16 +111,21 @@
 
 		regulators {
 			reg_vdd_soc: BUCK1 {
-				regulator-name = "vdd_soc_0v8";
+				regulator-name = "BUCK1";
 				regulator-min-microvolt = <780000>;
 				regulator-max-microvolt = <900000>;
 				regulator-boot-on;
 				regulator-always-on;
 				regulator-ramp-delay = <3125>;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <750000>;
+				};
 			};
 
 			reg_vdd_arm: BUCK2 {
-				regulator-name = "vdd_arm_0v9";
+				regulator-name = "BUCK2";
 				regulator-min-microvolt = <805000>;
 				regulator-max-microvolt = <950000>;
 				regulator-boot-on;
@@ -116,77 +133,108 @@
 				regulator-ramp-delay = <3125>;
 				nxp,dvs-run-voltage = <950000>;
 				nxp,dvs-standby-voltage = <850000>;
+
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			reg_vdd_dram: BUCK3 {
-				regulator-name = "vdd_dram&pu_0v9";
+				regulator-name = "BUCK3";
 				regulator-min-microvolt = <600000>;
 				regulator-max-microvolt = <2187500>;
 				regulator-boot-on;
 				regulator-always-on;
 				regulator-ramp-delay = <3125>;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <750000>;
+				};
 			};
 
 			reg_vdd_3v3: BUCK4 {
-				regulator-name = "3V3";
+				regulator-name = "BUCK4";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-boot-on;
 				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
 			};
 
 			reg_vdd_1v8: BUCK5 {
-				regulator-name = "1V8";
+				regulator-name = "BUCK5";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
 				regulator-boot-on;
 				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
 			};
 
 			reg_nvcc_dram: BUCK6 {
-				regulator-name = "nvcc_dram";
+				regulator-name = "BUCK6";
 				regulator-min-microvolt = <1060000>;
 				regulator-max-microvolt = <1170000>;
 				regulator-boot-on;
 				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
 			};
 
 			reg_snvs_1v8: LDO1 {
-				regulator-name = "NVCC_SNVS_1V8";
+				regulator-name = "LDO1";
 				regulator-min-microvolt = <1620000>;
 				regulator-max-microvolt = <1980000>;
 				regulator-boot-on;
 				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
 			};
 
 			reg_snvs_0v8: LDO2 {
-				regulator-name = "VDD_SNVS_0V8";
+				regulator-name = "LDO2";
 				regulator-min-microvolt = <760000>;
 				regulator-max-microvolt = <900000>;
 				regulator-boot-on;
 				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-on-in-suspend;
+				};
 			};
 
 			reg_vdda_1v8: LDO3 {
-				regulator-name = "VDDA_1V8";
+				regulator-name = "LDO3";
 				regulator-min-microvolt = <1710000>;
 				regulator-max-microvolt = <1890000>;
 				regulator-boot-on;
 				regulator-always-on;
+
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			reg_vdd_phy_0v9: LDO4 {
-				regulator-name = "VDD_PHY_0V9";
+				regulator-name = "LDO4";
 				regulator-min-microvolt = <855000>;
 				regulator-max-microvolt = <1000000>;
 				regulator-boot-on;
 				regulator-always-on;
-			};
 
-			ldo5_reg: LDO5 {
-				regulator-name = "LDO5";
-				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <3300000>;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 		};
 	};
@@ -272,17 +320,19 @@
 	pinctrl-0 = <&pinctrl_usdhc1>;
 	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
 	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
-	voltage-ranges = <3300 3300>;
 	bus-width = <8>;
+	vmmc-supply = <&reg_vdd_3v3>;
+	vqmmc-supply = <&reg_vdd_1v8>;
 	non-removable;
 	status = "okay";
 };
 
 &usdhc2 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usdhc2 &pinctrl_usdhc2_cd>;
+	pinctrl-0 = <&pinctrl_usdhc2>;
+	vmmc-supply = <&reg_vdd_3v3>;
+	vqmmc-supply = <&reg_vdd_3v3>;
 	voltage-ranges = <3300 3300>;
-	cd-gpios = <&gpio2 12 GPIO_ACTIVE_LOW>;
 };
 
 &wdog1 {
