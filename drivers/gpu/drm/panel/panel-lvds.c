@@ -95,8 +95,6 @@ static int panel_lvds_prepare(struct drm_panel *panel)
 	 */
 	msleep(30);
 
-	lvds->prepared = true;
-
 	return 0;
 }
 
@@ -208,12 +206,8 @@ static int panel_lvds_probe(struct platform_device *pdev)
 	}
 
 	/* Get GPIOs and backlight controller. */
-	if (device_property_read_bool(lvds->dev, "default-on"))
-		lvds->enable_gpio = devm_gpiod_get_optional(lvds->dev, "enable",
-							    GPIOD_OUT_HIGH);
-	else
-		lvds->enable_gpio = devm_gpiod_get_optional(lvds->dev, "enable",
-							    GPIOD_OUT_LOW);
+	lvds->enable_gpio = devm_gpiod_get_optional(lvds->dev, "enable",
+						    GPIOD_ASIS);
 	if (IS_ERR(lvds->enable_gpio)) {
 		ret = PTR_ERR(lvds->enable_gpio);
 		dev_err(lvds->dev, "failed to request %s GPIO: %d\n",
@@ -221,12 +215,16 @@ static int panel_lvds_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	if (device_property_read_bool(lvds->dev, "default-on"))
-		lvds->reset_gpio = devm_gpiod_get_optional(lvds->dev, "reset",
-							   GPIOD_OUT_LOW);
-	else
-		lvds->reset_gpio = devm_gpiod_get_optional(lvds->dev, "reset",
-							   GPIOD_OUT_HIGH);
+	if (lvds->enable_gpio) {
+		ret = gpiod_get_direction(lvds->enable_gpio);
+		if (ret != 0)
+			gpiod_direction_output(lvds->enable_gpio, 0);
+		else
+			gpiod_direction_output(lvds->enable_gpio, 1);
+	}
+
+	lvds->reset_gpio = devm_gpiod_get_optional(lvds->dev, "reset",
+						   GPIOD_OUT_HIGH);
 	if (IS_ERR(lvds->reset_gpio)) {
 		ret = PTR_ERR(lvds->reset_gpio);
 		dev_err(lvds->dev, "failed to request %s GPIO: %d\n",
