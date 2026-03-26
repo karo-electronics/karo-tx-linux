@@ -122,6 +122,10 @@
 	pinctrl-0 = <&pinctrl_usb2_oc>;
 };
 
+&usdhc2 {
+	status = "okay";
+};
+
 &iomuxc {
 	pinctrl_etnphy_int_b: etnphy-int-bgrp {
 		fsl,pins = <

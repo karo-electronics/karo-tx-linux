@@ -35,11 +35,6 @@
 	vbus-supply = <&reg_usbh_vbus>;
 };
 
-/* PCIe instead of SD/MMC */
-&usdhc2 {
-	status = "disabled";
-};
-
 &iomuxc {
 	pinctrl_usbh_vbus: usbh-vbusgrp {
 		fsl,pins = <MX8MP_IOMUXC_SD2_CD_B__GPIO2_IO12 0x1c0>;

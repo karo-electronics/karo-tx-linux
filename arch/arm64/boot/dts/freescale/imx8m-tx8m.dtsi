@@ -259,7 +259,6 @@
 	bus-width = <8>;
 	vmmc-supply = <&reg_vdd_3v3>;
 	vqmmc-supply = <&reg_vdd_1v8>;
-	voltage-ranges = <3300 3300>;
 	non-removable;
 	status = "okay";
 };
@@ -268,6 +267,9 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc2>;
 	bus-width = <4>;
+	vmmc-supply = <&reg_vdd_3v3>;
+	vqmmc-supply = <&reg_vdd_3v3>;
+	voltage-ranges = <3300 3300>;
 	no-1-8-v;
 	fsl,wp-controller;
 	status = "okay";
@@ -275,9 +277,11 @@
 
 &usdhc3 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usdhc3 &pinctrl_usdhc3_cd>;
+	pinctrl-0 = <&pinctrl_usdhc3>;
 	bus-width = <4>;
-	cd-gpios = <&gpio3 8 GPIO_ACTIVE_LOW>;
+	vmmc-supply = <&reg_vdd_3v3>;
+	vqmmc-supply = <&reg_vdd_3v3>;
+	voltage-ranges = <3300 3300>;
 	no-1-8-v;
 	fsl,wp-controller;
 };

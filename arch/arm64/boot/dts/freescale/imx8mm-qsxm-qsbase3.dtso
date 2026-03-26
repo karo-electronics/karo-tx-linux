@@ -35,10 +35,6 @@
 	vbus-supply = <&reg_usbh_vbus>;
 };
 
-&usdhc2 {
-	status = "disabled";
-};
-
 &iomuxc {
 	pinctrl_usbh_vbus: usbh-vbusgrp {
 		fsl,pins = <MX8MM_IOMUXC_SD2_CD_B_GPIO2_IO12 0x1c0>;

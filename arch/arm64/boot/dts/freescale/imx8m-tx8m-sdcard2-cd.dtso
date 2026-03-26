@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2026 Lothar Waßmann <LW@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+
+&{/} {
+	chosen {
+		overlays {
+			tx8m-sdcard2-cd;
+		};
+	};
+};
+
+&usdhc3 {
+	pinctrl-0 = <&pinctrl_usdhc3 &pinctrl_usdhc3_cd>;
+	cd-gpios = <&gpio3 8 GPIO_ACTIVE_LOW>;
+	status = "okay";
+};
