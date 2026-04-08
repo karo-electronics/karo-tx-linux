@@ -7,9 +7,16 @@
 
 /plugin/;
 
-&{/chosen} {
-	overlays {
-		karo-rtc;
+&{/} {
+	aliases {
+		rtc0 = "/soc@0/bus@30800000/i2c@30a30000/rtc@6f";
+		rtc1 = "/soc@0/bus@30000000/snvs@30370000/snvs-rtc-lp";
+	};
+
+	chosen {
+		overlays {
+			karo-rtc;
+		};
 	};
 };
 
