@@ -21,7 +21,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_eqos>;
 	pinctrl-1 = <&pinctrl_eqos_sleep>;
-	phy-mode = "rgmii";
+	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
 	phy-supply = <&ldo5_reg>;
 	status = "okay";
@@ -38,20 +38,12 @@
 
 		ethphy0: ethernet-phy@3 {
 			reg = <3>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_etnphy_int_b>;
+			interrupt-parent = <&gpio4>;
+			interrupts = <21 IRQ_TYPE_EDGE_FALLING>;
 			eee-broken-1000t;
 			micrel,force-master;
-			rxd0-skew-ps = <(420 + 99)>;
-			rxd1-skew-ps = <(420 + 119)>;
-			rxd2-skew-ps = <(420 + 111)>;
-			rxd3-skew-ps = <(420 + 129)>;
-			txd0-skew-ps = <(420 + 204)>;
-			txd1-skew-ps = <(420 + 178)>;
-			txd2-skew-ps = <(420 + 192)>;
-			txd3-skew-ps = <(420 + 151)>;
-			rxdv-skew-ps = <(420 + 129)>;
-			txen-skew-ps = <(420 + 150)>;
-			rxc-skew-ps = <(900 + 139)>;
-			txc-skew-ps = <(900 + 150)>;
 		};
 	};
 };
