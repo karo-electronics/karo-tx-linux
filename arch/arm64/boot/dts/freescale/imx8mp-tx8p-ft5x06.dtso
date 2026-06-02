@@ -36,9 +36,9 @@
 &iomuxc {
 	pinctrl_edt_ft5x06: edt-ft5x06grp {
 		fsl,pins = <
-			MX8MP_IOMUXC_I2C3_SCL__GPIO5_IO18		0x90 /* Interrupt */
-			MX8MP_IOMUXC_I2C3_SDA__GPIO5_IO19		0x1b0b0 /* Reset */
-			MX8MP_IOMUXC_GPIO1_IO00__GPIO1_IO00		0x1b0b0 /* Wake */
+			MX8MP_IOMUXC_I2C3_SCL__GPIO5_IO18		0x090 /* Interrupt */
+			MX8MP_IOMUXC_I2C3_SDA__GPIO5_IO19		0x040 /* Reset */
+			MX8MP_IOMUXC_GPIO1_IO00__GPIO1_IO00		0x040 /* Wake */
 		>;
 	};
 };
