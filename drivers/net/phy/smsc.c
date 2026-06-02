@@ -315,13 +315,18 @@ EXPORT_SYMBOL_GPL(lan87xx_read_status);
 
 static int lan874x_phy_config_init(struct phy_device *phydev)
 {
-	u16 val;
+	u16 val = 0;
 	int rc;
 
-	/* Setup LED2/nINT/nPME pin to function as nPME.  May need user option
-	 * to use LED1/nINT/nPME.
-	 */
-	val = MII_LAN874X_PHY_PME2_SET;
+	if (of_property_read_bool(dev_of_node(&phydev->mdio.dev), "smsc,npme-led2"))
+		/* Setup LED2/nINT/nPME pin to function as nPME */
+		val |= MII_LAN874X_PHY_PME2_SET;
+
+	if (of_property_read_bool(dev_of_node(&phydev->mdio.dev), "smsc,npme-led1"))
+		/* Setup LED1/nINT/nPME pin to function as nPME */
+		val |= MII_LAN874X_PHY_PME1_SET;
+	if (of_property_read_bool(dev_of_node(&phydev->mdio.dev), "smsc,npme-rmiisel"))
+		val |= MII_LAN874X_PHY_PME_RMIISEL_SET;
 
 	/* The bits MII_LAN874X_PHY_WOL_PFDA_FR, MII_LAN874X_PHY_WOL_WUFR,
 	 * MII_LAN874X_PHY_WOL_MPR, and MII_LAN874X_PHY_WOL_BCAST_FR need to

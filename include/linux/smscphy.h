@@ -56,6 +56,7 @@ int smsc_phy_probe(struct phy_device *phydev);
 
 #define MII_LAN874X_PHY_PME1_SET		(2 << 13)
 #define MII_LAN874X_PHY_PME2_SET		(2 << 11)
+#define MII_LAN874X_PHY_PME_RMIISEL_SET		(1 << 10)
 #define MII_LAN874X_PHY_PME_SELF_CLEAR		BIT(9)
 #define MII_LAN874X_PHY_WOL_PFDA_FR		BIT(7)
 #define MII_LAN874X_PHY_WOL_WUFR		BIT(6)
