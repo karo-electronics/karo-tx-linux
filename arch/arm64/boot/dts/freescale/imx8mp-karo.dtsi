@@ -73,7 +73,7 @@
 			reg_vdd_soc: BUCK1 {
 				regulator-name = "BUCK1";
 				regulator-min-microvolt = <805000>;
-				regulator-max-microvolt = <900000>;
+				regulator-max-microvolt = <1000000>;
 				regulator-ramp-delay = <3125>;
 				regulator-boot-on;
 				regulator-always-on;
@@ -86,7 +86,7 @@
 			reg_vdd_arm: BUCK2 {
 				regulator-name = "BUCK2";
 				regulator-min-microvolt = <805000>;
-				regulator-max-microvolt = <950000>;
+				regulator-max-microvolt = <1000000>;
 				regulator-ramp-delay = <3125>;
 				nxp,dvs-run-voltage = <950000>;
 				nxp,dvs-standby-voltage = <850000>;
