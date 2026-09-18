@@ -16,6 +16,6 @@
 #define _IPUV3_KMS_H_
 
 extern const struct drm_mode_config_funcs ipuv3_drm_mode_config_funcs;
-extern struct drm_mode_config_helper_funcs ipuv3_drm_mode_config_helpers;
+extern const struct drm_mode_config_helper_funcs ipuv3_drm_mode_config_helpers;
 
 #endif

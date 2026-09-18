@@ -389,6 +389,13 @@ static int ipu_drm_bind(struct device *dev, struct device *master, void *data)
 	ipu_crtc->dev = dev;
 	ipu_crtc->plane[0] = primary_plane;
 
+	/* The DPU and LCDIF CRTC drivers do the same from their own bind. */
+	if (!drm->mode_config.funcs)
+		drm->mode_config.funcs = &ipuv3_drm_mode_config_funcs;
+
+	if (!drm->mode_config.helper_private)
+		drm->mode_config.helper_private = &ipuv3_drm_mode_config_helpers;
+
 	crtc = &ipu_crtc->base;
 	crtc->port = pdata->of_node;
 	drm_crtc_helper_add(crtc, &ipu_helper_funcs);

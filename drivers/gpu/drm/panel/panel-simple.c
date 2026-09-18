@@ -2003,7 +2003,8 @@ static const struct panel_desc edt_et1010g0dsa = {
 		.height = 136,
 	},
 	.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
-	.bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE,
+	.bus_flags = DRM_BUS_FLAG_DE_HIGH,
+	.connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 
 static const struct display_timing evervision_vgg804821_timing = {
@@ -3196,6 +3197,7 @@ static const struct panel_desc nlt_nl12880bc20_jeida = {
 		.height = 163,
 	},
 	.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+	.connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 
 static const struct panel_desc nlt_nl12880bc20_spwg_18 = {
@@ -3207,6 +3209,7 @@ static const struct panel_desc nlt_nl12880bc20_spwg_18 = {
 		.height = 163,
 	},
 	.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
+	.connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 
 static const struct panel_desc nlt_nl12880bc20_spwg_24 = {
@@ -3218,6 +3221,7 @@ static const struct panel_desc nlt_nl12880bc20_spwg_24 = {
 		.height = 163,
 	},
 	.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+	.connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 
 static const struct drm_display_mode nvd_9128_mode = {

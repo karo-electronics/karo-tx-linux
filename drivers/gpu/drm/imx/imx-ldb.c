@@ -542,6 +542,16 @@ static struct bus_mux imx6q_lvds_mux[2] = {
  */
 static const struct of_device_id imx_ldb_dt_ids[] = {
 	{ .compatible = "fsl,imx6q-ldb", .data = imx6q_lvds_mux, },
+	/*
+	 * i.MX6S/DL have the very same LVDS input multiplexer in GPR3 as the
+	 * i.MX6Q, only with fewer valid sources (a single IPU). Their vendor
+	 * dtsi spells the compatible "fsl,imx6dl-ldb", which used to fall
+	 * through to the i.MX53 entry below: with no mux, the driver looked
+	 * for the output port at index 2 instead of 4 (see the binding: "port@2
+	 * on i.MX5, port@4 on i.MX6"), never found the panel and silently fell
+	 * back to the first display-timings of the device tree.
+	 */
+	{ .compatible = "fsl,imx6dl-ldb", .data = imx6q_lvds_mux, },
 	{ .compatible = "fsl,imx53-ldb", .data = NULL, },
 	{ }
 };
