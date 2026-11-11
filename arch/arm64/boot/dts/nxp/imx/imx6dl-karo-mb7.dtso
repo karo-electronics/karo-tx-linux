@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2017 Lothar Waßmann <LW@KARO-electronics.de>
+ * Copyright 2026 Ka-Ro electronics GmbH
+ *
+ * MB7 baseboard changes for the TX6 modules, converted from imx6qdl-tx6-mb7.dtsi.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/pwm/pwm.h>
+
+&{/} {
+	chosen {
+		overlays {
+			karo-mb7;
+		};
+	};
+
+	/* By name, not label: TTL modules lack backlight0/1, LVDS modules lack disp0 */
+	backlight0 {
+		pwms = <&pwm1 0 500000 PWM_POLARITY_INVERTED>;
+		turn-on-delay-ms = <35>;
+		power-supply = <&reg_lcd1_pwr>;
+	};
+
+	backlight1 {
+		pwms = <&pwm2 0 500000 PWM_POLARITY_INVERTED>;
+		turn-on-delay-ms = <35>;
+		power-supply = <&reg_lcd1_pwr>;
+	};
+
+	disp0 {
+		/* keep the IPU DI bus format in sync with the 24-bit panel */
+		interface-pix-fmt = "rgb24";
+		/* MB7 wires all 24 RGB lines, DISP0_DAT0 is freed below */
+		pinctrl-0 = <&pinctrl_disp0_2>;
+	};
+};
+
+&audmux {
+	status = "okay";
+};
+
+&can2 {
+	xceiver-supply = <&reg_3v3>;
+	status = "okay";
+};
+
+/* The module RTC backup voltage is not wired on the MB7 */
+&ds1339 {
+	status = "disabled";
+};
+
+&i2c3 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	rtc: rtc@6f {
+		compatible = "microchip,mcp7940x";
+		reg = <0x6f>;
+	};
+};
+
+&reg_lcd0_pwr {
+	status = "disabled";
+};
+
+&sgtl5000 {
+	status = "okay";
+};
+
+&sound {
+	status = "okay";
+};
+
+&ssi1 {
+	status = "okay";
+};

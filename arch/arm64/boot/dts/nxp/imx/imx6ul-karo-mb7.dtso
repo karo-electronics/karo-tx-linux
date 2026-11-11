@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2026 Ka-Ro electronics GmbH
+ *
+ * Ka-Ro electronics MB7 baseboard, TXUL modules (i.MX6UL/ULL).
+ */
+
+/dts-v1/;
+/plugin/;
+
+&{/} {
+	chosen {
+		overlays {
+			karo-mb7;
+		};
+	};
+};
+
+&can2 {
+	xceiver-supply = <&reg_3v3>;
+	status = "okay";
+};
+
+&fec1 {
+	/* LAN8720 needs post-reset delay before MDIO; U-Boot uses 22ms. */
+	phy-reset-post-delay = <50>;
+};
+
+&etnphy1 {
+	/* Only one PHY at address 0; silence missing-device log. */
+	status = "disabled";
+};
+
+&i2c2 {
+	rtc: rtc@6f {
+		compatible = "microchip,mcp7940x";
+		reg = <0x6f>;
+	};
+};
+
+/*
+ * EDT ETM0700G0DH6 (ET0700) 800x480 timings. Do NOT rely on U-Boot: the
+ * Ka-Ro 2025.07 port dropped karo_fdt_update_fb_mode() and the video_mode
+ * variable; ft_board_setup() no longer touches panel-timing. For another
+ * panel, edit this node or provide a DT overlay.
+ */
+&{/} {
+	lcd_panel: lcd-panel {
+		/* Panel type and timing come from a karo-panel-* overlay. */
+		status = "disabled";
+		backlight = <&backlight>;
+		power-supply = <&reg_lcd_pwr>;
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&lcdif_out>;
+			};
+		};
+	};
+};
+
+&lcdif {
+	/*
+	 * MB7 has no LCD_DATA00-borrowing CAN transceiver (can2 uses
+	 * reg_3v3), so all 24 data lines are available. Hardknott's
+	 * U-Boot switched to the 24-bit pad group at runtime via
+	 * karo_fdt_set_lcd_pins(); the 2025.07 port no longer does.
+	 */
+	pinctrl-0 = <&pinctrl_disp0_2>;
+
+	port {
+		lcdif_out: endpoint {
+			remote-endpoint = <&panel_in>;
+		};
+	};
+};
