@@ -2482,7 +2482,7 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 		 * entering low-power mode and re-enabled when exiting from
 		 * low-power mode.
 		 */
-		if (stm32_port->rx_ch) {
+		if (stm32_port->rx_ch && !uart_console(port)) {
 			spin_lock_irqsave(&port->lock, flags);
 			/* Poll data from DMA RX buffer if any */
 			if (!stm32_usart_rx_dma_pause(stm32_port))
@@ -2495,7 +2495,7 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 			stm32_usart_clr_bits(port, ofs->cr3, USART_CR3_DMAR);
 		}
 
-		if (stm32_port->tx_ch) {
+		if (stm32_port->tx_ch && !uart_console(port)) {
 			if (stm32_usart_tx_dma_started(stm32_port))
 				stm32_usart_tx_dma_terminate(stm32_port);
 			stm32_usart_clr_bits(port, ofs->cr3, USART_CR3_DMAT);
@@ -2508,10 +2508,10 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 			tty_flip_buffer_push(tport);
 		uart_unlock_and_check_sysrq_irqrestore(port, flags);
 	} else {
-		if (stm32_port->tx_ch)
+		if (stm32_port->tx_ch && !uart_console(port))
 			stm32_usart_set_bits(port, ofs->cr3, USART_CR3_DMAT);
 
-		if (stm32_port->rx_ch) {
+		if (stm32_port->rx_ch && !uart_console(port)) {
 			stm32_usart_set_bits(port, ofs->cr3, USART_CR3_DMAR);
 			ret = stm32_usart_rx_dma_start_or_resume(port);
 			if (ret)
@@ -2532,7 +2532,6 @@ static int __maybe_unused stm32_usart_serial_suspend(struct device *dev)
 	struct uart_port *port = dev_get_drvdata(dev);
 	struct stm32_port *stm32port = to_stm32_port(port);
 	int ret;
-
 
 	if (device_may_wakeup(dev) || device_wakeup_path(dev)) {
 		ret = pm_runtime_force_suspend(dev);
