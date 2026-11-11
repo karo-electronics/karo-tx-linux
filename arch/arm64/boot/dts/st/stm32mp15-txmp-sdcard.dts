@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) 2022 Markus Bauer <MB@KARO-electronics.de>
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+&{/chosen} {
+	overlays {
+		txmp-sdcard;
+	};
+};
+
+&sdmmc3 {
+	/* not usable on TXMP-1570 due to pinswap of SDMMC3_CMD and SDMMC3_D0 */
+	status = "okay";
+};

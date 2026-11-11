@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) 2022 Markus Bauer <MB@KARO-electronics.de>
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+#include <dt-bindings/pinctrl/stm32-pinfunc.h>
+
+&{/chosen} {
+	overlays {
+		karo-copro;
+	};
+};
+
+&m4_rproc {
+	memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
+			<&vdev0vring1>, <&vdev0buffer>;
+	mboxes = <&ipcc 0>, <&ipcc 1>, <&ipcc 2>, <&ipcc 3>;
+	mbox-names = "vq0", "vq1", "shutdown", "detach";
+	interrupt-parent = <&exti>;
+	interrupts = <68 1>;
+	interrupt-names = "wdg";
+	wakeup-source;
+	recovery;
+	status = "okay";
+};
+
+&ipcc {
+	status = "okay";
+};
+
+&usart2 {
+	status = "disabled";
+};
+
+&m4_usart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&m4_usart2_pins_mx>;
+	status = "okay";
+};
+
+&pinctrl {
+	m4_usart2_pins_mx: m4_usart2_mx-0 {
+		pins {
+			pinmux = <STM32_PINMUX('D', 5, RSVD)>, /* USART2_TX */
+				 <STM32_PINMUX('D', 6, RSVD)>; /* USART2_RX */
+		};
+	};
+};

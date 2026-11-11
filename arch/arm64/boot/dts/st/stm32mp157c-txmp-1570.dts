@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) 2020 Lothar Waßmann <LW@KARO-electronics.de>
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/pinctrl/stm32-pinfunc.h>
+#include "stm32mp157.dtsi"
+#include "stm32mp15xc.dtsi"
+#include "stm32mp15xxac-pinctrl.dtsi"
+#include "stm32mp157-txmp.dtsi"
+#include "stm32mp157c-karo-scmi.dtsi"
+#include "stm32mp157c-txmp-scmi.dtsi"
+
+/ {
+	model = "Ka-Ro electronics GmbH TXMP-1570 module";
+	compatible = "karo,stm32mp157c-txmp-1570", "karo,txmp", "st,stm32mp157";
+};
+
+&cryp1 {
+	status = "okay";
+};

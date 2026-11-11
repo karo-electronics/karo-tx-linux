@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) 2020 Lothar Waßmann <LW@KARO-electronics.de>
+ * Copyright (C) 2025 Marcel Mertens <MM@KARO-electronics.de>
+ *
+ */
+
+/dts-v1/;
+
+/plugin/;
+
+&{/} {
+	aliases {
+		dsi = "/soc/dsi@5a000000";
+		ltdc = "/soc/display-controller@5a001000";
+	};
+
+	chosen {
+		overlays {
+			qsmp-dsi-panel;
+		};
+	};
+};
+
+&dsi {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	default-on;
+	status = "okay";
+
+	dsi_panel: panel@0 {
+		reg = <0>;
+		power-supply = <&reg_3v3>;
+		status = "okay";
+
+		port {
+			dsi_panel_from_dsi: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+};
+
+&ltdc {
+	default-on;
+	status = "okay";
+
+	port {
+		ltdc_ep0_out: endpoint {
+			remote-endpoint = <&dsi_in>;
+		};
+	};
+};
