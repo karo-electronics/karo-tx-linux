@@ -14,7 +14,7 @@ config ST_THERMAL_MEMMAP
 
 config STM32_THERMAL
 	tristate "Thermal framework support on STMicroelectronics STM32 series of SoCs"
-	depends on MACH_STM32MP157
+	depends on MACH_STM32MP157 || MACH_STM32MP13
 	default y
 	help
 	  Support for thermal framework on STMicroelectronics STM32 series of

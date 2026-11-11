@@ -8,9 +8,9 @@ config STM32_HOG
 
 config STM32_PM_DOMAINS
 	bool "STM32 PM domains"
-	depends on MACH_STM32MP157
+	depends on MACH_STM32MP157 || MACH_STM32MP13
 	select PM_GENERIC_DOMAINS
-	default y if MACH_STM32MP157
+	default y
 
 config STM32MP_PM_DOMAIN
 	tristate "STM32MP PM domain"
