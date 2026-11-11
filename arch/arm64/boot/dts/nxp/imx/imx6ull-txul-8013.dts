@@ -1,0 +1,117 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/* Ka-Ro electronics TXUL-8013 module (i.MX6ULL, eMMC). */
+
+/dts-v1/;
+
+#include "imx6ull.dtsi"
+#include "imx6ul-txul.dtsi"
+
+/ {
+	model = "Ka-Ro electronics TXUL-8013 Module";
+	compatible = "karo,imx6ull-txul", "fsl,imx6ull";
+
+	aliases {
+		/* eMMC first */
+		mmc0 = &usdhc2;
+		mmc1 = &usdhc1;
+	};
+};
+
+/* No NAND on this module */
+&gpmi {
+	status = "disabled";
+};
+
+/* The i.MX6ULL routes SNVS pads through their own iomuxc. */
+&iomuxc {
+	/delete-node/ ledgrp;
+	/delete-node/ etnphy-pwrgrp;
+	/delete-node/ etnphy-intgrp-0;
+	/delete-node/ etnphy-rstgrp-0;
+	/delete-node/ etnphy-rst-sleepgrp-0;
+	/delete-node/ i2c-gpiogrp;
+	/delete-node/ lcd-pwrgrp;
+};
+
+&iomuxc_snvs {
+	pinctrl_led_snvs: ledgrp {
+		fsl,pins = <
+			MX6ULL_PAD_SNVS_TAMPER9__GPIO5_IO09	0x0b0b0 /* LED */
+		>;
+	};
+
+	pinctrl_etnphy_power_snvs: etnphy-pwrgrp {
+		fsl,pins = <
+			MX6ULL_PAD_SNVS_TAMPER7__GPIO5_IO07	0x0b0b0 /* ETN PHY POWER */
+		>;
+	};
+
+	pinctrl_etnphy0_int_snvs: etnphy-intgrp-0 {
+		fsl,pins = <
+			MX6ULL_PAD_SNVS_TAMPER5__GPIO5_IO05	0x0b0b0 /* ETN PHY INT */
+		>;
+	};
+
+	pinctrl_etnphy0_rst_snvs: etnphy-rstgrp-0 {
+		fsl,pins = <
+			MX6ULL_PAD_SNVS_TAMPER6__GPIO5_IO06	0x0b0b0 /* ETN PHY RESET */
+		>;
+	};
+
+	pinctrl_etnphy0_rst_sleep_snvs: etnphy-rst-sleepgrp-0 {
+		fsl,pins = <
+			MX6ULL_PAD_SNVS_TAMPER6__GPIO5_IO06	0x038b0
+		>;
+	};
+
+	pinctrl_i2c_gpio_snvs: i2c-gpiogrp {
+		fsl,pins = <
+			MX6ULL_PAD_SNVS_TAMPER0__GPIO5_IO00	0x4001b8b1 /* I2C SCL */
+			MX6ULL_PAD_SNVS_TAMPER1__GPIO5_IO01	0x4001b8b1 /* I2C SDA */
+		>;
+	};
+
+	pinctrl_lcd_pwr_snvs: lcd-pwrgrp {
+		fsl,pins = <
+			MX6ULL_PAD_SNVS_TAMPER4__GPIO5_IO04	0x0b0b0 /* LCD Power Enable */
+		>;
+	};
+};
+
+&i2c_gpio {
+	pinctrl-0 = <&pinctrl_i2c_gpio_snvs>;
+};
+
+&user_led {
+	pinctrl-0 = <&pinctrl_led_snvs>;
+};
+
+&reg_3v3_etn {
+	pinctrl-0 = <&pinctrl_etnphy_power_snvs>;
+};
+
+&reg_lcd_pwr {
+	pinctrl-0 = <&pinctrl_lcd_pwr_snvs>;
+};
+
+&fec1 {
+	pinctrl-0 = <&pinctrl_enet1 &pinctrl_enet1_mdio &pinctrl_etnphy0_rst_snvs>;
+	pinctrl-1 = <&pinctrl_enet1_sleep &pinctrl_enet1_mdio_sleep
+		     &pinctrl_etnphy0_rst_sleep_snvs>;
+};
+
+&etnphy0 {
+	pinctrl-0 = <&pinctrl_etnphy0_int_snvs>;
+};
+
+/* eMMC, 4-bit bus */
+&usdhc2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc2>;
+	bus-width = <4>;
+	no-1-8-v;
+	non-removable;
+	fsl,wp-controller;
+	status = "okay";
+};
+
