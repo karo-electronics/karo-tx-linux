@@ -22,7 +22,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&backlight_pwm_pins>;
 	pinctrl-1 = <&backlight_pwm_sleep_pins>;
-	pwms = <&backlight_pwm 1 500000 PWM_POLARITY_INVERTED>;
+	pwms = <&backlight_pwm 0 500000 PWM_POLARITY_INVERTED>;
 };
 
 &timers1 {
