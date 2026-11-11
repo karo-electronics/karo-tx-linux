@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR MIT)
+/*
+ * Copyright 2017 Lothar Waßmann <LW@KARO-electronics.de>
+ */
+
+/ {
+	aliases {
+		display = &display;
+	};
+
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm2 0 500000 PWM_POLARITY_INVERTED>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lcd1_pwr>;
+		enable-gpios = <&gpio2 31 GPIO_ACTIVE_HIGH>;
+		power-supply = <&reg_3v3>;
+		turn-on-delay-ms = <35>;
+		status = "disabled";
+		/*
+		 * a poor man's way to create a 1:1 relationship between
+		 * the PWM value and the actual duty cycle
+		 */
+		brightness-levels = < 0  1  2  3  4  5  6  7  8  9
+				     10 11 12 13 14 15 16 17 18 19
+				     20 21 22 23 24 25 26 27 28 29
+				     30 31 32 33 34 35 36 37 38 39
+				     40 41 42 43 44 45 46 47 48 49
+				     50 51 52 53 54 55 56 57 58 59
+				     60 61 62 63 64 65 66 67 68 69
+				     70 71 72 73 74 75 76 77 78 79
+				     80 81 82 83 84 85 86 87 88 89
+				     90 91 92 93 94 95 96 97 98 99
+				    100>;
+		default-brightness-level = <50>;
+	};
+
+	lcd_panel: lcd-panel {
+		/* Panel type and timing come from a karo-panel-* overlay. */
+		status = "disabled";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lcd0_pwr>;
+		enable-gpios = <&gpio3 29 GPIO_ACTIVE_HIGH>;
+		power-supply = <&reg_3v3>;
+		backlight = <&backlight>;
+
+		port {
+			lcd_panel_in: endpoint {
+				remote-endpoint = <&lcd_out>;
+			};
+		};
+	};
+
+	display: disp0 {
+		compatible = "fsl,imx-parallel-display";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_disp0_1>;
+		status = "disabled";
+
+		port@0 {
+			reg = <0>;
+
+			lcd_in: endpoint {
+				remote-endpoint = <&ipu1_di0_disp0>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			lcd_out: endpoint {
+				remote-endpoint = <&lcd_panel_in>;
+			};
+		};
+	};
+};
+
+&ipu1_di0_disp0 {
+	remote-endpoint = <&lcd_in>;
+};

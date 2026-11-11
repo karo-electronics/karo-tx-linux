@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/* Ka-Ro electronics TX6U-8030: same board as the TX6U-801x, 1 GiB DDR3. */
+
+/dts-v1/;
+
+#include "imx6dl-tx6u-801x.dts"
+
+/ {
+	model = "Ka-Ro electronics TX6U-8030 Module";
+};

@@ -1,0 +1,128 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR MIT)
+/*
+ * Copyright 2017 Lothar Waßmann <LW@KARO-electronics.de>
+ */
+
+/dts-v1/;
+#include "imx6qp.dtsi"
+#include "imx6qdl-tx6.dtsi"
+#include "imx6qdl-tx6-lvds.dtsi"
+
+/ {
+	model = "Ka-Ro electronics TX6Q-8137 Module";
+	compatible = "karo,imx6qp-tx6q", "fsl,imx6qp";
+};
+
+&ds1339 {
+	status = "disabled";
+};
+
+&gpmi {
+	status = "disabled";
+};
+
+&ipu2 {
+	status = "disabled";
+};
+
+&sata {
+	status = "okay";
+};
+
+&usdhc4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc4>;
+	bus-width = <4>;
+	non-removable;
+	no-1-8-v;
+	fsl,wp-controller;
+	status = "okay";
+};
+
+&iomuxc {
+	pinctrl_usdhc4: usdhc4grp {
+		fsl,pins = <
+			MX6QDL_PAD_SD4_CMD__SD4_CMD		0x070b1
+			MX6QDL_PAD_SD4_CLK__SD4_CLK		0x070b1
+			MX6QDL_PAD_SD4_DAT0__SD4_DATA0		0x070b1
+			MX6QDL_PAD_SD4_DAT1__SD4_DATA1		0x070b1
+			MX6QDL_PAD_SD4_DAT2__SD4_DATA2		0x070b1
+			MX6QDL_PAD_SD4_DAT3__SD4_DATA3		0x070b1
+			MX6QDL_PAD_NANDF_ALE__SD4_RESET		0x0b0b1
+		>;
+	};
+};
+
+/*
+ * imx6qp.dtsi comes from the NXP lf-6.6 BSP and describes the PRE/PRG in the
+ * form expected by the fbdev IPU stack (drivers/mxc/ipu3): compatible
+ * "fsl,imx6q-pre"/"fsl,imx6q-prg", an "ocram" phandle and "apb" clock, all
+ * disabled.  This BSP builds the mainline DRM stack instead
+ * (CONFIG_DRM_IMX_IPUV3=y, CONFIG_MXC_IPU unset), whose drivers only match
+ * "fsl,imx6qp-pre"/"fsl,imx6qp-prg" and read "fsl,iram"/"fsl,pres".
+ *
+ * Nothing therefore binds to the PRE/PRG, while imx6qp.dtsi still points both
+ * IPUs at them through "fsl,prg".  ipu_prg_lookup_by_phandle() returns NULL and
+ * ipu_probe() bails out with -EPROBE_DEFER for good, so imx-drm never binds and
+ * the board comes up without any display at all.
+ *
+ * Restore the binding documented in
+ * Documentation/devicetree/bindings/display/imx/fsl-imx-drm.txt, which is what
+ * the 5.10 device tree of these modules used.
+ */
+&pre1 {
+	compatible = "fsl,imx6qp-pre";
+	/delete-property/ ocram;
+	fsl,iram = <&ocram2>;
+	status = "okay";
+};
+
+&pre2 {
+	compatible = "fsl,imx6qp-pre";
+	/delete-property/ ocram;
+	fsl,iram = <&ocram2>;
+	status = "okay";
+};
+
+&pre3 {
+	compatible = "fsl,imx6qp-pre";
+	/delete-property/ ocram;
+	fsl,iram = <&ocram3>;
+	status = "okay";
+};
+
+&pre4 {
+	compatible = "fsl,imx6qp-pre";
+	/delete-property/ ocram;
+	fsl,iram = <&ocram3>;
+	status = "okay";
+};
+
+&prg1 {
+	compatible = "fsl,imx6qp-prg";
+	clock-names = "ipg", "axi";
+	fsl,pres = <&pre1>, <&pre2>, <&pre3>;
+	status = "okay";
+};
+
+&prg2 {
+	compatible = "fsl,imx6qp-prg";
+	clock-names = "ipg", "axi";
+	fsl,pres = <&pre4>, <&pre2>, <&pre3>;
+	status = "okay";
+};
+
+&ldb {
+	/* QP DI muxes take ldb_di<n>_div_sel, not the ldb_di<n> gates. */
+	clocks = <&clks IMX6QDL_CLK_LDB_DI0_SEL>, <&clks IMX6QDL_CLK_LDB_DI1_SEL>,
+		 <&clks IMX6QDL_CLK_IPU1_DI0_SEL>, <&clks IMX6QDL_CLK_IPU1_DI1_SEL>,
+		 <&clks IMX6QDL_CLK_IPU2_DI0_SEL>, <&clks IMX6QDL_CLK_IPU2_DI1_SEL>,
+		 <&clks IMX6QDL_CLK_LDB_DI0_DIV_SEL>, <&clks IMX6QDL_CLK_LDB_DI1_DIV_SEL>;
+	clock-names = "di0_pll", "di1_pll",
+		      "di0_sel", "di1_sel", "di2_sel", "di3_sel",
+		      "di0", "di1";
+};
+
+&gpu_vg {
+	status = "okay";
+};
