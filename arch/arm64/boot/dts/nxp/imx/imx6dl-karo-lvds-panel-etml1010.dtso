@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2026 Ka-Ro electronics GmbH
+ *
+ * EDT ETML1010G0DKA 1280x800 LVDS panel on both MB7 LVDS connectors.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include "imx6dl-pinfunc.h"
+
+&{/} {
+	chosen {
+		overlays {
+			karo-lvds-panel-etml1010;
+		};
+	};
+};
+
+&backlight0 {
+	status = "okay";
+};
+
+&backlight1 {
+	status = "okay";
+};
+
+&ldb {
+	status = "okay";
+};
+
+&pwm1 {
+	status = "okay";
+};
+
+&pwm2 {
+	status = "okay";
+};
+
+&lvds0_panel {
+	compatible = "edt,etml1010g0dka";
+	pixelclk-active = <0>;
+	status = "okay";
+};
+
+&lvds1_panel {
+	compatible = "edt,etml1010g0dka";
+	pixelclk-active = <0>;
+	status = "okay";
+};
+
+/* FT5x06 touch on the MB7 panel connector */
+&i2c3 {
+	polytouch: polytouch@38 {
+		compatible = "edt,edt-ft5x06";
+		reg = <0x38>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_edt_ft5x06>;
+		interrupt-parent = <&gpio6>;
+		interrupts = <15 IRQ_TYPE_EDGE_FALLING>;
+		reset-gpios = <&gpio2 22 GPIO_ACTIVE_LOW>;
+		wake-gpios = <&gpio2 21 GPIO_ACTIVE_HIGH>;
+		wakeup-source;
+	};
+};
+
+&iomuxc {
+	pinctrl_edt_ft5x06: edt-ft5x06grp {
+		fsl,pins = <
+			MX6QDL_PAD_NANDF_CS2__GPIO6_IO15	0x1b0b0
+			MX6QDL_PAD_EIM_A16__GPIO2_IO22		0x1b0b0
+			MX6QDL_PAD_EIM_A17__GPIO2_IO21		0x1b0b0
+		>;
+	};
+};
